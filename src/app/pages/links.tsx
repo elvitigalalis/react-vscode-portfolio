@@ -9,7 +9,7 @@ export const links = [
   {
     index: 0,
     title: "Find me on Github",
-    href: "https://github.com/LEL16",
+    href: "https://github.com/LEL16/",
     icon: <FaGithub />,
   },
   {
