@@ -1,6 +1,6 @@
 # 👨‍💻 Experience
 
-**Software Developer** @ [Ernst & Young](https://www.ey.com/) _(Nov 2018 - Nov 2021)_
+<!-- **Software Developer** @ [Ernst & Young](https://www.ey.com/) _(Nov 2018 - Nov 2021)_
 
 Completed full lifecycle application development to enterprise business applications including requirement analysis, system design, development, unit testing, implementation, testing support, performance tuning, maintenance, and post-production support.
 - Detailed achievements:
@@ -22,4 +22,4 @@ Planned and conducted operational and ﬁnancial audits to conﬁrm ﬁnancial s
 
 **Audit Intern** @ [KPMG](https://home.kpmg/) _(July 2015 - July 2015)_
 
-Performed analytical procedures and analyses to detect unusual ﬁnancial relationships.
+Performed analytical procedures and analyses to detect unusual ﬁnancial relationships. -->

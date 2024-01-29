@@ -1,5 +1,5 @@
 # 💻 Skills
-
+<!-- 
 ## General Tech Stacks
 - Architecture Design
 - Desktop App Development
@@ -29,4 +29,4 @@
 - Render
 
 ## Vcs
-- Git
+- Git -->
