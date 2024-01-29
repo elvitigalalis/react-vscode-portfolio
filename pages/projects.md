@@ -1,6 +1,6 @@
 # 🧪 Projects
 
-## [aachen-termin-bot](https://github.com/LEL16/aachen-termin-bot) 🔗
+<!-- ## [aachen-termin-bot](https://github.com/LEL16/aachen-termin-bot) 🔗
 - Instant notification when new SuperC appointment slots available, exclusive for RWTH Student use.
 - Python Chatbot, Telegram Bot
 
@@ -87,4 +87,4 @@
 
 ## [Liu Input Method Tutorial](https://LEL16.github.io/learnliu/) 🔗
 - The tutorial website teaches how to use Liu input method(嘸蝦米輸入法).
-- HTML
+- HTML -->
