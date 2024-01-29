@@ -1,6 +1,5 @@
 import {
   FaMedium,
-  FaBlog,
   FaGithub,
   FaLinkedin,
   FaEnvelope,
@@ -28,13 +27,7 @@ export const links = [
   {
     index: 3,
     title: "Find me on Youtube",
-    href: "https://www.youtube.com/channel/UC3gbsCw3p7KLWinTEy7Z5Pg",
+    href: "https://www.youtube.com/@lisule",
     icon: <FaMedium />,
-  },
-  {
-    index: 4,
-    title: "Find me on Blog",
-    href: "https://LEL16.github.io/blog/",
-    icon: <FaBlog />,
   },
 ];
