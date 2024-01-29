@@ -2,12 +2,12 @@
 
 ## Summary
 
-Senior Software Developer specializing in web application development. Experienced with all stages of the development cycle for dynamic web projects. Well-versed in numerous programming languages including C# .NET, Python and JavaScript/TypeScript. Strong background in both accounting/auditing and software development. Mitigated the gap between end users and developers, co-designed and built scalable solutions.
+<!-- Senior Software Developer specializing in web application development. Experienced with all stages of the development cycle for dynamic web projects. Well-versed in numerous programming languages including C# .NET, Python and JavaScript/TypeScript. Strong background in both accounting/auditing and software development. Mitigated the gap between end users and developers, co-designed and built scalable solutions. -->
 
 
 ## Experience
 
-**Software Developer** @ [Ernst & Young](https://www.ey.com/) _(Nov 2018 - Nov 2021)_
+<!-- **Software Developer** @ [Ernst & Young](https://www.ey.com/) _(Nov 2018 - Nov 2021)_
 
 Completed full lifecycle application development to enterprise business applications including requirement analysis, system design, development, unit testing, implementation, testing support, performance tuning, maintenance, and post-production support.
 - Detailed achievements:
@@ -29,11 +29,18 @@ Planned and conducted operational and ﬁnancial audits to conﬁrm ﬁnancial s
 
 **Audit Intern** @ [KPMG](https://home.kpmg/) _(July 2015 - July 2015)_
 
-Performed analytical procedures and analyses to detect unusual ﬁnancial relationships.
+Performed analytical procedures and analyses to detect unusual ﬁnancial relationships. -->
 
 ## Education
 
-`2021-2022` [National Taipei University of Technology](https://www-en.ntut.edu.tw/)
+`2020-present` [Syosset Senior High School](https://www.syossetschools.org/)
+- **Grade: 12**
+- Interests: **Environmentalism**, **computer science**, chemistry, physics, and mathematics!
+- Related Coursework: Math Theory Honors, AP Calculus BC, AP Physics 1, AP Physics C Mech. and E&M, AP Computer Science A, AP Chemistry, & Adv. Science Research 12.
+- SAT (Superscore): 1570 (800 M, 770 E)
+- PSAT: 1450
+
+<!-- `2021-2022` [National Taipei University of Technology](https://www-en.ntut.edu.tw/)
 - **Extension program** in Computer Science, Electrical Engineering, and Electronic Engineering
 - Courses: Computer Organization, Discrete Mathematics, Computer Program-
 ming(I), Object-Oriented Programming, Probability, Digital Logic Design
@@ -56,33 +63,32 @@ ming(I), Object-Oriented Programming, Probability, Digital Logic Design
 
 `2012-2016` [National Cheng Kung University](https://www.ncku.edu.tw/index.php?Lang=en)
 - **B.B.A** in Accountancy
-- GPA: 3.88/4.0
+- GPA: 3.88/4.0 -->
 
 ## Skills
 
 ### General Tech Stacks
-- Architecture Design
+- Research
 - Desktop App Development
 - Web Development (Frontend & Backend)
+- Google Spreadsheets/Slides/Docs
+- API Usage
 
 ### Programming languages
-- C# .NET
 - Python
-- JavaScript/TypeScript
-  - React.js
-- T-SQL
-- Go
-- C++
 - Java
-- VB.NET/VBA
+- C++
+- HTML/CSS/JS
+- React
 
 ## Certificates
-- Certified Public Accountant (Taiwan)
+<!-- - Certified Public Accountant (Taiwan) -->
 
 ## Accomplishments
-**Won First Place** @ [EY Innovation Campaign](https://www.ey.com/) _(May 2021)_
-Built Trial Balance System, a system that streamlines data transmission across users, providing consistent, reliable financial reports to them. 
+<!-- **Won First Place** @ [EY Innovation Campaign](https://www.ey.com/) _(May 2021)_
+Built Trial Balance System, a system that streamlines data transmission across users, providing consistent, reliable financial reports to them.  -->
 
 ## Languages
-**English**: C1
-**Chinese**: Native
+**English**: Proficient/Native
+**Sinhalese**: Proficient/Native
+**Spanish**: Advanced

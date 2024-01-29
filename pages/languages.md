@@ -1,3 +1,4 @@
 # 💬 Languages
 **English**: C1
-**Chinese**: Native
+**Sinhalese**: Native
+**Spanish**: Advanced
