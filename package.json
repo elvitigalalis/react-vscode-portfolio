@@ -1,7 +1,7 @@
 {
   "name": "react-vscode-portfolio",
   "version": "0.1.0",
-  "homepage": "https://lisul.org",
+  "homepage": "https://www.lisul.org",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.9.0",

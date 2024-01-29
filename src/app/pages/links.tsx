@@ -34,7 +34,7 @@ export const links = [
   {
     index: 4,
     title: "Find me on Blog",
-    href: "https://noworneverev.github.io/blog/",
+    href: "https://LEL16.github.io/blog/",
     icon: <FaBlog />,
   },
 ];
