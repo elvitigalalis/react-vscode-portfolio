@@ -1,32 +1,27 @@
 # 💻 Skills
-<!-- 
+
 ## General Tech Stacks
-- Architecture Design
-- Desktop App Development
 - Web Development (Frontend & Backend)
+- Desktop App Development (Figma)
+- Internet of Things (IoT) - Arduino & Raspberry Pi
+- Robotics
 
 ## Programming languages
-- C# .NET
 - Python
-- JavaScript/TypeScript
-  - React.js
-- T-SQL
-- Go
-- C++
 - Java
-- VB.NET/VBA
-
-## Databases
-- MSSQL
-- PostgreSQL
-- MySQL
-- SQLite
+- C++
+- HTML/CSS/JS
+- React.js
+  - w/ Firebase API
+- Other APIs:
+  - ChatGPT 3.5-turbo API
+  - Google Spreadsheets
+  - Pyautogui
+- Trained neural networks w/ Google CoLab
 
 ## Cloud
-- Azure
-- GCP
-- Heroku
-- Render
+- Google Virtual Machine Servers
+- Oracle Cloud Services
 
 ## Vcs
-- Git -->
+- Git
