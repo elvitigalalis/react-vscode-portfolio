@@ -1,2 +1,2 @@
 # 🥇 Certificates
-<!-- - Certified Public Accountant (Taiwan) -->
+- IACS Computes! Honoree (Stony Brook University)
