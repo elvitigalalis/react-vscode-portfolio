@@ -79,7 +79,7 @@ ming(I), Object-Oriented Programming, Probability, Digital Logic Design
 - Java
 - C++
 - HTML/CSS/JS
-- React
+- React.js
 
 ## Certificates
 <!-- - Certified Public Accountant (Taiwan) -->
