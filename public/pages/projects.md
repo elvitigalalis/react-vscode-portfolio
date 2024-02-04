@@ -1,5 +1,10 @@
 # 🧪 Projects
 
+## [ketanbot-robotic-bartender](https://github.com/LEL16/ketanbot-robotic-bartender) 🔗
+- Learn about specifics at the [KetanBot website](https://lel16.github.io/ketanbot-robotic-bartender/)
+- Arduino, C++, Adafruit
+
+
 <!-- ## [aachen-termin-bot](https://github.com/LEL16/aachen-termin-bot) 🔗
 - Instant notification when new SuperC appointment slots available, exclusive for RWTH Student use.
 - Python Chatbot, Telegram Bot
