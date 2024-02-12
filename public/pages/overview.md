@@ -107,8 +107,8 @@ Co-founded and led a chemistry club chartered with the American Chemical Society
 - IACS Computes! Honoree (Stony Brook University)
 
 ## Accomplishments
-<!-- **Won First Place** @ [EY Innovation Campaign](https://www.ey.com/) _(May 2021)_
-Built Trial Balance System, a system that streamlines data transmission across users, providing consistent, reliable financial reports to them.  -->
+FIRST Robotics Competition (FRC) World Championship [Rookie All Star]
+National Merit Scholarship Commended
 
 ## Languages
 **English**: Proficient/Native
