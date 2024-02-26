@@ -39,53 +39,49 @@ export default function Home({ setSelectedIndex }: Props) {
         <Stack direction={{ xs: "column", sm: "row-reverse" }} spacing={2}
           sx={{ justifyContent: "center", alignItems: "center", height: "100%" }}>
           <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <img src={logo} width="200px" alt="logo" style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }} />
+            <img src={logo} width="225rem" alt="logo" style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }} />
           </Box>
           <Box>
             <Grid
               display="flex"
               justifyContent={{ xs: "center", sm: "flex-start" }}
             >
-              <Typography variant="h3">{process.env.REACT_APP_NAME}</Typography>
-            </Grid>
-            <Grid
-              display="flex"
-              justifyContent={{ xs: "center", sm: "flex-start" }}
-            >
-              <Typography variant="subtitle1" gutterBottom>
-                Environmentalist & Computer Science Enthusiast
-                {/* Better an{' '}
-                <Box fontWeight="fontWeightMedium" display="inline">
-                  oops
-                </Box>{' '}
-                than a{' '}
-                <Box fontWeight="fontWeightMedium" display="inline">
-                  what if
-                </Box> */}
+              <Typography variant="h3" sx={{ fontSize: { xs: '2.5rem', sm: '3.4rem' } }}>
+                Lisul Elvitigala
               </Typography>
             </Grid>
             <Grid
               display="flex"
               justifyContent={{ xs: "center", sm: "flex-start" }}
             >
-              <Stack direction="row" spacing={0.4}>
-                {links.map((link) => (
-                  <Tooltip key={link.index} title={link.title} arrow>
-                    <Link
-                      target="_blank"
-                      href={link.href}
-                      underline="none"
-                      color="inherit"
-                    >
-                      <IconButton color="inherit">{link.icon}</IconButton>
-                    </Link>
-                  </Tooltip>
-                ))}
-              </Stack>
-            </Grid>
-          </Box>
-        </Stack>
-      </Grid>
+              <Typography variant="subtitle1" sx={{ fontSize: { xs: '1.25rem', sm: '1rem' } }} gutterBottom>
+                Environmentalist & Computer Science Enthusiast
+              </Typography>
+          </Grid>
+          <Grid
+            display="flex"
+            justifyContent={{ xs: "center", sm: "flex-start" }}
+          >
+            <Stack direction="row" spacing={0.4}>
+              {links.map((link) => (
+                <Tooltip key={link.index} title={link.title} arrow>
+                  <Link
+                    target="_blank"
+                    href={link.href}
+                    underline="none"
+                    color="inherit"
+                  >
+                    <IconButton color="inherit" sx={{ fontSize: '1.6rem' }}> {/* Adjust the font size here */}
+                      {link.icon}
+                    </IconButton>
+                  </Link>
+                </Tooltip>
+              ))}
+            </Stack>
+          </Grid>
+        </Box>
+      </Stack>
     </Grid>
+    </Grid >
   );
 }
