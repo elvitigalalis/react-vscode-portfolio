@@ -39,7 +39,7 @@ export default function Home({ setSelectedIndex }: Props) {
         <Stack direction={{ xs: "column", sm: "row-reverse" }} spacing={2}
           sx={{ justifyContent: "center", alignItems: "center", height: "100%" }}>
           <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <img src={logo} width="225rem" alt="logo" style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }} />
+            <img src={logo} width="200rem" alt="logo" style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }} />
           </Box>
           <Box>
             <Grid
