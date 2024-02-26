@@ -36,9 +36,10 @@ export default function Home({ setSelectedIndex }: Props) {
       sx={{ minHeight: `calc(100vh - 20px - 33px)` }}
     >
       <Grid item xs={3}>
-        <Stack direction={{ xs: "column", sm: "row-reverse" }} spacing={2}>
-          <Box display="flex" sx={{ justifyContent: "center" }}>
-          <img src={logo} width="150px" alt="logo" style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }} />
+        <Stack direction={{ xs: "column", sm: "row-reverse" }} spacing={2}
+          sx={{ justifyContent: "center", alignItems: "center", height: "100%" }}>
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <img src={logo} width="200px" alt="logo" style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }} />
           </Box>
           <Box>
             <Grid
