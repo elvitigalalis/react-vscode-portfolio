@@ -14,7 +14,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/LEL16/react-vscode-portfolio">
+  <a href="https://github.com/elvitigalalis/react-vscode-portfolio">
     <img src="./src/static/logo.svg" alt="Logo" width="80" >
   </a>
 
@@ -23,14 +23,14 @@
   <p align="center">
     A vscode inspired portfolio project
     <br />
-    <a href="https://github.com/LEL16/react-vscode-portfolio/blob/main/README.md"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/elvitigalalis/react-vscode-portfolio/blob/main/README.md"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://LEL16.github.io/">View Demo</a>
+    <a href="https://elvitigalalis.github.io/">View Demo</a>
     ·
-    <a href="https://LEL16.github.io/#/docs">Markdown prview</a>
+    <a href="https://elvitigalalis.github.io/#/docs">Markdown prview</a>
     ·
-    <a href="https://github.com/LEL16/react-vscode-portfolio/issues">Report Bug</a>
+    <a href="https://github.com/elvitigalalis/react-vscode-portfolio/issues">Report Bug</a>
   </p>
 </div>
 
@@ -65,7 +65,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-[![Product Name Screen Shot][product-screenshot]](https://LEL16.github.io/)
+[![Product Name Screen Shot][product-screenshot]](https://elvitigalalis.github.io/)
 
 The project is inspired by [Visual Studio Code](https://github.com/microsoft/vscode) and [caglarturali.github.io](https://github.com/caglarturali/caglarturali.github.io). The pages of the portfolio are powered by `markdown`, which make them easy to modify or add your own contents.
 
@@ -87,7 +87,7 @@ The project is inspired by [Visual Studio Code](https://github.com/microsoft/vsc
 
 1. Clone the repo
    ```sh
-   git clone https://github.com/LEL16/react-vscode-portfolio.git
+   git clone https://github.com/elvitigalalis/react-vscode-portfolio.git
    ```
 2. Install NPM packages
    ```sh
@@ -116,7 +116,7 @@ The project is inspired by [Visual Studio Code](https://github.com/microsoft/vsc
       {
         index: 0,
         title: "Find me on Github",
-        href: "https://github.com/LEL16",
+        href: "https://github.com/elvitigalalis",
         icon: <FaGithub />,
       },
     ];
@@ -150,8 +150,8 @@ docker-compose up
 ## Demonstration
 
 - The project is deployed to following two domains, and they are in synchronization.
-  - user site: [https://LEL16.github.io/](https://LEL16.github.io/)
-  - project site: [https://LEL16.github.io/react-vscode-portfolio/](https://LEL16.github.io/react-vscode-portfolio/)
+  - user site: [https://elvitigalalis.github.io/](https://elvitigalalis.github.io/)
+  - project site: [https://elvitigalalis.github.io/react-vscode-portfolio/](https://elvitigalalis.github.io/react-vscode-portfolio/)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -169,7 +169,7 @@ docker-compose up
 - Google Analytics supported
 - Auto-deploy to gh-pages with github actions ready
 
-Markdown preview: https://LEL16.github.io/#/docs
+Markdown preview: https://elvitigalalis.github.io/#/docs
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -185,9 +185,9 @@ Distributed under the MIT License. See `LICENSE.md` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Yan-Ying Liao - [Personal Portfolio](https://LEL16.github.io/) - n9102125@gmail.com
+Yan-Ying Liao - [Personal Portfolio](https://elvitigalalis.github.io/) - n9102125@gmail.com
 
-Project Link: [https://github.com/LEL16/react-vscode-portfolio](https://github.com/LEL16/react-vscode-portfolio)
+Project Link: [https://github.com/elvitigalalis/react-vscode-portfolio](https://github.com/elvitigalalis/react-vscode-portfolio)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
@@ -205,18 +205,18 @@ Project Link: [https://github.com/LEL16/react-vscode-portfolio](https://github.c
 
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
-[forks-shield]: https://img.shields.io/github/forks/LEL16/react-vscode-portfolio
-[forks-url]: https://github.com/LEL16/react-vscode-portfolio/network/members
-[stars-shield]: https://img.shields.io/github/stars/LEL16/react-vscode-portfolio
-[stars-url]: https://github.com/LEL16/react-vscode-portfolio/stargazers
-[issues-shield]: https://img.shields.io/github/issues/LEL16/react-vscode-portfolio
-[issues-url]: https://github.com/LEL16/react-vscode-portfolio/issues
-[license-shield]: https://img.shields.io/github/license/LEL16/react-vscode-portfolio
-[license-url]: https://github.com/LEL16/react-vscode-portfolio/blob/master/LICENSE.md
+[forks-shield]: https://img.shields.io/github/forks/elvitigalalis/react-vscode-portfolio
+[forks-url]: https://github.com/elvitigalalis/react-vscode-portfolio/network/members
+[stars-shield]: https://img.shields.io/github/stars/elvitigalalis/react-vscode-portfolio
+[stars-url]: https://github.com/elvitigalalis/react-vscode-portfolio/stargazers
+[issues-shield]: https://img.shields.io/github/issues/elvitigalalis/react-vscode-portfolio
+[issues-url]: https://github.com/elvitigalalis/react-vscode-portfolio/issues
+[license-shield]: https://img.shields.io/github/license/elvitigalalis/react-vscode-portfolio
+[license-url]: https://github.com/elvitigalalis/react-vscode-portfolio/blob/master/LICENSE.md
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=flat&logo=linkedin&colorB=555
 [linkedin-url]: https://www.linkedin.com/in/yan-ying-liao/
 [product-screenshot]: ./src/static/screenshot.gif
-[gh-pages-shield]: https://img.shields.io/github/deployments/LEL16/LEL16.github.io/github-pages
-[gh-pages-url]: https://github.com/LEL16/LEL16.github.io/deployments
-[website-shield]:https://img.shields.io/website?url=https%3A%2F%2FLEL16.github.io%2F
-[website-url]: https://LEL16.github.io/
+[gh-pages-shield]: https://img.shields.io/github/deployments/elvitigalalis/elvitigalalis.github.io/github-pages
+[gh-pages-url]: https://github.com/elvitigalalis/elvitigalalis.github.io/deployments
+[website-shield]:https://img.shields.io/website?url=https%3A%2F%2Felvitigalalis.github.io%2F
+[website-url]: https://elvitigalalis.github.io/
