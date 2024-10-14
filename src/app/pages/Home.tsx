@@ -47,7 +47,7 @@ export default function Home({ setSelectedIndex }: Props) {
               src="https://github.com/elvitigalalis.png"
               width="185rem"
               alt="GitHub profile"
-              style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(-1)' }}
+              style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(1)' }}
             />
           </Box>
           <Box>
