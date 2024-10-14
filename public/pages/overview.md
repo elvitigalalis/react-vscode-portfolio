@@ -2,7 +2,7 @@
 
 ## Summary
 
-Senior at Syosset High School who loves environmentalism and programming. Experienced with all stages of the development cycle for web applications, robots, and APIs. Well-versed in numerous programming languages including Java, C++, Python, HTML/CSS/JS, and React.js. Strong background in computer science, chemistry, physics, and mathematics. Creator of environmental initiative [FutureGro Inc](https://futuregro.org/), recipient of 120k/yr Google Ad Grant.
+Freshman at Stony Brook University who loves environmentalism and programming. Experienced with all stages of the development cycle for web applications, robots, and APIs. Well-versed in numerous programming languages including Java, C++, Python, HTML/CSS/JS, and React.js. Strong background in computer science, chemistry, physics, and mathematics. Creator of environmental initiative [FutureGro Inc](https://futuregro.org/) (website currently down for design refactoring), recipient of 120k/yr Google Ad Grant.
 
 ## Experience
 # 👨‍💻 Experience
@@ -104,7 +104,7 @@ Co-founded and led a chemistry club chartered with the American Chemical Society
 - React.js
 
 ## Certificates
-- IACS Computes! Honoree (Stony Brook University)
+- IACS Computes! 8hr/day/2wk Software Internship (Stony Brook University)
 
 ## Accomplishments
 FIRST Robotics Competition (FRC) World Championship [Rookie All Star]
@@ -113,4 +113,4 @@ National Merit Scholarship Commended
 ## Languages
 **English**: Proficient/Native
 **Sinhalese**: Proficient/Native
-**Spanish**: Advanced
+**Spanish**: Very Advanced/Fluent
