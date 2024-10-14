@@ -80,8 +80,16 @@ Co-founded and led a chemistry club chartered with the American Chemical Society
 
 ## Education
 
-`2020-present` [Syosset Senior High School](https://www.syossetschools.org/)
-- **Grade: 12**
+`2024-present` [Stony Brook University](https://www.cs.stonybrook.edu/)
+- **Freshman**.
+- Related Coursework: 
+- Computer Science: CSE214 Data Structures.
+- Mathematics: AMS210 Applied Linear Algebra.
+- Clubs: IEEE, AI Community, and Computer Science Club.
+- Level 9/9 Math Placement Exam Score.
+
+`2020-2024` [Syosset Senior High School](https://www.syossetschools.org/)
+- Graduate.
 - Interests: **Environmentalism**, **computer science**, chemistry, physics, and mathematics!
 - Related Coursework: Math Theory Honors, AP Calculus BC, AP Physics 1, AP Physics C Mech. and E&M, AP Computer Science A, AP Chemistry, & Adv. Science Research 12.
 - SAT (Superscore): 1570 (800 M, 770 E)
@@ -107,7 +115,8 @@ Co-founded and led a chemistry club chartered with the American Chemical Society
 - IACS Computes! 8hr/day/2wk Software Internship (Stony Brook University)
 
 ## Accomplishments
-FIRST Robotics Competition (FRC) World Championship [Rookie All Star]
+FIRST Robotics Competition (FRC) World Championship at Houston, Texas 2x Qualifier (Team 9016: Syosset Supersonics)
+1st Place & Captains @ [Hofstra Regionals](https://www.thebluealliance.com/event/2024nyli2) (out of 49 robotics teams)
 National Merit Scholarship Commended
 
 ## Languages
