@@ -12,7 +12,7 @@
 
 `2020-2024` [Syosset Senior High School](https://www.syossetschools.org/)
 - Graduate.
-- Interests: **Environmentalism**, **computer science**, chemistry, physics, and mathematics!
+- Interests: **Environmentalism**, **computer science**, chemistry, physics, and mathematics.
 - Related Coursework: Math Theory Honors, AP Calculus BC (5), AP Physics 1, AP Physics C Mech. and E&M, AP Computer Science A (5), AP Chemistry (5), & Adv. Science Research 12.
 - Other Coursework: AP World History I, AP U.S. History, AP Comparative Gov't, AP English Language & Composition, AP Literature & Composition (5), AP Microeconomics (5), AP Spanish Language and Culture, and Honors Subjects.
 - Skills: Spreedsheets/ Slides/ Docs + Programming (Python, HTML, CSS, Java, C++)

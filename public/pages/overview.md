@@ -90,7 +90,7 @@ Co-founded and led a chemistry club chartered with the American Chemical Society
 
 `2020-2024` [Syosset Senior High School](https://www.syossetschools.org/)
 - Graduate.
-- Interests: **Environmentalism**, **computer science**, chemistry, physics, and mathematics!
+- Interests: **Environmentalism**, **computer science**, chemistry, physics, and mathematics.
 - Related Coursework: Math Theory Honors, AP Calculus BC, AP Physics 1, AP Physics C Mech. and E&M, AP Computer Science A, AP Chemistry, & Adv. Science Research 12.
 - SAT (Superscore): 1570 (800 M, 770 E)
 - PSAT: 1450
