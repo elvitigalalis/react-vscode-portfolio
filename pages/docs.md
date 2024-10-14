@@ -104,11 +104,11 @@ Right aligned columns
 
 ## Links
 
-[link text](https://LEL16.github.io/)
+[link text](https://elvitigalalis.github.io/)
 
-[link with title](https://github.com/LEL16/react-vscode-portfolio "title text!")
+[link with title](https://github.com/elvitigalalis/react-vscode-portfolio "title text!")
 
-Autoconverted link https://LEL16.github.io/ 
+Autoconverted link https://elvitigalalis.github.io/ 
 
 ## Alerts
 ::: warning

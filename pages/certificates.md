@@ -1,2 +1,2 @@
 # 🥇 Certificates
-- IACS Computes! Honoree (Stony Brook University)
+- IACS Computes! 8hr/day/2wk Software Internship (Stony Brook University)
