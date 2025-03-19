@@ -6,10 +6,9 @@ View my [Resume](lisul.org/resume.pdf).
 
 ## Summary
 
-Freshman at Stony Brook University who loves environmentalism and programming. Experienced with all stages of the development cycle for web applications, robots, and APIs. Well-versed in numerous programming languages including Java, C++, Python, HTML/CSS/JS, and React.js. Strong background in computer science, chemistry, physics, and mathematics. Creator of environmental initiative [FutureGro Inc](https://futuregro.org/) (website currently down for design refactoring), recipient of 120k/yr Google Ad Grant.
+Freshman at Stony Brook University who loves environmentalism and programming. Experienced with all stages of the development cycle for web applications, robots, and APIs. Well-versed in numerous programming languages including Java, C++, Python, HTML/CSS/JS, and React.js. Strong background in computer science, chemistry, physics, and mathematics. Creator of environmental initiative [FutureGro Inc](https://futuregro.org/), recipient of 120k/yr Google Ad Grant.
 
 ## Experience
-# 👨‍💻 Experience
 
 ## **Co-President, Coding and Web Design Club** @ **School** _(9th Grade - 12th Grade)_
 Introduced sub-groups focusing on Arduino and AI, tutored students in computer science olympiads, and led the club in organizing hackathons and competitions. Raised funds to support club activities, including social events.
