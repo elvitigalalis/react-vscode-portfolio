@@ -19,7 +19,7 @@
   </a>
 
 <h3 align="center">react-vscode-portfolio</h3>
-
+<!-- About project -->
   <p align="center">
     A vscode inspired portfolio project
     <br />
