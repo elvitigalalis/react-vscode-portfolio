@@ -6,7 +6,7 @@ View my [Resume](Lisul_Elvitigala_Resume_2025.pdf).
 
 ## Summary
 
-Freshman at Stony Brook University who loves environmentalism and programming. Experienced with all stages of the development cycle for web applications, robots, and APIs. Well-versed in numerous programming languages including Java, C++, Python, HTML/CSS/JS, and React.js. Strong background in computer science, chemistry, physics, and mathematics. Creator of environmental initiative [FutureGro Inc](https://futuregro.org/), recipient of 120k/yr Google Ad Grant.
+Freshman at Stony Brook University who loves environmentalism and programming. Experienced with all stages of the development cycle for web applications, robots, and APIs. Well-versed in numerous programming languages including Java, C#, C++, Python, HTML/CSS/JS, SQL, and React.js. Strong background in computer science, robotics, and mathematics. Creator of environmental initiative [FutureGro Inc](https://futuregro.org/), recipient of 120k/yr Google Ad Grant.
 
 ## Experience
 
