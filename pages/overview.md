@@ -2,7 +2,7 @@
 
 ## Resume
 
-View my [Resume](Lisul_Elvitigala_Resume_2025.pdf).
+View my [Resume](Lisul_Elvitigala_resume.pdf).
 
 ## Summary
 
