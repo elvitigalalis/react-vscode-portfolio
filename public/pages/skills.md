@@ -1,27 +1,13 @@
-# 💻 Skills
+# Skills
 
-## General Tech Stacks
-- Web Development (Frontend & Backend)
-- Desktop App Development (Figma)
-- Internet of Things (IoT) - Arduino & Raspberry Pi
-- Robotics
+**Languages**
+Python • C++ • C# • Java • JavaScript • SQL
 
-## Programming languages
-- Python
-- Java
-- C++
-- HTML/CSS/JS
-- React.js
-  - w/ Firebase API
-- Other APIs:
-  - ChatGPT 3.5-turbo API
-  - Google Spreadsheets
-  - Pyautogui
-- Trained neural networks w/ Google CoLab
+**Frameworks & Libraries**
+PyTorch • React • Node.js • ASP.NET Core • Flask • Express
 
-## Cloud
-- Google Virtual Machine Servers
-- Oracle Cloud Services
+**Tools & Platforms**
+Docker • Kubernetes • AWS • Git • Linux • Firebase • Splunk
 
-## Vcs
-- Git
+**Specializations**
+Machine Learning • Embedded Systems • CI/CD Pipelines • Backend APIs
