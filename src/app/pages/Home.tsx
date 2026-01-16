@@ -58,7 +58,7 @@ export default function Home({ setSelectedIndex }: Props) {
             </Grid>
             <Grid display="flex" justifyContent={{ xs: "center", sm: "flex-start" }}>
               <Typography variant="subtitle1" sx={{ fontSize: { xs: '1.25rem', sm: '1rem' } }} gutterBottom>
-                Software Engineer | ML & Robotics | Stony Brook '27
+                Software Engineer Intern | ML & Robotics | Stony Brook '27
               </Typography>
             </Grid>
             <Grid display="flex" justifyContent={{ xs: "center", sm: "flex-start" }}>
