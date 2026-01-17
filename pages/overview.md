@@ -4,7 +4,7 @@
 [View Resume PDF](Lisul_Elvitigala_resume.pdf)
 
 ## About
-Software engineer intern with 2 SWE internships, ML research, and robotics experience. B.S. Computer Science & Applied Mathematics at Stony Brook (3.95 GPA, May 2027).
+Software engineer intern with 2 SWE internships, ML research, and robotics experience. B.S. Computer Science & Applied Mathematics at Stony Brook (3.81 GPA, May 2027).
 
 ## Experience Highlights
 - **Clever Devices** (Summer 2025) - Built C# vehicle tracking system serving 200+ vehicles, reduced SQL latency 85%
