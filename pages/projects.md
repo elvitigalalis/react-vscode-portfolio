@@ -1,29 +1,17 @@
 # Projects
 
-## [CUDA-Accelerated Robotic Arm](https://github.com/elvitigalalis/autonomous-robotic-arm)
-**Role:** Individual project
+## [Autonomous Micromouse Robot](https://github.com/IEEE-StonyBrook/Jurababa_2025-2026)
+**Role:** Team Captain
 
-Built 6-DoF robotic arm with imitation learning. Recorded 1,000+ training demos and optimized PyTorch inference with CUDA, reducing latency from 120ms to <50ms on Jetson Orin Nano.
+Captained a 13-member team for 2 seasons: 2nd of 15+ at MIT, 1st in Best Design, and 2nd at NYIT (38s run). Built a double-buffered sensor hub across the Pico's 2 cores (lock-free reads, mutex on publish) for 100 Hz PID, and flood fill and A* with 45-degree diagonals and trapezoidal motion profiles; wrote 110 of 121 commits. Compiled the robot's C++ navigation code into a host simulator to rehearse all 3 competition run phases.
 
-**Tech:** C++, CUDA, PyTorch, OpenCV, Python
-**Impact:** 58% latency reduction, 20% faster actuation across 50+ test runs
-
-&nbsp;
-
-## [CNN Object Detection Robot](https://github.com/SyossetFRC/SYO_official-2024)
-**Role:** Lead Programmer (Team 9016)
-
-Trained custom CNN on 3,500+ Gaussian-smoothed images for real-time game piece detection. Integrated with Coral TPU edge accelerator, reducing autonomous navigation overshoot 70%.
-
-**Tech:** Java, Python, PyTorch, Coral TPU
-**Impact:** 70% overshoot reduction, enabled 29th place finish at World Championship
+**Tech:** C++, Raspberry Pi Pico (RP2040), PID, CMake
 
 &nbsp;
 
-## [Autonomous Maze Solver Robot](https://github.com/IEEE-StonyBrook/Jurababa_2025-2026)
-**Role:** Team Lead (IEEE Stony Brook)
+## [WorkIt](https://github.com/WorkIt-CSE-416/WorkIt-CSE416)
+**Role:** 5-Person Team
 
-Building competition robot for IEEE Micromouse regionals. Implemented flood-fill and A* pathfinding algorithms in C++ with real-time sensor integration. Conducted 500+ test runs across 20+ maze configurations.
+Built a robots.txt-compliant Python scraper reading 1,800 company boards (Greenhouse, Lever, Ashby) into 1,000+ roles, cutting runtime from 9.5 to 3 min with one lane per provider and quiet boards read every 3rd run. Made the 6-hourly import one Postgres transaction that refuses an empty feed or closing over half the jobs. Shipped Scout, a FastAPI + Gemini assistant grounded only in a user's parsed resume and the job posting.
 
-**Tech:** C++, Embedded Systems, Raspberry Pi
-**Impact:** 250% simulated speed increase via algorithm optimization
+**Tech:** Python, FastAPI, Next.js, Supabase Postgres, GitHub Actions, Gemini
