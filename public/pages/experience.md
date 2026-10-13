@@ -1,40 +1,29 @@
 # Experience
 
-## **Software Engineer Intern** @ [Clever Devices](https://www.cleverdevices.com/) _(June 2025 - Aug 2025)_
-Built backend systems for transit vehicle fleet management.
-- Enabled real-time entry/exit detection for 200+ vehicles with 99.9% uptime C# tracker system
-- Reduced data retrieval latency 85% by optimizing SQL backend for vehicle API microservice
-- Developed Python fuzzing tool generating 250+ synthetic payloads across 10 threads, uncovering 5 unhandled exceptions; containerized with Docker, monitored with Splunk
+## **Software Engineer Intern, Onboard Systems** @ [Hitachi Rail](https://www.hitachirail.com/) _(June 2026 - Aug 2026)_
+Built onboard and dispatch integrations for transit bus telemetry.
+- Built GTFS-Realtime (Protobuf/HTTP) and TAIP (UDP) adapters in C#/.NET 10, feeding multi-agency bus telemetry into Hitachi's CAD dispatch; validated on MBTA's live feed ahead of a planned LA Metro rollout
+- Extended the C++ gateway's TCP protocol to v3 to relay agency names to dispatch; fixed byte-alignment bugs
+- Architected and led a 13-intern depot bus tracker (YOLOv8-OBB, 2-stage OCR, homography) at 30 FPS on CPU with sub-second detection; verified all 15 fleet IDs and sent 4,009 updates in 4 min to SmartYard
+- Fixed a production LockRecursionException in SmartYard's C# by narrowing ReaderWriterLockSlim scope
+- Merged 10 PRs (65 commits, 40+ story points) through senior review; rated at Associate Engineer level
 
-**Technologies:** C#, SQL, Python, Docker, Splunk, REST APIs
+**Technologies:** C#, .NET 10, C++, GTFS-Realtime, Protobuf, TAIP, UDP/TCP, YOLOv8-OBB, OCR
 
 &nbsp;
 
-## **Undergraduate Researcher** @ [Princeton CUbitsAI Lab](https://cubits.ai/) _(Dec 2024 - May 2025)_
-Contributed to AI/ML research and educational platform development.
-- Authored [paper](https://www.linkedin.com/in/lisul/overlay/experience/2347942623/multiple-media-viewer/?profileId=ACoAAEJdRFwBJEbDRCslBjY39vXAKrgrQtbVwPw&treasuryMediaId=1708916042412) on automated prompt-to-video pipeline producing 30s video outputs
-- Architected [Q&A platform](https://final-project-ig-group.vercel.app/) for 30+ permissioned students using React, Tailwind, Node, MongoDB, MySQL
-- Implemented user validation with Firestore database integration via Firebase API
+## **Software Engineer Intern** @ [Clever Devices](https://www.cleverdevices.com/) (acquired by Hitachi Rail) _(June 2025 - Aug 2025)_
+Built testing and tracking tools for transit vehicle systems.
+- Built a multithreaded Python fuzzer firing synthetic POST payloads at a fault-tolerant vehicle REST API, uncovering unhandled exceptions; containerized the tool with Docker and charted each fuzzing run in Splunk
+- Built a real-time C# tracker service on the transit server that detects buses entering and leaving their depots
 
-**Technologies:** Python, React, Tailwind, Node.js, MongoDB, MySQL, Firebase
+**Technologies:** Python, C#, Docker, Splunk, REST APIs
 
 &nbsp;
 
 ## **Software Engineer Intern** @ [Cloud Data Pro](https://www.clouddatapro.com/) _(June 2024 - Aug 2024)_
-Full-stack development and DevOps for enterprise software tools.
-- Built internal version manager web application using CRUD framework in ASP.NET Core
-- Engineered scalable Python automation on Azure, accelerating Portuguese translation by 500%
-- Implemented CI/CD pipeline with Kubernetes for Docker deployments using JWT authentication
-- Restored 99.9% uptime by developing SQL hotfix for broken stored procedure in live system
+Production database fixes and DevOps.
+- Ended a production outage by writing and deploying a SQL hotfix for the broken stored procedure behind it
+- Built a CI/CD pipeline on Azure deploying Docker images from Artifactory to Kubernetes with JWT auth
 
-**Technologies:** C#, ASP.NET Core, Python, Azure, Kubernetes, Docker, SQL, JWT
-
-&nbsp;
-
-## **Lead Programmer** @ FIRST Robotics Team 9016 _(Sep 2020 - May 2024)_
-Led programming for competition robots; achieved World Championship qualification 2x.
-- Implemented neural network-based computer vision with 3,500 training images for position tracking
-- Designed autonomous navigation routines contributing to 29th place finish at World Championship
-- Trained team members on command-based framework, reducing learning curve from weeks to days
-
-**Technologies:** Java, Python, Computer Vision, Neural Networks
+**Technologies:** SQL, Azure, Docker, Artifactory, Kubernetes, JWT
