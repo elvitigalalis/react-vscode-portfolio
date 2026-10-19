@@ -3,13 +3,14 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { schema } from "./schema.mjs";
 import { mirror } from "./mirror.mjs";
 import { routing } from "./routing.mjs";
 import { lint } from "./lint.mjs";
 import { tags } from "./tags.mjs";
 import { html, links, lighthouse, a11y } from "./tools.mjs";
 
-const gates = { mirror, lint, tags, routing, html, links, a11y, lighthouse };
+const gates = { schema, mirror, lint, tags, routing, html, links, a11y, lighthouse };
 
 const { values, positionals } = parseArgs({ options: { dist: { type: "string", default: "dist" } }, allowPositionals: true });
 const root = new URL("..", import.meta.url).pathname;
