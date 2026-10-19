@@ -150,3 +150,51 @@ test("the build fails when resume.json breaks the schema", () => {
   assert.notEqual(r.status, 0, "build should fail on a schema violation");
   assert.match(r.stdout + r.stderr, /resume\.json does not match its schema/);
 });
+
+// Write-ups: one markdown file in src/content/writeups/<slug>.md builds /projects/<slug>/.
+const writeupDir = join(root, "src/content/writeups");
+const writeupSlugs = () => readdirSync(writeupDir).filter((f) => f.endsWith(".md")).map((f) => f.replace(/\.md$/, ""));
+const writeupHtml = (slug) => readFileSync(join(dist, "projects", slug, "index.html"), "utf8");
+
+test("each write-up file builds a page that only its card's Write-up button links to", () => {
+  const slugs = writeupSlugs();
+  assert.ok(slugs.includes("micromouse"), "the Micromouse write-up exists");
+  for (const p of resume.projects) {
+    const linked = home.includes(`href="/projects/${p.slug}/"`);
+    assert.equal(linked, slugs.includes(p.slug), `Write-up button for ${p.slug}`);
+  }
+  for (const slug of slugs) assert.ok(writeupHtml(slug).length > 0);
+});
+
+test("a write-up's header and At a glance mirror its résumé project verbatim", () => {
+  for (const slug of writeupSlugs()) {
+    const p = resume.projects.find((x) => x.slug === slug);
+    assert.ok(p, `${slug} is a resume.json project`);
+    const html = writeupHtml(slug);
+    const header = textOf(html.match(/<header class="writeup-head"[\s\S]*?<\/header>/)[0]);
+    for (const f of [p.title, p.role, p.dates, ...p.stack].filter(Boolean)) assert.ok(header.includes(squash(f)), f);
+    assert.match(html, new RegExp(`href="${p.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+    const glance = textOf(html.match(/<aside[^>]*id="at-a-glance"[\s\S]*?<\/aside>/)[0]);
+    assert.deepEqual(p.bullets.filter((b) => !glance.includes(squash(b))), []);
+  }
+});
+
+test("a write-up ends with links back to all projects and the résumé", () => {
+  for (const slug of writeupSlugs()) {
+    const end = writeupHtml(slug).match(/<nav class="writeup-end"[\s\S]*?<\/nav>/)[0];
+    assert.match(end, /href="\/#projects"[^>]*>← All projects</);
+    assert.match(end, /href="\/Lisul_Elvitigala_resume\.pdf"/);
+  }
+});
+
+test("each write-up has its own title, description and absolute canonical", () => {
+  const pages = [home, ...writeupSlugs().map(writeupHtml)];
+  const tag = (html, re) => html.match(re)?.[1];
+  const titles = pages.map((h) => tag(h, /<title>([^<]+)<\/title>/));
+  const descs = pages.map((h) => tag(h, /<meta name="description" content="([^"]+)"/));
+  assert.equal(new Set(titles).size, pages.length);
+  assert.equal(new Set(descs).size, pages.length);
+  for (const slug of writeupSlugs()) {
+    assert.match(writeupHtml(slug), new RegExp(`<link rel="canonical" href="https://www\\.lisul-elvi\\.com/projects/${slug}/"`));
+  }
+});
