@@ -1,0 +1,43 @@
+# The built-site gate suite (npm run check) and its fixture tests (npm test), on every push and PR.
+# The weekly run also checks external links, which can flake, so pushes check internal ones only.
+name: Check
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 9 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+env:
+  LYCHEE_VERSION: "0.24.2"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install lychee
+        run: |
+          cd "$RUNNER_TEMP"
+          base="https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}"
+          curl -fsSLO "$base/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSLO "$base/lychee-x86_64-unknown-linux-gnu.tar.gz.sha256"
+          sha256sum -c lychee-x86_64-unknown-linux-gnu.tar.gz.sha256
+          tar xzf lychee-x86_64-unknown-linux-gnu.tar.gz
+          install -D "$(find . -name lychee -type f | head -1)" "$HOME/.local/bin/lychee"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: npm ci
+      - name: Gate suite
+        run: npm run check
+        env:
+          CHECK_EXTERNAL_LINKS: ${{ github.event_name == 'schedule' && '1' || '' }}
+      - name: Gate fixture tests
+        run: npm test
