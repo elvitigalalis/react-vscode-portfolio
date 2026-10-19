@@ -113,3 +113,21 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .footer { border-top: 1px solid var(--line); margin-top: 2.5rem; padding: 1.5rem 0 2rem; }
 .small { color: var(--muted); font-size: 0.875rem; margin: 0.75rem 0 0; }
 .small a { color: var(--muted); }
+
+/* Write-ups: one narrow reading column; figures span it, each led in by a sentence. */
+.writeup { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem 0; }
+.writeup h1 { font-size: clamp(1.75rem, 6vw, 2.25rem); letter-spacing: -0.01em; }
+.writeup-head .links { margin: 0.6rem 0 0; font-weight: 600; }
+.tldr { font-size: 1.125rem; margin: 1.5rem 0; }
+.writeup figure { margin: 1.25rem 0 1.75rem; }
+.writeup figure img, .writeup figure video, .writeup figure svg { display: block; width: 100%; height: auto; border-radius: 0.4rem; }
+.writeup figcaption { color: var(--muted); font-size: 0.875rem; margin-top: 0.5rem; }
+.clip video { max-height: 80vh; width: auto; max-width: 100%; margin: 0 auto; background: #000; }
+.glance { border: 1px solid var(--line); border-radius: 0.6rem; padding: 1rem 1.1rem; margin: 1.5rem 0 2rem; }
+.glance h2 { font-size: 1rem; margin: 0; }
+.prose h2 { font-size: 1.25rem; margin: 2.25rem 0 0.75rem; }
+.prose p, .prose ul { margin: 0 0 1rem; }
+.prose ul { padding-left: 1.2rem; }
+.prose li { margin-bottom: 0.35rem; }
+.todo { background: #fef08a; color: #1c1917; padding: 0 0.2em; }
+.writeup-end { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; font-weight: 600; }

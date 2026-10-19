@@ -1,0 +1,54 @@
+---
+// A write-up: anish.io's narrow reading column with figures in Matt Keeter's rhythm.
+// Header, summary, clip and "At a glance" come first; the header and the bullets are
+// mirrored from resume.json, so they can never contradict the PDF.
+import { getCollection, render } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { resume } from "../../data/resume";
+import { siteConfig } from "../../config";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("writeups");
+  return entries.map((entry) => {
+    const project = resume.projects.find((p) => p.slug === entry.id);
+    if (!project) throw new Error(`Write-up ${entry.id}.md has no matching project in resume.json`);
+    return { params: { slug: entry.id }, props: { entry, project } };
+  });
+}
+
+const { entry, project: p } = Astro.props;
+const { Content } = await render(entry);
+const { description, summary, video } = entry.data;
+---
+
+<Base title={`${p.title} · ${siteConfig.title}`} description={description} path={`/projects/${p.slug}/`}>
+  <article class="writeup">
+    <header class="writeup-head">
+      <h1>{p.title}</h1>
+      <p class="meta">{p.role && <>{p.role} · </>}{p.dates}</p>
+      <ul class="tags" aria-label="Technologies">{p.stack.map((s) => <li>{s}</li>)}</ul>
+      <p class="links"><a href={p.url}>Code</a></p>
+    </header>
+    <p class="tldr">{summary}</p>
+    {video && (
+      <figure class="clip">
+        <video controls muted playsinline preload="none" poster={video.poster} width={video.width} height={video.height}>
+          <source src={video.src} type="video/mp4" />
+          <track kind="captions" src={video.captions} srclang="en" label="English" default />
+        </video>
+        <figcaption>{video.caption}</figcaption>
+      </figure>
+    )}
+    <aside class="glance" id="at-a-glance" aria-labelledby="glance-h">
+      <h2 id="glance-h">At a glance</h2>
+      <ul class="bullets">{p.bullets.map((b) => <li>{b}</li>)}</ul>
+    </aside>
+    <div class="prose">
+      <Content />
+    </div>
+    <nav class="writeup-end" aria-label="More">
+      <a href="/#projects">← All projects</a>
+      <a href={siteConfig.resumePdf}>Résumé (PDF)</a>
+    </nav>
+  </article>
+</Base>
