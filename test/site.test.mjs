@@ -198,3 +198,71 @@ test("each write-up has its own title, description and absolute canonical", () =
     assert.match(writeupHtml(slug), new RegExp(`<link rel="canonical" href="https://www\\.lisul-elvi\\.com/projects/${slug}/"`));
   }
 });
+
+// A write-up's hand-written text: its front matter fields (except sources) and its body.
+function writeupSource(slug) {
+  const raw = readFileSync(join(writeupDir, `${slug}.md`), "utf8");
+  const [, fm, body] = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  const sourcesAt = fm.search(/^sources:/m);
+  // Front matter comments and media fields (paths, pixel sizes) are not prose.
+  const fields = fm.slice(0, sourcesAt).replace(/^\s*(#|src:|poster:|captions:|width:|height:).*$/gm, "");
+  return { prose: fields + "\n" + body, sources: fm.slice(sourcesAt) };
+}
+const numbersIn = (text) => text.match(/\d+(?:[.,]\d+)*/g) ?? [];
+const proseText = (s) => textOf(s.replace(/<!--[\s\S]*?-->/g, "")); // tags and attributes are not prose
+
+const banned = [
+  /\boffers?\b/i, /acquired by/i, /\bformerly\b/i, /\b\d[\d,]*\s+commits?\b/i,
+  /LA Metro/i, /robotic arm/i, /\bCUDA\b/i,
+];
+
+test("every number in a write-up traces to resume.json or its sources: list", () => {
+  const known = new Set(numbersIn(JSON.stringify(resume)));
+  for (const slug of writeupSlugs()) {
+    const { prose, sources } = writeupSource(slug);
+    const allowed = new Set([...known, ...numbersIn(sources)]);
+    const untraced = [...new Set(numbersIn(proseText(prose)))].filter((n) => !allowed.has(n));
+    assert.deepEqual(untraced, [], `${slug}: numbers missing from sources:`);
+  }
+});
+
+test("write-ups obey the standing wording rules", () => {
+  for (const slug of writeupSlugs()) {
+    const text = proseText(writeupSource(slug).prose);
+    assert.deepEqual(banned.filter((re) => re.test(text)).map(String), [], slug);
+  }
+  // The robot's run code plans with A*; its flood-fill code never runs, so it gets no credit.
+  assert.doesNotMatch(proseText(writeupSource("micromouse").prose), /flood[- ]?fill/i);
+});
+
+test("a write-up runs 700 to 1,200 words with 2 to 4 figures", () => {
+  for (const slug of writeupSlugs()) {
+    const html = writeupHtml(slug);
+    const prose = html.match(/<div class="prose"[^>]*>([\s\S]*?)<\/div>\s*<nav class="writeup-end"/)[1];
+    const tldr = html.match(/<p class="tldr">([\s\S]*?)<\/p>/)[1];
+    const words = textOf(tldr + " " + prose.replace(/<figure[\s\S]*?<\/figure>/g, "")).split(" ").filter((w) => /\w/.test(w));
+    assert.ok(words.length >= 700 && words.length <= 1200, `${slug}: ${words.length} words`);
+    const figures = prose.match(/<figure\b/g) ?? [];
+    assert.ok(figures.length >= 2 && figures.length <= 4, `${slug}: ${figures.length} figures`);
+  }
+});
+
+test("write-up figures are described, sized, lazy and light", () => {
+  for (const slug of writeupSlugs()) {
+    const prose = writeupHtml(slug).match(/<div class="prose"[^>]*>[\s\S]*<nav class="writeup-end"/)[0];
+    for (const fig of prose.match(/<figure\b[\s\S]*?<\/figure>/g) ?? []) {
+      assert.match(fig, /<figcaption>[^<]{20,}/, "each figure has a caption");
+      const img = fig.match(/<img\b[^>]*>/)?.[0];
+      if (img) {
+        assert.match(img, /alt="[^"]{10,}"/);
+        assert.match(img, /width="\d+" height="\d+"/);
+        assert.match(img, /loading="lazy"/);
+        const src = img.match(/src="([^"]+)"/)[1];
+        assert.match(src, /\.webp$/);
+        assert.ok(statSync(join(dist, src)).size <= 150 * 1024, `${src} is over 150 KB`);
+      } else {
+        assert.match(fig, /<svg\b[^>]*role="img"[^>]*aria-labelledby="[^"]+"/, "a drawn figure is labelled");
+      }
+    }
+  }
+});
