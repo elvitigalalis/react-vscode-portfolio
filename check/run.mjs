@@ -6,8 +6,9 @@ import { parseArgs } from "node:util";
 import { mirror } from "./mirror.mjs";
 import { routing } from "./routing.mjs";
 import { lint } from "./lint.mjs";
+import { tags } from "./tags.mjs";
 
-const gates = { mirror, lint, routing };
+const gates = { mirror, lint, tags, routing };
 
 const { values, positionals } = parseArgs({ options: { dist: { type: "string", default: "dist" } }, allowPositionals: true });
 const root = new URL("..", import.meta.url).pathname;
