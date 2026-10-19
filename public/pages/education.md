@@ -1,8 +1,10 @@
 # Education
 
 ## [Stony Brook University](https://www.cs.stonybrook.edu/) _(Expected May 2028)_
-**B.S. Computer Science and Applied Math & Statistics, Presidential Scholar** | GPA: 3.86/4.00
+**B.S. Computer Science** | GPA: 3.86/4.00
 
-**Coursework:** Algorithms, Data Structures, Probability & Statistics, Linear Algebra, Differential Equations
+**Honors:** Presidential Scholar (university merit scholarship); Dean's List in all four completed semesters
 
-**Honors:** MIT Micromouse Judge (1 of 4 selected); 2x FIRST Robotics World Championship Qualifier
+**Teaching Assistant:** CSE 114 (Java OOP), Spring 2026: led a weekly ~20-student lab, office hours, grading
+
+**Coursework:** Systems Fundamentals II, Algorithms, Data Structures, Linear Algebra, Probability & Statistics
