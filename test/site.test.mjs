@@ -91,20 +91,6 @@ test("each project card shows a photo of at most 100 KB with alt text", () => {
   }
 });
 
-test("hand-written home page text obeys the standing wording rules", () => {
-  const text = readFileSync(join(root, "src/content/home.md"), "utf8").replace(/^\s*#.*$/gm, "");
-  const banned = [
-    /\boffers?\b/i, // offer tags
-    /acquired by/i,
-    /\bformerly\b/i,
-    /\b\d[\d,]*\s+commits?\b/i,
-    /LA Metro/i,
-    /robotic arm/i,
-    /\bCUDA\b/i,
-  ];
-  assert.deepEqual(banned.filter((re) => re.test(text)).map(String), []);
-});
-
 test("the build fails when resume.json breaks the schema", () => {
   const dir = mkdtempSync(join(tmpdir(), "resume-"));
   const bad = { ...resume, projects: resume.projects.map((p) => ({ ...p, note: "Return offer" })) };
