@@ -1,13 +1,10 @@
 # Skills
 
 **Languages**
-C++ • C# • Python • TypeScript • JavaScript • Java • C • SQL
+C++ • Python • C# • C • SQL • Java • JavaScript • TypeScript
 
-**Frameworks**
-.NET • ASP.NET Core • FastAPI • Next.js • React • PyTorch • OpenCV • YOLO
+**Frameworks & Libraries**
+.NET • ASP.NET • PyTorch • OpenCV • Ultralytics YOLO • Protobuf
 
-**Infrastructure**
-Docker • Kubernetes • Azure • AWS • RabbitMQ • PostgreSQL • Linux • Git • GitHub Actions
-
-**AI Tools**
-Claude Code • GitHub Copilot
+**Tools**
+Git • Docker • PostgreSQL • GitHub Actions • Linux • CMake • GDB • GitHub Copilot • Claude Code
