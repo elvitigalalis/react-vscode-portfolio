@@ -11,6 +11,7 @@ import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
 import { tags } from "../check/tags.mjs";
+import { html } from "../check/tools.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -239,4 +240,17 @@ test("tags: the home page's JSON-LD must parse and tie the profiles together", a
 test("tags: robots.txt must point at the sitemap", async () => {
   const dist = broken((d) => { seo(d); write(d, "robots.txt", "User-agent: *\nDisallow:\n"); });
   assert.match((await tags({ dist, resume })).join("\n"), /robots\.txt: no Sitemap/);
+});
+
+// --- html-validate --------------------------------------------------------
+
+test("html: passes on the real build", async () => {
+  assert.deepEqual(await html({ root, dist: realDist }), []);
+});
+
+test("html: fails on invalid markup in any page", async () => {
+  const dist = broken((d) => write(d, "projects/demo/index.html", page('<div id="a"></div><p id="a">Two ids <span>unclosed</p>')));
+  const problems = (await html({ root, dist })).join("\n");
+  assert.match(problems, /projects\/demo\/index\.html/);
+  assert.match(problems, /no-dup-id/);
 });
