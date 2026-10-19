@@ -1,29 +1,28 @@
 # Experience
 
 ## **Software Engineer Intern, Onboard Systems** @ [Hitachi Rail](https://www.hitachirail.com/) _(June 2026 - Aug 2026)_
-Built onboard and dispatch integrations for transit bus telemetry.
-- Built GTFS-Realtime (Protobuf/HTTP) and TAIP (UDP) adapters in C#/.NET 10, feeding multi-agency bus telemetry into Hitachi's CAD dispatch; validated on MBTA's live feed ahead of a planned LA Metro rollout
-- Extended the C++ gateway's TCP protocol to v3 to relay agency names to dispatch; fixed byte-alignment bugs
-- Architected and led a 13-intern depot bus tracker (YOLOv8-OBB, 2-stage OCR, homography) at 30 FPS on CPU with sub-second detection; verified all 15 fleet IDs and sent 4,009 updates in 4 min to SmartYard
-- Fixed a production LockRecursionException in SmartYard's C# by narrowing ReaderWriterLockSlim scope
-- Merged 10 PRs (65 commits, 40+ story points) through senior review; rated at Associate Engineer level
+Woodbury, NY
+- Built and unit-tested GTFS-Realtime (Protobuf) and TAIP (UDP) adapters in C#/.NET to bring bus GPS into dispatch; validated on MBTA's live feed, 500+ buses at once, ahead of a planned LA Metro rollout
+- Extended a C++ dispatch server's TCP protocol to v3, adding agency names to its messages so one server can route multiple agencies; built security-reviewed ASP.NET/JavaScript web forms for operators to add feeds
+- Pitched computer-vision tracking to the CTO so depots can locate buses cheaply in real time; led its 13-intern team, fine-tuned PyTorch YOLOv8, built 2-stage OCR and homography; demo verified all 15 fleet-ID reads
 
-**Technologies:** C#, .NET 10, C++, GTFS-Realtime, Protobuf, TAIP, UDP/TCP, YOLOv8-OBB, OCR
+**Technologies:** C++, C#, .NET, PyTorch, OpenCV
 
 &nbsp;
 
-## **Software Engineer Intern** @ [Clever Devices](https://www.cleverdevices.com/) (acquired by Hitachi Rail) _(June 2025 - Aug 2025)_
-Built testing and tracking tools for transit vehicle systems.
-- Built a multithreaded Python fuzzer firing synthetic POST payloads at a fault-tolerant vehicle REST API, uncovering unhandled exceptions; containerized the tool with Docker and charted each fuzzing run in Splunk
-- Built a real-time C# tracker service on the transit server that detects buses entering and leaving their depots
+## **Software Engineer (Part-Time)** @ [Cloud Data Pro](https://www.clouddatapro.com/) _(Jan 2026 - Present)_
+Remote
+- Rebuilt a nonprofit's 2017 WordPress site as a custom block theme so it loads fast: home page 2.9 MB to 616 KB (pre-launch). Wrote a PHP importer migrating 386 items and CI that checks all 550 old links still resolve
+- Built a PHP endpoint so HMAC-verified Zeffy webhooks keep fundraiser totals from going stale, no hand edits
 
-**Technologies:** Python, C#, Docker, Splunk, REST APIs
+**Technologies:** PHP, WordPress, TypeScript, Playwright
 
 &nbsp;
 
-## **Software Engineer Intern** @ [Cloud Data Pro](https://www.clouddatapro.com/) _(June 2024 - Aug 2024)_
-Production database fixes and DevOps.
-- Ended a production outage by writing and deploying a SQL hotfix for the broken stored procedure behind it
-- Built a CI/CD pipeline on Azure deploying Docker images from Artifactory to Kubernetes with JWT auth
+## **Software Engineer Intern, CleverCAD** @ [Clever Devices](https://www.cleverdevices.com/) _(June 2025 - Aug 2025)_
+Woodbury, NY
+- Debugged and fixed a REST API bug where clearing a vehicle attribute reported success but saved nothing; the data layer now clears empty values and skips omitted fields, so clears persist; shipped on 4 release lines
+- Wrote a multithreaded Python fuzzer, run in Docker, sending Gemini-generated payloads to the Fleet Manager REST API; found 3 unhandled exceptions, including an API crash on a long malformed request
+- Ended a production outage: traced a logged SQL error to a byte order mark and removed it in a tested hotfix
 
-**Technologies:** SQL, Azure, Docker, Artifactory, Kubernetes, JWT
+**Technologies:** Python, REST APIs, Docker, SQL
