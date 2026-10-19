@@ -1,0 +1,21 @@
+---
+import { resume } from "../data/resume";
+
+const rows = [
+  ["Languages", resume.skills.languages],
+  ["Frameworks & Libraries", resume.skills.frameworks],
+  ["Tools", resume.skills.tools],
+] as const;
+---
+
+<section class="wrap" id="skills" aria-labelledby="skills-h">
+  <h2 id="skills-h">Skills</h2>
+  <dl class="skills">
+    {rows.map(([label, items]) => (
+      <>
+        <dt>{label}</dt>
+        <dd><ul class="tags">{items.map((s) => <li>{s}</li>)}</ul></dd>
+      </>
+    ))}
+  </dl>
+</section>

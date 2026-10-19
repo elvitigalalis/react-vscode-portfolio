@@ -1,0 +1,35 @@
+---
+// Every page: head, top bar, main, footer. Only system fonts and one inline stylesheet.
+import Header from "../components/Header.astro";
+import Footer from "../components/Footer.astro";
+import { siteConfig } from "../config";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+}
+const { title, description, path } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={new URL(path, siteConfig.url).href} />
+    <link rel="icon" href="/favicon.png" type="image/png" />
+    <meta name="color-scheme" content="light dark" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <Header />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer />
+    <slot name="end" />
+  </body>
+</html>
