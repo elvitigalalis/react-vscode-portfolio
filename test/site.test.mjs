@@ -18,8 +18,8 @@ function builtFiles(dir = dist) {
     d.isDirectory() ? builtFiles(join(dir, d.name)) : /\.(html|css|js|xml|txt|json)$/.test(d.name) ? [join(dir, d.name)] : []);
 }
 
-function build(env = {}) {
-  return spawnSync(join(root, "node_modules/.bin/astro"), ["build"], {
+function build(env = {}, args = []) {
+  return spawnSync(join(root, "node_modules/.bin/astro"), ["build", ...args], {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -128,12 +128,11 @@ test("each project card shows a photo of at most 100 KB with alt text", () => {
   }
 });
 
-// Last: a failed build leaves dist/ incomplete.
 test("the build fails when resume.json breaks the schema", () => {
   const dir = mkdtempSync(join(tmpdir(), "resume-"));
   const bad = { ...resume, projects: resume.projects.map((p) => ({ ...p, note: "Return offer" })) };
   writeFileSync(join(dir, "resume.json"), JSON.stringify(bad));
-  const r = build({ RESUME_JSON: join(dir, "resume.json") });
+  const r = build({ RESUME_JSON: join(dir, "resume.json") }, ["--outDir", join(dir, "dist")]);
   assert.notEqual(r.status, 0, "build should fail on a schema violation");
   assert.match(r.stdout + r.stderr, /resume\.json does not match its schema/);
 });
