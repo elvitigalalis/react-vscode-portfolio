@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
+import { lint } from "../check/lint.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -91,4 +92,54 @@ test("routing: fails when old #/section links no longer land", async () => {
   assert.match((await routing({ dist: gone })).join("\n"), /hash/);
   const wrong = broken((d) => write(d, "index.html", read(d, "index.html").replace('"#" +', '"#x" +')));
   assert.match((await routing({ dist: wrong })).join("\n"), /#\/projects/);
+});
+
+// --- hand-written-text lint -------------------------------------------------
+
+const realContent = join(root, "src/content");
+// A content folder holding one write-up, `projects/demo.md`.
+function writeup(frontMatter, body) {
+  const content = mkdtempSync(join(tmpdir(), "content-"));
+  write(content, "projects/demo.md", `---\ntitle: Demo\n${frontMatter}---\n\n${body}\n`);
+  return content;
+}
+
+test("lint: passes on the real hand-written text", async () => {
+  assert.deepEqual(await lint({ content: realContent, resume }), []);
+});
+
+test("lint: fails on each kind of banned wording", async () => {
+  const cases = [
+    "I got a return offer at the end.",
+    "The company was acquired by a bigger one.",
+    "It was formerly a startup.",
+    "I landed 386 commits.",
+    "The adapters are deployed at LA Metro.",
+    "LA Metro now runs it in production after we deployed it.",
+    "I built a robotic arm.",
+    "Inference runs on CUDA.",
+  ];
+  for (const line of cases) {
+    const problems = await lint({ content: writeup("", line), resume });
+    assert.equal(problems.length, 1, `${line}\n${problems.join("\n")}`);
+    assert.match(problems[0], /projects\/demo\.md: banned wording/);
+  }
+  // Stating the plan the résumé states is not a deployment claim.
+  assert.deepEqual(await lint({ content: writeup("", "It was validated ahead of a planned LA Metro rollout."), resume }), []);
+});
+
+test("lint: a number must trace to resume.json or the file's sources", async () => {
+  const body = "Exploration took 7.25 minutes; the drift fell from 3.4° to 0.62°, and 500+ buses ran in 2026.";
+  const problems = await lint({ content: writeup("", body), resume });
+  assert.deepEqual(problems.map((p) => p.match(/"([^"]+)"/)[1]).sort(), ["0.62", "3.4", "7.25"]);
+
+  const sourced = writeup("sources:\n  - Lab notebook: drift 3.4° before the fix and 0.62° after\n  - Run log: 7.25 min exploration\n", body);
+  assert.deepEqual(await lint({ content: sourced, resume }), []);
+});
+
+test("lint: numbers in links, image paths and YAML comments are not prose", async () => {
+  const content = writeup("# a 1234 comment\nphoto: /images/robot-360.webp\n", "See ![the board](/images/pcb-720.webp) and [the repo](https://github.com/x/y2024).");
+  assert.deepEqual(await lint({ content, resume }), []);
+  const front = writeup("summary: It ran 77 laps.\n", "Body.");
+  assert.match((await lint({ content: front, resume })).join("\n"), /"77"/);
 });
