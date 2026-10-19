@@ -89,7 +89,8 @@ test("the résumé PDF keeps its old public path", () => {
 });
 
 test("no client JS beyond the inline hash script", () => {
-  const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+  // JSON-LD is data, not code, so it does not count.
+  const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !m[1].includes("ld+json"));
   assert.equal(scripts.length, 1);
   assert.doesNotMatch(scripts[0][1], /src=/);
   assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
@@ -97,7 +98,7 @@ test("no client JS beyond the inline hash script", () => {
 });
 
 test("old #/section links land on the matching section", () => {
-  const code = home.match(/<script\b[^>]*>([\s\S]*?)<\/script>/)[1];
+  const code = home.match(/<script>([\s\S]*?)<\/script>/)[1];
   const land = (hash) => {
     let replaced = null;
     const location = { hash, replace: (h) => { replaced = h; } };
@@ -251,4 +252,29 @@ test("the sitemap lists exactly the indexable pages, and robots.txt points to it
   const urls = sitemaps.flatMap(locs).sort();
   const canonicals = indexable().map((p) => tags(p.html, /<link rel="canonical" href="([^"]*)"/g)[0]).sort();
   assert.deepEqual(urls, canonicals);
+});
+
+test("home JSON-LD: WebSite and ProfilePage about a Person, from resume.json", () => {
+  const blocks = tags(home, /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
+  assert.equal(blocks.length, 1);
+  const items = JSON.parse(blocks[0]);
+  const byType = Object.fromEntries(items.map((i) => [i["@type"], i]));
+  for (const i of items) assert.equal(i["@context"], "https://schema.org");
+
+  // Google site names: WebSite with name and url, on the home page.
+  assert.equal(byType.WebSite.name, "Lisul Elvitigala");
+  assert.equal(byType.WebSite.url, `${ORIGIN}/`);
+
+  // Google profile pages: ProfilePage with mainEntity (a Person) that has a name.
+  const page = byType.ProfilePage;
+  assert.equal(page.url, `${ORIGIN}/`);
+  assert.equal(page.dateModified, resume.meta.generatedAt);
+  const person = page.mainEntity;
+  assert.equal(person["@type"], "Person");
+  assert.equal(person.name, "Lisul Elvitigala");
+  assert.equal(person.url, `${ORIGIN}/`);
+  assert.deepEqual(person.sameAs, ["https://linkedin.com/in/lisul", "https://github.com/elvitigalalis"]);
+  assert.deepEqual(person.alumniOf, { "@type": "CollegeOrUniversity", name: "Stony Brook University" });
+  assert.ok(!("telephone" in person), "the phone number stays off the site");
+  assert.ok(!("worksFor" in person), "no employer claim for a past role");
 });
