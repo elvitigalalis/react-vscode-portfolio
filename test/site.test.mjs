@@ -240,3 +240,15 @@ test("iMessage gets a square 180×180 touch icon", () => {
   const { type, width, height } = imageSize(readFileSync(join(dist, "apple-touch-icon.png")));
   assert.deepEqual({ type, width, height }, { type: "png", width: 180, height: 180 });
 });
+
+test("the sitemap lists exactly the indexable pages, and robots.txt points to it", () => {
+  const robots = readFileSync(join(dist, "robots.txt"), "utf8");
+  const line = robots.match(/^Sitemap: (\S+)$/m);
+  assert.ok(line, "robots.txt has a Sitemap: line");
+  assert.match(line[1], new RegExp(`^${ORIGIN}/`));
+  const locs = (path) => tags(readFileSync(join(dist, new URL(path).pathname), "utf8"), /<loc>([^<]*)<\/loc>/g);
+  const sitemaps = /index\.xml$/.test(line[1]) ? locs(line[1]) : [line[1]];
+  const urls = sitemaps.flatMap(locs).sort();
+  const canonicals = indexable().map((p) => tags(p.html, /<link rel="canonical" href="([^"]*)"/g)[0]).sort();
+  assert.deepEqual(urls, canonicals);
+});
