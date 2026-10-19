@@ -1,0 +1,36 @@
+---
+// The search and link-preview tags every page gets through Base.astro.
+// A page passes only its title, description and path; everything else is derived here.
+import { siteConfig } from "../config";
+
+export interface Props {
+  title: string;
+  description: string;
+  path: string;
+  // Pages that should not be indexed (the 404) get noindex and no canonical.
+  noindex?: boolean;
+  // schema.org structured data for this page, rendered as one JSON-LD block.
+  jsonLd?: object;
+}
+const { title, description, path, noindex = false, jsonLd } = Astro.props;
+const canonical = new URL(path, siteConfig.url).href;
+// Apple asks for the site name in og:site_name, not in og:title, so drop a trailing " – Name".
+const ogTitle = title.replace(new RegExp(`\\s+[–·|-]\\s+${siteConfig.title}$`), "");
+const image = siteConfig.ogImage;
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+{noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={siteConfig.title} />
+<meta property="og:title" content={ogTitle} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={new URL(image.src, siteConfig.url).href} />
+<meta property="og:image:width" content={String(image.width)} />
+<meta property="og:image:height" content={String(image.height)} />
+<meta property="og:image:alt" content={image.alt} />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+{jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, "\\u003c")} />}

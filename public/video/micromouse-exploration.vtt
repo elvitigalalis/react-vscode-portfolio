@@ -1,0 +1,10 @@
+WEBVTT
+
+00:00.000 --> 00:05.000
+[No sound] An exploration run before the Montclair 2026 competition. Video: Manasa.
+
+00:05.000 --> 00:13.000
+The robot drives the maze one cell at a time, reading the walls with its distance sensors.
+
+00:13.000 --> 00:22.000
+It turns into each new corridor, adding the walls it finds to its map.
