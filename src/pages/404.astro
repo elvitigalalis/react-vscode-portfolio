@@ -3,7 +3,7 @@ import Base from "../layouts/Base.astro";
 import { siteConfig } from "../config";
 ---
 
-<Base title={`Page not found · ${siteConfig.title}`} description="This page does not exist." path="/404.html">
+<Base title={`Page not found · ${siteConfig.title}`} description="This page does not exist." path="/404.html" noindex>
   <section class="wrap hero">
     <h1>Page not found</h1>
     <p class="thesis">There is nothing at this address.</p>
