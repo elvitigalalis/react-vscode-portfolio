@@ -150,3 +150,43 @@ test("the build fails when resume.json breaks the schema", () => {
   assert.notEqual(r.status, 0, "build should fail on a schema violation");
   assert.match(r.stdout + r.stderr, /resume\.json does not match its schema/);
 });
+
+// ---- SEO and link previews (the tag gate) ----
+const ORIGIN = "https://www.lisul-elvi.com";
+const pages = () => builtFiles().filter((f) => f.endsWith(".html")).map((file) => ({ file, html: readFileSync(file, "utf8") }));
+const indexable = () => pages().filter((p) => !p.file.endsWith("/404.html"));
+const tags = (html, re) => [...html.matchAll(re)].map((m) => m[1]);
+const meta = (html, key) => tags(html, new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)"`, "g"));
+const decode = (s) => textOf(s).trim();
+
+test("every page has one title and description, unique across the site", () => {
+  const all = pages();
+  const titles = all.map((p) => tags(p.html, /<title>([^<]*)<\/title>/g));
+  const descs = all.map((p) => meta(p.html, "description"));
+  for (const [i, p] of all.entries()) {
+    assert.equal(titles[i].length, 1, `${p.file}: one <title>`);
+    assert.equal(descs[i].length, 1, `${p.file}: one description`);
+    assert.ok(descs[i][0].length >= 20, `${p.file}: description too short`);
+  }
+  assert.equal(new Set(titles.flat()).size, all.length, "titles are unique");
+  assert.equal(new Set(descs.flat()).size, all.length, "descriptions are unique");
+});
+
+test("the home title names Lisul first, then his role", () => {
+  assert.equal(decode(tags(home, /<title>([^<]*)<\/title>/g)[0]), "Lisul Elvitigala – Software Engineer · Stony Brook CS");
+});
+
+test("every indexable page has a self-referencing absolute https://www canonical", () => {
+  for (const { file, html } of indexable()) {
+    const canon = tags(html, /<link rel="canonical" href="([^"]*)"/g);
+    assert.equal(canon.length, 1, file);
+    const rel = file.slice(dist.length).replace(/index\.html$/, "");
+    assert.equal(canon[0], ORIGIN + rel, file);
+  }
+});
+
+test("the 404 page is kept out of the index", () => {
+  const page = readFileSync(join(dist, "404.html"), "utf8");
+  assert.match(page, /<meta name="robots" content="noindex"/);
+  assert.doesNotMatch(page, /rel="canonical"/);
+});

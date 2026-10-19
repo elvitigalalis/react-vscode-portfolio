@@ -1,0 +1,19 @@
+---
+// The search and link-preview tags every page gets through Base.astro.
+// A page passes only its title, description and path; everything else is derived here.
+import { siteConfig } from "../config";
+
+export interface Props {
+  title: string;
+  description: string;
+  path: string;
+  // Pages that should not be indexed (the 404) get noindex and no canonical.
+  noindex?: boolean;
+}
+const { title, description, path, noindex = false } = Astro.props;
+const canonical = new URL(path, siteConfig.url).href;
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+{noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}

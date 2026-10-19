@@ -6,9 +6,10 @@ import Experience from "../components/Experience.astro";
 import Education from "../components/Education.astro";
 import Skills from "../components/Skills.astro";
 import { siteConfig } from "../config";
+import { frontmatter as content } from "../content/home.md";
 ---
 
-<Base title={siteConfig.title} description={siteConfig.description} path="/">
+<Base title={`${siteConfig.title} – ${content.kicker}`} description={siteConfig.description} path="/">
   <Hero />
   <Projects />
   <Experience />
