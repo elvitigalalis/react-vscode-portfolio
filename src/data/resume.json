@@ -1,0 +1,156 @@
+{
+  "basics": {
+    "name": "Lisul Elvitigala",
+    "citizenship": "U.S. Citizen",
+    "email": "elvitigalalis@gmail.com",
+    "phone": "(516) 532-4675",
+    "links": [
+      {
+        "label": "linkedin.com/in/lisul",
+        "url": "https://linkedin.com/in/lisul"
+      },
+      {
+        "label": "github.com/elvitigalalis",
+        "url": "https://github.com/elvitigalalis"
+      }
+    ]
+  },
+  "education": [
+    {
+      "school": "Stony Brook University",
+      "degree": "B.S. Computer Science",
+      "date": "Expected May 2028",
+      "gpa": "GPA: 3.86/4.00",
+      "items": [
+        "Honors: Presidential Scholar (university merit scholarship); Dean’s List in all four completed semesters",
+        "Teaching Assistant: CSE 114 (Java OOP), Spring 2026: led a weekly ∼20-student lab, office hours, grading",
+        "Coursework: Systems Fundamentals II, Algorithms, Data Structures, Linear Algebra, Probability & Statistics"
+      ]
+    }
+  ],
+  "experience": [
+    {
+      "company": "Hitachi Rail",
+      "title": "Software Engineer Intern",
+      "team": "Onboard Systems",
+      "dates": "Jun 2026 – Aug 2026",
+      "location": "Woodbury, NY",
+      "stack": [
+        "C++",
+        "C#",
+        ".NET",
+        "PyTorch",
+        "OpenCV"
+      ],
+      "bullets": [
+        "Built and unit-tested GTFS-Realtime (Protobuf) and TAIP (UDP) adapters in C#/.NET to bring bus GPS into dispatch; validated on MBTA’s live feed, 500+ buses at once, ahead of a planned LA Metro rollout.",
+        "Extended a C++ dispatch server’s TCP protocol to v3, adding agency names to its messages so one server can route multiple agencies; built security-reviewed ASP.NET/JavaScript web forms for operators to add feeds.",
+        "Pitched computer-vision tracking to the CTO so depots can locate buses cheaply in real time; led its 13-intern team, fine-tuned PyTorch YOLOv8, built 2-stage OCR and homography; demo verified all 15 fleet-ID reads."
+      ]
+    },
+    {
+      "company": "Cloud Data Pro",
+      "title": "Software Engineer (Part-Time)",
+      "dates": "Jan 2026 – Present",
+      "location": "Remote",
+      "stack": [
+        "PHP",
+        "WordPress",
+        "TypeScript",
+        "Playwright"
+      ],
+      "bullets": [
+        "Rebuilt a nonprofit’s 2017 WordPress site as a custom block theme so it loads fast: home page 2.9 MB to 616 KB (pre-launch). Wrote a PHP importer migrating 386 items and CI that checks all 550 old links still resolve.",
+        "Built a PHP endpoint so HMAC-verified Zeffy webhooks keep fundraiser totals from going stale, no hand edits."
+      ]
+    },
+    {
+      "company": "Clever Devices",
+      "title": "Software Engineer Intern",
+      "team": "CleverCAD",
+      "dates": "Jun 2025 – Aug 2025",
+      "location": "Woodbury, NY",
+      "stack": [
+        "Python",
+        "REST APIs",
+        "Docker",
+        "SQL"
+      ],
+      "bullets": [
+        "Debugged and fixed a REST API bug where clearing a vehicle attribute reported success but saved nothing; the data layer now clears empty values and skips omitted fields, so clears persist; shipped on 4 release lines.",
+        "Wrote a multithreaded Python fuzzer, run in Docker, sending Gemini-generated payloads to the Fleet Manager REST API; found 3 unhandled exceptions, including an API crash on a long malformed request.",
+        "Ended a production outage: traced a logged SQL error to a byte order mark and removed it in a tested hotfix."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "slug": "micromouse",
+      "title": "Micromouse Maze-Solving Robot",
+      "url": "https://github.com/IEEE-StonyBrook/Jurababa_2025-2026/tree/NEW_ROBOT",
+      "role": "IEEE Stony Brook",
+      "dates": "Aug 2024 – Present",
+      "stack": [
+        "C/C++",
+        "Pi Pico",
+        "CMake"
+      ],
+      "bullets": [
+        "Wrote the 2026 robot’s C++ firmware on open-source UKMARS (ToF sensing, A* routing) that ran 2nd at NYIT 2026 (38 s); simulator-tested each algorithm, incl. a state machine shortening A* zigzags into diagonals.",
+        "Traced turn overshoot to ∼40 ms IMU yaw latency; encoder-yaw PD cut worst-case spin error 2.75° to 1.01°.",
+        "Captain 3 seasons, giving each member a component to own with deadlines set at weekly builds: 2nd of 15+ and Best Design at MIT 2025, 2nd at NYIT 2026; in Fall 2026, picked 13 of 101 applicants after 20 interviews."
+      ]
+    },
+    {
+      "slug": "workit",
+      "title": "WorkIt: Early-Career Job Aggregator",
+      "url": "https://github.com/WorkIt-CSE-416/WorkIt-CSE416",
+      "dates": "Aug 2026 – Present",
+      "stack": [
+        "Python",
+        "PostgreSQL",
+        "GitHub Actions"
+      ],
+      "bullets": [
+        "Built a Python scraper filtering 1,800 boards (Greenhouse, Lever, Ashby) to 1,000+ internship and new-grad roles; cut routine runs 9.5 to 3 min via per-provider thread pools, rechecking no-match boards every 3rd run.",
+        "Scheduled the scrape-to-PostgreSQL import in GitHub Actions; its dry run on import-changing PRs caught a database schema mismatch before merge; added a CI test-and-lint job (145 of 252 scraper tests mine)."
+      ]
+    }
+  ],
+  "skills": {
+    "languages": [
+      "C++",
+      "Python",
+      "C#",
+      "C",
+      "SQL",
+      "Java",
+      "JavaScript",
+      "TypeScript"
+    ],
+    "frameworks": [
+      ".NET",
+      "ASP.NET",
+      "PyTorch",
+      "OpenCV",
+      "Ultralytics YOLO",
+      "Protobuf"
+    ],
+    "tools": [
+      "Git",
+      "Docker",
+      "PostgreSQL",
+      "GitHub Actions",
+      "Linux",
+      "CMake",
+      "GDB",
+      "GitHub Copilot",
+      "Claude Code"
+    ]
+  },
+  "meta": {
+    "source": "latex/onepager.tex",
+    "generatedAt": "2026-10-19T19:22:53-04:00",
+    "commit": "d1b96210d2b033b02684209bf8339a99c6a0d836"
+  }
+}
