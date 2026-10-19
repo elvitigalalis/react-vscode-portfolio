@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readdirSync } from "node:fs";
+import { readdirSync, statSync } from "node:fs";
 
 const root = new URL("..", import.meta.url).pathname;
 const dist = join(root, "dist");
@@ -114,6 +114,18 @@ test("old #/section links land on the matching section", () => {
   assert.equal(land("#projects"), null, "new hashes are left alone");
   assert.equal(land(""), null);
   for (const id of ["top", "projects", "experience", "education", "skills"]) assert.match(home, new RegExp(`id="${id}"`));
+});
+
+test("each project card shows a photo of at most 100 KB with alt text", () => {
+  const imgs = [...home.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
+  for (const p of resume.projects) {
+    const img = imgs.find((i) => i.includes(`/images/${p.slug}.`));
+    assert.ok(img, `no photo for ${p.slug}`);
+    assert.match(img, /alt="[^"]{10,}"/);
+    assert.match(img, /width="\d+" height="\d+"/);
+    const src = img.match(/src="([^"]+)"/)[1];
+    assert.ok(statSync(join(dist, src)).size <= 100 * 1024, src);
+  }
 });
 
 // Last: a failed build leaves dist/ incomplete.
