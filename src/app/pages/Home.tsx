@@ -42,11 +42,11 @@ export default function Home({ setSelectedIndex }: Props) {
           sx={{ justifyContent: "center", alignItems: "center", height: "100%" }}
         >
           <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-            {/* Use GitHub profile picture instead of favicon */}
+            {/* Same photo as the LinkedIn profile */}
             <img
-              src="https://github.com/elvitigalalis.png"
+              src={`${process.env.PUBLIC_URL}/profile.jpg`}
               width="185rem"
-              alt="GitHub profile"
+              alt="Lisul Elvitigala"
               style={{ objectFit: 'contain', borderRadius: '50%', transform: 'scaleX(1)' }}
             />
           </Box>
