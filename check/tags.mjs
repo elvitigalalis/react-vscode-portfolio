@@ -1,5 +1,6 @@
 // Tag gate: what a crawler or link-preview bot reads in each page's <head>.
-// Always: one unique <title>, a meta description, an absolute canonical on the www origin.
+// Always: one unique <title>, a meta description, an absolute canonical on the www origin
+// (a noindex page, such as the 404, may leave the canonical out).
 // Once the site carries any preview or structured-data tag (or a sitemap), all of them are
 // required: full Open Graph and twitter:card on every page, a 1200×630 OG image of at most
 // 300 KB, WebSite and ProfilePage/Person JSON-LD on / with sameAs from resume.json, and a
@@ -60,7 +61,8 @@ export async function tags({ dist, resume }) {
     else if (seen.has(titles[0])) bad(`same title as ${seen.get(titles[0])}: "${titles[0]}"`);
     else seen.set(titles[0], file);
     if (!meta.description?.trim()) bad("no meta description");
-    if (!canonical) bad("no canonical");
+    const noindex = /\bnoindex\b/i.test(meta.robots ?? "");
+    if (!canonical) { if (!noindex) bad("no canonical"); }
     else if (!canonical.startsWith(`${ORIGIN}/`)) bad(`canonical "${canonical}" is not absolute on ${ORIGIN}`);
 
     for (const json of ld) {

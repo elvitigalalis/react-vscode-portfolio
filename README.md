@@ -28,4 +28,4 @@ push and PR. `node check/run.mjs <gate>` runs one gate over an existing `dist/`.
 | html | html-validate (recommended) |
 | links | lychee on internal links and anchors; `CHECK_EXTERNAL_LINKS=1` adds external ones, LinkedIn excluded |
 | a11y | pa11y-ci with axe, WCAG 2.2 AA, on every page |
-| lighthouse | Lighthouse CI, mobile, budgets in `lighthouserc.json` |
+| lighthouse | Lighthouse CI, mobile, budgets in `lighthouserc.cjs` |
