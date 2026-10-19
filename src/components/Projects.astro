@@ -1,6 +1,8 @@
 ---
 // Project cards: photo, dates, title and role, summary, the résumé bullets verbatim, tags,
 // and Write-up / Code / Demo buttons, each shown only when its target exists.
+// Photos come in 640 px and 360 px widths (<name>.webp, <name>-360.webp). The first card's
+// photo can be in a phone's first viewport, so it is not lazy-loaded.
 import { resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 
@@ -11,12 +13,22 @@ const writeups = new Set(
 
 <section class="wrap" id="projects" aria-labelledby="projects-h">
   <h2 id="projects-h">Projects</h2>
-  {resume.projects.map((p) => {
+  {resume.projects.map((p, i) => {
     const extra = home.projects?.[p.slug] ?? {};
     return (
       <article class="card">
         {extra.photo && (
-          <img src={extra.photo.src} alt={extra.photo.alt} width="640" height="480" loading="lazy" decoding="async" />
+          <img
+            src={extra.photo.src}
+            srcset={`${extra.photo.src.replace(/\.webp$/, "-360.webp")} 360w, ${extra.photo.src} 640w`}
+            sizes="(max-width: 40rem) calc(100vw - 4rem), 15rem"
+            alt={extra.photo.alt}
+            width="640"
+            height="480"
+            loading={i === 0 ? "eager" : "lazy"}
+            fetchpriority={i === 0 ? "high" : undefined}
+            decoding="async"
+          />
         )}
         <div>
           <p class="dates">{p.dates}</p>
