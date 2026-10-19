@@ -36,7 +36,7 @@ projects:
       scheduled its import into the database.
     photo:
       src: /images/workit.webp
-      alt: "WorkIt's landing page: the headline From resume to offer above sign-up buttons"
+      alt: WorkIt's landing page, with its headline and sign-up buttons above an illustrated city
     demo:
       url: https://workit-web-gamma.vercel.app
       label: Demo (in development, sign-in required)
