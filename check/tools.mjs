@@ -32,12 +32,12 @@ export async function links({ dist }) {
   return errors.length ? errors : lines(r);
 }
 
-// Lighthouse CI with the spec's mobile budgets (lighthouserc.json): / and 404 at 100 KB and
+// Lighthouse CI with the spec's mobile budgets (lighthouserc.cjs): / and 404 at 100 KB and
 // 15 requests, write-ups under /projects/ at 300 KB, Perf >= 0.95 and 100 elsewhere.
 export async function lighthouse({ root, dist, runs }) {
   const work = mkdtempSync(join(tmpdir(), "lhci-"));
   const lhci = join(root, "node_modules/.bin/lhci");
-  const config = `--config=${join(root, "lighthouserc.json")}`;
+  const config = `--config=${join(root, "lighthouserc.cjs")}`;
   const collect = run(lhci, ["collect", config, `--collect.staticDistDir=${dist}`, ...(runs ? [`--collect.numberOfRuns=${runs}`] : [])], { cwd: work });
   if (collect.status !== 0) return [`lhci collect failed:`, ...lines(collect)];
   const assert = run(lhci, ["assert", config], { cwd: work });
