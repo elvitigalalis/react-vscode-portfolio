@@ -13,6 +13,7 @@
     "astro": "^7.4.1"
   },
   "devDependencies": {
+    "@astrojs/sitemap": "^3.7.4",
     "ajv": "^8.20.0"
   }
 }

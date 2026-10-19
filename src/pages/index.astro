@@ -6,9 +6,31 @@ import Experience from "../components/Experience.astro";
 import Education from "../components/Education.astro";
 import Skills from "../components/Skills.astro";
 import { siteConfig } from "../config";
+import { frontmatter as content } from "../content/home.md";
+import { resume } from "../data/resume";
+
+// Who this site is about, for search engines: generated from resume.json so it cannot drift.
+// No telephone (kept off the site) and no worksFor (no current role to claim).
+const home = new URL("/", siteConfig.url).href;
+const jsonLd = [
+  { "@context": "https://schema.org", "@type": "WebSite", name: resume.basics.name, url: home },
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    url: home,
+    dateModified: resume.meta.generatedAt,
+    mainEntity: {
+      "@type": "Person",
+      name: resume.basics.name,
+      url: home,
+      sameAs: resume.basics.links.map((l) => l.url),
+      alumniOf: { "@type": "CollegeOrUniversity", name: resume.education[0].school },
+    },
+  },
+];
 ---
 
-<Base title={siteConfig.title} description={siteConfig.description} path="/">
+<Base title={`${siteConfig.title} – ${content.kicker}`} description={siteConfig.description} path="/" jsonLd={jsonLd}>
   <Hero />
   <Projects />
   <Experience />
