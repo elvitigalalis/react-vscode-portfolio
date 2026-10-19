@@ -12,6 +12,15 @@ summary: >-
   UKMARS architecture to our Pi Pico robot, and it ran 2nd at NYIT 2026 with a 38 s run. The
   largest accuracy fix was feeding encoder yaw, not IMU yaw, to the turn controller: worst-case
   spin error fell from 2.75° to 1.01°.
+video:
+  src: /video/micromouse-exploration.mp4
+  poster: /video/micromouse-exploration.webp
+  captions: /video/micromouse-exploration.vtt
+  width: 480
+  height: 854
+  caption: >-
+    An exploration run before the Montclair 2026 competition: the robot drives the maze cell by
+    cell, mapping walls as it goes. Muted. Video: Manasa.
 sources:
   - "Résumé one-pager (resume.json): the 2026 firmware on UKMARS with A* routing, 2nd at NYIT 2026 (38 s), the ∼40 ms IMU yaw latency, worst-case spin error 2.75° to 1.01°, captain for 3 seasons."
   - "Public firmware repository, NEW_ROBOT branch: the 500 Hz hardware-timer control loop, the 29.86:1 gear ratio, the BNO085 IMU, A* called on every search and fast run, the diagonalizer, the UKMARS parity checklist, DriverLab."

@@ -266,3 +266,46 @@ test("write-up figures are described, sized, lazy and light", () => {
     }
   }
 });
+
+// Seconds in an MP4, from its movie header (mvhd) box.
+function mp4Seconds(buf) {
+  const at = buf.indexOf("mvhd");
+  const v1 = buf[at + 4] === 1;
+  const timescale = buf.readUInt32BE(at + (v1 ? 24 : 16));
+  const duration = v1 ? Number(buf.readBigUInt64BE(at + 28)) : buf.readUInt32BE(at + 20);
+  return duration / timescale;
+}
+
+test("the Micromouse run clip is click-to-play, muted, captioned, credited and light", () => {
+  const html = writeupHtml("micromouse");
+  const fig = html.match(/<figure class="clip">[\s\S]*?<\/figure>/)?.[0];
+  assert.ok(fig, "the clip sits under the summary");
+  assert.ok(html.indexOf(fig) < html.indexOf('id="at-a-glance"'), "the clip comes before At a glance");
+  const video = fig.match(/<video\b[^>]*>/)[0];
+  assert.match(video, /preload="none"/);
+  assert.match(video, /\bmuted\b/);
+  assert.match(video, /\bcontrols\b/);
+  assert.doesNotMatch(video, /autoplay/);
+  assert.match(video, /width="\d+" height="\d+"/);
+
+  const poster = video.match(/poster="([^"]+)"/)[1];
+  assert.ok(statSync(join(dist, poster)).size <= 60 * 1024, "poster ≤ 60 KB");
+
+  const src = fig.match(/<source src="([^"]+)" type="video\/mp4"/)[1];
+  const mp4 = readFileSync(join(dist, src));
+  assert.ok(mp4.length <= 3 * 1024 * 1024, "clip ≤ 3 MB");
+  assert.ok(mp4.includes("avc1"), "H.264 video");
+  assert.ok(!mp4.includes("mp4a") && !mp4.includes("soun"), "no audio track");
+  const seconds = mp4Seconds(mp4);
+  assert.ok(seconds >= 15 && seconds <= 30, `${seconds} s long`);
+
+  const track = fig.match(/<track\b[^>]*>/)[0];
+  assert.match(track, /kind="captions"/);
+  const vtt = readFileSync(join(dist, track.match(/src="([^"]+)"/)[1]), "utf8");
+  assert.match(vtt, /^WEBVTT/);
+  assert.match(vtt, /Video: Manasa/);
+
+  const caption = textOf(fig.match(/<figcaption>([\s\S]*?)<\/figcaption>/)[1]);
+  assert.match(caption, /Video: Manasa/);
+  assert.match(caption, /before the Montclair 2026 competition/);
+});
