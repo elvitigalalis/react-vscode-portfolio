@@ -131,3 +131,14 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .prose li { margin-bottom: 0.35rem; }
 .todo { background: #fef08a; color: #1c1917; padding: 0 0.2em; }
 .writeup-end { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; font-weight: 600; }
+/* Drawn figures follow the page's colours, light or dark. */
+.writeup figure svg.fig-svg { max-width: 26rem; margin: 0 auto; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.fig-svg text { fill: var(--fg); }
+.fig-svg .strong { font-weight: 600; }
+.fig-svg .box { fill: var(--chip); stroke: var(--muted); }
+.fig-svg .box.accent { stroke: var(--accent); stroke-width: 2; }
+.fig-svg .wire { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.fig-svg .fill-fg { fill: var(--muted); }
+.fig-svg .grid { stroke: var(--line); stroke-width: 2; }
+.fig-svg .bar { fill: var(--muted); }
+.fig-svg .bar.accent { fill: var(--accent); }
