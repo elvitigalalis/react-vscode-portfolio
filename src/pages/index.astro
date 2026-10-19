@@ -14,4 +14,12 @@ import { siteConfig } from "../config";
   <Experience />
   <Education />
   <Skills />
+  <!-- Old links such as /#/projects (the previous site's hash routes) land on #projects. -->
+  <script is:inline slot="end">
+    var m = /^#\/([a-z]*)/.exec(location.hash);
+    if (m) {
+      var alias = { "": "top", overview: "top", docs: "top", languages: "skills", accomplishments: "education", certificates: "education" };
+      location.replace("#" + (alias[m[1]] || m[1]));
+    }
+  </script>
 </Base>

@@ -76,6 +76,46 @@ test("the phone number is never rendered", () => {
   }
 });
 
+test("a plain 404 page exists with the top bar", () => {
+  const page = readFileSync(join(dist, "404.html"), "utf8");
+  assert.match(page, /href="\/Lisul_Elvitigala_resume\.pdf"/);
+  assert.match(page, /href="\/#projects"/);
+});
+
+test("the résumé PDF keeps its old public path", () => {
+  const pdf = readFileSync(join(dist, "Lisul_Elvitigala_resume.pdf"));
+  assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+  assert.match(home, /href="\/Lisul_Elvitigala_resume\.pdf"/);
+});
+
+test("no client JS beyond the inline hash script", () => {
+  const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+  assert.equal(scripts.length, 1);
+  assert.doesNotMatch(scripts[0][1], /src=/);
+  assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
+  assert.deepEqual(builtFiles().filter((f) => f.endsWith(".js")), []);
+});
+
+test("old #/section links land on the matching section", () => {
+  const code = home.match(/<script\b[^>]*>([\s\S]*?)<\/script>/)[1];
+  const land = (hash) => {
+    let replaced = null;
+    const location = { hash, replace: (h) => { replaced = h; } };
+    new Function("location", code)(location);
+    return replaced;
+  };
+  assert.equal(land("#/projects"), "#projects");
+  assert.equal(land("#/experience"), "#experience");
+  assert.equal(land("#/education"), "#education");
+  assert.equal(land("#/skills"), "#skills");
+  assert.equal(land("#/overview"), "#top");
+  assert.equal(land("#/accomplishments"), "#education");
+  assert.equal(land("#/"), "#top");
+  assert.equal(land("#projects"), null, "new hashes are left alone");
+  assert.equal(land(""), null);
+  for (const id of ["top", "projects", "experience", "education", "skills"]) assert.match(home, new RegExp(`id="${id}"`));
+});
+
 // Last: a failed build leaves dist/ incomplete.
 test("the build fails when resume.json breaks the schema", () => {
   const dir = mkdtempSync(join(tmpdir(), "resume-"));
