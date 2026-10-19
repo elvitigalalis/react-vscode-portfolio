@@ -23,7 +23,7 @@ export async function links({ dist }) {
   const online = process.env.CHECK_EXTERNAL_LINKS === "1";
   const r = run("lychee", [
     "--no-progress", "--include-fragments", "--root-dir", dist, "--index-files", "index.html",
-    "--exclude", String.raw`linkedin\.com`, ...(online ? ["--max-retries", "3"] : ["--offline"]), dist,
+    "--remap", `^https://www\\.lisul-elvi\\.com file://${dist}`, "--exclude", String.raw`linkedin\.com`, ...(online ? ["--max-retries", "3"] : ["--offline"]), dist,
   ]);
   if (r.status === 0) return [];
   const errors = lines(r).filter((l) => /ERROR|\[\d{3}\]|Timeout/i.test(l));
