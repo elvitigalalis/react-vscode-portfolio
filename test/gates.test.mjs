@@ -5,10 +5,12 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { deflateSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
+import { tags } from "../check/tags.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -142,4 +144,99 @@ test("lint: numbers in links, image paths and YAML comments are not prose", asyn
   assert.deepEqual(await lint({ content, resume }), []);
   const front = writeup("summary: It ran 77 laps.\n", "Body.");
   assert.match((await lint({ content: front, resume })).join("\n"), /"77"/);
+});
+
+// --- tags -----------------------------------------------------------------
+
+// A real PNG of the given size; `pad` bytes of junk metadata make it heavier.
+function png(width, height, pad = 0) {
+  const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return ~c >>> 0; };
+  const chunk = (type, data) => {
+    const out = Buffer.alloc(12 + data.length);
+    out.writeUInt32BE(data.length, 0); out.write(type, 4, "latin1"); data.copy(out, 8);
+    out.writeUInt32BE(crc(out.subarray(4, 8 + data.length)), 8 + data.length);
+    return out;
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  return Buffer.concat([Buffer.from("\x89PNG\r\n\x1a\n", "latin1"), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)),
+    ...(pad ? [chunk("tEXt", Buffer.alloc(pad, 97))] : []), chunk("IEND", Buffer.alloc(0))]);
+}
+
+const SITE = "https://www.lisul-elvi.com";
+const jsonLd = () => [
+  { "@context": "https://schema.org", "@type": "WebSite", name: resume.basics.name, url: `${SITE}/` },
+  { "@context": "https://schema.org", "@type": "ProfilePage",
+    mainEntity: { "@type": "Person", name: resume.basics.name, url: `${SITE}/`, sameAs: resume.basics.links.map((l) => l.url) } },
+];
+// What #157 adds: full preview tags on every page, JSON-LD on /, the OG image, a sitemap.
+function seo(d, { image = png(1200, 630), ld = JSON.stringify(jsonLd()), drop = null } = {}) {
+  write(d, "og.png", image);
+  write(d, "sitemap-index.xml", `<?xml version="1.0"?><sitemapindex/>`);
+  write(d, "robots.txt", `User-agent: *\nDisallow:\nSitemap: ${SITE}/sitemap-index.xml\n`);
+  for (const file of ["index.html", "404.html"]) {
+    const html = read(d, file);
+    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)[1];
+    const m = {
+      "og:title": "A title", "og:description": "A description.", "og:url": canonical, "og:type": "website",
+      "og:site_name": resume.basics.name, "og:image": `${SITE}/og.png`, "og:image:width": "1200", "og:image:height": "630",
+      "og:image:alt": "A micromouse on a maze", "twitter:card": "summary_large_image",
+    };
+    delete m[drop];
+    let head = Object.entries(m).map(([k, v]) => `<meta ${k.startsWith("og:") ? "property" : "name"}="${k}" content="${v}">`).join("");
+    if (file === "index.html" && ld !== null) head += `<script type="application/ld+json">${ld}</script>`;
+    write(d, file, html.replace("</head>", head + "</head>"));
+  }
+}
+
+test("tags: passes on the real build", async () => {
+  assert.deepEqual(await tags({ dist: realDist, resume }), []);
+});
+
+test("tags: every page needs a unique title, a description and an absolute canonical", async () => {
+  const cases = [
+    [(h) => h.replace(/<meta name="description"[^>]*>/, ""), /index\.html: no meta description/],
+    [(h) => h.replace(/<link rel="canonical"[^>]*>/, ""), /index\.html: no canonical/],
+    [(h) => h.replace(`href="${SITE}/"`, 'href="/"'), /index\.html: canonical "\/" is not absolute/],
+    [(h) => h.replace(/<title>[^<]*<\/title>/, "<title>Page not found · Lisul Elvitigala</title>"), /same title/],
+  ];
+  for (const [edit, want] of cases) {
+    const dist = broken((d) => write(d, "index.html", edit(read(d, "index.html"))));
+    assert.match((await tags({ dist, resume })).join("\n"), want);
+  }
+});
+
+test("tags: once preview tags exist, the full set must be right on every page", async () => {
+  assert.deepEqual(await tags({ dist: broken((d) => seo(d)), resume }), [], "the complete fixture passes");
+
+  const partial = broken((d) => write(d, "index.html", read(d, "index.html").replace("</head>", '<meta property="og:title" content="x"></head>')));
+  assert.match((await tags({ dist: partial, resume })).join("\n"), /404\.html: no og:image/);
+
+  for (const drop of ["og:description", "og:image:alt", "twitter:card", "og:site_name"]) {
+    const dist = broken((d) => seo(d, { drop }));
+    assert.match((await tags({ dist, resume })).join("\n"), new RegExp(`no ${drop}`));
+  }
+});
+
+test("tags: the OG image must be 1200×630 and at most 300 KB", async () => {
+  const wrong = broken((d) => seo(d, { image: png(1280, 812) }));
+  assert.match((await tags({ dist: wrong, resume })).join("\n"), /og\.png is 1280×812/);
+  const heavy = broken((d) => seo(d, { image: png(1200, 630, 310 * 1024) }));
+  assert.match((await tags({ dist: heavy, resume })).join("\n"), /og\.png is \d+ KB/);
+});
+
+test("tags: the home page's JSON-LD must parse and tie the profiles together", async () => {
+  const unparsable = broken((d) => seo(d, { ld: "{not json" }));
+  assert.match((await tags({ dist: unparsable, resume })).join("\n"), /JSON-LD does not parse/);
+  const missing = broken((d) => seo(d, { ld: null }));
+  assert.match((await tags({ dist: missing, resume })).join("\n"), /no WebSite/);
+  const ld = jsonLd(); ld[1].mainEntity.sameAs = ld[1].mainEntity.sameAs.slice(0, 1);
+  const sameAs = broken((d) => seo(d, { ld: JSON.stringify(ld) }));
+  assert.match((await tags({ dist: sameAs, resume })).join("\n"), /sameAs is missing https:\/\/github\.com/);
+});
+
+test("tags: robots.txt must point at the sitemap", async () => {
+  const dist = broken((d) => { seo(d); write(d, "robots.txt", "User-agent: *\nDisallow:\n"); });
+  assert.match((await tags({ dist, resume })).join("\n"), /robots\.txt: no Sitemap/);
 });
