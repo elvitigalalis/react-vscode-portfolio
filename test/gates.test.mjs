@@ -3,10 +3,11 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { mirror } from "../check/mirror.mjs";
+import { routing } from "../check/routing.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -67,4 +68,27 @@ test("mirror: a write-up's At a glance must carry its project's bullets verbatim
 
   const none = broken((d) => write(d, file, page(`<p>${p.bullets.map(esc).join(" ")}</p>`)));
   assert.match((await mirror({ dist: none, resume })).join("\n"), /no "At a glance"/);
+});
+
+// --- routing --------------------------------------------------------------
+
+test("routing: passes on the real build", async () => {
+  assert.deepEqual(await routing({ dist: realDist }), []);
+});
+
+test("routing: fails without the 404 page", async () => {
+  const dist = broken((d) => rmSync(join(d, "404.html")));
+  assert.match((await routing({ dist })).join("\n"), /404\.html/);
+});
+
+test("routing: fails without the résumé PDF at its old path", async () => {
+  const dist = broken((d) => rmSync(join(d, "Lisul_Elvitigala_resume.pdf")));
+  assert.match((await routing({ dist })).join("\n"), /Lisul_Elvitigala_resume\.pdf/);
+});
+
+test("routing: fails when old #/section links no longer land", async () => {
+  const gone = broken((d) => write(d, "index.html", read(d, "index.html").replace(/<script\b[\s\S]*?<\/script>/, "")));
+  assert.match((await routing({ dist: gone })).join("\n"), /hash/);
+  const wrong = broken((d) => write(d, "index.html", read(d, "index.html").replace('"#" +', '"#x" +')));
+  assert.match((await routing({ dist: wrong })).join("\n"), /#\/projects/);
 });
