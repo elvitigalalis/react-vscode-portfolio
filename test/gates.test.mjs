@@ -266,4 +266,7 @@ test("links: fails on a broken internal link or #anchor", async () => {
   assert.match((await links({ dist: file })).join("\n"), /projects\/nope/);
   const anchor = broken((d) => write(d, "404.html", read(d, "404.html").replace("</main>", '<a href="/#nowhere">x</a></main>')));
   assert.match((await links({ dist: anchor })).join("\n"), /#nowhere/);
+  // Absolute links on the site's own origin are checked against the build, not the live site.
+  const own = broken((d) => write(d, "index.html", read(d, "index.html").replace("</main>", '<a href="https://www.lisul-elvi.com/gone/">x</a></main>')));
+  assert.match((await links({ dist: own })).join("\n"), /gone/);
 });
