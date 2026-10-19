@@ -7,6 +7,7 @@ import Experience from "../components/Experience.astro";
 import Education from "../components/Education.astro";
 import Footer from "../components/Footer.astro";
 import { siteConfig } from "../config";
+import { resume } from "../data/resume";
 import "../styles/global.css";
 ---
 
@@ -23,7 +24,7 @@ import "../styles/global.css";
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&display=swap"
       rel="stylesheet"
     />
-    <title>{siteConfig.name} - {siteConfig.title}</title>
+    <title>{resume.basics.name} - {siteConfig.title}</title>
   </head>
   <body>
     <Header />
