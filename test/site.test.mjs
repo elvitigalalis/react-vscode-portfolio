@@ -160,6 +160,7 @@ const writeupHtml = (slug) => readFileSync(join(dist, "projects", slug, "index.h
 test("each write-up file builds a page that only its card's Write-up button links to", () => {
   const slugs = writeupSlugs();
   assert.ok(slugs.includes("micromouse"), "the Micromouse write-up exists");
+  assert.ok(slugs.includes("workit"), "the WorkIt write-up exists");
   for (const p of resume.projects) {
     const linked = home.includes(`href="/projects/${p.slug}/"`);
     assert.equal(linked, slugs.includes(p.slug), `Write-up button for ${p.slug}`);
@@ -234,6 +235,18 @@ test("write-ups obey the standing wording rules", () => {
   }
   // The robot's run code plans with A*; its flood-fill code never runs, so it gets no credit.
   assert.doesNotMatch(proseText(writeupSource("micromouse").prose), /flood[- ]?fill/i);
+});
+
+test("the WorkIt write-up credits teammates and never links WorkIt issues or PRs", () => {
+  const raw = readFileSync(join(writeupDir, "workit.md"), "utf8");
+  // A link or #-reference posts a "mentioned this" event on the WorkIt PR; plain text only.
+  assert.doesNotMatch(raw, /github\.com\/WorkIt-CSE-416\/[^/\s]+\/(pull|issues)\//i);
+  assert.doesNotMatch(raw, /(^|[\s(])#\d+\b|WorkIt-CSE-416\/[\w-]+#\d+/m);
+  for (const f of builtFiles()) assert.doesNotMatch(readFileSync(f, "utf8"), /WorkIt-CSE416\/(pull|issues)\//, f);
+  const text = proseText(writeupSource("workit").prose);
+  // The import script, its transaction and its guards are Xiang's; Supabase was Brian's to create.
+  assert.match(text, /Xiang Liu/);
+  assert.doesNotMatch(text, /\bset up Supabase|Supabase setup/i);
 });
 
 test("a write-up runs 700 to 1,200 words with 2 to 4 figures", () => {
