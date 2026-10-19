@@ -1,13 +1,11 @@
 # Accomplishments
 
-## Micromouse (Team Captain)
-- **Competition Judge** - 1 of 4 selected to judge at MIT
-- **#1 Best Design** - MIT
-- **#2 of 15+ teams** - MIT
-- **#2** - NYIT (38s run)
-
-## FIRST Robotics
-- **2x World Championship Qualifier**
+## Micromouse (Team Captain, 3 seasons)
+- **#1 Best Design** - MIT 2025
+- **#2 of 15+ teams** - MIT 2025
+- **#2** - NYIT 2026 (38s run)
 
 ## Academic
-- **Stony Brook Presidential Scholar**
+- **Stony Brook Presidential Scholar** (university merit scholarship)
+- **Dean's List** - all four completed semesters
+- **Teaching Assistant** - CSE 114 (Java OOP), Spring 2026
