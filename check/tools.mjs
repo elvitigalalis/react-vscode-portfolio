@@ -1,5 +1,7 @@
 // Gates that wrap an outside checker. Each returns its findings as problem lines.
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { htmlPages } from "./lib.mjs";
 
@@ -28,4 +30,20 @@ export async function links({ dist }) {
   if (r.status === 0) return [];
   const errors = lines(r).filter((l) => /ERROR|\[\d{3}\]|Timeout/i.test(l));
   return errors.length ? errors : lines(r);
+}
+
+// Lighthouse CI with the spec's mobile budgets (lighthouserc.json): / and 404 at 100 KB and
+// 15 requests, write-ups under /projects/ at 300 KB, Perf >= 0.95 and 100 elsewhere.
+export async function lighthouse({ root, dist, runs }) {
+  const work = mkdtempSync(join(tmpdir(), "lhci-"));
+  const lhci = join(root, "node_modules/.bin/lhci");
+  const config = `--config=${join(root, "lighthouserc.json")}`;
+  const collect = run(lhci, ["collect", config, `--collect.staticDistDir=${dist}`, ...(runs ? [`--collect.numberOfRuns=${runs}`] : [])], { cwd: work });
+  if (collect.status !== 0) return [`lhci collect failed:`, ...lines(collect)];
+  const assert = run(lhci, ["assert", config], { cwd: work });
+  const results = JSON.parse(readFileSync(join(work, ".lighthouseci/assertion-results.json"), "utf8"));
+  const problems = results
+    .filter((r) => r.level === "error" && !r.passed)
+    .map((r) => `${new URL(r.url).pathname}: ${[r.auditId, r.auditProperty?.replace(".", ":")].filter(Boolean).join(":")} ${r.name} ${r.operator} ${r.expected}, found ${r.actual}`);
+  return assert.status === 0 || problems.length ? problems : lines(assert);
 }
