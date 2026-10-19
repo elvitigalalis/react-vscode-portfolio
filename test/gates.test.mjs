@@ -11,7 +11,7 @@ import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
 import { tags } from "../check/tags.mjs";
-import { html } from "../check/tools.mjs";
+import { html, links } from "../check/tools.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -253,4 +253,17 @@ test("html: fails on invalid markup in any page", async () => {
   const problems = (await html({ root, dist })).join("\n");
   assert.match(problems, /projects\/demo\/index\.html/);
   assert.match(problems, /no-dup-id/);
+});
+
+// --- lychee ---------------------------------------------------------------
+
+test("links: passes on the real build", async () => {
+  assert.deepEqual(await links({ dist: realDist }), []);
+});
+
+test("links: fails on a broken internal link or #anchor", async () => {
+  const file = broken((d) => write(d, "index.html", read(d, "index.html").replace("</main>", '<a href="/projects/nope/">x</a></main>')));
+  assert.match((await links({ dist: file })).join("\n"), /projects\/nope/);
+  const anchor = broken((d) => write(d, "404.html", read(d, "404.html").replace("</main>", '<a href="/#nowhere">x</a></main>')));
+  assert.match((await links({ dist: anchor })).join("\n"), /#nowhere/);
 });

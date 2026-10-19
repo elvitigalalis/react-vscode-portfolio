@@ -7,9 +7,9 @@ import { mirror } from "./mirror.mjs";
 import { routing } from "./routing.mjs";
 import { lint } from "./lint.mjs";
 import { tags } from "./tags.mjs";
-import { html } from "./tools.mjs";
+import { html, links } from "./tools.mjs";
 
-const gates = { mirror, lint, tags, routing, html };
+const gates = { mirror, lint, tags, routing, html, links };
 
 const { values, positionals } = parseArgs({ options: { dist: { type: "string", default: "dist" } }, allowPositionals: true });
 const root = new URL("..", import.meta.url).pathname;
