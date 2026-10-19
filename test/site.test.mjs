@@ -89,7 +89,8 @@ test("the résumé PDF keeps its old public path", () => {
 });
 
 test("no client JS beyond the inline hash script", () => {
-  const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+  // JSON-LD is data, not code, so it does not count.
+  const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !m[1].includes("ld+json"));
   assert.equal(scripts.length, 1);
   assert.doesNotMatch(scripts[0][1], /src=/);
   assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
@@ -97,7 +98,7 @@ test("no client JS beyond the inline hash script", () => {
 });
 
 test("old #/section links land on the matching section", () => {
-  const code = home.match(/<script\b[^>]*>([\s\S]*?)<\/script>/)[1];
+  const code = home.match(/<script>([\s\S]*?)<\/script>/)[1];
   const land = (hash) => {
     let replaced = null;
     const location = { hash, replace: (h) => { replaced = h; } };
@@ -308,4 +309,131 @@ test("the Micromouse run clip is click-to-play, muted, captioned, credited and l
   const caption = textOf(fig.match(/<figcaption>([\s\S]*?)<\/figcaption>/)[1]);
   assert.match(caption, /Video: Manasa/);
   assert.match(caption, /before the Montclair 2026 competition/);
+});
+
+// ---- SEO and link previews (the tag gate) ----
+const ORIGIN = "https://www.lisul-elvi.com";
+const pages = () => builtFiles().filter((f) => f.endsWith(".html")).map((file) => ({ file, html: readFileSync(file, "utf8") }));
+const indexable = () => pages().filter((p) => !p.file.endsWith("/404.html"));
+const tags = (html, re) => [...html.matchAll(re)].map((m) => m[1]);
+const meta = (html, key) => tags(html, new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)"`, "g"));
+const decode = (s) => textOf(s).trim();
+
+test("every page has one title and description, unique across the site", () => {
+  const all = pages();
+  const titles = all.map((p) => tags(p.html, /<title>([^<]*)<\/title>/g));
+  const descs = all.map((p) => meta(p.html, "description"));
+  for (const [i, p] of all.entries()) {
+    assert.equal(titles[i].length, 1, `${p.file}: one <title>`);
+    assert.equal(descs[i].length, 1, `${p.file}: one description`);
+    assert.ok(descs[i][0].length >= 20, `${p.file}: description too short`);
+  }
+  assert.equal(new Set(titles.flat()).size, all.length, "titles are unique");
+  assert.equal(new Set(descs.flat()).size, all.length, "descriptions are unique");
+});
+
+test("the home title names Lisul first, then his role", () => {
+  assert.equal(decode(tags(home, /<title>([^<]*)<\/title>/g)[0]), "Lisul Elvitigala – Software Engineer · Stony Brook CS");
+});
+
+test("every indexable page has a self-referencing absolute https://www canonical", () => {
+  for (const { file, html } of indexable()) {
+    const canon = tags(html, /<link rel="canonical" href="([^"]*)"/g);
+    assert.equal(canon.length, 1, file);
+    const rel = file.slice(dist.length).replace(/index\.html$/, "");
+    assert.equal(canon[0], ORIGIN + rel, file);
+  }
+});
+
+test("the 404 page is kept out of the index", () => {
+  const page = readFileSync(join(dist, "404.html"), "utf8");
+  assert.match(page, /<meta name="robots" content="noindex"/);
+  assert.doesNotMatch(page, /rel="canonical"/);
+});
+
+// Width and height from a JPEG's start-of-frame or a PNG's IHDR.
+function imageSize(buf) {
+  if (buf.subarray(1, 4).toString() === "PNG") return { type: "png", width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  assert.equal(buf.readUInt16BE(0), 0xffd8, "not a JPEG or PNG");
+  for (let i = 2; i < buf.length; ) {
+    const marker = buf.readUInt16BE(i);
+    if (marker >= 0xffc0 && marker <= 0xffcf && ![0xffc4, 0xffc8, 0xffcc].includes(marker)) {
+      return { type: "jpeg", height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    i += 2 + buf.readUInt16BE(i + 2);
+  }
+  throw new Error("no JPEG frame header");
+}
+
+test("every indexable page has full Open Graph and Twitter card tags", () => {
+  for (const { file, html } of indexable()) {
+    const one = (key) => {
+      const v = meta(html, key);
+      assert.equal(v.length, 1, `${file}: one ${key}`);
+      return decode(v[0]);
+    };
+    const title = decode(tags(html, /<title>([^<]*)<\/title>/g)[0]);
+    const ogTitle = one("og:title");
+    assert.ok(ogTitle && title.includes(ogTitle), `${file}: og:title comes from the title`);
+    assert.equal(one("og:description"), decode(meta(html, "description")[0]), file);
+    assert.equal(one("og:url"), tags(html, /<link rel="canonical" href="([^"]*)"/g)[0], file);
+    assert.equal(one("og:type"), "website");
+    assert.equal(one("og:site_name"), resume.basics.name);
+    assert.match(one("og:image"), new RegExp(`^${ORIGIN}/`), file);
+    assert.equal(one("og:image:width"), "1200");
+    assert.equal(one("og:image:height"), "630");
+    assert.ok(one("og:image:alt").length >= 10, `${file}: og:image:alt`);
+    assert.equal(one("twitter:card"), "summary_large_image");
+  }
+});
+
+test("the preview image is 1200×630 and at most 300 KB", () => {
+  const url = decode(meta(home, "og:image")[0]);
+  const buf = readFileSync(join(dist, new URL(url).pathname));
+  assert.ok(buf.length <= 300 * 1024, `${buf.length} bytes`);
+  const { width, height } = imageSize(buf);
+  assert.deepEqual({ width, height }, { width: 1200, height: 630 });
+});
+
+test("iMessage gets a square 180×180 touch icon", () => {
+  assert.match(home, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"/);
+  const { type, width, height } = imageSize(readFileSync(join(dist, "apple-touch-icon.png")));
+  assert.deepEqual({ type, width, height }, { type: "png", width: 180, height: 180 });
+});
+
+test("the sitemap lists exactly the indexable pages, and robots.txt points to it", () => {
+  const robots = readFileSync(join(dist, "robots.txt"), "utf8");
+  const line = robots.match(/^Sitemap: (\S+)$/m);
+  assert.ok(line, "robots.txt has a Sitemap: line");
+  assert.match(line[1], new RegExp(`^${ORIGIN}/`));
+  const locs = (path) => tags(readFileSync(join(dist, new URL(path).pathname), "utf8"), /<loc>([^<]*)<\/loc>/g);
+  const sitemaps = /index\.xml$/.test(line[1]) ? locs(line[1]) : [line[1]];
+  const urls = sitemaps.flatMap(locs).sort();
+  const canonicals = indexable().map((p) => tags(p.html, /<link rel="canonical" href="([^"]*)"/g)[0]).sort();
+  assert.deepEqual(urls, canonicals);
+});
+
+test("home JSON-LD: WebSite and ProfilePage about a Person, from resume.json", () => {
+  const blocks = tags(home, /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g);
+  assert.equal(blocks.length, 1);
+  const items = JSON.parse(blocks[0]);
+  const byType = Object.fromEntries(items.map((i) => [i["@type"], i]));
+  for (const i of items) assert.equal(i["@context"], "https://schema.org");
+
+  // Google site names: WebSite with name and url, on the home page.
+  assert.equal(byType.WebSite.name, "Lisul Elvitigala");
+  assert.equal(byType.WebSite.url, `${ORIGIN}/`);
+
+  // Google profile pages: ProfilePage with mainEntity (a Person) that has a name.
+  const page = byType.ProfilePage;
+  assert.equal(page.url, `${ORIGIN}/`);
+  assert.equal(page.dateModified, resume.meta.generatedAt);
+  const person = page.mainEntity;
+  assert.equal(person["@type"], "Person");
+  assert.equal(person.name, "Lisul Elvitigala");
+  assert.equal(person.url, `${ORIGIN}/`);
+  assert.deepEqual(person.sameAs, ["https://linkedin.com/in/lisul", "https://github.com/elvitigalalis"]);
+  assert.deepEqual(person.alumniOf, { "@type": "CollegeOrUniversity", name: "Stony Brook University" });
+  assert.ok(!("telephone" in person), "the phone number stays off the site");
+  assert.ok(!("worksFor" in person), "no employer claim for a past role");
 });
