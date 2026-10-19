@@ -19,7 +19,7 @@ export async function getStaticPaths() {
 
 const { entry, project: p } = Astro.props;
 const { Content } = await render(entry);
-const { description, summary, video } = entry.data;
+const { description, summary, video, screenshot } = entry.data;
 // The card's Demo link, label and all, so the two can never disagree.
 const demo = home.projects?.[p.slug]?.demo;
 ---
@@ -40,6 +40,12 @@ const demo = home.projects?.[p.slug]?.demo;
           <track kind="captions" src={video.captions} srclang="en" label="English" default />
         </video>
         <figcaption>{video.caption}</figcaption>
+      </figure>
+    )}
+    {screenshot && (
+      <figure class="shot">
+        <img src={screenshot.src} alt={screenshot.alt} width={screenshot.width} height={screenshot.height} decoding="async" />
+        <figcaption>{screenshot.caption}</figcaption>
       </figure>
     )}
     <aside class="glance" id="at-a-glance" aria-labelledby="glance-h">
