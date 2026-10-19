@@ -181,6 +181,18 @@ test("a write-up's header and At a glance mirror its résumé project verbatim",
   }
 });
 
+test("a write-up's header repeats its card's Demo link, label and all", () => {
+  for (const slug of writeupSlugs()) {
+    const card = home.split('<article class="card">').find((c) => c.includes(`href="/projects/${slug}/"`));
+    const demo = card.match(/<a class="btn" href="([^"]+)">(Demo[^<]*)<\/a>/);
+    const links = writeupHtml(slug).match(/<p class="links">[\s\S]*?<\/p>/)[0];
+    if (demo) assert.ok(links.includes(`href="${demo[1]}">${demo[2]}</a>`), `${slug}: Demo link`);
+    else assert.doesNotMatch(links, /Demo/, `${slug}: no Demo link`);
+  }
+  // The demo needs sign-in and is still being built; the label says so.
+  assert.match(writeupHtml("workit"), /href="https:\/\/workit-web-gamma\.vercel\.app">Demo \(in development, sign-in required\)<\/a>/);
+});
+
 test("a write-up ends with links back to all projects and the résumé", () => {
   for (const slug of writeupSlugs()) {
     const end = writeupHtml(slug).match(/<nav class="writeup-end"[\s\S]*?<\/nav>/)[0];
