@@ -8,6 +8,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { deflateSync } from "node:zlib";
 import { dirname, join } from "node:path";
+import { schema } from "../check/schema.mjs";
 import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
@@ -39,6 +40,19 @@ const page = (body, head = "") =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Fixture</title>${head}</head><body><main>${body}</main></body></html>`;
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 const glance = (bullets) => `<h2>At a glance</h2><ul>${bullets.map((b) => `<li>${esc(b)}</li>`).join("")}</ul><h2>Problem</h2><p>Text.</p>`;
+
+// --- schema ---------------------------------------------------------------
+
+test("schema: passes on the real resume.json", async () => {
+  assert.deepEqual(await schema({ root, resume }), []);
+});
+
+test("schema: fails on an offer note or a missing field", async () => {
+  const note = { ...resume, projects: resume.projects.map((p) => ({ ...p, note: "Return offer" })) };
+  assert.match((await schema({ root, resume: note })).join("\n"), /\/projects\/0 must NOT have additional properties/);
+  const { skills, ...noSkills } = resume;
+  assert.match((await schema({ root, resume: noSkills })).join("\n"), /must have required property 'skills'/);
+});
 
 // --- mirror ---------------------------------------------------------------
 
