@@ -22,6 +22,8 @@ const { description, summary, video } = entry.data;
 ---
 
 <Base title={`${p.title} · ${siteConfig.title}`} description={description} path={`/projects/${p.slug}/`}>
+  {/* The clip's poster is the page's largest paint; a poster can't take fetchpriority itself. */}
+  {video && <link slot="head" rel="preload" as="image" href={video.poster} fetchpriority="high" />}
   <article class="writeup">
     <header class="writeup-head">
       <h1>{p.title}</h1>

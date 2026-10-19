@@ -15,6 +15,7 @@ type Props = SeoProps;
     <Seo {...Astro.props} />
     <link rel="icon" href="/favicon.png" type="image/png" />
     <meta name="color-scheme" content="light dark" />
+    <slot name="head" />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
