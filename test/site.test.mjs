@@ -190,3 +190,53 @@ test("the 404 page is kept out of the index", () => {
   assert.match(page, /<meta name="robots" content="noindex"/);
   assert.doesNotMatch(page, /rel="canonical"/);
 });
+
+// Width and height from a JPEG's start-of-frame or a PNG's IHDR.
+function imageSize(buf) {
+  if (buf.subarray(1, 4).toString() === "PNG") return { type: "png", width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  assert.equal(buf.readUInt16BE(0), 0xffd8, "not a JPEG or PNG");
+  for (let i = 2; i < buf.length; ) {
+    const marker = buf.readUInt16BE(i);
+    if (marker >= 0xffc0 && marker <= 0xffcf && ![0xffc4, 0xffc8, 0xffcc].includes(marker)) {
+      return { type: "jpeg", height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+    }
+    i += 2 + buf.readUInt16BE(i + 2);
+  }
+  throw new Error("no JPEG frame header");
+}
+
+test("every indexable page has full Open Graph and Twitter card tags", () => {
+  for (const { file, html } of indexable()) {
+    const one = (key) => {
+      const v = meta(html, key);
+      assert.equal(v.length, 1, `${file}: one ${key}`);
+      return decode(v[0]);
+    };
+    const title = decode(tags(html, /<title>([^<]*)<\/title>/g)[0]);
+    const ogTitle = one("og:title");
+    assert.ok(ogTitle && title.includes(ogTitle), `${file}: og:title comes from the title`);
+    assert.equal(one("og:description"), decode(meta(html, "description")[0]), file);
+    assert.equal(one("og:url"), tags(html, /<link rel="canonical" href="([^"]*)"/g)[0], file);
+    assert.equal(one("og:type"), "website");
+    assert.equal(one("og:site_name"), resume.basics.name);
+    assert.match(one("og:image"), new RegExp(`^${ORIGIN}/`), file);
+    assert.equal(one("og:image:width"), "1200");
+    assert.equal(one("og:image:height"), "630");
+    assert.ok(one("og:image:alt").length >= 10, `${file}: og:image:alt`);
+    assert.equal(one("twitter:card"), "summary_large_image");
+  }
+});
+
+test("the preview image is 1200×630 and at most 300 KB", () => {
+  const url = decode(meta(home, "og:image")[0]);
+  const buf = readFileSync(join(dist, new URL(url).pathname));
+  assert.ok(buf.length <= 300 * 1024, `${buf.length} bytes`);
+  const { width, height } = imageSize(buf);
+  assert.deepEqual({ width, height }, { width: 1200, height: 630 });
+});
+
+test("iMessage gets a square 180×180 touch icon", () => {
+  assert.match(home, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"/);
+  const { type, width, height } = imageSize(readFileSync(join(dist, "apple-touch-icon.png")));
+  assert.deepEqual({ type, width, height }, { type: "png", width: 180, height: 180 });
+});
