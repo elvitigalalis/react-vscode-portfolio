@@ -1,9 +1,9 @@
 // Gates that wrap an outside checker. Each returns its findings as problem lines.
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { htmlPages } from "./lib.mjs";
+import { htmlPages, serve } from "./lib.mjs";
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...opts });
@@ -46,4 +46,42 @@ export async function lighthouse({ root, dist, runs }) {
     .filter((r) => r.level === "error" && !r.passed)
     .map((r) => `${new URL(r.url).pathname}: ${[r.auditId, r.auditProperty?.replace(".", ":")].filter(Boolean).join(":")} ${r.name} ${r.operator} ${r.expected}, found ${r.actual}`);
   return assert.status === 0 || problems.length ? problems : lines(assert);
+}
+
+// pa11y-ci with the axe runner on every built page, served as GitHub Pages would. pa11y's
+// WCAG2AA standard maps to axe's 2.0/2.1 A and AA tags plus best-practice; the WCAG 2.2 AA rule
+// (target-size) is switched on by name. Every axe violation fails, whatever its impact;
+// "needs review" results do not.
+const WCAG22 = ["target-size"];
+
+export async function a11y({ root, dist }) {
+  const work = mkdtempSync(join(tmpdir(), "pa11y-"));
+  const server = await serve(dist);
+  try {
+    const config = join(work, "pa11y.json");
+    writeFileSync(config, JSON.stringify({
+      defaults: {
+        runners: ["axe"], standard: "WCAG2AA", rules: WCAG22, includeWarnings: true, includeNotices: true,
+        timeout: 60_000, chromeLaunchConfig: { args: ["--no-sandbox"] },
+      },
+      urls: htmlPages(dist).map((f) => `${server.url}/${f}`),
+    }));
+    // Async spawn: the server above must keep answering while pa11y-ci runs.
+    const out = await new Promise((ok, fail) => {
+      const p = spawn(join(root, "node_modules/.bin/pa11y-ci"), ["--json", "--config", config], { cwd: work });
+      let stdout = "", stderr = "";
+      p.stdout.on("data", (d) => (stdout += d));
+      p.stderr.on("data", (d) => (stderr += d));
+      p.on("error", fail);
+      p.on("close", () => ok({ stdout, stderr }));
+    });
+    let report;
+    try { report = JSON.parse(out.stdout); } catch { return ["pa11y-ci gave no report:", ...(out.stdout + out.stderr).split("\n").filter(Boolean)]; }
+    return Object.entries(report.results).flatMap(([url, issues]) =>
+      issues
+        .filter((i) => !i.runnerExtras?.needsFurtherReview)
+        .map((i) => i instanceof Error || i.message && !i.code ? `${new URL(url).pathname}: ${i.message}` : `${new URL(url).pathname}: ${i.code} ${i.message} at ${i.selector}`));
+  } finally {
+    await server.close();
+  }
 }

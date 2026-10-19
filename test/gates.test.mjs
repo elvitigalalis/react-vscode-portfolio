@@ -12,7 +12,7 @@ import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
 import { tags } from "../check/tags.mjs";
-import { html, links, lighthouse } from "../check/tools.mjs";
+import { html, links, lighthouse, a11y } from "../check/tools.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -294,4 +294,22 @@ test("lighthouse: fails over the JS budget, and write-ups get 300 KB where / get
   assert.match(text, /^\/index\.html: resource-summary:script:size/m);
   assert.match(text, /^\/projects\/heavy\/index\.html: resource-summary:total:size/m);
   assert.doesNotMatch(text, /^\/projects\/light\/index\.html: resource-summary:total:size/m);
+});
+
+// --- pa11y-ci with axe ----------------------------------------------------
+
+test("a11y: passes on the real build", { timeout: 300_000 }, async () => {
+  assert.deepEqual(await a11y({ root, dist: realDist }), []);
+});
+
+test("a11y: fails on an axe violation, WCAG 2.2 rules included", { timeout: 300_000 }, async () => {
+  const dist = broken((d) => {
+    write(d, "projects/alt/index.html", page('<h1>Alt</h1><img src="/favicon.png" width="32" height="32">'));
+    // 2.5.8 Target Size (Minimum), new in WCAG 2.2: two 10 px buttons side by side.
+    write(d, "projects/tiny/index.html", page('<h1>Tiny</h1><p><a href="/" style="display:inline-block;width:10px;height:10px;overflow:hidden">A</a><a href="/" style="display:inline-block;width:10px;height:10px;overflow:hidden">B</a></p>'));
+  });
+  const text = (await a11y({ root, dist })).join("\n");
+  assert.match(text, /^\/projects\/alt\/index\.html: image-alt/m);
+  assert.match(text, /^\/projects\/tiny\/index\.html: target-size/m);
+  assert.doesNotMatch(text, /^\/index\.html/m, "the real pages stay clean");
 });
