@@ -3,6 +3,7 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { deflateSync } from "node:zlib";
@@ -11,7 +12,7 @@ import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
 import { tags } from "../check/tags.mjs";
-import { html, links } from "../check/tools.mjs";
+import { html, links, lighthouse } from "../check/tools.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -269,4 +270,28 @@ test("links: fails on a broken internal link or #anchor", async () => {
   // Absolute links on the site's own origin are checked against the build, not the live site.
   const own = broken((d) => write(d, "index.html", read(d, "index.html").replace("</main>", '<a href="https://www.lisul-elvi.com/gone/">x</a></main>')));
   assert.match((await links({ dist: own })).join("\n"), /gone/);
+});
+
+// --- Lighthouse CI --------------------------------------------------------
+
+test("lighthouse: passes on the real build", { timeout: 300_000 }, async () => {
+  assert.deepEqual(await lighthouse({ root, dist: realDist, runs: 1 }), []);
+});
+
+test("lighthouse: fails over the JS budget, and write-ups get 300 KB where / gets 100 KB", { timeout: 300_000 }, async () => {
+  const dist = broken((d) => {
+    write(d, "big.js", `window.x = "${randomBytes(20 * 1024).toString("base64")}";`); // incompressible
+    write(d, "index.html", read(d, "index.html").replace("</body>", '<script src="/big.js"></script></body>'));
+    // 150 KB fits a write-up's 300 KB budget; 400 KB does not.
+    for (const [slug, kb] of [["light", 150], ["heavy", 400]]) {
+      write(d, `projects/${slug}/photo.png`, png(600, 400, kb * 1024));
+      write(d, `projects/${slug}/index.html`, page(`<h1>${slug}</h1><img src="photo.png" width="600" height="400" alt="A test photo of nothing">`,
+        '<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="A fixture page.">'));
+    }
+  });
+  const problems = await lighthouse({ root, dist, runs: 1 });
+  const text = problems.join("\n");
+  assert.match(text, /^\/index\.html: resource-summary:script:size/m);
+  assert.match(text, /^\/projects\/heavy\/index\.html: resource-summary:total:size/m);
+  assert.doesNotMatch(text, /^\/projects\/light\/index\.html: resource-summary:total:size/m);
 });
