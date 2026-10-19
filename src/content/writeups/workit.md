@@ -12,6 +12,18 @@ summary: >-
   new-grad roles, and the GitHub Actions workflow that imports its results into PostgreSQL.
   Routine runs fell from 9.5 to about 3 minutes with every site paced as before, and the
   workflow's dry run on pull requests caught a database schema mismatch before it merged.
+screenshot:
+  src: /images/workit/landing.webp
+  width: 960
+  height: 368
+  alt: >-
+    WorkIt's landing page: a line saying it tailors a resume to each role and matches you with
+    jobs, Google and LinkedIn sign-up buttons, and two sample job-match cards over an
+    illustrated city.
+  caption: >-
+    WorkIt's public landing page, October 2026. The app behind it needs sign-in and is still in
+    development; the page and the app are mostly Andrew Shi's work, and the jobs come from my
+    scraper.
 sources:
   - "Résumé one-pager (resume.json): the scraper over 1,800 boards (Greenhouse, Lever, Ashby) keeping 1,000+ internship and new-grad roles; routine runs 9.5 to 3 min; the scheduled scrape-to-PostgreSQL import, its dry run on pull requests that caught a schema mismatch, the CI test-and-lint job, 145 of the 252 scraper tests."
   - "Public WorkIt repository, the scraper's first pull request (WorkIt PR 48, merged 5 October 2026): about 1,800 companies on Greenhouse, Lever and Ashby, about 1,000 roles, robots.txt obeyed and stayed away from when unreadable, every site paced, the scraper's test-and-lint job in CI."

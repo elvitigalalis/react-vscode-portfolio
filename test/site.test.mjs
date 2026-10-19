@@ -293,6 +293,21 @@ test("write-up figures are described, sized, lazy and light", () => {
   }
 });
 
+test("the WorkIt screenshot sits under the summary, described, sized and light", () => {
+  const html = writeupHtml("workit");
+  const fig = html.match(/<figure class="shot">[\s\S]*?<\/figure>/)?.[0];
+  assert.ok(fig, "the screenshot sits under the summary");
+  assert.ok(html.indexOf('class="tldr"') < html.indexOf(fig), "after the summary");
+  assert.ok(html.indexOf(fig) < html.indexOf('id="at-a-glance"'), "before At a glance");
+  const img = fig.match(/<img\b[^>]*>/)[0];
+  assert.match(img, /alt="[^"]{10,}"/);
+  assert.match(img, /width="\d+" height="\d+"/);
+  const src = img.match(/src="([^"]+)"/)[1];
+  assert.match(src, /\.webp$/);
+  assert.ok(statSync(join(dist, src)).size <= 150 * 1024, `${src} is over 150 KB`);
+  assert.match(fig, /<figcaption>[^<]{20,}/);
+});
+
 // Seconds in an MP4, from its movie header (mvhd) box.
 function mp4Seconds(buf) {
   const at = buf.indexOf("mvhd");
