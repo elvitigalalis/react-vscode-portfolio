@@ -27,10 +27,16 @@ projects:
     summary: >-
       A small robot that maps an unknown maze and races to its centre. I captain Stony Brook's
       IEEE team and wrote the 2026 robot's firmware.
+    photo:
+      src: /images/micromouse.webp
+      alt: Close-up of a micromouse circuit board under a microscope, its traces and solder pads magnified
   workit:
     summary: >-
       A job board for internship and new-grad roles. I built the scraper that finds them and
       scheduled its import into the database.
+    photo:
+      src: /images/workit.webp
+      alt: "WorkIt's landing page: the headline From resume to offer above sign-up buttons"
     demo:
       url: https://workit-web-gamma.vercel.app
       label: Demo (in development, sign-in required)
