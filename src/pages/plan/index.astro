@@ -1,0 +1,74 @@
+---
+// The Sheet's planner (docs/sheet.md): Lisul's week, behind his Google sign-in.
+import Base from "../../layouts/Base.astro";
+import { siteConfig } from "../../config";
+import { SHEET } from "../../site.mjs";
+import "../../styles/sheet.css";
+---
+
+<Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
+  {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
+  <section class="sheet-page sheet-planner">
+    <div class="sheet-bar-top">
+      <h1 data-week-title>Plan</h1>
+      <div class="sheet-tools" data-tools hidden>
+        <button type="button" class="sheet-btn" data-act="prev-week" aria-label="Previous week">←</button>
+        <button type="button" class="sheet-btn" data-act="this-week">Today</button>
+        <button type="button" class="sheet-btn" data-act="next-week" aria-label="Next week">→</button>
+        <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
+        <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
+        <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
+        <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
+      </div>
+    </div>
+    <p class="sheet-status" data-status>Loading…</p>
+    <p class="sheet-notice" data-notice hidden></p>
+    <div class="sheet-daynav" data-daynav hidden>
+      <button type="button" class="sheet-btn" data-act="prev-day" aria-label="Previous day">‹</button>
+      <button type="button" class="sheet-btn" data-act="next-day" aria-label="Next day">›</button>
+    </div>
+    <div class="sheet-week" data-week aria-label="Week" role="group"></div>
+    <h2 class="sheet-someday-title" data-someday-title hidden>Someday</h2>
+    <div class="sheet-someday" data-someday></div>
+
+    <div class="sheet-menu" data-menu popover>
+      <button type="button" data-move="today">To today</button>
+      <button type="button" data-move="tomorrow">To tomorrow</button>
+      <button type="button" data-move="next-week">To next week</button>
+      <button type="button" data-move="someday">To Someday</button>
+      <button type="button" data-move="visibility">Make public</button>
+      <button type="button" data-move="delete">Delete</button>
+    </div>
+
+    <div class="sheet-toast" role="status" data-toast hidden>
+      <span data-toast-text></span> <button type="button" class="sheet-link" data-act="undo">Undo</button>
+    </div>
+
+    <dialog class="sheet-dialog" data-help aria-labelledby="sheet-help-title">
+      <h2 id="sheet-help-title">Keys</h2>
+      <dl class="sheet-keys">
+        <dt>Enter</dt><dd>Add the task, start the next</dd>
+        <dt>~45m · @3pm · #tag · !public</dt><dd>Estimate, fixed time, tag, visibility</dd>
+        <dt>P</dt><dd>Plan today</dd>
+        <dt>O</dt><dd>Shut down</dd>
+        <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
+        <dt>← →</dt><dd>Previous or next week</dd>
+        <dt>T</dt><dd>This week</dd>
+        <dt>.</dt><dd>Menu for the focused task</dd>
+        <dt>⌘Z</dt><dd>Undo</dd>
+      </dl>
+      <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
+    </dialog>
+
+    <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
+    <dialog class="sheet-dialog sheet-shut" data-shut aria-labelledby="sheet-shut-title"></dialog>
+
+  </section>
+</Base>
+
+<script>
+  import { start } from "../../sheet/planner.mjs";
+  import { setupPlanToday } from "../../sheet/plan-today.mjs";
+  import { setupShutdown } from "../../sheet/shutdown.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown]);
+</script>

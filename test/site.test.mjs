@@ -52,13 +52,27 @@ test("the résumé PDF keeps its old public path", () => {
   assert.ok(home.includes(`href="${RESUME_PDF}"`));
 });
 
-test("no client JS beyond the inline hash script", () => {
+test("no client JS beyond the inline hash script, except on The Sheet's pages", () => {
   // JSON-LD is data, not code, so it does not count.
   const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !m[1].includes("ld+json"));
   assert.equal(scripts.length, 1);
   assert.doesNotMatch(scripts[0][1], /src=/);
   assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
-  assert.deepEqual(builtFiles().filter((f) => f.endsWith(".js")), []);
+  // Script files exist only for /plan and /now (docs/sheet.md): no other page loads one, and every
+  // one is loaded by those pages, directly or through another script's import.
+  const rel = (f) => f.slice(dist.length);
+  const html = builtFiles().filter((f) => f.endsWith(".html"));
+  const jsFiles = builtFiles().filter((f) => f.endsWith(".js"));
+  const loads = (file, js) => readFileSync(file, "utf8").includes(js.split("/").pop());
+  for (const page of html.filter((f) => !/^\/(plan|now)\//.test(rel(f)))) {
+    for (const js of jsFiles) assert.ok(!loads(page, js), `${rel(page)} loads ${rel(js)}`);
+  }
+  const reached = new Set(jsFiles.filter((js) => html.some((page) => /^\/(plan|now)\//.test(rel(page)) && loads(page, js))));
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const js of jsFiles) if (!reached.has(js) && [...reached].some((from) => loads(from, js))) { reached.add(js); grew = true; }
+  }
+  for (const js of jsFiles) assert.ok(reached.has(js), `${rel(js)} is loaded by nothing`);
 });
 
 test("analytics load after the page, and only in the deployed build", () => {
@@ -341,7 +355,7 @@ test("the Micromouse run clip is click-to-play, muted, captioned, credited and l
 
 // ---- SEO and link previews (the tag gate) ----
 const pages = () => builtFiles().filter((f) => f.endsWith(".html")).map((file) => ({ file, html: readFileSync(file, "utf8") }));
-const indexable = () => pages().filter((p) => !p.file.endsWith("/404.html"));
+const indexable = () => pages().filter((p) => !/<meta name="robots" content="noindex"/.test(p.html));
 const tags = (html, re) => [...html.matchAll(re)].map((m) => m[1]);
 const meta = (html, key) => tags(html, new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)"`, "g"));
 
