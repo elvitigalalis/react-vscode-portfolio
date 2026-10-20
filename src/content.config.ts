@@ -23,6 +23,16 @@ const writeups = defineCollection({
         caption: z.string(),
       })
       .optional(),
+    // A screenshot under the summary, for a project with no clip (WorkIt).
+    screenshot: z
+      .object({
+        src: z.string(),
+        alt: z.string(),
+        width: z.number(),
+        height: z.number(),
+        caption: z.string(),
+      })
+      .optional(),
     // Where each fact and number comes from, described in words (never copied from the private bank).
     sources: z.array(z.string()).min(1),
   }),

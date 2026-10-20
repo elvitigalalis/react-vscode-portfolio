@@ -121,6 +121,7 @@ const writeupHtml = (slug) => readFileSync(join(dist, "projects", slug, "index.h
 test("each write-up file builds a page that only its card's Write-up button links to", () => {
   const slugs = writeupSlugs();
   assert.ok(slugs.includes("micromouse"), "the Micromouse write-up exists");
+  assert.ok(slugs.includes("workit"), "the WorkIt write-up exists");
   for (const p of resume.projects) {
     const linked = home.includes(`href="/projects/${p.slug}/"`);
     assert.equal(linked, slugs.includes(p.slug), `Write-up button for ${p.slug}`);
@@ -139,6 +140,18 @@ test("a write-up's header and At a glance mirror its résumé project verbatim",
     const glance = textOf(html.match(/<aside[^>]*id="at-a-glance"[\s\S]*?<\/aside>/)[0]);
     assert.deepEqual(p.bullets.filter((b) => !glance.includes(squash(b))), []);
   }
+});
+
+test("a write-up's header repeats its card's Demo link, label and all", () => {
+  for (const slug of writeupSlugs()) {
+    const card = home.split('<article class="card">').find((c) => c.includes(`href="/projects/${slug}/"`));
+    const demo = card.match(/<a class="btn" href="([^"]+)">(Demo[^<]*)<\/a>/);
+    const links = writeupHtml(slug).match(/<p class="links">[\s\S]*?<\/p>/)[0];
+    if (demo) assert.ok(links.includes(`href="${demo[1]}">${demo[2]}</a>`), `${slug}: Demo link`);
+    else assert.doesNotMatch(links, /Demo/, `${slug}: no Demo link`);
+  }
+  // The demo needs sign-in and is still being built; the label says so.
+  assert.match(writeupHtml("workit"), /href="https:\/\/workit-web-gamma\.vercel\.app">Demo \(in development, sign-in required\)<\/a>/);
 });
 
 test("a write-up ends with links back to all projects and the résumé", () => {
@@ -197,6 +210,18 @@ test("write-ups obey the standing wording rules", () => {
   assert.doesNotMatch(proseText(writeupSource("micromouse").prose), /flood[- ]?fill/i);
 });
 
+test("the WorkIt write-up credits teammates and never links WorkIt issues or PRs", () => {
+  const raw = readFileSync(join(writeupDir, "workit.md"), "utf8");
+  // A link or #-reference posts a "mentioned this" event on the WorkIt PR; plain text only.
+  assert.doesNotMatch(raw, /github\.com\/WorkIt-CSE-416\/[^/\s]+\/(pull|issues)\//i);
+  assert.doesNotMatch(raw, /(^|[\s(])#\d+\b|WorkIt-CSE-416\/[\w-]+#\d+/m);
+  for (const f of builtFiles()) assert.doesNotMatch(readFileSync(f, "utf8"), /WorkIt-CSE416\/(pull|issues)\//, f);
+  const text = proseText(writeupSource("workit").prose);
+  // The import script, its transaction and its guards are Xiang's; Supabase was Brian's to create.
+  assert.match(text, /Xiang Liu/);
+  assert.doesNotMatch(text, /\bset up Supabase|Supabase setup/i);
+});
+
 test("a write-up runs 700 to 1,200 words with 2 to 4 figures", () => {
   for (const slug of writeupSlugs()) {
     const html = writeupHtml(slug);
@@ -227,6 +252,21 @@ test("write-up figures are described, sized, lazy and light", () => {
       }
     }
   }
+});
+
+test("the WorkIt screenshot sits under the summary, described, sized and light", () => {
+  const html = writeupHtml("workit");
+  const fig = html.match(/<figure class="shot">[\s\S]*?<\/figure>/)?.[0];
+  assert.ok(fig, "the screenshot sits under the summary");
+  assert.ok(html.indexOf('class="tldr"') < html.indexOf(fig), "after the summary");
+  assert.ok(html.indexOf(fig) < html.indexOf('id="at-a-glance"'), "before At a glance");
+  const img = fig.match(/<img\b[^>]*>/)[0];
+  assert.match(img, /alt="[^"]{10,}"/);
+  assert.match(img, /width="\d+" height="\d+"/);
+  const src = img.match(/src="([^"]+)"/)[1];
+  assert.match(src, /\.webp$/);
+  assert.ok(statSync(join(dist, src)).size <= 150 * 1024, `${src} is over 150 KB`);
+  assert.match(fig, /<figcaption>[^<]{20,}/);
 });
 
 // Seconds in an MP4, from its movie header (mvhd) box.
