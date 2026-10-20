@@ -189,7 +189,7 @@ export function taskRow(t) {
 }
 
 function addRow(where, label) {
-  const input = el("input", { className: "sheet-add", type: "text", autocomplete: "off", spellcheck: true, ariaLabel: label });
+  const input = el("input", { className: "sheet-add", type: "text", autocomplete: "off", spellcheck: true, ariaLabel: label, placeholder: "+ Add a task" });
   if (where.day) input.dataset.day = where.day; else input.dataset.list = where.list;
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
