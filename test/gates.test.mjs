@@ -106,7 +106,7 @@ test("routing: fails without the résumé PDF at its old path", async () => {
 });
 
 test("routing: fails when old #/section links no longer land", async () => {
-  const gone = broken((d) => write(d, "index.html", read(d, "index.html").replace(/<script\b[\s\S]*?<\/script>/, "")));
+  const gone = broken((d) => write(d, "index.html", read(d, "index.html").replace(/<script\b[^>]*>[^<]*location\.hash[\s\S]*?<\/script>/, "")));
   assert.match((await routing({ dist: gone })).join("\n"), /hash/);
   const wrong = broken((d) => write(d, "index.html", read(d, "index.html").replace('"#" +', '"#x" +')));
   assert.match((await routing({ dist: wrong })).join("\n"), /#\/projects/);
