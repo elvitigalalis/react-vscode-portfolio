@@ -214,7 +214,7 @@ function png(width, height, pad = 0) {
 }
 
 const PREVIEW = /<meta (?:property|name)="(?:og|twitter):[^>]*>|<script type="application\/ld\+json">[\s\S]*?<\/script>/g;
-const pages = (d) => ["index.html", "404.html", ...resume.projects.map((p) => `projects/${p.slug}/index.html`)].filter((f) => existsSync(join(d, f)));
+const pages = (d) => ["index.html", "404.html", "now/index.html", "plan/index.html", ...resume.projects.map((p) => `projects/${p.slug}/index.html`)].filter((f) => existsSync(join(d, f)));
 const eachPage = (d, edit) => { for (const f of pages(d)) write(d, f, edit(read(d, f), f)); };
 // The build as it was before any preview tags, structured data or sitemap existed.
 function bare(d) {
