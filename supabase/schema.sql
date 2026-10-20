@@ -8,7 +8,7 @@ create table if not exists settings (
   id boolean primary key default true check (id),
   owner_email text not null,
   time_zone text not null default 'America/New_York',
-  capacity_min int not null default 330
+  gcal_calendar_id text               -- the "Time blocks" Google calendar, once created
 );
 
 create table if not exists tasks (
@@ -67,7 +67,7 @@ drop policy if exists owner_all on settings;
 drop policy if exists owner_all on tasks;
 drop policy if exists owner_all on blocks;
 drop policy if exists owner_all on days;
-create policy owner_all on settings for select using (is_owner());
+create policy owner_all on settings for all using (is_owner()) with check (is_owner());
 create policy owner_all on tasks for all using (is_owner()) with check (is_owner());
 create policy owner_all on blocks for all using (is_owner()) with check (is_owner());
 create policy owner_all on days for all using (is_owner()) with check (is_owner());
