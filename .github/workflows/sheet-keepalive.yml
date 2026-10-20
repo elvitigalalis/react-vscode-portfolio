@@ -1,0 +1,27 @@
+# Supabase pauses a free project after a week with no requests, which would blank /now. One read
+# of the public view each week keeps it awake. Does nothing until SHEET is set in src/site.mjs.
+name: Sheet keep-alive
+on:
+  schedule:
+    - cron: "41 13 * * 1,4"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Read the public view
+        run: |
+          node --input-type=module -e '
+            const { SHEET } = await import("./src/site.mjs");
+            if (!SHEET.supabaseUrl) { console.log("The Sheet is not set up; nothing to ping."); process.exit(0); }
+            const res = await fetch(`${SHEET.supabaseUrl}/rest/v1/public_now`, { headers: { apikey: SHEET.anonKey } });
+            console.log(`public_now: ${res.status}`);
+            if (!res.ok) process.exit(1);
+          '
