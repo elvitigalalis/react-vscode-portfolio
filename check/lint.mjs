@@ -7,7 +7,8 @@ import { parse } from "yaml";
 import { files } from "./lib.mjs";
 
 const DEPLOY = String.raw`(?:deploy\w*|launch\w*|rolled out|runs?|running|live|in production|in service)`;
-const BANNED = [
+// The standing rules' banned wording, one list for the gate and the tests.
+export const BANNED = [
   [/\boffers?\b/i, "an offer tag"],
   [/acquired by/i, '"acquired by"'],
   [/\bformerly\b/i, '"formerly"'],
@@ -19,7 +20,7 @@ const BANNED = [
 
 // Numbers as a reader sees them: "2.75°" -> 2.75, "1,200" -> 1200, "87%" -> 87. Digits glued to
 // letters (YOLOv8, v3) are names, not numbers.
-const numbers = (text, glued = false) =>
+export const numbersIn = (text, glued = false) =>
   [...text.matchAll(glued ? /\d+(?:[.,]\d+)*/g : /(?<![\p{L}\d_.])\d+(?:[.,]\d+)*(?![\p{L}\d_])/gu)]
     .map((m) => m[0].replace(/,(?=\d{3}\b)/g, ""));
 
@@ -35,14 +36,14 @@ const prose = (md) => md
   .replace(/https?:\/\/\S+/g, " ");
 
 export async function lint({ content, resume }) {
-  const known = new Set(numbers(strings(resume).join("\n"), true));
+  const known = new Set(numbersIn(strings(resume).join("\n"), true));
   const problems = [];
   for (const file of files(content, /\.mdx?$/).sort()) {
     const src = readFileSync(join(content, file), "utf8");
     const fm = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(src);
     const data = (fm && parse(fm[1])) || {};
     const { sources = [], ...rest } = data;
-    const sourced = new Set(numbers(strings(sources).join("\n"), true));
+    const sourced = new Set(numbersIn(strings(sources).join("\n"), true));
     const said = [...strings(rest).filter((s) => !isLink(s)), prose(fm ? src.slice(fm[0].length) : src)].join("\n");
     const text = [said, ...strings(sources)].join("\n");
 
@@ -50,7 +51,7 @@ export async function lint({ content, resume }) {
       const m = re.exec(text);
       if (m) problems.push(`${file}: banned wording, ${what}: "${m[0]}"`);
     }
-    for (const n of new Set(numbers(said)))
+    for (const n of new Set(numbersIn(said)))
       if (!known.has(n) && !sourced.has(n)) problems.push(`${file}: "${n}" traces to neither resume.json nor this file's sources:`);
   }
   return problems;

@@ -3,20 +3,18 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readdirSync, statSync } from "node:fs";
+import { decode, files, imageSize, squash, textOf } from "../check/lib.mjs";
+import { BANNED, numbersIn } from "../check/lint.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const dist = join(root, "dist");
 const resume = JSON.parse(readFileSync(join(root, "src/data/resume.json"), "utf8"));
 
-// Every text file in dist/ (HTML, CSS, JS, XML, TXT).
-function builtFiles(dir = dist) {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
-    d.isDirectory() ? builtFiles(join(dir, d.name)) : /\.(html|css|js|xml|txt|json)$/.test(d.name) ? [join(dir, d.name)] : []);
-}
+// Every text file in dist/ (HTML, CSS, JS, XML, TXT, JSON), as full paths.
+const builtFiles = () => files(dist, /\.(html|css|js|xml|txt|json)$/).map((f) => join(dist, f));
 
 function build(env = {}, args = []) {
   return spawnSync(join(root, "node_modules/.bin/astro"), ["build", ...args], {
@@ -25,18 +23,6 @@ function build(env = {}, args = []) {
     encoding: "utf8",
   });
 }
-
-// The text a reader sees: tags dropped, entities decoded, whitespace collapsed.
-function textOf(html) {
-  return html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-    .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ");
-}
-const squash = (s) => s.replace(/\s+/g, " ");
 
 let home;
 before(() => {
@@ -183,19 +169,13 @@ function writeupSource(slug) {
   const fields = fm.slice(0, sourcesAt).replace(/^\s*(#|src:|poster:|captions:|width:|height:).*$/gm, "");
   return { prose: fields + "\n" + body, sources: fm.slice(sourcesAt) };
 }
-const numbersIn = (text) => text.match(/\d+(?:[.,]\d+)*/g) ?? [];
 const proseText = (s) => textOf(s.replace(/<!--[\s\S]*?-->/g, "")); // tags and attributes are not prose
 
-const banned = [
-  /\boffers?\b/i, /acquired by/i, /\bformerly\b/i, /\b\d[\d,]*\s+commits?\b/i,
-  /LA Metro/i, /robotic arm/i, /\bCUDA\b/i,
-];
-
 test("every number in a write-up traces to resume.json or its sources: list", () => {
-  const known = new Set(numbersIn(JSON.stringify(resume)));
+  const known = new Set(numbersIn(JSON.stringify(resume), true));
   for (const slug of writeupSlugs()) {
     const { prose, sources } = writeupSource(slug);
-    const allowed = new Set([...known, ...numbersIn(sources)]);
+    const allowed = new Set([...known, ...numbersIn(sources, true)]);
     const untraced = [...new Set(numbersIn(proseText(prose)))].filter((n) => !allowed.has(n));
     assert.deepEqual(untraced, [], `${slug}: numbers missing from sources:`);
   }
@@ -204,7 +184,7 @@ test("every number in a write-up traces to resume.json or its sources: list", ()
 test("write-ups obey the standing wording rules", () => {
   for (const slug of writeupSlugs()) {
     const text = proseText(writeupSource(slug).prose);
-    assert.deepEqual(banned.filter((re) => re.test(text)).map(String), [], slug);
+    assert.deepEqual(BANNED.filter(([re]) => re.test(text)).map(([, what]) => what), [], slug);
   }
   // The robot's run code plans with A*; its flood-fill code never runs, so it gets no credit.
   assert.doesNotMatch(proseText(writeupSource("micromouse").prose), /flood[- ]?fill/i);
@@ -323,7 +303,6 @@ const pages = () => builtFiles().filter((f) => f.endsWith(".html")).map((file) =
 const indexable = () => pages().filter((p) => !p.file.endsWith("/404.html"));
 const tags = (html, re) => [...html.matchAll(re)].map((m) => m[1]);
 const meta = (html, key) => tags(html, new RegExp(`<meta (?:name|property)="${key}" content="([^"]*)"`, "g"));
-const decode = (s) => textOf(s).trim();
 
 test("every page has one title and description, unique across the site", () => {
   const all = pages();
@@ -357,20 +336,6 @@ test("the 404 page is kept out of the index", () => {
   assert.doesNotMatch(page, /rel="canonical"/);
 });
 
-// Width and height from a JPEG's start-of-frame or a PNG's IHDR.
-function imageSize(buf) {
-  if (buf.subarray(1, 4).toString() === "PNG") return { type: "png", width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-  assert.equal(buf.readUInt16BE(0), 0xffd8, "not a JPEG or PNG");
-  for (let i = 2; i < buf.length; ) {
-    const marker = buf.readUInt16BE(i);
-    if (marker >= 0xffc0 && marker <= 0xffcf && ![0xffc4, 0xffc8, 0xffcc].includes(marker)) {
-      return { type: "jpeg", height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
-    }
-    i += 2 + buf.readUInt16BE(i + 2);
-  }
-  throw new Error("no JPEG frame header");
-}
-
 test("every indexable page has full Open Graph and Twitter card tags", () => {
   for (const { file, html } of indexable()) {
     const one = (key) => {
@@ -397,13 +362,13 @@ test("the preview image is 1200×630 and at most 300 KB", () => {
   const url = decode(meta(home, "og:image")[0]);
   const buf = readFileSync(join(dist, new URL(url).pathname));
   assert.ok(buf.length <= 300 * 1024, `${buf.length} bytes`);
-  const { width, height } = imageSize(buf);
+  const { width, height } = imageSize(buf) ?? {};
   assert.deepEqual({ width, height }, { width: 1200, height: 630 });
 });
 
 test("iMessage gets a square 180×180 touch icon", () => {
   assert.match(home, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"/);
-  const { type, width, height } = imageSize(readFileSync(join(dist, "apple-touch-icon.png")));
+  const { type, width, height } = imageSize(readFileSync(join(dist, "apple-touch-icon.png"))) ?? {};
   assert.deepEqual({ type, width, height }, { type: "png", width: 180, height: 180 });
 });
 
