@@ -2,6 +2,7 @@
 // Experience entries: a date column, "Role · Company", one context sentence,
 // every résumé bullet verbatim, and technology tags.
 import { siteConfig } from "../config";
+import Tags from "./Tags.astro";
 import { resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 ---
@@ -17,7 +18,7 @@ import { frontmatter as home } from "../content/home.md";
           <p class="meta">{[e.team, e.location].filter(Boolean).join(" · ")}</p>
           {home.roles?.[e.company] && <p class="summary">{home.roles[e.company]}</p>}
           <ul class="bullets">{e.bullets.map((b) => <li>{b}</li>)}</ul>
-          <ul class="tags" aria-label="Technologies">{e.stack.map((s) => <li>{s}</li>)}</ul>
+          <Tags items={e.stack} />
         </div>
       </li>
     ))}

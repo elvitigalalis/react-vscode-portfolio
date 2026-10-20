@@ -4,6 +4,7 @@
 // mirrored from resume.json, so they can never contradict the PDF.
 import { getCollection, render } from "astro:content";
 import Base from "../../layouts/Base.astro";
+import Tags from "../../components/Tags.astro";
 import { resume } from "../../data/resume";
 import { siteConfig } from "../../config";
 import { frontmatter as home } from "../../content/home.md";
@@ -31,7 +32,7 @@ const demo = home.projects?.[p.slug]?.demo;
     <header class="writeup-head">
       <h1>{p.title}</h1>
       <p class="meta">{p.role && <>{p.role} · </>}{p.dates}</p>
-      <ul class="tags" aria-label="Technologies">{p.stack.map((s) => <li>{s}</li>)}</ul>
+      <Tags items={p.stack} />
       <p class="links"><a href={p.url}>Code</a>{demo && <> · <a href={demo.url}>{demo.label}</a></>}</p>
     </header>
     <p class="tldr">{summary}</p>
