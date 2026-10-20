@@ -3,6 +3,7 @@
 // and Write-up / Code / Demo buttons, each shown only when its target exists.
 // Photos come in 640 px and 360 px widths (<name>.webp, <name>-360.webp). The first card's
 // photo can be in a phone's first viewport, so it is not lazy-loaded.
+import Tags from "./Tags.astro";
 import { resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 
@@ -35,7 +36,7 @@ const writeups = new Set(
           <h3>{p.title}{p.role && <span class="role"> · {p.role}</span>}</h3>
           {extra.summary && <p class="summary">{extra.summary}</p>}
           <ul class="bullets">{p.bullets.map((b) => <li>{b}</li>)}</ul>
-          <ul class="tags" aria-label="Technologies">{p.stack.map((s) => <li>{s}</li>)}</ul>
+          <Tags items={p.stack} />
           <p class="buttons">
             {writeups.has(p.slug) && <a class="btn primary" href={`/projects/${p.slug}/`}>Write-up</a>}
             <a class="btn" href={p.url}>Code</a>

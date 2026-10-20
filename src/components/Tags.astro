@@ -1,0 +1,6 @@
+---
+// A role's or project's technology tags, as one labelled list.
+interface Props { items: string[] }
+---
+
+<ul class="tags" aria-label="Technologies">{Astro.props.items.map((s) => <li>{s}</li>)}</ul>
