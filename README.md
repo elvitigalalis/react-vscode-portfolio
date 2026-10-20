@@ -35,6 +35,17 @@ push and PR. `node check/run.mjs <gate>` runs one gate over an existing `dist/`.
 | a11y | pa11y-ci with axe, WCAG 2.2 AA, on every page |
 | lighthouse | Lighthouse CI, mobile, budgets in `lighthouserc.cjs` |
 
+## Content notes
+
+- **Where content lives.** Résumé facts come only from `src/data/resume.json`. The home page's
+  hand-written text (kicker, thesis, role context, card summaries) is `src/content/home.md`. A
+  write-up is one file, `src/content/writeups/<slug>.md`, whose front matter also carries its
+  card's `photo` and `demo`; `home.md` sets those only for a project with no write-up.
+- **Deliberate departures from spec #152.** The first screen's key-value block has a
+  Citizenship row beyond the spec's Location / Graduating / Currently, and the thesis runs two
+  sentences where the spec asks for one. Both are kept on purpose: citizenship is a résumé fact
+  recruiters screen for, and the second sentence names the micromouse work next to Hitachi Rail.
+
 ### How a write-up's length is counted
 
 One rule, in `check/writeup.mjs`, serves the `length` gate and the tests. It counts every word
