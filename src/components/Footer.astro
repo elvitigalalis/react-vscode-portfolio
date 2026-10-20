@@ -1,12 +1,15 @@
 ---
-// "Updated <date>" is written at build time, so the page never shows a stale year.
+// "Updated <date>" is written at build time, so the page never shows a stale year. The text
+// and its datetime are both the build's date in New York, so they never name different days.
 // "built from <commit>" appears when the build knows its commit.
 import { execSync } from "node:child_process";
 import { siteConfig } from "../config";
 import { profileOf, resume } from "../data/resume";
 
 const now = new Date();
-const updated = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "America/New_York" });
+const timeZone = "America/New_York";
+const updated = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone });
+const iso = now.toLocaleDateString("en-CA", { timeZone }); // YYYY-MM-DD
 let commit = process.env.GITHUB_SHA ?? "";
 if (!commit) {
   try { commit = execSync("git rev-parse HEAD", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch {}
@@ -23,7 +26,7 @@ const repo = "https://github.com/elvitigalalis/react-vscode-portfolio";
       <li><a href={siteConfig.resumePdf}>Résumé (PDF)</a></li>
     </ul>
     <p class="small">
-      Updated <time datetime={now.toISOString().slice(0, 10)}>{updated}</time>
+      Updated <time datetime={iso}>{updated}</time>
       {short && <> · built from <a href={`${repo}/commit/${commit}`}><code>{short}</code></a></>}
     </p>
   </div>

@@ -90,6 +90,12 @@ test("each project card shows a photo of at most 100 KB with alt text", () => {
   }
 });
 
+test("the footer's Updated date and its datetime name the same day", () => {
+  const [, iso, text] = home.match(/<time datetime="([^"]+)">([^<]+)<\/time>/);
+  assert.match(iso, /^\d{4}-\d{2}-\d{2}$/);
+  assert.equal(new Date(`${text} UTC`).toISOString().slice(0, 10), iso);
+});
+
 test("the build fails when resume.json breaks the schema", () => {
   const dir = mkdtempSync(join(tmpdir(), "resume-"));
   const bad = { ...resume, projects: resume.projects.map((p) => ({ ...p, note: "Return offer" })) };
