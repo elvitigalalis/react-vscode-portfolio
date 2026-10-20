@@ -24,7 +24,8 @@ video:
 sources:
   - "Résumé one-pager (resume.json): the 2026 firmware on UKMARS with A* routing, 2nd at NYIT 2026 (38 s), the ∼40 ms IMU yaw latency, worst-case spin error 2.75° to 1.01°, captain for 3 seasons."
   - "Public firmware repository, NEW_ROBOT branch: the 500 Hz hardware-timer control loop, the 29.86:1 gear ratio, the BNO085 IMU, A* called on every search and fast run, the diagonalizer, the UKMARS parity checklist, DriverLab."
-  - "Lisul's 2026 tuning log (firmware history, measurements in the change notes): IMU yaw about 40 ms late and turns overshooting by about 5°; spin error −2.75…+0.44° before and −1.01…+0.27° after encoder yaw; per-90° spread ±2.5° to ±1.1°; smooth-turn arc error −1.8° to −0.8°; a Td sweep settling on 1.5 Tm because 1.0 Tm caused stick-slip."
+  - "Lisul's 2026 tuning log, public firmware repository, NEW_ROBOT branch (change notes of commits 6758702, f0c3c6e, 01cc68d, b05149c, 4ba23e9): IMU yaw about 40 ms late and turns overshooting by about 5°; encoder yaw first only for arcs with a 100 ms holdover, then on every motion; spin error −2.75…+0.44° before and −1.01…+0.27° after, read as the rotation controller's error in the 4 ms trace; per-90° spread ±2.5° to ±1.1°; smooth-turn arc error −1.8° to −0.8°; right smooth turn settling near −88° before and at −90.1° after on the IMU; wheels slipping above about 400°/s; tyre scrub about 4° at 300 mm/s and a 95° right arc; a Td sweep settling on 1.5 Tm because mazerunner-core's 1.0 Tm caused stick-slip. The spin count is not recorded."
+  - "Same branch: docs/ukmars_parity_matrix.md (IMU yaw listed as a deliberate difference from UKMARS's encoder-derived rotation); firmware/config/motion.h (encoder yaw as the turn controller's input, heading hold on IMU yaw, re-measure the plant after changing the feedback, settings from mazerunner-core's Orion values); commits 547a736 and ac38f0b (yaw and turn gains set on the robot, December 2025), c49177b (MotorLab, January 2026) and 0a35e77 (motors, encoders and MotorLab updated for the new board, April 2026)."
   - "DriverLab records: Td = Tm instead of motorlab's Tm/2, because the 29.86:1 gearing makes the plant about 4× snappier than UKMARSBOT; rotation plant on the maze floor Km 385°/s/V over 8 fits (361 to 407), Tm 0.097 s."
   - "Bench-maze smooth-turn run: all 21 segments (10 arcs, 4 one-cell S-bends) at up to about 1,200 mm/s, final yaw error 1.35°, goal moved to a 4×4 centre block; not a competition run."
   - "Diagonalizer: a state machine over 11 movement-block states that turns A*'s path into 45° turns and half-cell moves; simulator only."
@@ -82,9 +83,9 @@ The structure, the motion profiles and the controller formulas come from UKMARS 
 
 The constraint: the BNO085 reports yaw about 40 ms late. During an arc the rotation controller chased that stale angle, reversed the inside wheel and overshot by about 5°.
 
-The wheel encoders have no such delay: the controller reads them every tick. <mark class="todo">TODO(Lisul): which other fixes you weighed before choosing encoder yaw, and why they lost.</mark>
+The wheel encoders have no such delay: the controller reads them every tick, and UKMARS turns on them; IMU yaw had been one of our deliberate departures. My first fix was narrow: encoder yaw only during arcs, handing back to the IMU 100 ms after each arc. Then I made encoder yaw the turn controller's input on every move, as mazerunner-core does.
 
-I fed encoder yaw to the rotation controller and measured the plant again. Worst-case spin error went from −2.75…+0.44° to −1.01…+0.27°, the spread per 90° turn from ±2.5° to ±1.1°, and smooth-turn arc error from −1.8° to −0.8°. <mark class="todo">TODO(Lisul): how many spins these ranges cover, and how the final angle was measured.</mark>
+I fed encoder yaw to the rotation controller and measured the plant again. Worst-case spin error went from −2.75…+0.44° to −1.01…+0.27°, the spread per 90° turn from ±2.5° to ±1.1°, and smooth-turn arc error from −1.8° to −0.8°. The ranges are the turn controller's own error in the robot's 4 ms trace of 90° spins; the notes don't record how many. Since the encoders now measure that error themselves, the IMU gave the independent check: a right smooth turn now settles at −90.1°, not near −88°.
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-spin-t" viewBox="0 0 400 190" width="400" height="190">
@@ -108,7 +109,7 @@ I fed encoder yaw to the rotation controller and measured the plant again. Worst
 <figcaption>Worst-case spin error, drawn to scale: the encoder-yaw range is less than half as wide as the IMU-yaw range.</figcaption>
 </figure>
 
-The cost: with a derivative time of 1.0 Tm, the value DriverLab had set (below), the slow inside wheel went into stick-slip, so I swept it and settled on 1.5 Tm. <mark class="todo">TODO(Lisul): what encoder yaw gives up compared with the IMU, and whether the IMU still has a job.</mark>
+The cost is the body's true angle. Encoders count wheel turns, so they miss slip and scrub: the wheels slipped above about 400°/s, and at 300 mm/s tyre scrub turned the body about 4° less than the encoders said, so the right arc is set to 95° to land on 90°. The IMU keeps a job: heading hold uses its absolute yaw to keep the robot square to the maze. Separately, with a derivative time of 1.0 Tm, mazerunner-core's value, the slow inside wheel went into stick-slip, so I swept it and settled on 1.5 Tm.
 
 ## Measuring the motor instead of hand-tuning gains
 
@@ -116,11 +117,11 @@ Controller gains can be guessed and adjusted run by run, or computed from a mode
 
 One choice was mine: I set the derivative time Td equal to Tm, not motorlab's Tm/2, because our 29.86:1 gearing makes the plant about 4× snappier than the UKMARSBOT the defaults were written for. On the maze floor the rotation plant measured Km = 385°/s/V over 8 fits (361 to 407) and Tm = 0.097 s.
 
-<mark class="todo">TODO(Lisul): why you measured the motor rather than hand-tuning, and what the measuring costs you.</mark>
+Before DriverLab (first MotorLab, January 2026), turn gains were set by testing on the robot. Since then a hardware change, such as the new board in April 2026, has meant re-running the trials, and the gains follow. The cost is re-measuring when the feedback changes: the IMU fit had counted the BNO085's lag as part of Tm, so encoder yaw needed a new fit.
 
 ## Building on UKMARS instead of the old code or a blank slate
 
-The old code's turns were inaccurate, and I replaced it rather than patch it. I adapted UKMARS's motion profiles, wall-following steering and odometry to our robot, which has a different processor, gearing and sensors, and kept a parity checklist in the repository of what follows UKMARS and what stays ours. <mark class="todo">TODO(Lisul): why UKMARS rather than a blank slate or another open micromouse codebase.</mark>
+The old code's turns were inaccurate, and I replaced it rather than patch it. I adapted UKMARS's motion profiles, wall-following steering and odometry to our robot, which has a different processor, gearing and sensors, and kept a parity checklist in the repository of what follows UKMARS and what stays ours. UKMARS also came with numbers to check against: our turn and acceleration settings start from mazerunner-core's values for its Orion robot, and the config notes where ours differ and why.
 
 The cost is honesty about credit: the architecture is UKMARS's, not mine. What I can claim is the adaptation, the A* planner and the measurement and tuning work above.
 
@@ -136,7 +137,7 @@ The cost is honesty about credit: the architecture is UKMARS's, not mine. What I
 - **Diagonals run only in the simulator.** I wrote a state machine over 11 movement patterns that turns A*'s zigzags into 45° turns and half-cell moves. The current robot is too wide to drive them; they wait for a slimmer chassis.
 - **The speedup is unmeasured** (above).
 - **Battery thresholds are estimates.** The low-battery warning fires below 6.4 V on a 2S pack, and that threshold is still a guess.
-- **The mouse broke on competition morning at Montclair 2026.** An electrical fault stopped it, and the team went to the competition without a working robot. The clip above is from before that. <mark class="todo">TODO(Lisul): what the fault was, and what you would change in the firmware or the build so it can't end a competition again.</mark>
+- **The mouse broke on competition morning at Montclair 2026.** An electrical fault stopped it, and the team went to the competition without a working robot. The clip above is from before that.
 
 The team traced the fault on the repair bench under the inspection microscope:
 
