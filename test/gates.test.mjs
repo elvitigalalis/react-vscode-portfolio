@@ -111,6 +111,9 @@ test("routing: fails when old #/section links no longer land", async () => {
   assert.match((await routing({ dist: gone })).join("\n"), /hash/);
   const wrong = broken((d) => write(d, "index.html", read(d, "index.html").replace('"#" +', '"#x" +')));
   assert.match((await routing({ dist: wrong })).join("\n"), /#\/projects/);
+  // An old route with no section here must land on #top, not on an anchor that does not exist.
+  const unknown = broken((d) => write(d, "index.html", read(d, "index.html").replace('? to[k] : "top"', '? to[k] : k')));
+  assert.match((await routing({ dist: unknown })).join("\n"), /#\/no-such-page lands on #no-such-page, not #top/);
 });
 
 // --- hand-written-text lint -------------------------------------------------
