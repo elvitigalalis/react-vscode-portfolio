@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, relative } from "node:path";
 
-export { ORIGIN, RESUME_PDF } from "../src/site.mjs";
+export { ANALYTICS, ORIGIN, RESUME_PDF } from "../src/site.mjs";
 
 // A string as a literal piece of a regular expression.
 export const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

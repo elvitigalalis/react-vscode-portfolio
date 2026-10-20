@@ -1,0 +1,44 @@
+---
+// Google Analytics 4 (traffic, sources, résumé downloads, outbound clicks) and Microsoft Clarity
+// (heatmaps and session recordings). Both load after the page has, so they never delay it.
+// An empty ID leaves that tool out; ANALYTICS=off (tests and gates) leaves both out, so the
+// budgets in lighthouserc.cjs keep measuring the site's own bytes.
+import { siteConfig } from "../config";
+
+const { gaId, clarityId } = siteConfig.analytics;
+const on = process.env.ANALYTICS !== "off" && (gaId || clarityId);
+---
+
+{
+  on && (
+    <script is:inline define:vars={{ gaId, clarityId }}>
+      const load = (src) => {
+        const s = document.createElement("script");
+        s.async = true;
+        s.src = src;
+        document.head.append(s);
+      };
+      if (gaId) {
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () {
+          dataLayer.push(arguments);
+        };
+        gtag("js", new Date());
+        gtag("config", gaId);
+        // Enhanced measurement skips mailto: links, so count email clicks here.
+        addEventListener("click", (e) => {
+          if (e.target.closest?.('a[href^="mailto:"]')) gtag("event", "email_click");
+        });
+      }
+      if (clarityId) {
+        window.clarity = window.clarity || function () {
+          (window.clarity.q = window.clarity.q || []).push(arguments);
+        };
+      }
+      addEventListener("load", () => {
+        if (gaId) load("https://www.googletagmanager.com/gtag/js?id=" + gaId);
+        if (clarityId) load("https://www.clarity.ms/tag/" + clarityId);
+      });
+    </script>
+  )
+}

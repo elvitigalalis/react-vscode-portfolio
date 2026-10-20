@@ -22,7 +22,7 @@ const realDist = join(root, "dist");
 const resume = JSON.parse(readFileSync(join(root, "src/data/resume.json"), "utf8"));
 
 before(() => {
-  const r = spawnSync(join(root, "node_modules/.bin/astro"), ["build"], { cwd: root, encoding: "utf8" });
+  const r = spawnSync(join(root, "node_modules/.bin/astro"), ["build"], { cwd: root, env: { ...process.env, ANALYTICS: "off" }, encoding: "utf8" });
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
