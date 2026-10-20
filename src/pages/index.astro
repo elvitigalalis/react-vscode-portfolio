@@ -36,12 +36,15 @@ const jsonLd = [
   <Experience />
   <Education />
   <Skills />
-  <!-- Old links such as /#/projects (the previous site's hash routes) land on #projects. -->
+  <!-- Old links such as /#/projects (the previous site's hash routes) land on #projects;
+       an old route with no section here lands on #top. -->
   <script is:inline slot="end">
-    var m = /^#\/([a-z]*)/.exec(location.hash);
+    var m = /^#\/([^?]*)/.exec(location.hash);
     if (m) {
-      var alias = { "": "top", overview: "top", docs: "top", languages: "skills", accomplishments: "education", certificates: "education" };
-      location.replace("#" + (alias[m[1]] || m[1]));
+      var to = { projects: "projects", experience: "experience", education: "education", skills: "skills",
+        languages: "skills", accomplishments: "education", certificates: "education" };
+      var k = m[1].toLowerCase();
+      location.replace("#" + (to.hasOwnProperty(k) ? to[k] : "top"));
     }
   </script>
 </Base>

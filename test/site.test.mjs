@@ -73,6 +73,8 @@ test("old #/section links land on the matching section", () => {
   assert.equal(land("#/overview"), "#top");
   assert.equal(land("#/accomplishments"), "#education");
   assert.equal(land("#/"), "#top");
+  assert.equal(land("#/no-such-page"), "#top", "an unknown old route lands on the first screen");
+  assert.equal(land("#/toString"), "#top", "inherited object keys are not sections");
   assert.equal(land("#projects"), null, "new hashes are left alone");
   assert.equal(land(""), null);
   for (const id of ["top", "projects", "experience", "education", "skills"]) assert.match(home, new RegExp(`id="${id}"`));

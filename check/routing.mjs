@@ -1,5 +1,6 @@
 // Routing gate: old links keep working. /404.html exists with the top bar, the résumé PDF
-// keeps its old path, and the inline script sends old #/section hashes to #section.
+// keeps its old path, and the inline script sends old #/section hashes to #section (an
+// unknown one to #top).
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { RESUME_PDF } from "./lib.mjs";
@@ -26,7 +27,7 @@ export async function routing({ dist }) {
     try { new Function("location", code)({ hash, replace: (h) => { to = h; } }); } catch {}
     return to;
   };
-  const cases = { "#/projects": "#projects", "#/experience": "#experience", "#/": "#top", "#projects": null };
+  const cases = { "#/projects": "#projects", "#/experience": "#experience", "#/": "#top", "#/no-such-page": "#top", "#projects": null };
   const code = scripts.find((c) => land(c, "#/projects") !== null);
   if (!code) problems.push("index.html: no hash-rewrite script for old #/section links");
   for (const [from, to] of Object.entries(cases)) {
