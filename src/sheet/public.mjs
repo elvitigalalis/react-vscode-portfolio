@@ -23,6 +23,12 @@ function taskRow(t, writeups) {
   return li;
 }
 
+// When the week scrolls sideways (tablets), start at today.
+export function scrollToToday(week) {
+  const today = week.querySelector(".is-today");
+  if (today && week.scrollWidth > week.clientWidth) week.scrollLeft = today.offsetLeft - week.offsetLeft;
+}
+
 export function renderPublicWeek(root, { days, today, tasks, stamps, writeups }) {
   const byDay = Object.fromEntries(days.map((d) => [d, tasks.filter((t) => t.day === d).sort(byPosition)]));
   const rows = rowCount(byDay);
