@@ -33,7 +33,13 @@
   border-bottom: 1px solid var(--line); font-size: 0.9375rem; line-height: 1.25; padding: 0.25rem 0;
   overflow-wrap: anywhere;
 }
-.sheet-row.is-done > :not(.visually-hidden) { opacity: 0.2; text-decoration: line-through; }
+/* One line per row, like ruled paper; the full text is in the title attribute. Phones wrap. */
+.sheet-row > span:not(.sheet-bar, .visually-hidden), .sheet-row > a, .sheet-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 48rem) {
+  .sheet-row > span:not(.sheet-bar, .visually-hidden), .sheet-row > a, .sheet-title { white-space: normal; }
+}
+.sheet-stamps { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-row.is-done > :not(.visually-hidden, .sheet-check, .sheet-more) { opacity: 0.2; text-decoration: line-through; }
 .sheet-bar { display: inline-block; max-width: 100%; height: 0.8em; background: var(--fg); border-radius: 1px; }
 
 /* A margin note in the site's own type, set like handwriting. */
@@ -41,4 +47,91 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .sheet-row, .sheet-row > * { transition: opacity 0.25s ease-in-out; }
+}
+
+/* The planner. */
+.sheet-bar-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-bottom: 0.5rem; }
+.sheet-bar-top h1 { margin: 0; }
+.sheet-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.sheet-btn {
+  font: inherit; font-size: 0.875rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.35rem 0.7rem; min-height: 2rem; cursor: pointer;
+}
+.sheet-btn:hover { border-color: var(--muted); }
+.sheet-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.sheet-btn kbd { font: inherit; font-size: 0.75rem; opacity: 0.75; margin-left: 0.25rem; }
+.sheet-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+.sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
+.sheet-daynav { display: none; }
+
+.sheet-task { position: relative; cursor: grab; }
+.sheet-task > :not(.sheet-check, .sheet-more, .visually-hidden) { opacity: var(--ink, 1); }
+.sheet-title {
+  flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
+  padding: 0; cursor: text; overflow-wrap: anywhere;
+}
+.sheet-meta { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.sheet-roll { color: var(--muted); font-size: 0.8125rem; }
+.sheet-pub { color: var(--accent); font-size: 0.625rem; }
+/* Check and menu sit over the row's right end on hover, so titles keep the full width. */
+.sheet-check, .sheet-more {
+  position: absolute; top: 50%; translate: 0 -50%; width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%;
+  background: var(--bg); color: var(--muted); font: inherit; font-size: 0.8125rem; cursor: pointer; opacity: 0;
+}
+.sheet-check { right: 1.6rem; }
+.sheet-more { right: 0; }
+.sheet-task:hover .sheet-check, .sheet-task:hover .sheet-more, .sheet-check:focus-visible, .sheet-more:focus-visible { opacity: 1; }
+.sheet-check:hover { color: var(--accent); }
+@media (hover: none) {
+  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; }
+}
+.sheet-task:hover { border-bottom-color: var(--accent); }
+.sheet-task.is-done .sheet-title { opacity: 0.2; text-decoration: line-through; }
+.sheet-add {
+  width: 100%; font: inherit; font-size: 0.9375rem; color: var(--fg); background: transparent;
+  border: 0; padding: 0; outline-offset: 2px;
+}
+.sheet-row.is-empty { cursor: text; }
+.sheet-rows.is-drop { background: var(--chip); }
+.is-ghost { opacity: 0.25; }
+.sheet-float {
+  position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; max-width: 16rem;
+  background: var(--bg); border: 1px solid var(--accent); border-radius: 0.3rem; padding: 0.2rem 0.5rem; font-size: 0.875rem;
+}
+body.sheet-dragging { user-select: none; cursor: grabbing; }
+
+.sheet-someday-title { font-size: 1.0625rem; margin: 2rem 0 0.5rem; }
+.sheet-someday { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1rem; }
+.sheet-list .sheet-head { border-bottom-width: 1px; }
+
+.sheet-menu {
+  position: fixed; inset: auto; margin: 0; padding: 0.3rem; min-width: 11rem;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 0.4rem;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
+}
+.sheet-menu button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 0.875rem; color: inherit;
+  background: none; border: 0; border-radius: 0.25rem; padding: 0.4rem 0.6rem; cursor: pointer;
+}
+.sheet-menu button:hover, .sheet-menu button:focus-visible { background: var(--chip); }
+.sheet-toast {
+  position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 5;
+  background: var(--fg); color: var(--bg); border-radius: 0.4rem; padding: 0.5rem 0.9rem; font-size: 0.875rem;
+}
+.sheet-toast .sheet-link { color: inherit; font-weight: 600; margin-left: 0.5rem; }
+.sheet-dialog {
+  background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 0.6rem;
+  padding: 1.25rem; max-width: min(36rem, calc(100vw - 2rem));
+}
+.sheet-dialog::backdrop { background: rgb(0 0 0 / 0.35); }
+.sheet-dialog h2 { font-size: 1.125rem; margin-bottom: 0.75rem; }
+.sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; font-size: 0.875rem; margin: 0 0 1rem; }
+.sheet-keys dt { font-weight: 600; }
+.sheet-keys dd { margin: 0; color: var(--muted); }
+
+/* Narrow screens: one day at a time. */
+@media (max-width: 48rem) {
+  .sheet-planner .sheet-day:not(.is-focus) { display: none; }
+  .sheet-planner .sheet-daynav:not([hidden]) { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
+  .sheet-planner .sheet-row.is-empty:not(.is-add) { display: none; }
 }
