@@ -17,7 +17,7 @@ function taskRow(t, writeups) {
   }
   const text = t.done && writeups.has(t.tag)
     ? el("a", { href: `/projects/${t.tag}/`, textContent: t.title })
-    : el("span", { textContent: t.title });
+    : el("span", { textContent: t.title, title: t.title });
   const li = el("li", { className: `sheet-row${t.done ? " is-done" : ""}` }, text);
   if (t.done) li.append(el("span", { className: "visually-hidden", textContent: " (done)" }));
   return li;
