@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { decode, escapeRe, files, imageSize, ORIGIN, RESUME_PDF, squash, textOf } from "../check/lib.mjs";
+import { ANALYTICS, decode, escapeRe, files, imageSize, ORIGIN, RESUME_PDF, squash, textOf } from "../check/lib.mjs";
 import { BANNED, numbersIn } from "../check/lint.mjs";
 import { parse } from "yaml";
 import { FIGURES, WORDS, figureCount, wordCount, writeupText } from "../check/writeup.mjs";
@@ -21,7 +21,8 @@ const builtFiles = () => files(dist, /\.(html|css|js|xml|txt|json)$/).map((f) =>
 function build(env = {}, args = []) {
   return spawnSync(join(root, "node_modules/.bin/astro"), ["build", ...args], {
     cwd: root,
-    env: { ...process.env, ...env },
+    // Analytics stay out of the build under test unless a test turns them on.
+    env: { ...process.env, ANALYTICS: "off", ...env },
     encoding: "utf8",
   });
 }
@@ -58,6 +59,23 @@ test("no client JS beyond the inline hash script", () => {
   assert.doesNotMatch(scripts[0][1], /src=/);
   assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
   assert.deepEqual(builtFiles().filter((f) => f.endsWith(".js")), []);
+});
+
+test("analytics load after the page, and only in the deployed build", () => {
+  const r = build({ ANALYTICS: "" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const { gaId, clarityId } = ANALYTICS;
+  for (const page of ["index.html", "404.html", "projects/micromouse/index.html"]) {
+    const html = readFileSync(join(dist, page), "utf8");
+    const tag = html.match(/<script>(?=[^<]*googletagmanager)([\s\S]*?)<\/script>/)?.[1] ?? "";
+    if (gaId) assert.ok(tag.includes(JSON.stringify(gaId)), `${page} carries the GA ID`);
+    if (clarityId) assert.ok(tag.includes(JSON.stringify(clarityId)), `${page} carries the Clarity ID`);
+    if (gaId || clarityId) assert.match(tag, /addEventListener\("load"/, "third-party scripts wait for the load event");
+    else assert.equal(tag, "", "no IDs, no tag");
+    assert.doesNotMatch(html, /<script[^>]+src="https?:/, "no blocking third-party script tags");
+  }
+  assert.equal(build().status, 0, "rebuild without analytics for the other tests");
+  assert.doesNotMatch(readFileSync(join(dist, "index.html"), "utf8"), /googletagmanager|clarity\.ms/);
 });
 
 test("old #/section links land on the matching section", () => {
