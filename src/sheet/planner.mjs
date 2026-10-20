@@ -483,10 +483,11 @@ export async function start(node, plugins = []) {
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
   if (!(await api.signedIn())) {
-    setStatus(null);
     const button = el("button", { type: "button", className: "sheet-btn primary", textContent: "Sign in with Google" });
     button.addEventListener("click", api.signIn);
-    $("[data-week]").replaceChildren(el("p", {}, "This is Lisul's planner. The public view is at ", el("a", { href: "/now/", textContent: "/now" }), "."), button);
+    const status = $("[data-status]");
+    status.hidden = false;
+    status.replaceChildren("This is Lisul's planner. The public view is at ", el("a", { href: "/now/", textContent: "/now" }), ". ", button);
     return;
   }
   wire();
