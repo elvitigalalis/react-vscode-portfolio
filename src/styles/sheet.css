@@ -103,6 +103,8 @@
 @media (hover: none) { .sheet-add::placeholder { color: var(--muted); } }
 .sheet-rows.is-drop { background: var(--chip); }
 .is-ghost { opacity: 0.25; }
+.sheet-task { -webkit-touch-callout: none; }
+.sheet-task.is-held { background: var(--chip); }
 .sheet-float {
   position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; max-width: 16rem;
   background: var(--bg); border: 1px solid var(--accent); border-radius: 0.3rem; padding: 0.2rem 0.5rem; font-size: 0.875rem;

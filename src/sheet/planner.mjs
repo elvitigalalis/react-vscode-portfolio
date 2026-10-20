@@ -347,16 +347,35 @@ function dropSpot(x, y) {
   };
 }
 
+// A finger swipe has to keep scrolling the page, so on touch a task is picked up by holding it
+// still for a moment; after that, touchmove is cancelled so the browser doesn't scroll instead.
+const HOLD_MS = 300;
+
 function onPointerDown(e) {
   const li = e.target.closest(".sheet-task");
   if (!li || e.button !== 0 || e.target.closest("button:not(.sheet-title), input")) return;
-  drag = { id: li.dataset.id, li, x: e.clientX, y: e.clientY, on: false };
+  drag = { id: li.dataset.id, li, x: e.clientX, y: e.clientY, on: false, touch: e.pointerType !== "mouse", held: false };
+  if (drag.touch) {
+    const d = drag;
+    d.timer = setTimeout(() => { d.held = true; d.li.classList.add("is-held"); }, HOLD_MS);
+  }
+}
+
+function dropDrag() {
+  if (!drag) return;
+  clearTimeout(drag.timer);
+  drag.li.classList.remove("is-held");
+  drag = null;
 }
 
 function onPointerMove(e) {
   if (!drag) return;
   if (!drag.on) {
-    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+    const moved = Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
+    // Moving before the hold finishes is a scroll, not a drag.
+    if (drag.touch && !drag.held) { if (moved > 8) dropDrag(); return; }
+    if (!drag.touch && moved < 5) return;
+    drag.li.classList.remove("is-held");
     drag.on = true;
     drag.li.classList.add("is-ghost");
     drag.float = el("div", { className: "sheet-float", textContent: state.tasks.get(drag.id).title });
@@ -372,7 +391,7 @@ function onPointerMove(e) {
 
 async function onPointerUp(e) {
   const d = drag;
-  drag = null;
+  dropDrag();
   if (!d?.on) return;
   d.float.remove();
   document.body.classList.remove("sheet-dragging");
@@ -437,7 +456,7 @@ function wire() {
 
   root.addEventListener("contextmenu", (e) => {
     const li = e.target.closest(".sheet-task");
-    if (li) { e.preventDefault(); openMenu(li.dataset.id, li); }
+    if (li) { e.preventDefault(); if (!drag?.touch) openMenu(li.dataset.id, li); }
   });
 
   root.addEventListener("keydown", async (e) => {
@@ -467,14 +486,15 @@ function wire() {
     else if (e.key === "?") $("[data-help]").showModal();
     else if (e.key === ".") {
       const li = document.activeElement?.closest?.(".sheet-task");
-      if (li) { e.preventDefault(); openMenu(li.dataset.id, li); }
+      if (li) { e.preventDefault(); if (!drag?.touch) openMenu(li.dataset.id, li); }
     } else for (const hook of keyHooks) if (hook(e)) { e.preventDefault(); return; }
   });
 
   root.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
   document.addEventListener("pointerup", (e) => { if (drag?.on) wasDrag.at = Date.now(); onPointerUp(e); });
-  document.addEventListener("pointercancel", () => { if (drag?.on) { drag.float.remove(); drag.li.classList.remove("is-ghost"); document.body.classList.remove("sheet-dragging"); } drag = null; });
+  document.addEventListener("pointercancel", () => { if (drag?.on) { drag.float.remove(); drag.li.classList.remove("is-ghost"); document.body.classList.remove("sheet-dragging"); } dropDrag(); });
+  document.addEventListener("touchmove", (e) => { if (drag?.held) e.preventDefault(); }, { passive: false });
 }
 
 // --- Start -------------------------------------------------------------------------------
