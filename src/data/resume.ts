@@ -23,3 +23,8 @@ if (!validate(data)) {
 }
 
 export const resume = data as Resume;
+
+// Which profile a link is, by its host: "GitHub", "LinkedIn", or undefined for anything else.
+const PROFILES: Record<string, string> = { "github.com": "GitHub", "linkedin.com": "LinkedIn" };
+export const profileOf = (url: string): string | undefined => PROFILES[new URL(url).hostname.replace(/^www\./, "")];
+export const profileLink = (name: string) => resume.basics.links.find((l) => profileOf(l.url) === name);
