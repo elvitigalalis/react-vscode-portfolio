@@ -15,6 +15,10 @@ npm run check    # build, then every gate below (needs lychee and Chrome)
 npm test         # each gate against the real build and a fixture broken on purpose
 ```
 
+Pushes to `main` deploy to GitHub Pages through `.github/workflows/deploy.yml` (Astro's
+official flow: `withastro/action` builds, `actions/deploy-pages` publishes). The repo's Pages
+source must be set to "GitHub Actions" (Settings → Pages → Build and deployment).
+
 `npm run check` gates the built site; CI (`.github/workflows/check.yml`) runs it on every
 push and PR. `node check/run.mjs <gate>` runs one gate over an existing `dist/`.
 
