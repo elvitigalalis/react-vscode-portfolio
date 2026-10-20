@@ -18,14 +18,16 @@ export async function html({ root, dist }) {
   return r.status === 0 ? [] : lines(r);
 }
 
-// lychee: every internal link and #anchor resolves in the build. External links are checked
-// only with CHECK_EXTERNAL_LINKS=1 (the scheduled CI run), since they can flake; LinkedIn is
-// always skipped because it answers bots with HTTP 999.
+// lychee: every internal link and #anchor resolves in the build. With CHECK_EXTERNAL_LINKS=1
+// (every CI run) external links are checked too, retried with back-off, and a 429 rate limit
+// counts as alive rather than broken; without it (a local run) lychee stays offline. LinkedIn
+// is always skipped because it answers bots with HTTP 999.
 export async function links({ dist }) {
   const online = process.env.CHECK_EXTERNAL_LINKS === "1";
   const r = run("lychee", [
     "--no-progress", "--include-fragments", "--root-dir", dist, "--index-files", "index.html",
-    "--remap", `^${escapeRe(ORIGIN)} file://${dist}`, "--exclude", String.raw`linkedin\.com`, ...(online ? ["--max-retries", "3"] : ["--offline"]), dist,
+    "--remap", `^${escapeRe(ORIGIN)} file://${dist}`, "--exclude", String.raw`linkedin\.com`,
+    ...(online ? ["--max-retries", "4", "--retry-wait-time", "3", "--accept", "200..=299,429"] : ["--offline"]), dist,
   ]);
   if (r.status === 0) return [];
   const errors = lines(r).filter((l) => /ERROR|\[\d{3}\]|Timeout/i.test(l));

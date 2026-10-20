@@ -27,7 +27,7 @@ push and PR. `node check/run.mjs <gate>` runs one gate over an existing `dist/`.
 | tags | title, description, canonical; once any preview tag exists, full Open Graph, twitter:card, OG image, JSON-LD and sitemap |
 | routing | `/404.html`, the old PDF path, the old `#/section` hash rewrite |
 | html | html-validate (recommended) |
-| links | lychee on internal links and anchors; `CHECK_EXTERNAL_LINKS=1` adds external ones, LinkedIn excluded |
+| links | lychee on internal links and anchors; `CHECK_EXTERNAL_LINKS=1` (set on every CI run: push, PR and weekly) adds external ones with retries, 429 accepted, LinkedIn excluded |
 | a11y | pa11y-ci with axe, WCAG 2.2 AA, on every page |
 | lighthouse | Lighthouse CI, mobile, budgets in `lighthouserc.cjs` |
 
