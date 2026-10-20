@@ -19,6 +19,7 @@ const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h *
 let dialog;
 let day;          // the day being planned
 let events = [];  // his Google events that day
+let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
 const blocksOn = (d) => state.blocks.filter((b) => minutesOn(b.starts_at, d, SHEET.timeZone) >= 0 && minutesOn(b.starts_at, d, SHEET.timeZone) < 1440);
@@ -80,7 +81,11 @@ function draw() {
   const preview = el("div", { className: "sheet-preview", hidden: true });
   timeline.append(preview);
 
-  const list = el("ul", { className: "sheet-rows" }, ...tasksOn(day).filter((t) => !t.done).map(taskRow));
+  const list = el("ul", { className: "sheet-rows" }, ...tasksOn(day).filter((t) => !t.done).map((t) => {
+    const row = taskRow(t);
+    if (t.id === picked) row.classList.add("is-picked");
+    return row;
+  }));
   list.dataset.day = day;
 
   const google = api.googleReady()
@@ -94,7 +99,9 @@ function draw() {
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
-    el("p", { className: "small" }, "Drag tasks onto the timeline. D moves the focused task to tomorrow, Z to Someday."),
+    el("p", { className: "small", textContent: picked
+      ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
+      : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday." }),
     google,
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
@@ -222,10 +229,26 @@ export function setupPlanToday(root) {
   dialog.addEventListener("pointerdown", onPointerDown, true);
   dialog.addEventListener("click", async (e) => {
     const x = e.target.closest(".sheet-block-x");
-    if (!x) return;
-    try { await removeBlock(x.closest(".sheet-block").dataset.block); } catch (err) { failed(err); }
-    draw();
-  });
+    if (x) {
+      try { await removeBlock(x.closest(".sheet-block").dataset.block); } catch (err) { failed(err); }
+      return draw();
+    }
+    // Tap a task, then tap a time: the way to time-block where dragging isn't possible.
+    const title = e.target.closest(".sheet-plan-tasks .sheet-title");
+    if (title) {
+      e.stopPropagation();
+      const id = title.closest(".sheet-task").dataset.id;
+      picked = picked === id ? null : id;
+      draw();
+      return dialog.querySelector(`[data-id="${id}"] .sheet-title`)?.focus();
+    }
+    if (picked && e.target.closest(".sheet-timeline") && !e.target.closest(".sheet-block, .sheet-shutline")) {
+      const id = picked;
+      picked = null;
+      try { await addBlock(id, minuteAt(e.clientY, timelineBox())); } catch (err) { failed(err); }
+      draw();
+    }
+  }, true);
   dialog.addEventListener("keydown", async (e) => {
     const li = e.target.closest?.(".sheet-task");
     if (!li || e.target.closest("input") || e.metaKey || e.ctrlKey) return;
@@ -244,6 +267,7 @@ export function setupPlanToday(root) {
       } catch (err) { failed(err); }
     }
     dialog.returnValue = "";
+    picked = null;
     render();
   });
   // Each day's header shows its planned load, coloured near and over capacity.
