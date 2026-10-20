@@ -7,14 +7,13 @@
 // Sitemap: line in robots.txt.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { htmlPages } from "./lib.mjs";
+import { decode, htmlPages, imageSize } from "./lib.mjs";
 
 const ORIGIN = "https://www.lisul-elvi.com";
 const OG = ["og:title", "og:description", "og:url", "og:type", "og:site_name", "og:image", "og:image:width", "og:image:height", "og:image:alt"];
 const MAX_IMAGE = 300 * 1024;
 
 const attrs = (tag) => Object.fromEntries([...tag.matchAll(/([\w:-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
-const decode = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 
 function head(html) {
   const meta = {};
@@ -29,19 +28,6 @@ function head(html) {
     meta,
     ld: [...html.matchAll(/<script\b[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]),
   };
-}
-
-// Width and height of a PNG or JPEG, or null.
-function size(buf) {
-  if (buf.subarray(1, 4).toString() === "PNG") return [buf.readUInt32BE(16), buf.readUInt32BE(20)];
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    for (let i = 2; i + 9 < buf.length; ) {
-      const marker = buf[i + 1];
-      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)];
-      i += 2 + buf.readUInt16BE(i + 2);
-    }
-  }
-  return null;
 }
 
 // Every node in a JSON-LD document, including @graph members and nested objects.
@@ -82,9 +68,9 @@ export async function tags({ dist, resume }) {
     const path = decodeURIComponent(new URL(url).pathname);
     const file = join(dist, path);
     if (!existsSync(file)) { problems.push(`og:image ${path} is not in the build`); continue; }
-    const dims = size(readFileSync(file));
+    const dims = imageSize(readFileSync(file));
     if (!dims) problems.push(`og:image ${path} is not a PNG or JPEG`);
-    else if (dims[0] !== 1200 || dims[1] !== 630) problems.push(`og:image ${path} is ${dims[0]}×${dims[1]}, not 1200×630`);
+    else if (dims.width !== 1200 || dims.height !== 630) problems.push(`og:image ${path} is ${dims.width}×${dims.height}, not 1200×630`);
     const kb = statSync(file).size;
     if (kb > MAX_IMAGE) problems.push(`og:image ${path} is ${Math.round(kb / 1024)} KB, over 300 KB`);
   }

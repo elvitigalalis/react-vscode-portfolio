@@ -11,18 +11,29 @@ export function files(dir, re = /./, sub = dir) {
 
 export const htmlPages = (dist) => files(dist, /\.html$/).sort();
 
+// HTML entities decoded: numeric ones and the few named ones Astro writes.
+export const decode = (s) => s
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+
 // The text a reader sees: tags dropped, entities decoded, whitespace collapsed.
-export function textOf(html) {
-  return html
-    .replace(/<(script|style)[\s\S]*?<\/\1>/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-    .replace(/&nbsp;/g, " ").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ");
-}
+export const textOf = (html) => decode(html.replace(/<(script|style)[\s\S]*?<\/\1>/g, "").replace(/<[^>]+>/g, "")).replace(/\s+/g, " ");
 
 export const squash = (s) => s.replace(/\s+/g, " ").trim();
+
+// Width and height of a PNG or JPEG, or null for anything else.
+export function imageSize(buf) {
+  if (buf.subarray(1, 4).toString() === "PNG") return { type: "png", width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    for (let i = 2; i + 9 < buf.length; ) {
+      const marker = buf[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return { type: "jpeg", width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) };
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
 
 // Serve a built folder on localhost the way GitHub Pages does (dir/ -> dir/index.html,
 // misses -> 404.html). Resolves to { url, close }.
