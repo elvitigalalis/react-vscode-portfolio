@@ -13,9 +13,10 @@ const writeups = (await getCollection("writeups")).map((w) => w.id);
   {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
   <section class="sheet-page" data-writeups={writeups.join(" ")}>
     <h1>Now</h1>
-    <p class="sheet-now" hidden><span class="sheet-label">Right now</span> <span data-now></span></p>
-    <p class="sheet-status" data-status>Loading this week…</p>
-    <div class="sheet-week" data-week aria-label="This week" role="group"></div>
+    <p class="sheet-now is-empty"><span class="sheet-label">Right now</span> <span data-now></span></p>
+    <div class="sheet-week sheet-week-public" data-week aria-label="This week" role="group">
+      <p class="sheet-status" data-status>Loading this week…</p>
+    </div>
     <p class="sheet-ps">P.S. the black bars are life stuff.</p>
     <p class="small" data-updated></p>
   </section>
@@ -34,7 +35,7 @@ const writeups = (await getCollection("writeups")).map((w) => w.id);
   async function refreshNow() {
     const row = await publicNow();
     const line = rightNow(row);
-    root.querySelector(".sheet-now").hidden = !line;
+    root.querySelector(".sheet-now").classList.toggle("is-empty", !line);
     root.querySelector("[data-now]").textContent = line ?? "";
     if (row?.updated_on) {
       const d = new Date(`${row.updated_on}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -49,7 +50,6 @@ const writeups = (await getCollection("writeups")).map((w) => w.id);
     try {
       const [tasks, stamps] = await Promise.all([publicWeek(days[0], days[6]), publicDays(days[0], days[6]), refreshNow()]);
       renderPublicWeek(root.querySelector("[data-week]"), { days, today, tasks, stamps, writeups });
-      status.hidden = true;
       setInterval(() => refreshNow().catch(() => {}), 60_000);
     } catch {
       status.textContent = "Could not load this week. Try again in a minute.";
