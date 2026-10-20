@@ -14,6 +14,7 @@ import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
 import { tags } from "../check/tags.mjs";
 import { html, links, lighthouse, a11y } from "../check/tools.mjs";
+import { escapeRe, ORIGIN, RESUME_PDF } from "../check/lib.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -101,8 +102,8 @@ test("routing: fails without the 404 page", async () => {
 });
 
 test("routing: fails without the résumé PDF at its old path", async () => {
-  const dist = broken((d) => rmSync(join(d, "Lisul_Elvitigala_resume.pdf")));
-  assert.match((await routing({ dist })).join("\n"), /Lisul_Elvitigala_resume\.pdf/);
+  const dist = broken((d) => rmSync(join(d, RESUME_PDF.slice(1))));
+  assert.match((await routing({ dist })).join("\n"), new RegExp(escapeRe(RESUME_PDF.slice(1))));
 });
 
 test("routing: fails when old #/section links no longer land", async () => {
@@ -180,7 +181,6 @@ function png(width, height, pad = 0) {
     ...(pad ? [chunk("tEXt", Buffer.alloc(pad, 97))] : []), chunk("IEND", Buffer.alloc(0))]);
 }
 
-const SITE = "https://www.lisul-elvi.com";
 const PREVIEW = /<meta (?:property|name)="(?:og|twitter):[^>]*>|<script type="application\/ld\+json">[\s\S]*?<\/script>/g;
 const pages = (d) => ["index.html", "404.html", ...resume.projects.map((p) => `projects/${p.slug}/index.html`)].filter((f) => existsSync(join(d, f)));
 const eachPage = (d, edit) => { for (const f of pages(d)) write(d, f, edit(read(d, f), f)); };
@@ -205,7 +205,7 @@ test("tags: every page needs a unique title, a description and an absolute canon
   const cases = [
     [(h) => h.replace(/<meta name="description"[^>]*>/, ""), /index\.html: no meta description/],
     [(h) => h.replace(/<link rel="canonical"[^>]*>/, ""), /index\.html: no canonical/],
-    [(h) => h.replace(`rel="canonical" href="${SITE}/"`, 'rel="canonical" href="/"'), /index\.html: canonical "\/" is not absolute/],
+    [(h) => h.replace(`rel="canonical" href="${ORIGIN}/"`, 'rel="canonical" href="/"'), /index\.html: canonical "\/" is not absolute/],
     [(h) => h.replace(/<title>[^<]*<\/title>/, "<title>Page not found · Lisul Elvitigala</title>"), /same title/],
   ];
   for (const [edit, want] of cases) {
@@ -276,7 +276,7 @@ test("links: fails on a broken internal link or #anchor", async () => {
   const anchor = broken((d) => write(d, "404.html", read(d, "404.html").replace("</main>", '<a href="/#nowhere">x</a></main>')));
   assert.match((await links({ dist: anchor })).join("\n"), /#nowhere/);
   // Absolute links on the site's own origin are checked against the build, not the live site.
-  const own = broken((d) => write(d, "index.html", read(d, "index.html").replace("</main>", '<a href="https://www.lisul-elvi.com/gone/">x</a></main>')));
+  const own = broken((d) => write(d, "index.html", read(d, "index.html").replace("</main>", `<a href="${ORIGIN}/gone/">x</a></main>`)));
   assert.match((await links({ dist: own })).join("\n"), /gone/);
 });
 

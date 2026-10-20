@@ -1,11 +1,12 @@
 // Site-wide settings that are not résumé facts.
+import { ORIGIN, RESUME_PDF } from "./site.mjs";
+
 export const siteConfig = {
-  url: "https://www.lisul-elvi.com",
+  url: ORIGIN,
   title: "Lisul Elvitigala",
   description:
     "Lisul Elvitigala, software engineer and Stony Brook computer science student: projects, experience, education and skills, with the résumé PDF.",
-  // The PDF keeps the path past résumés link to.
-  resumePdf: "/Lisul_Elvitigala_resume.pdf",
+  resumePdf: RESUME_PDF,
   // The link-preview image: 1200×630, no text in it (Apple and LinkedIn crop or reject otherwise).
   ogImage: {
     src: "/og.jpg",
