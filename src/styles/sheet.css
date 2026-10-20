@@ -44,7 +44,10 @@
   .sheet-row > span:not(.sheet-bar, .visually-hidden), .sheet-row > a, .sheet-title { white-space: normal; }
 }
 .sheet-stamps { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sheet-row.is-done > :not(.visually-hidden, .sheet-check, .sheet-more) { opacity: 0.2; text-decoration: line-through; }
+/* Done reads as faded but keeps WCAG contrast: muted ink and a strike, not low opacity. Bars
+   carry no text, so they can fade. */
+.sheet-row.is-done > :not(.visually-hidden, .sheet-check, .sheet-more, .sheet-bar) { color: var(--muted); text-decoration: line-through; }
+.sheet-row.is-done > .sheet-bar { opacity: 0.25; }
 .sheet-bar { display: inline-block; max-width: 100%; height: 0.8em; background: var(--fg); border-radius: 1px; }
 
 /* A margin note in the site's own type, set like handwriting. */
@@ -91,7 +94,7 @@
   .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; }
 }
 .sheet-task:hover { border-bottom-color: var(--accent); }
-.sheet-task.is-done .sheet-title { opacity: 0.2; text-decoration: line-through; }
+.sheet-task.is-done .sheet-title { color: var(--muted); text-decoration: line-through; }
 .sheet-add {
   width: 100%; font: inherit; font-size: 0.9375rem; color: var(--fg); background: transparent;
   border: 0; padding: 0; outline-offset: 2px;
