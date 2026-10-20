@@ -392,6 +392,17 @@ test("iMessage gets a square 180×180 touch icon", () => {
   assert.deepEqual({ type, width, height }, { type: "png", width: 180, height: 180 });
 });
 
+test("every page links favicon.ico (16 and 32 px) and a dark-aware icon.svg", () => {
+  for (const { file, html } of indexable()) {
+    assert.match(html, /<link rel="icon" href="\/favicon\.ico" sizes="32x32"/, file);
+    assert.match(html, /<link rel="icon" href="\/icon\.svg" type="image\/svg\+xml"/, file);
+  }
+  const svg = readFileSync(join(dist, "icon.svg"), "utf8");
+  assert.match(svg, /prefers-color-scheme: dark/, "the SVG icon has a dark-mode style");
+  const ico = readFileSync(join(dist, "favicon.ico"));
+  assert.deepEqual([ico.readUInt16LE(2), ico[6 + 16]], [1, 32], "favicon.ico is an icon whose second image is 32 px");
+});
+
 test("the sitemap lists exactly the indexable pages, and robots.txt points to it", () => {
   const robots = readFileSync(join(dist, "robots.txt"), "utf8");
   const line = robots.match(/^Sitemap: (\S+)$/m);
