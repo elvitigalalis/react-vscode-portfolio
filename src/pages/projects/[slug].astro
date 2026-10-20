@@ -6,6 +6,7 @@ import { getCollection, render } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import { resume } from "../../data/resume";
 import { siteConfig } from "../../config";
+import { frontmatter as home } from "../../content/home.md";
 
 export async function getStaticPaths() {
   const entries = await getCollection("writeups");
@@ -18,7 +19,9 @@ export async function getStaticPaths() {
 
 const { entry, project: p } = Astro.props;
 const { Content } = await render(entry);
-const { description, summary, video } = entry.data;
+const { description, summary, video, screenshot } = entry.data;
+// The card's Demo link, label and all, so the two can never disagree.
+const demo = home.projects?.[p.slug]?.demo;
 ---
 
 <Base title={`${p.title} · ${siteConfig.title}`} description={description} path={`/projects/${p.slug}/`}>
@@ -29,7 +32,7 @@ const { description, summary, video } = entry.data;
       <h1>{p.title}</h1>
       <p class="meta">{p.role && <>{p.role} · </>}{p.dates}</p>
       <ul class="tags" aria-label="Technologies">{p.stack.map((s) => <li>{s}</li>)}</ul>
-      <p class="links"><a href={p.url}>Code</a></p>
+      <p class="links"><a href={p.url}>Code</a>{demo && <> · <a href={demo.url}>{demo.label}</a></>}</p>
     </header>
     <p class="tldr">{summary}</p>
     {video && (
@@ -39,6 +42,12 @@ const { description, summary, video } = entry.data;
           <track kind="captions" src={video.captions} srclang="en" label="English" default />
         </video>
         <figcaption>{video.caption}</figcaption>
+      </figure>
+    )}
+    {screenshot && (
+      <figure class="shot">
+        <img src={screenshot.src} alt={screenshot.alt} width={screenshot.width} height={screenshot.height} decoding="async" />
+        <figcaption>{screenshot.caption}</figcaption>
       </figure>
     )}
     <aside class="glance" id="at-a-glance" aria-labelledby="glance-h">
