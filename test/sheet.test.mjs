@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, formatClock,
+  addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, rollMark, barWidth, rightNow,
 } from "../src/sheet/logic.mjs";
 
@@ -18,6 +18,15 @@ test("dates: weeks start on Monday and cross month ends", () => {
 test("dates: today follows the owner's time zone, not UTC", () => {
   const now = new Date("2026-10-21T02:30:00Z"); // 10:30 pm on the 20th in New York
   assert.deepEqual(localNow(now, "America/New_York"), { day: "2026-10-20", minutes: 22 * 60 + 30 });
+});
+
+test("dates: a local clock time becomes the right instant, across daylight saving", () => {
+  const tz = "America/New_York";
+  assert.equal(zonedIso("2026-10-20", 9 * 60, tz), "2026-10-20T13:00:00.000Z"); // EDT
+  assert.equal(zonedIso("2026-11-02", 9 * 60, tz), "2026-11-02T14:00:00.000Z"); // EST
+  assert.equal(zonedIso("2026-11-01", 23 * 60, tz), "2026-11-02T04:00:00.000Z"); // the change day
+  assert.equal(minutesOn("2026-10-20T13:00:00.000Z", "2026-10-20", tz), 9 * 60);
+  assert.equal(minutesOn("2026-10-21T04:30:00.000Z", "2026-10-20", tz), 24 * 60 + 30);
 });
 
 test("typed details: estimate, time, tag and visibility come out of the title", () => {
