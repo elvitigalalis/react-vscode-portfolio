@@ -30,6 +30,27 @@ export function localNow(now, timeZone) {
   return { day: `${parts.year}-${parts.month}-${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
 }
 
+const dayDiff = (a, b) => Math.round((toDate(a) - toDate(b)) / 86_400_000);
+
+// The instant (ISO) when the clock in `timeZone` reads `minutes` past midnight on `day`.
+// Correct across daylight-saving changes: it refines a UTC guess by the zone's offset.
+export function zonedIso(day, minutes, timeZone) {
+  const [y, m, d] = day.split("-").map(Number);
+  let t = Date.UTC(y, m - 1, d, 0, minutes);
+  for (let i = 0; i < 2; i++) {
+    const at = localNow(new Date(t), timeZone);
+    t -= (dayDiff(at.day, day) * 1440 + at.minutes - minutes) * 60_000;
+  }
+  return new Date(t).toISOString();
+}
+
+// Minutes past midnight of `day` in `timeZone` at an ISO instant (negative or past 1440 when
+// the instant falls on another day).
+export function minutesOn(iso, day, timeZone) {
+  const at = localNow(new Date(iso), timeZone);
+  return dayDiff(at.day, day) * 1440 + at.minutes;
+}
+
 export function dayLabel(day) {
   const d = toDate(day);
   return {
