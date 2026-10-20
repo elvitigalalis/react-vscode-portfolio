@@ -81,8 +81,8 @@ tasks jumping days across time zones.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To
   tomorrow, To next week, To Someday, Public/Private, Delete. This menu is also the keyboard and
   screen-reader way to do everything drag does.
-- **Drag** a task within a day, between days, or to and from Someday (Pointer Events, so it works
-  on touch). The dragged task leaves a 25 % ghost.
+- **Drag** a task within a day, between days, or to and from Someday (Pointer Events). On touch,
+  hold a task for 0.3 s to pick it up, so a swipe still scrolls. The dragged task leaves a 25 % ghost.
 - **Hover** shows a check circle at the row's right end; clicking it completes the task.
 - **Undo** (a toast for 6 s, and `⌘Z`) after delete, complete and every move.
 
