@@ -14,7 +14,7 @@ summary: >-
   worst-case spin error from 2.75° to 1.01°.
 photo:
   src: /images/micromouse.webp
-  alt: Close-up of a micromouse circuit board under a microscope, its traces and solder pads magnified
+  alt: The team's micromouse on a lab bench, a green circuit board on a black 3D-printed chassis between two wheels
 video:
   src: /video/micromouse-exploration.mp4
   poster: /video/micromouse-exploration.webp
