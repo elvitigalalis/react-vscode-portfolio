@@ -4,6 +4,7 @@ import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Seo, { type Props as SeoProps } from "../components/Seo.astro";
 import Analytics from "../components/Analytics.astro";
+import { siteConfig } from "../config";
 import "../styles/global.css";
 
 type Props = SeoProps;
@@ -19,6 +20,7 @@ type Props = SeoProps;
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf8" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131211" />
     <meta name="color-scheme" content="light dark" />
+    {siteConfig.analytics.searchConsole && <meta name="google-site-verification" content={siteConfig.analytics.searchConsole} />}
     <slot name="head" />
     <Analytics />
   </head>
