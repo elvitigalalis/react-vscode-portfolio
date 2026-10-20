@@ -74,6 +74,9 @@ test("analytics load after the page, and only in the deployed build", () => {
     else assert.equal(tag, "", "no IDs, no tag");
     assert.doesNotMatch(html, /<script[^>]+src="https?:/, "no blocking third-party script tags");
   }
+  const home = readFileSync(join(dist, "index.html"), "utf8");
+  if (ANALYTICS.searchConsole) assert.ok(home.includes(`name="google-site-verification" content="${ANALYTICS.searchConsole}"`));
+  else assert.doesNotMatch(home, /google-site-verification/);
   assert.equal(build().status, 0, "rebuild without analytics for the other tests");
   assert.doesNotMatch(readFileSync(join(dist, "index.html"), "utf8"), /googletagmanager|clarity\.ms/);
 });
