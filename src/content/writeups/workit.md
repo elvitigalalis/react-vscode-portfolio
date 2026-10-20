@@ -47,13 +47,13 @@ sources:
 
 ## The problem
 
-Internship and new-grad postings live on each company's own careers page, most of them on a few hiring systems: Greenhouse, Lever and Ashby. WorkIt, built by a team of 5 in CSE 416, is a job board for early-career roles. Its jobs come from a scraper that reads those boards directly, keeps the early-career software roles, and fills in the facts a job card shows.
+Internship and new-grad postings live on company careers pages, most of them on a few hiring systems: Greenhouse, Lever and Ashby. WorkIt, built by a team of 5 in CSE 416, gets its jobs from a scraper that reads those boards directly, keeps the early-career software roles and fills in the facts a job card shows.
 
-Two constraints shaped the work. The scraper must be polite: it obeys each site's robots.txt, stays away when it can't read one, and paces every site. And the database is shared with the whole app, so an import that writes bad rows breaks the site for everyone.
+Two constraints shaped it. The scraper must be polite: it obeys each site's robots.txt, stays away when it can't read one, and paces every site. And the database is shared, so an import that writes bad rows breaks the site for everyone.
 
 ## How it works
 
-The scraper reads about 1,800 company boards and keeps 1,000+ roles. A scheduled GitHub Actions workflow runs it, then imports the result into PostgreSQL on Supabase:
+The scraper reads about 1,800 company boards and keeps 1,000+ roles; a scheduled GitHub Actions workflow runs it and imports the result into PostgreSQL on Supabase:
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-pipe-t" viewBox="0 0 400 470" width="400" height="470">
@@ -91,9 +91,9 @@ The scraper reads about 1,800 company boards and keeps 1,000+ roles. A scheduled
 
 ## Giving each job-board provider its own lane
 
-A run took 9.5 minutes. Lever's one-second crawl delay over its 333 boards came to 5.5 of them. Every board shared 8 workers, so a worker waiting out Lever was a worker not reading Greenhouse.
+A run took 9.5 minutes, 5.5 of them Lever's one-second crawl delay over its 333 boards. Every board shared 8 workers, so a worker waiting out Lever was one not reading Greenhouse.
 
-Speed must never come from less pacing, so I made two other changes. Each provider now runs in its own lane, a thread pool with its own workers and the same per-site pacing, so no server sees more traffic than before. And quiet boards rest: a board that has never had a posting we keep, which was 282 of the 333 on Lever, is read on 1 day in 3, staggered across boards, and at least once every 3 days. A `--full` run still reads every board.
+Speed must never come from less pacing, so I changed two other things. Each provider runs in its own lane, a thread pool with its own workers and the same per-site pacing, so no server sees more traffic. And quiet boards rest: a board that has never had a posting we keep (282 of the 333 on Lever) is read on 1 day in 3, staggered, and at least every 3 days. A `--full` run still reads every board.
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-run-t" viewBox="0 0 400 180" width="400" height="180">
@@ -115,17 +115,17 @@ Speed must never come from less pacing, so I made two other changes. Each provid
 <figcaption>A routine run before and after, drawn to scale; the mark on the old run ends Lever's share of it.</figcaption>
 </figure>
 
-Routine runs went from 9.5 to about 3 minutes. The cost is freshness: a company's first posting on a quiet board can appear up to 2 days late. The 9.5 minutes is from runs before the workflow existed, and the notes don't say how many; the 3 held in Actions, where the first 8 scheduled scrapes took 2 min 45 s to 3 min 2 s. More workers could not have fixed Lever: its 333 boards share one server, paced at a request a second, so they take 5.5 minutes regardless.
+Routine runs went from 9.5 to about 3 minutes. The 9.5 comes from runs before the workflow existed, how many unrecorded; the 3 held in Actions, where the first 8 scheduled scrapes took 2 min 45 s to 3 min 2 s. More workers could not have fixed Lever: its 333 boards share one server, paced at a request a second, so they take 5.5 minutes regardless. The cost is freshness: a company's first posting on a quiet board can appear up to 2 days late.
 
 ## A dry run of the import on every pull request that touches it
 
-The workflow I wrote scrapes and then imports on a schedule, every 6 hours at first; Andrew Shi later moved it to every 3. The import script is Xiang Liu's: it runs in one transaction, refuses an empty feed or closing more than half the jobs at once, and has a dry-run mode that writes nothing. Those guards stop a bad scrape at run time, after the change behind it has merged.
+My workflow scrapes, then imports, on a schedule: every 6 hours at first, until Andrew Shi made it every 3. The import script is Xiang Liu's: one transaction that refuses an empty feed or closing more than half the jobs at once, with a dry-run mode that writes nothing. Those guards stop a bad scrape at run time, after the change behind it has merged.
 
-I wanted the failure before the merge. Any pull request that changes the scraper, the import, its schema or the workflow now runs the whole path in Actions, real scrape included, with the import forced to a dry run against the live database. A throwaway Postgres, like the one WorkIt PR 80's rollout was rehearsed on, is built from the branch's own migrations, so it always matches the code. WorkIt applies migrations by hand, never in a deploy, so the live database is the one that falls behind.
+I wanted the failure before the merge. Any pull request that changes the scraper, the import, its schema or the workflow now runs the whole path in Actions, real scrape included, with the import forced to a dry run against the live database, not a throwaway Postgres like the one WorkIt PR 80's rollout was rehearsed on. A throwaway is built from the branch's own migrations, so it always matches the code; WorkIt applies migrations by hand, never in a deploy, so the live database is what falls behind.
 
-It earned its place on 14 October 2026. My own resume-builder change, WorkIt PR 116, failed its dry run with "column job_postings.keywords does not exist": the code expected a column the database lacked. The next run passed, and the change merged 2 days later. Nothing in the backend changed between the two runs; the database did. By the rerun the column existed: the pull request's migrations had been applied, as its instructions require before it deploys.
+It earned its place on 14 October 2026, when my own resume-builder change, WorkIt PR 116, failed its dry run with "column job_postings.keywords does not exist": the code expected a column the database lacked. No backend file changed before the next run passed; the database did, once the pull request's migrations were applied, as its instructions require before it deploys. It merged 2 days later.
 
-The cost: every such pull request waits for a full scrape (the failing run took 4 min 39 s), and nothing forces anyone to wait, because WorkIt's main branch has no required checks.
+The cost: every such pull request waits for a full scrape (the failing run took 4 min 39 s).
 
 ## Inferring work style when a posting doesn't say
 
@@ -133,7 +133,7 @@ A job card shows a work style: on site, hybrid or remote. Many postings never st
 
 I chose to infer, in order: what the posting states, from its board's field or a sentence in the text; then what the company's other postings state most often; then "On site" for a posting that names a place and never mentions remote, hybrid or working from home. Only specific hybrid wording counts as stated, because a bare "hybrid" was wrong 38 times in 89 ("hybrid cloud").
 
-To measure it, I used 250 postings whose board states a work style but whose text does not, so the board's label could be checked against the inference:
+I measured it on 250 postings whose board states a work style but whose text does not, checking the board's label against the inference:
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-style-t" viewBox="0 0 400 170" width="400" height="170">
@@ -150,11 +150,11 @@ To measure it, I used 250 postings whose board states a work style but whose tex
 <figcaption>Share of 250 labelled postings whose work style each method got right, drawn to scale.</figcaption>
 </figure>
 
-The order was right 87% of the time, against 70% for always guessing "On site". On that day's 1,096 jobs, 997 cards got a work style. The cost is the misses, which are hybrid jobs shown as on site. Postings that state nothing mostly work on site, so a card that says so beats "not listed". Work style is the only fact the scraper infers; for pay, job type and the rest, a wrong fact is worse than a blank.
+The order was right 87% of the time, against 70% for always guessing "On site", and 997 of that day's 1,096 jobs got a work style. The cost is the misses: hybrid jobs shown as on site. Postings that state nothing mostly work on site, so saying so beats "not listed". Work style is the only fact the scraper infers; for pay, job type and the rest, a wrong fact is worse than a blank.
 
 ## Result
 
-- **Speed:** routine runs 9.5 → about 3 minutes, with every site paced as before.
+- **Speed:** routine runs 9.5 → about 3 minutes, pacing unchanged.
 - **Safety:** the pull-request dry run caught a schema mismatch before it merged.
 - **Coverage:** a work style on 997 of 1,096 cards, 87% right against 70%.
 - **Tests:** I wrote 145 of the scraper's 252 tests and added its test-and-lint job to CI on every pull request.
@@ -162,11 +162,11 @@ The order was right 87% of the time, against 70% for always guessing "On site". 
 ## What's still unproven
 
 - **CI informs; it doesn't gate.** Branch protection is off, so the test-and-lint job and the dry run can fail without blocking a merge.
-- **The 87% was measured where the answer is known.** Postings whose board states nothing may behave differently, and nothing measures them.
-- **The speed figure predates newer providers.** Andrew has since added more job-board providers to the scraper; the 9.5 to 3 minutes covers Greenhouse, Lever and Ashby.
-- **Scout is untested on facts.** Scout, my assistant that answers from one posting and the user's resume, has grounding rules and 19 tests but no measure of how often it makes things up; its only users so far are the 4 teammates.
+- **The 87% was measured where the answer is known.** Postings whose board states nothing may differ, and nothing measures them.
+- **The speed figure predates newer providers:** the 9.5 to 3 minutes covers Greenhouse, Lever and Ashby, and Andrew has since added more.
+- **Scout is untested on facts.** My assistant that answers from one posting and the user's resume, has grounding rules and 19 tests but no measure of how often it makes things up; its only users so far are the 4 teammates.
 - **Some of my work hasn't merged** and sits on branches.
 
 ## Who did what
 
-I wrote the scraper with its tests and CI job, the card facts, the scheduled workflow and its dry run, the Vercel deployment, the profile schema design, and Scout. Xiang Liu wrote the import script with its transaction and guards, the database schema and migrations, Supabase sign-in and row-level security. Brian Cao created the Supabase project. Vedant Vyas added Google and LinkedIn sign-in. Andrew Shi built most of the web app, added role categories and providers to the scraper, and moved the schedule to every 3 hours.
+I wrote the scraper with its tests and CI job, the card facts, the scheduled workflow and its dry run, the Vercel deployment, the profile schema design, and Scout. Xiang Liu wrote the import script with its transaction and guards, the database schema and migrations, Supabase sign-in and row-level security. Brian Cao created the Supabase project. Vedant Vyas added Google and LinkedIn sign-in. Andrew Shi built most of the web app and added role categories and providers to the scraper.
