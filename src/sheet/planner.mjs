@@ -40,7 +40,7 @@ function setStatus(text) {
   s.textContent = text ?? "";
 }
 
-function failed(err) {
+export function failed(err) {
   console.error(err);
   setStatus("Something did not save. Reload to see what's stored.");
 }
@@ -170,7 +170,7 @@ async function toggleVisibility(id) {
 
 // --- Rendering ---------------------------------------------------------------------------
 
-function taskRow(t) {
+export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
@@ -477,7 +477,8 @@ function wire() {
 
 // --- Start -------------------------------------------------------------------------------
 
-export async function start(node) {
+// `plugins` (plan today, shutdown) each get the root once the planner is wired.
+export async function start(node, plugins = []) {
   root = node;
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
@@ -489,6 +490,7 @@ export async function start(node) {
     return;
   }
   wire();
+  for (const plugin of plugins) plugin(root);
   try {
     if (!(await api.settings())) {
       setStatus("This account cannot open the planner.");

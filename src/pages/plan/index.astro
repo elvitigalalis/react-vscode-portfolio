@@ -15,6 +15,7 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn" data-act="prev-week" aria-label="Previous week">←</button>
         <button type="button" class="sheet-btn" data-act="this-week">Today</button>
         <button type="button" class="sheet-btn" data-act="next-week" aria-label="Next week">→</button>
+        <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
       </div>
@@ -47,6 +48,8 @@ import "../../styles/sheet.css";
       <dl class="sheet-keys">
         <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>~45m · @3pm · #tag · !public</dt><dd>Estimate, fixed time, tag, visibility</dd>
+        <dt>P</dt><dd>Plan today</dd>
+        <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
         <dt>← →</dt><dd>Previous or next week</dd>
         <dt>T</dt><dd>This week</dd>
         <dt>.</dt><dd>Menu for the focused task</dd>
@@ -55,10 +58,13 @@ import "../../styles/sheet.css";
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
+    <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
+
   </section>
 </Base>
 
 <script>
   import { start } from "../../sheet/planner.mjs";
-  start(document.querySelector(".sheet-planner"));
+  import { setupPlanToday } from "../../sheet/plan-today.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday]);
 </script>
