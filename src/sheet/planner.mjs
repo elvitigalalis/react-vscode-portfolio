@@ -86,7 +86,7 @@ async function dropBlocks(id) {
 }
 
 export async function addTask(text, where) {
-  const parsed = parseEntry(text, SHEET.publicTags);
+  const parsed = parseEntry(text);
   if (!parsed.title) return;
   const siblings = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const task = await api.insertTask({
@@ -143,12 +143,12 @@ async function removeTask(id) {
 
 async function editTask(id, text) {
   const t = state.tasks.get(id);
-  const parsed = parseEntry(text, SHEET.publicTags);
+  const parsed = parseEntry(text);
   if (!parsed.title) return removeTask(id);
   // Details typed while editing apply; ones not typed stay as they were.
   const change = { title: parsed.title };
   for (const k of ["est_min", "at_time", "tag"]) if (parsed[k] !== null) change[k] = parsed[k];
-  if (parsed.tag !== null || /(^|\s)!(public|private)(\s|$)/i.test(text)) change.public = parsed.public;
+  if (/(^|\s)!(public|private|p)(\s|$)/i.test(text)) change.public = parsed.public;
   const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public };
   await patch(id, change);
   if (change.public !== undefined && change.public !== before.public) await retitleBlocks(id);
@@ -176,13 +176,13 @@ export function taskRow(t) {
   li.dataset.id = t.id;
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
-  title.setAttribute("aria-label", `${t.title}${t.public ? ", public" : ""}${t.done ? ", done" : ""}. Edit`);
+  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}. Edit`);
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${t.rolls} time${t.rolls > 1 ? "s" : ""}` }) : null,
     title,
     t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
-    t.public ? el("span", { className: "sheet-pub", textContent: "◉", title: "Public" }) : null,
+    t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
     el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),
     el("button", { type: "button", className: "sheet-more", textContent: "⋯", ariaLabel: `More for ${t.title}` }),
   ].filter(Boolean));

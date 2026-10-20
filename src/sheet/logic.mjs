@@ -64,13 +64,13 @@ export function dayLabel(day) {
 const EST = /(?:^|\s)~(?:(\d+)h)?(?:(\d+)m?)?(?=\s|$)/i;
 const AT = /(?:^|\s)@(\d{1,2})(?::(\d{2}))?\s?(am|pm)?(?=\s|$)/i;
 const TAG = /(?:^|\s)#([a-z0-9][\w-]*)(?=\s|$)/i;
-const VIS = /(?:^|\s)!(public|private)(?=\s|$)/i;
+const VIS = /(?:^|\s)!(public|private|p)(?=\s|$)/i;
 
 // "Ship auth ~45m #workit" → { title: "Ship auth", est_min: 45, tag: "workit", public: true, ... }.
-// A detail that does not parse stays in the title.
-export function parseEntry(text, publicTags = []) {
+// Tasks are public unless marked "!p" (or "!private"). A detail that does not parse stays in the title.
+export function parseEntry(text) {
   let title = ` ${text.trim()} `;
-  const out = { est_min: null, at_time: null, tag: null, public: false };
+  const out = { est_min: null, at_time: null, tag: null, public: true };
 
   const est = title.match(EST);
   if (est && (est[1] || est[2])) {
@@ -90,7 +90,6 @@ export function parseEntry(text, publicTags = []) {
   }
   const tag = title.match(TAG);
   if (tag) { out.tag = tag[1].toLowerCase(); title = title.replace(tag[0], " "); }
-  out.public = out.tag !== null && publicTags.includes(out.tag);
   const vis = title.match(VIS);
   if (vis) { out.public = vis[1].toLowerCase() === "public"; title = title.replace(vis[0], " "); }
 

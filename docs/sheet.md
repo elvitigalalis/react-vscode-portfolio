@@ -34,7 +34,7 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
 - **Rollover runs in the database** (`pg_cron`, hourly and idempotent, using the owner's time zone), so `/now` is
   right even on days Lisul never opens the planner.
 - **Config** lives in `src/site.mjs` as `SHEET = { supabaseUrl, anonKey, ownerEmail, timeZone,
-  publicTags }`; all public values. Empty `supabaseUrl` → both pages say "not set up yet".
+  }`; all public values. Empty `supabaseUrl` → both pages say "not set up yet".
 - **Inactivity:** Supabase pauses free projects after a week with no requests. A GitHub Actions
   job (`sheet-keepalive.yml`) reads `public_now` twice a week to keep it awake.
 
@@ -75,9 +75,9 @@ tasks jumping days across time zones.
 - **Typed details,** shown as a chip while typing and stripped from the title on save:
   - `~45m` or `~1h30` → estimate
   - `@3pm` / `@15:00` → fixed time (the task stays on its day and never rolls)
-  - `#workit` → tag; tags in `publicTags` make the task public by default
-  - `!public` / `!private` → visibility, overriding the tag default
-- **Default visibility is private.**
+  - `#workit` → tag
+  - `!p` (or `!private`) → private; `!public` makes it public again when editing
+- **Tasks are public by default.** Private ones carry a small "private" label in the planner.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To
   tomorrow, To next week, To Someday, Public/Private, Delete. This menu is also the keyboard and
   screen-reader way to do everything drag does.
