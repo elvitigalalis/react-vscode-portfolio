@@ -10,8 +10,8 @@ description: >-
 summary: >-
   I wrote the C++ firmware for Stony Brook's 2026 micromouse robot, adapting the open-source
   UKMARS architecture to our Pi Pico robot, and it ran 2nd at NYIT 2026 with a 38 s run. The
-  largest accuracy fix was feeding encoder yaw, not IMU yaw, to the turn controller: worst-case
-  spin error fell from 2.75° to 1.01°.
+  largest accuracy fix, feeding encoder yaw instead of IMU yaw to the turn controller, cut
+  worst-case spin error from 2.75° to 1.01°.
 photo:
   src: /images/micromouse.webp
   alt: Close-up of a micromouse circuit board under a microscope, its traces and solder pads magnified
@@ -39,13 +39,13 @@ sources:
 
 ## The problem
 
-A micromouse is a small autonomous robot that explores an unknown maze, then races from the start to the centre. Speed comes from turning well: a robot that stops, spins and straightens at every corner loses time, and one that turns a degree or two wrong drifts into walls a few cells later.
+A micromouse is a small autonomous robot that explores an unknown maze, then races to its centre. Speed comes from turning well: a robot that stops and spins at every corner loses time, and one that turns a degree or two wrong drifts into a wall a few cells later.
 
-The code the team had before my rewrite turned that way. It stopped, spun in place under a proportional-only controller on IMU yaw, and its turns were inaccurate. The 2026 robot is a Raspberry Pi Pico with 29.86:1 gearing, time-of-flight wall sensors, wheel encoders and a BNO085 IMU. My job was the firmware: everything between those sensors and the motors.
+The team's code before my rewrite did both: it stopped and spun in place under a proportional-only controller on IMU yaw, and its turns were inaccurate. The 2026 robot is a Raspberry Pi Pico with 29.86:1 gearing, time-of-flight wall sensors, wheel encoders and a BNO085 IMU. My job was the firmware between those sensors and the motors.
 
 ## How it works
 
-The firmware runs on one core, driven by a 500 Hz hardware timer. Each tick reads the sensors, updates the robot's position, and runs the speed and turn controllers:
+One core runs everything from a 500 Hz hardware timer. Each tick reads the sensors, updates the position and runs the speed and turn controllers:
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-loop-t" viewBox="0 0 400 400" width="400" height="400">
@@ -80,15 +80,15 @@ The firmware runs on one core, driven by a 500 Hz hardware timer. Each tick read
 <figcaption>Sensor feedback closes the loop at 500 Hz; the wall readings also update the map that A* plans on.</figcaption>
 </figure>
 
-The structure, the motion profiles and the controller formulas come from UKMARS mazerunner-core, an open-source micromouse codebase. On top of that I wrote the parts that make it this robot: the A* planner, the wall-sensor calibration, the turn feedback, a motor-measurement mode called DriverLab, and a Bluetooth console for tuning without reflashing. Every algorithm runs in a maze simulator before it runs on the robot. The team's older code also planned with A*; I kept the algorithm and wrote a new implementation.
+The structure, motion profiles and controller formulas come from UKMARS mazerunner-core, an open-source micromouse codebase. I wrote the rest: the A* planner (the old code also used A*; mine is a new implementation), wall-sensor calibration, the turn feedback, a motor-measurement mode called DriverLab, and a Bluetooth console for tuning without reflashing. Every algorithm runs in a maze simulator first.
 
 ## Feeding encoder yaw, not IMU yaw, to the turn controller
 
-The constraint: the BNO085 reports yaw about 40 ms late. During an arc the rotation controller chased that stale angle, reversed the inside wheel and overshot by about 5°.
+The BNO085 reports yaw about 40 ms late. During an arc the rotation controller chased that stale angle, reversed the inside wheel and overshot by about 5°.
 
-The wheel encoders have no such delay: the controller reads them every tick, and UKMARS turns on them; IMU yaw had been one of our deliberate departures. My first fix was narrow: encoder yaw only during arcs, handing back to the IMU 100 ms after each arc. Then I made encoder yaw the turn controller's input on every move, as mazerunner-core does.
+The wheel encoders have no such delay, and UKMARS turns on them; IMU yaw had been one of our deliberate departures. My first fix was narrow: encoder yaw only during arcs, handing back to the IMU 100 ms after each. Then I made encoder yaw the turn controller's input on every move, as mazerunner-core does, and measured the plant again.
 
-I fed encoder yaw to the rotation controller and measured the plant again. Worst-case spin error went from −2.75…+0.44° to −1.01…+0.27°, the spread per 90° turn from ±2.5° to ±1.1°, and smooth-turn arc error from −1.8° to −0.8°. The ranges are the turn controller's own error in the robot's 4 ms trace of 90° spins; the notes don't record how many. Since the encoders now measure that error themselves, the IMU gave the independent check: a right smooth turn now settles at −90.1°, not near −88°.
+Worst-case spin error went from −2.75…+0.44° to −1.01…+0.27°, the spread per 90° turn from ±2.5° to ±1.1°, and smooth-turn arc error from −1.8° to −0.8°. The ranges are the turn controller's own error in the robot's 4 ms trace of 90° spins; the notes don't record how many. Because the encoders now measure that error themselves, the IMU gave the independent check: a right smooth turn now settles at −90.1°, not near −88°.
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-spin-t" viewBox="0 0 400 190" width="400" height="190">
@@ -112,50 +112,42 @@ I fed encoder yaw to the rotation controller and measured the plant again. Worst
 <figcaption>Worst-case spin error, drawn to scale: the encoder-yaw range is less than half as wide as the IMU-yaw range.</figcaption>
 </figure>
 
-The cost is the body's true angle. Encoders count wheel turns, so they miss slip and scrub: the wheels slipped above about 400°/s, and at 300 mm/s tyre scrub turned the body about 4° less than the encoders said, so the right arc is set to 95° to land on 90°. The IMU keeps a job: heading hold uses its absolute yaw to keep the robot square to the maze. Separately, with a derivative time of 1.0 Tm, mazerunner-core's value, the slow inside wheel went into stick-slip, so I swept it and settled on 1.5 Tm.
+The cost is the body's true angle. Encoders miss slip and scrub: the wheels slipped above about 400°/s, and at 300 mm/s tyre scrub turned the body about 4° less than the encoders said, so the right arc is set to 95° to land on 90°. The IMU keeps heading hold, using its absolute yaw to keep the robot square to the maze. Separately, mazerunner-core's derivative time of 1.0 Tm put the slow inside wheel into stick-slip, so I swept it and settled on 1.5 Tm.
 
 ## Measuring the motor instead of hand-tuning gains
 
-Controller gains can be guessed and adjusted run by run, or computed from a model of the motor. I built DriverLab, a mode that runs trials on the robot: an open-loop voltage sweep fits the motor gain Km, and a step response fits the time constant Tm. It computes the PD gains by pole placement, using the formula from UKMARS's motorlab, and exports them as constants for the run firmware.
+Controller gains can be guessed run by run, or computed from a model of the motor. I built DriverLab, a mode that runs trials on the robot: an open-loop voltage sweep fits the motor gain Km, and a step response fits the time constant Tm. It computes the PD gains by pole placement, with the formula from UKMARS's motorlab, and exports them to the run firmware.
 
-One choice was mine: I set the derivative time Td equal to Tm, not motorlab's Tm/2, because our 29.86:1 gearing makes the plant about 4× snappier than the UKMARSBOT the defaults were written for. On the maze floor the rotation plant measured Km = 385°/s/V over 8 fits (361 to 407) and Tm = 0.097 s.
+One choice was mine: derivative time Td = Tm, not motorlab's Tm/2, because our 29.86:1 gearing makes the plant about 4× snappier than the UKMARSBOT the defaults were written for. On the maze floor the rotation plant measured Km = 385°/s/V over 8 fits (361 to 407) and Tm = 0.097 s.
 
-Before DriverLab (first MotorLab, January 2026), turn gains were set by testing on the robot. Since then a hardware change, such as the new board in April 2026, has meant re-running the trials, and the gains follow. The cost is re-measuring when the feedback changes: the IMU fit had counted the BNO085's lag as part of Tm, so encoder yaw needed a new fit.
+Before DriverLab (first MotorLab, January 2026), turn gains were set by trial on the robot; now a hardware change, such as the new board in April 2026, means re-running the trials. The cost is re-measuring whenever the feedback changes: the IMU fit had counted the BNO085's lag as part of Tm, so encoder yaw needed a new fit.
 
 ## Building on UKMARS instead of the old code or a blank slate
 
-The old code's turns were inaccurate, and I replaced it rather than patch it. I adapted UKMARS's motion profiles, wall-following steering and odometry to our robot, which has a different processor, gearing and sensors, and kept a parity checklist in the repository of what follows UKMARS and what stays ours. UKMARS also came with numbers to check against: our turn and acceleration settings start from mazerunner-core's values for its Orion robot, and the config notes where ours differ and why.
+Rather than patch the old code or start from nothing, I adapted UKMARS's motion profiles, wall-following steering and odometry to our robot's different processor, gearing and sensors, and kept a parity checklist in the repository of what follows UKMARS and what stays ours. Our turn and acceleration settings start from mazerunner-core's values for its Orion robot; the config notes where ours differ and why.
 
-The cost is honesty about credit: the architecture is UKMARS's, not mine. What I can claim is the adaptation, the A* planner and the measurement and tuning work above.
+The cost is credit: the architecture is UKMARS's, not mine; the adaptation, planner and tuning are what I can claim.
 
 ## Result
 
-- **Competition:** the 2026 firmware ran 2nd at NYIT 2026, with a 38 s run.
-- **Turns:** worst-case spin error 2.75° → 1.01°, measured on the robot (above).
-- **Speed, bench only:** with non-stop smooth turns, a fast run drove all 21 segments of a bench maze (10 arcs, 4 one-cell S-bends) at up to about 1,200 mm/s, ending 1.35° off heading. The goal was moved to a 4×4 centre block for that test, so it is not a competition time.
-- **Not measured:** how much faster smooth turns make a competition run. There is no before-and-after time on a full maze yet.
+- **Competition:** 2nd at NYIT 2026, with a 38 s run.
+- **Turns:** worst-case spin error 2.75° → 1.01°, measured on the robot.
+- **Speed, bench only:** with non-stop smooth turns, a fast run drove all 21 segments of a bench maze (10 arcs, 4 one-cell S-bends) at up to about 1,200 mm/s, ending 1.35° off heading, with the goal moved to a 4×4 centre block; not a competition time.
 
 ## What's still unproven
 
-- **Diagonals run only in the simulator.** I wrote a state machine over 11 movement patterns that turns A*'s zigzags into 45° turns and half-cell moves. The current robot is too wide to drive them; they wait for a slimmer chassis.
-- **The speedup is unmeasured** (above).
-- **Battery thresholds are estimates.** The low-battery warning fires below 6.4 V on a 2S pack, and that threshold is still a guess.
-- **The mouse broke on competition morning at Montclair 2026.** An electrical fault stopped it, and the team went to the competition without a working robot. The clip above is from before that.
+- **Diagonals run only in the simulator.** A state machine I wrote over 11 movement patterns turns A*'s zigzags into 45° turns and half-cell moves; the current robot is too wide to drive them, so they wait for a slimmer chassis.
+- **The speedup is unmeasured:** there is no before-and-after time on a full maze for how much faster smooth turns make a competition run.
+- **Battery thresholds are estimates:** the low-battery warning below 6.4 V on a 2S pack is a guess.
+- **The mouse broke on competition morning at Montclair 2026.** An electrical fault stopped it, and the team competed without a working robot. The clip above is from before that.
 
-The team traced the fault on the repair bench under the inspection microscope:
+The team traced the fault under the inspection microscope:
 
 <figure>
 <img src="/images/micromouse/repair-bench.webp" width="960" height="720" loading="lazy" decoding="async" alt="A team member, seen from behind, bends over an inspection microscope at a repair bench; the board appears magnified on a monitor beside a multimeter, solder and tweezers.">
-<figcaption>October 2026: diagnosing the electrical fault that broke the mouse on competition morning.</figcaption>
-</figure>
-
-On the monitor, the board's traces and parts:
-
-<figure>
-<img src="/images/micromouse/board-magnified.webp" width="960" height="680" loading="lazy" decoding="async" alt="A monitor showing the robot's circuit board magnified: copper traces, a small chip labelled U1, capacitors and connector pads, with flux residue around the chip.">
-<figcaption>The board under the microscope during the diagnosis.</figcaption>
+<figcaption>October 2026: diagnosing the electrical fault that broke the mouse on competition morning, the board magnified on the monitor.</figcaption>
 </figure>
 
 ## Who did what
 
-I wrote and tested the 2026 firmware. Dennis Huang added the IMU setup code and speed plotting to DriverLab, and Felix Nie tuned the line follower. The team's electrical and mechanical members built the hardware; I helped with soldering and PCB design but did not do most of it. As captain I gave each member a component to own, with deadlines set at weekly builds. Placements belong to the team. Manasa filmed the run.
+I wrote and tested the 2026 firmware. Dennis Huang added the IMU setup code and speed plotting to DriverLab, and Felix Nie tuned the line follower. The electrical and mechanical members built the hardware; I helped with soldering and PCB design, not most of it. As captain I gave each member a component to own, with deadlines set at weekly builds. Placements belong to the team. Manasa filmed the run.
