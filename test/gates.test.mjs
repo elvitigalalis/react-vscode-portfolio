@@ -147,6 +147,13 @@ test("lint: fails on each kind of banned wording", async () => {
   assert.deepEqual(await lint({ content: writeup("", "It was validated ahead of a planned LA Metro rollout."), resume }), []);
 });
 
+test("lint: fails on a TODO(Lisul) marker, even one in a comment", async () => {
+  for (const body of ["It ran TODO(Lisul) laps.", "Text. <!-- TODO(Lisul): which run? -->"]) {
+    const problems = await lint({ content: writeup("", body), resume });
+    assert.deepEqual(problems, ["projects/demo.md: an unanswered TODO(Lisul) marker"]);
+  }
+});
+
 test("lint: a number must trace to resume.json or the file's sources", async () => {
   const body = "Exploration took 7.25 minutes; the drift fell from 3.4° to 0.62°, and 500+ buses ran in 2026.";
   const problems = await lint({ content: writeup("", body), resume });

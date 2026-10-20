@@ -1,6 +1,7 @@
 // Hand-written-text lint over every markdown file in src/content (the home page's expand layer
 // and the write-ups). Every number must trace to resume.json or to the file's own `sources:`
-// list, and the standing rules' banned wording must not appear.
+// list, the standing rules' banned wording must not appear, and no TODO(Lisul) marker may be
+// left waiting for an answer.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -47,6 +48,7 @@ export async function lint({ content, resume }) {
     const said = [...strings(rest).filter((s) => !isLink(s)), prose(fm ? src.slice(fm[0].length) : src)].join("\n");
     const text = [said, ...strings(sources)].join("\n");
 
+    if (src.includes("TODO(Lisul)")) problems.push(`${file}: an unanswered TODO(Lisul) marker`);
     for (const [re, what] of BANNED) {
       const m = re.exec(text);
       if (m) problems.push(`${file}: banned wording, ${what}: "${m[0]}"`);
