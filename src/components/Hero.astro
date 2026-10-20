@@ -1,15 +1,14 @@
 ---
 // The first screen: who, what, where, and the two buttons, all as plain text.
 import { siteConfig } from "../config";
-import { resume } from "../data/resume";
+import { profileLink, resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 
 const { basics, education, experience } = resume;
 const graduating = education[0].date.replace(/^Expected\s+/, "");
 const current = experience.filter((e) => /Present$/.test(e.dates));
-const link = (host: string) => basics.links.find((l) => l.url.includes(host));
-const github = link("github.com");
-const linkedin = link("linkedin.com");
+const github = profileLink("GitHub");
+const linkedin = profileLink("LinkedIn");
 ---
 
 <section class="hero wrap" id="top" aria-labelledby="name">
