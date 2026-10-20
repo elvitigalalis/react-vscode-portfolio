@@ -65,7 +65,9 @@ async function rest(path, { method = "GET", body, prefer, anon = false } = {}) {
     method,
     headers: {
       apikey: SHEET.anonKey,
-      authorization: `Bearer ${s?.access_token ?? SHEET.anonKey}`,
+      // Visitors send only the project key, which works for both legacy anon keys and the
+      // newer publishable keys (those cannot be sent as a Bearer token).
+      ...(s ? { authorization: `Bearer ${s.access_token}` } : {}),
       ...(body ? { "content-type": "application/json" } : {}),
       ...(prefer ? { prefer } : {}),
     },
