@@ -1,0 +1,44 @@
+/* The Sheet (/plan and /now): ruled paper rows, bold uppercase day names, today in the accent
+   colour only. Same tokens as global.css; motion is a 0.25 s fade, off when reduced. */
+.sheet-page { max-width: 80rem; margin: 0 auto; padding: 2rem 1rem 1rem; --row: 2.1rem; }
+.sheet-page h1 { font-size: clamp(1.75rem, 6vw, 2.25rem); letter-spacing: -0.01em; margin-bottom: 0.75rem; }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.sheet-now { margin: 0 0 1rem; font-size: 1.0625rem; }
+.sheet-label { color: var(--muted); font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.4rem; }
+.sheet-status { color: var(--muted); }
+
+/* The week: seven equal columns; every column has the same number of rows, so lines run across. */
+.sheet-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0 1rem; }
+@media (max-width: 48rem) {
+  .sheet-week { grid-template-columns: 1fr; gap: 1.25rem; }
+  .sheet-row.is-empty { display: none; }
+}
+.sheet-head {
+  display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.9375rem;
+  padding-bottom: 0.3rem; border-bottom: 2px solid var(--fg); margin: 0;
+}
+.sheet-wd { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.sheet-dt { color: var(--muted); font-weight: 400; }
+.is-today .sheet-head { border-bottom-color: var(--accent); }
+.is-today .sheet-wd, .is-today .sheet-dt, .sheet-alldone { color: var(--accent); }
+.sheet-stamps { margin: 0.2rem 0 0; min-height: 1.2rem; color: var(--muted); font-size: 0.75rem; }
+
+.sheet-rows { list-style: none; }
+.sheet-row {
+  display: flex; align-items: center; gap: 0.4rem; min-height: var(--row);
+  border-bottom: 1px solid var(--line); font-size: 0.9375rem; line-height: 1.25; padding: 0.25rem 0;
+  overflow-wrap: anywhere;
+}
+.sheet-row.is-done > :not(.visually-hidden) { opacity: 0.2; text-decoration: line-through; }
+.sheet-bar { display: inline-block; max-width: 100%; height: 0.8em; background: var(--fg); border-radius: 1px; }
+
+/* A margin note in the site's own type, set like handwriting. */
+.sheet-ps { font-style: italic; color: var(--muted); transform: rotate(-1deg); margin: 1.5rem 0 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-row, .sheet-row > * { transition: opacity 0.25s ease-in-out; }
+}

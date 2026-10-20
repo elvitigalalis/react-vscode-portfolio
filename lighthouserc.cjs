@@ -21,6 +21,17 @@ const all = {
 };
 const home = { "resource-summary:total:size": fail({ maxNumericValue: 100 * 1024 }), "resource-summary:total:count": fail({ maxNumericValue: 15 }) };
 const writeup = { "resource-summary:total:size": fail({ maxNumericValue: 300 * 1024 }) };
+// The Sheet's pages (docs/sheet.md) run the planner's script and read one third-party origin,
+// Supabase; they are noindex, so they cannot be "crawlable" either.
+const sheet = {
+  "resource-summary:script:size": fail({ maxNumericValue: 60 * 1024 }),
+  "resource-summary:third-party:count": fail({ maxNumericValue: 1 }),
+  "resource-summary:total:size": fail({ maxNumericValue: 150 * 1024 }),
+  "categories:seo": "off", "is-crawlable": "off",
+  // The week is drawn by the page's script from Supabase, so HTML → script → data is the page
+  // itself, not a chain to cut; a preconnect to Supabase shortens it.
+  "network-dependency-tree-insight": "off",
+};
 // The 404 page is noindex on purpose, so it cannot be "crawlable".
 const notFound = { "categories:seo": "off", "is-crawlable": "off" };
 
@@ -33,7 +44,8 @@ module.exports = {
       assertMatrix: [
         entry("/404\\.html$", home, notFound),
         entry("/projects/", writeup),
-        entry("^(?!.*/projects/)(?!.*/404\\.html$).*$", home),
+        entry("/(plan|now)/", sheet),
+        entry("^(?!.*/projects/)(?!.*/(plan|now)/)(?!.*/404\\.html$).*$", home),
         // Drift shows up as a warning well before it fails.
         { matchingUrlPattern: ".*", assertions: {
           "largest-contentful-paint": ["warn", { maxNumericValue: 1500 }],

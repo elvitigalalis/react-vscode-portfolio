@@ -1,0 +1,59 @@
+---
+// The Sheet's public view (docs/sheet.md): this week, public tasks by title, private ones as bars.
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { siteConfig } from "../../config";
+import "../../styles/sheet.css";
+import { SHEET } from "../../site.mjs";
+
+const writeups = (await getCollection("writeups")).map((w) => w.id);
+---
+
+<Base title={`Now · ${siteConfig.title}`} description="What Lisul Elvitigala is working on this week, from his planner. Private tasks show as black bars." path="/now/" noindex>
+  {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
+  <section class="sheet-page" data-writeups={writeups.join(" ")}>
+    <h1>Now</h1>
+    <p class="sheet-now" hidden><span class="sheet-label">Right now</span> <span data-now></span></p>
+    <p class="sheet-status" data-status>Loading this week…</p>
+    <div class="sheet-week" data-week aria-label="This week" role="group"></div>
+    <p class="sheet-ps">P.S. the black bars are life stuff.</p>
+    <p class="small" data-updated></p>
+  </section>
+</Base>
+
+<script>
+  import { configured, publicWeek, publicDays, publicNow } from "../../sheet/api.mjs";
+  import { renderPublicWeek } from "../../sheet/public.mjs";
+  import { SHEET } from "../../site.mjs";
+  import { localNow, weekDays, rightNow } from "../../sheet/logic.mjs";
+
+  const root = document.querySelector(".sheet-page");
+  const status = root.querySelector("[data-status]");
+  const writeups = new Set(root.dataset.writeups.split(" ").filter(Boolean));
+
+  async function refreshNow() {
+    const row = await publicNow();
+    const line = rightNow(row);
+    root.querySelector(".sheet-now").hidden = !line;
+    root.querySelector("[data-now]").textContent = line ?? "";
+    if (row?.updated_on) {
+      const d = new Date(`${row.updated_on}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+      root.querySelector("[data-updated]").textContent = `Last updated ${d}.`;
+    }
+  }
+
+  async function load() {
+    if (!configured) { status.textContent = "The planner is not set up yet."; return; }
+    const today = localNow(new Date(), SHEET.timeZone).day;
+    const days = weekDays(today);
+    try {
+      const [tasks, stamps] = await Promise.all([publicWeek(days[0], days[6]), publicDays(days[0], days[6]), refreshNow()]);
+      renderPublicWeek(root.querySelector("[data-week]"), { days, today, tasks, stamps, writeups });
+      status.hidden = true;
+      setInterval(() => refreshNow().catch(() => {}), 60_000);
+    } catch {
+      status.textContent = "Could not load this week. Try again in a minute.";
+    }
+  }
+  load();
+</script>
