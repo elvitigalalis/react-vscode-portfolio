@@ -13,6 +13,7 @@ npm run build    # static site in dist/
 npm run preview  # serve dist/
 npm run check    # build, then every gate below (needs lychee and Chrome)
 npm test         # each gate against the real build and a fixture broken on purpose
+node tools/brand.mjs  # favicon set in public/ from the LE mark (needs rsvg-convert)
 ```
 
 Pushes to `main` deploy to GitHub Pages through `.github/workflows/deploy.yml` (Astro's

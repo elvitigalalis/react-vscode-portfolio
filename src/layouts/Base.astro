@@ -13,7 +13,10 @@ type Props = SeoProps;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <Seo {...Astro.props} />
-    <link rel="icon" href="/favicon.png" type="image/png" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fbfaf8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131211" />
     <meta name="color-scheme" content="light dark" />
     <slot name="head" />
   </head>
