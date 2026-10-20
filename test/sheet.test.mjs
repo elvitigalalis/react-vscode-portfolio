@@ -30,7 +30,7 @@ test("dates: a local clock time becomes the right instant, across daylight savin
 });
 
 test("typed details: estimate, time, tag and visibility come out of the title", () => {
-  assert.deepEqual(parseEntry("Ship WorkIt auth ~45m #workit", ["workit"]),
+  assert.deepEqual(parseEntry("Ship WorkIt auth ~45m #workit"),
     { title: "Ship WorkIt auth", est_min: 45, at_time: null, tag: "workit", public: true });
   assert.deepEqual(parseEntry("Dentist @3pm !private"),
     { title: "Dentist", est_min: null, at_time: "15:00", tag: null, public: false });
@@ -39,12 +39,15 @@ test("typed details: estimate, time, tag and visibility come out of the title", 
   assert.equal(parseEntry("Read ~90").est_min, 90);
   assert.equal(parseEntry("Standup @9:30").at_time, "09:30");
   assert.equal(parseEntry("Lunch @12am").at_time, "00:00");
-  assert.equal(parseEntry("Post #workit update !private", ["workit"]).public, false);
+  assert.equal(parseEntry("Post #workit update !private").public, false);
+  assert.equal(parseEntry("Gym !p").public, false);
+  assert.equal(parseEntry("Gym !p").title, "Gym");
   assert.equal(parseEntry("Gym #life !public").public, true);
 });
 
-test("typed details: tasks are private by default and odd text stays in the title", () => {
-  assert.equal(parseEntry("Call mom").public, false);
+test("typed details: tasks are public by default and odd text stays in the title", () => {
+  assert.equal(parseEntry("Call mom").public, true);
+  assert.equal(parseEntry("Wow!p").title, "Wow!p");
   assert.equal(parseEntry("Email me@site.com about ~").title, "Email me@site.com about ~");
   assert.equal(parseEntry("Room @3").title, "Room @3");
   assert.equal(parseEntry("C# notes").title, "C# notes");

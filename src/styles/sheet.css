@@ -80,7 +80,7 @@
 }
 .sheet-meta { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .sheet-roll { color: var(--muted); font-size: 0.8125rem; }
-.sheet-pub { color: var(--accent); font-size: 0.625rem; }
+.sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 /* Check and menu sit over the row's right end on hover, so titles keep the full width. */
 .sheet-check, .sheet-more {
   position: absolute; top: 50%; translate: 0 -50%; width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%;
