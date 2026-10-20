@@ -222,6 +222,11 @@ test("the WorkIt write-up credits teammates and never links WorkIt issues or PRs
   assert.doesNotMatch(text, /\bset up Supabase|Supabase setup/i);
 });
 
+test("no built page carries an unanswered TODO(Lisul) marker", () => {
+  const marked = builtFiles().filter((f) => readFileSync(f, "utf8").includes("TODO(Lisul)"));
+  assert.deepEqual(marked, []);
+});
+
 test("a write-up runs 700 to 1,200 words with 2 to 4 figures", () => {
   for (const slug of writeupSlugs()) {
     const html = writeupHtml(slug);
