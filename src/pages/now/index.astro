@@ -24,7 +24,7 @@ const writeups = (await getCollection("writeups")).map((w) => w.id);
 
 <script>
   import { configured, publicWeek, publicDays, publicNow } from "../../sheet/api.mjs";
-  import { renderPublicWeek } from "../../sheet/public.mjs";
+  import { renderPublicWeek, scrollToToday } from "../../sheet/public.mjs";
   import { SHEET } from "../../site.mjs";
   import { localNow, weekDays, rightNow } from "../../sheet/logic.mjs";
 
@@ -50,6 +50,7 @@ const writeups = (await getCollection("writeups")).map((w) => w.id);
     try {
       const [tasks, stamps] = await Promise.all([publicWeek(days[0], days[6]), publicDays(days[0], days[6]), refreshNow()]);
       renderPublicWeek(root.querySelector("[data-week]"), { days, today, tasks, stamps, writeups });
+      scrollToToday(root.querySelector("[data-week]"));
       setInterval(() => refreshNow().catch(() => {}), 60_000);
     } catch {
       status.textContent = "Could not load this week. Try again in a minute.";

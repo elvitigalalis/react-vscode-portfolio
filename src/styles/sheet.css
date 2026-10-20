@@ -193,3 +193,13 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 .sheet-dialog-end { gap: 0.5rem; }
 .sheet-week > .sheet-status { grid-column: 1 / -1; }
+
+/* Tablets (iPad portrait): seven columns would be ~90 px each, so the week becomes a row of
+   fixed-width columns that swipe sideways and snap, with today scrolled into view. */
+@media (min-width: 48.01rem) and (max-width: 64rem) {
+  .sheet-week {
+    grid-template-columns: repeat(7, 12rem); overflow-x: auto; scroll-snap-type: x mandatory;
+    padding-bottom: 0.5rem; overscroll-behavior-x: contain;
+  }
+  .sheet-day { scroll-snap-align: start; }
+}

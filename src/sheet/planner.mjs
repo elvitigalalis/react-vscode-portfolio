@@ -6,6 +6,7 @@ import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete,
 } from "./logic.mjs";
+import { scrollToToday } from "./public.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -262,6 +263,7 @@ export async function load() {
   state.days = Object.fromEntries(dayRows.map((d) => [d.day, d]));
   state.parked = parked.length;
   render();
+  scrollToToday($("[data-week]"));
 }
 
 async function showWeek(monday) {
