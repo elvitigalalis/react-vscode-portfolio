@@ -5,8 +5,8 @@
 # never merge the MIT 2025 and NYIT 2026 robots, no LA Metro deployment claim.
 kicker: Software Engineer · Stony Brook CS
 thesis: >-
-  In 2026 I was a software engineer intern at Hitachi Rail, bringing live bus GPS into dispatch.
-  I also wrote the firmware for Stony Brook's 2026 micromouse robot.
+  I was a software engineer intern at Hitachi Rail in 2026, bringing live bus GPS into dispatch.
+  I also wrote the C++ firmware for Stony Brook's micromouse robot.
 location: Stony Brook, NY
 
 # At most one context sentence per role, keyed by company.
