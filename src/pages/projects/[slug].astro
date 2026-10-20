@@ -46,7 +46,12 @@ const demo = home.projects?.[p.slug]?.demo;
     )}
     {screenshot && (
       <figure class="shot">
-        <img src={screenshot.src} alt={screenshot.alt} width={screenshot.width} height={screenshot.height} decoding="async" />
+        <img
+          src={screenshot.src}
+          srcset={`${screenshot.src.replace(/\.webp$/, "-720.webp")} 720w, ${screenshot.src} ${screenshot.width}w`}
+          sizes="(max-width: 40rem) calc(100vw - 2rem), 38rem"
+          alt={screenshot.alt} width={screenshot.width} height={screenshot.height} decoding="async"
+        />
         <figcaption>{screenshot.caption}</figcaption>
       </figure>
     )}
