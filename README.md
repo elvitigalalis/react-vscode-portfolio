@@ -22,7 +22,7 @@ push and PR. `node check/run.mjs <gate>` runs one gate over an existing `dist/`.
 |---|---|
 | schema | `src/data/resume.json` matches its schema |
 | mirror | every résumé fact is verbatim on `/`, each write-up's "At a glance" has its bullets, no phone number |
-| lint | numbers in `src/content/**/*.md` trace to `resume.json` or the file's `sources:`; no banned wording |
+| lint | numbers in `src/content/**/*.md` trace to `resume.json` or the file's `sources:`; no banned wording; no `TODO(Lisul)` marker |
 | tags | title, description, canonical; once any preview tag exists, full Open Graph, twitter:card, OG image, JSON-LD and sitemap |
 | routing | `/404.html`, the old PDF path, the old `#/section` hash rewrite |
 | html | html-validate (recommended) |
