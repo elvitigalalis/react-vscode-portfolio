@@ -167,3 +167,19 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-nowline { position: absolute; left: 0; right: 0; border-top: 1px solid #b91c1c; pointer-events: none; }
 .sheet-dialog-end { display: flex; justify-content: flex-end; margin-top: 1rem; }
 .sheet-plan .sheet-task { cursor: grab; }
+
+/* Shutdown. */
+.sheet-shut { width: min(40rem, calc(100vw - 2rem)); }
+.sheet-shut-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
+.sheet-shut-col h3 { font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; margin-bottom: 0.3rem; }
+.sheet-shut-col ul { list-style: none; }
+.sheet-shut-item {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 0.875rem; color: inherit;
+  background: none; border: 0; border-bottom: 1px solid var(--line); padding: 0.35rem 0.2rem; cursor: pointer;
+}
+.sheet-shut-item:hover { color: var(--accent); }
+.sheet-reflect {
+  width: 100%; font: inherit; font-size: 0.9375rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.5rem;
+}
+.sheet-dialog-end { gap: 0.5rem; }
