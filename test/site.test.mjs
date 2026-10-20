@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { decode, escapeRe, files, imageSize, ORIGIN, RESUME_PDF, squash, textOf } from "../check/lib.mjs";
 import { BANNED, numbersIn } from "../check/lint.mjs";
+import { parse } from "yaml";
 
 const root = new URL("..", import.meta.url).pathname;
 const dist = join(root, "dist");
@@ -133,6 +134,14 @@ test("a write-up's header and At a glance mirror its résumé project verbatim",
     assert.match(html, new RegExp(`href="${escapeRe(p.url)}"`));
     const glance = textOf(html.match(/<aside[^>]*id="at-a-glance"[\s\S]*?<\/aside>/)[0]);
     assert.deepEqual(p.bullets.filter((b) => !glance.includes(squash(b))), []);
+  }
+});
+
+test("a project with a write-up keeps its card photo and demo in that one file", () => {
+  const home = parse(readFileSync(join(root, "src/content/home.md"), "utf8").split(/^---$/m)[1]);
+  for (const slug of writeupSlugs()) {
+    assert.deepEqual(Object.keys(home.projects?.[slug] ?? {}).filter((k) => k === "photo" || k === "demo"), [], `home.md: ${slug}`);
+    assert.match(readFileSync(join(writeupDir, `${slug}.md`), "utf8"), /^photo:\n  src: \/images\//m, `${slug}.md: photo`);
   }
 });
 

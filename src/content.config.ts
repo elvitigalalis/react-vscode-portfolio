@@ -12,6 +12,10 @@ const writeups = defineCollection({
     description: z.string(),
     // The 2-3 sentence result, shown under the header.
     summary: z.string(),
+    // The project card's photo on the home page: 640 px wide, with a -360 copy beside it.
+    photo: z.object({ src: z.string(), alt: z.string() }).optional(),
+    // The card's and the header's Demo or Video button, label and all.
+    demo: z.object({ url: z.string(), label: z.string() }).optional(),
     // Click-to-play clip under the summary: muted, captioned, never preloaded.
     video: z
       .object({

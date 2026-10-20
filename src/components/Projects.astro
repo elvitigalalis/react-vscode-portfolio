@@ -3,19 +3,22 @@
 // and Write-up / Code / Demo buttons, each shown only when its target exists.
 // Photos come in 640 px and 360 px widths (<name>.webp, <name>-360.webp). The first card's
 // photo can be in a phone's first viewport, so it is not lazy-loaded.
+// A project's photo and demo come from its write-up's front matter, or from home.md for a
+// project with no write-up.
+import { getCollection } from "astro:content";
 import Tags from "./Tags.astro";
 import { resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 
-const writeups = new Set(
-  Object.keys(import.meta.glob("../content/writeups/*.md")).map((f) => f.split("/").pop()!.replace(/\.md$/, "")),
-);
+const writeups = new Map((await getCollection("writeups")).map((w) => [w.id, w.data]));
 ---
 
 <section class="wrap" id="projects" aria-labelledby="projects-h">
   <h2 id="projects-h">Projects</h2>
   {resume.projects.map((p, i) => {
-    const extra = home.projects?.[p.slug] ?? {};
+    const card = home.projects?.[p.slug] ?? {};
+    const w = writeups.get(p.slug);
+    const extra = { summary: card.summary, photo: w ? w.photo : card.photo, demo: w ? w.demo : card.demo };
     return (
       <article class="card">
         {extra.photo && (

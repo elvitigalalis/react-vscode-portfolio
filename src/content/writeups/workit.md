@@ -12,6 +12,12 @@ summary: >-
   new-grad roles, and the GitHub Actions workflow that imports its results into PostgreSQL.
   Routine runs fell from 9.5 to about 3 minutes with every site paced as before, and the
   workflow's dry run on pull requests caught a database schema mismatch before it merged.
+photo:
+  src: /images/workit.webp
+  alt: WorkIt's landing page, with its headline and sign-up buttons above an illustrated city
+demo:
+  url: https://workit-web-gamma.vercel.app
+  label: Demo (in development, sign-in required)
 screenshot:
   src: /images/workit/landing.webp
   width: 960
