@@ -74,7 +74,9 @@ async function rest(path, { method = "GET", body, prefer, anon = false } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new SheetError(`${method} ${path.split("?")[0]}: ${res.status}`);
-  return res.status === 204 ? null : res.json();
+  // Writes without return=representation answer 201 or 204 with an empty body.
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // Public views, readable by anyone.
