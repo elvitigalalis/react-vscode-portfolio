@@ -12,6 +12,7 @@ import { schema } from "../check/schema.mjs";
 import { mirror } from "../check/mirror.mjs";
 import { routing } from "../check/routing.mjs";
 import { lint } from "../check/lint.mjs";
+import { length } from "../check/writeup.mjs";
 import { tags } from "../check/tags.mjs";
 import { html, links, lighthouse, a11y } from "../check/tools.mjs";
 import { escapeRe, ORIGIN, RESUME_PDF } from "../check/lib.mjs";
@@ -171,6 +172,27 @@ test("lint: numbers in links, image paths and YAML comments are not prose", asyn
   assert.deepEqual(await lint({ content, resume }), []);
   const front = writeup("summary: It ran 77 laps.\n", "Body.");
   assert.match((await lint({ content: front, resume })).join("\n"), /"77"/);
+});
+
+// --- length ---------------------------------------------------------------
+
+// A write-up page with `words` words of body text, `figures` figures, and a header, At a glance
+// box and captions full of words that must not count.
+const longPage = (words, figures) => page(`<article class="writeup"><header class="writeup-head"><h1>${"head ".repeat(300)}</h1></header>
+  <p class="tldr">${"word ".repeat(words)}</p><aside id="at-a-glance"><h2>At a glance</h2><ul><li>${"glance ".repeat(300)}</li></ul></aside>
+  ${`<figure><img src="/x.webp" alt="x"><figcaption>${"caption ".repeat(100)}</figcaption></figure>`.repeat(figures)}</article>`);
+
+test("length: passes on the real build", async () => {
+  assert.deepEqual(await length({ dist: realDist, resume }), []);
+});
+
+test("length: counts body text only, and fails over 1,200 words or 4 figures", async () => {
+  const file = `projects/${resume.projects[0].slug}/index.html`;
+  const at = async (words, figures) => length({ dist: broken((d) => write(d, file, longPage(words, figures))), resume });
+  assert.deepEqual(await at(1200, 4), []);
+  assert.deepEqual(await at(1201, 4), [`${file}: 1201 words, not 700 to 1200`]);
+  assert.deepEqual(await at(699, 2), [`${file}: 699 words, not 700 to 1200`]);
+  assert.deepEqual(await at(1000, 5), [`${file}: 5 figures, not 2 to 4`]);
 });
 
 // --- tags -----------------------------------------------------------------

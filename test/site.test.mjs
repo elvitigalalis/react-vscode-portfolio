@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { decode, escapeRe, files, imageSize, ORIGIN, RESUME_PDF, squash, textOf } from "../check/lib.mjs";
 import { BANNED, numbersIn } from "../check/lint.mjs";
 import { parse } from "yaml";
+import { FIGURES, WORDS, figureCount, wordCount, writeupText } from "../check/writeup.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const dist = join(root, "dist");
@@ -224,15 +225,18 @@ test("no built page carries an unanswered TODO(Lisul) marker", () => {
   assert.deepEqual(marked, []);
 });
 
-test("a write-up runs 700 to 1,200 words with 2 to 4 figures", () => {
+test("a write-up runs 700 to 1,200 words with 2 to 4 figures, by the length gate's rule", () => {
   for (const slug of writeupSlugs()) {
     const html = writeupHtml(slug);
-    const prose = html.match(/<div class="prose"[^>]*>([\s\S]*?)<\/div>\s*<nav class="writeup-end"/)[1];
-    const tldr = html.match(/<p class="tldr">([\s\S]*?)<\/p>/)[1];
-    const words = textOf(tldr + " " + prose.replace(/<figure[\s\S]*?<\/figure>/g, "")).split(" ").filter((w) => /\w/.test(w));
-    assert.ok(words.length >= 700 && words.length <= 1200, `${slug}: ${words.length} words`);
-    const figures = prose.match(/<figure\b/g) ?? [];
-    assert.ok(figures.length >= 2 && figures.length <= 4, `${slug}: ${figures.length} figures`);
+    const words = wordCount(html);
+    assert.ok(words >= WORDS.min && words <= WORDS.max, `${slug}: ${words} words`);
+    const figures = figureCount(html);
+    assert.ok(figures >= FIGURES.min && figures <= FIGURES.max, `${slug}: ${figures} figures, the lead clip or screenshot included`);
+    // The rule leaves out the header, At a glance and every figure, and counts the rest.
+    const text = writeupText(html);
+    assert.ok(text.startsWith(textOf(html.match(/<p class="tldr">([\s\S]*?)<\/p>/)[1]).trim()), `${slug}: counting starts at the summary`);
+    for (const left of ["At a glance", squash(resume.projects.find((p) => p.slug === slug).bullets[0])]) assert.ok(!text.includes(left), `${slug}: counts "${left}"`);
+    for (const cap of html.match(/<figcaption>[\s\S]*?<\/figcaption>/g)) assert.ok(!text.includes(textOf(cap).trim()), `${slug}: counts a caption`);
   }
 });
 
