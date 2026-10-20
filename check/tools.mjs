@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { htmlPages, serve } from "./lib.mjs";
+import { escapeRe, htmlPages, ORIGIN, serve } from "./lib.mjs";
 
 function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...opts });
@@ -25,7 +25,7 @@ export async function links({ dist }) {
   const online = process.env.CHECK_EXTERNAL_LINKS === "1";
   const r = run("lychee", [
     "--no-progress", "--include-fragments", "--root-dir", dist, "--index-files", "index.html",
-    "--remap", `^https://www\\.lisul-elvi\\.com file://${dist}`, "--exclude", String.raw`linkedin\.com`, ...(online ? ["--max-retries", "3"] : ["--offline"]), dist,
+    "--remap", `^${escapeRe(ORIGIN)} file://${dist}`, "--exclude", String.raw`linkedin\.com`, ...(online ? ["--max-retries", "3"] : ["--offline"]), dist,
   ]);
   if (r.status === 0) return [];
   const errors = lines(r).filter((l) => /ERROR|\[\d{3}\]|Timeout/i.test(l));

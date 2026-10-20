@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { decode, files, imageSize, squash, textOf } from "../check/lib.mjs";
+import { decode, escapeRe, files, imageSize, ORIGIN, RESUME_PDF, squash, textOf } from "../check/lib.mjs";
 import { BANNED, numbersIn } from "../check/lint.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -39,14 +39,14 @@ test("every resume.json link is a working href on the home page", () => {
 
 test("a plain 404 page exists with the top bar", () => {
   const page = readFileSync(join(dist, "404.html"), "utf8");
-  assert.match(page, /href="\/Lisul_Elvitigala_resume\.pdf"/);
+  assert.ok(page.includes(`href="${RESUME_PDF}"`));
   assert.match(page, /href="\/#projects"/);
 });
 
 test("the résumé PDF keeps its old public path", () => {
-  const pdf = readFileSync(join(dist, "Lisul_Elvitigala_resume.pdf"));
+  const pdf = readFileSync(join(dist, RESUME_PDF));
   assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
-  assert.match(home, /href="\/Lisul_Elvitigala_resume\.pdf"/);
+  assert.ok(home.includes(`href="${RESUME_PDF}"`));
 });
 
 test("no client JS beyond the inline hash script", () => {
@@ -122,7 +122,7 @@ test("a write-up's header and At a glance mirror its résumé project verbatim",
     const html = writeupHtml(slug);
     const header = textOf(html.match(/<header class="writeup-head"[\s\S]*?<\/header>/)[0]);
     for (const f of [p.title, p.role, p.dates, ...p.stack].filter(Boolean)) assert.ok(header.includes(squash(f)), f);
-    assert.match(html, new RegExp(`href="${p.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`));
+    assert.match(html, new RegExp(`href="${escapeRe(p.url)}"`));
     const glance = textOf(html.match(/<aside[^>]*id="at-a-glance"[\s\S]*?<\/aside>/)[0]);
     assert.deepEqual(p.bullets.filter((b) => !glance.includes(squash(b))), []);
   }
@@ -144,7 +144,7 @@ test("a write-up ends with links back to all projects and the résumé", () => {
   for (const slug of writeupSlugs()) {
     const end = writeupHtml(slug).match(/<nav class="writeup-end"[\s\S]*?<\/nav>/)[0];
     assert.match(end, /href="\/#projects"[^>]*>← All projects</);
-    assert.match(end, /href="\/Lisul_Elvitigala_resume\.pdf"/);
+    assert.ok(end.includes(`href="${RESUME_PDF}"`));
   }
 });
 
@@ -156,7 +156,7 @@ test("each write-up has its own title, description and absolute canonical", () =
   assert.equal(new Set(titles).size, pages.length);
   assert.equal(new Set(descs).size, pages.length);
   for (const slug of writeupSlugs()) {
-    assert.match(writeupHtml(slug), new RegExp(`<link rel="canonical" href="https://www\\.lisul-elvi\\.com/projects/${slug}/"`));
+    assert.match(writeupHtml(slug), new RegExp(`<link rel="canonical" href="${escapeRe(ORIGIN)}/projects/${slug}/"`));
   }
 });
 
@@ -298,7 +298,6 @@ test("the Micromouse run clip is click-to-play, muted, captioned, credited and l
 });
 
 // ---- SEO and link previews (the tag gate) ----
-const ORIGIN = "https://www.lisul-elvi.com";
 const pages = () => builtFiles().filter((f) => f.endsWith(".html")).map((file) => ({ file, html: readFileSync(file, "utf8") }));
 const indexable = () => pages().filter((p) => !p.file.endsWith("/404.html"));
 const tags = (html, re) => [...html.matchAll(re)].map((m) => m[1]);
@@ -350,7 +349,7 @@ test("every indexable page has full Open Graph and Twitter card tags", () => {
     assert.equal(one("og:url"), tags(html, /<link rel="canonical" href="([^"]*)"/g)[0], file);
     assert.equal(one("og:type"), "website");
     assert.equal(one("og:site_name"), resume.basics.name);
-    assert.match(one("og:image"), new RegExp(`^${ORIGIN}/`), file);
+    assert.match(one("og:image"), new RegExp(`^${escapeRe(ORIGIN)}/`), file);
     assert.equal(one("og:image:width"), "1200");
     assert.equal(one("og:image:height"), "630");
     assert.ok(one("og:image:alt").length >= 10, `${file}: og:image:alt`);
@@ -376,7 +375,7 @@ test("the sitemap lists exactly the indexable pages, and robots.txt points to it
   const robots = readFileSync(join(dist, "robots.txt"), "utf8");
   const line = robots.match(/^Sitemap: (\S+)$/m);
   assert.ok(line, "robots.txt has a Sitemap: line");
-  assert.match(line[1], new RegExp(`^${ORIGIN}/`));
+  assert.match(line[1], new RegExp(`^${escapeRe(ORIGIN)}/`));
   const locs = (path) => tags(readFileSync(join(dist, new URL(path).pathname), "utf8"), /<loc>([^<]*)<\/loc>/g);
   const sitemaps = /index\.xml$/.test(line[1]) ? locs(line[1]) : [line[1]];
   const urls = sitemaps.flatMap(locs).sort();

@@ -7,9 +7,8 @@
 // Sitemap: line in robots.txt.
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { decode, htmlPages, imageSize } from "./lib.mjs";
+import { decode, htmlPages, imageSize, ORIGIN } from "./lib.mjs";
 
-const ORIGIN = "https://www.lisul-elvi.com";
 const OG = ["og:title", "og:description", "og:url", "og:type", "og:site_name", "og:image", "og:image:width", "og:image:height", "og:image:alt"];
 const MAX_IMAGE = 300 * 1024;
 

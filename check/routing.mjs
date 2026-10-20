@@ -2,8 +2,9 @@
 // keeps its old path, and the inline script sends old #/section hashes to #section.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { RESUME_PDF } from "./lib.mjs";
 
-const PDF = "Lisul_Elvitigala_resume.pdf";
+const PDF = RESUME_PDF.slice(1);
 
 export async function routing({ dist }) {
   const problems = [];
