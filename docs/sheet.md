@@ -137,7 +137,7 @@ A skipped shutdown costs nothing: the nightly rollover does the same move.
   private task's block, "Heads down"; otherwise nothing. It refreshes every minute.
 - Each day can carry **"Planned ✓"** and **"Shut down ✓"** stamps. No times.
 - A done public task whose tag matches a write-up (`#workit`, `#micromouse`) links to it.
-- A handwritten-style margin note in the site's own type: *P.S. the black bars are life stuff.*
+- A handwritten-style margin note in the site's own type: *P.S. the redacted bars are life stuff.*
 - **Never shown:** times, estimates, Someday lists, rollover counts, reflections, Google events,
   streaks, totals. "Last updated" shows the date only.
 - One small reward when every task today is done: the day's header gets a check mark (no
