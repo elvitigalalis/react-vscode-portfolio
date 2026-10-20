@@ -14,7 +14,7 @@ summary: >-
   workflow's dry run on pull requests caught a database schema mismatch before it merged.
 photo:
   src: /images/workit.webp
-  alt: WorkIt's landing page, with its headline and sign-up buttons above an illustrated city
+  alt: WorkIt's job board, listing internship postings with location, pay and start date beside a match score for each
 demo:
   url: https://workit-web-gamma.vercel.app
   label: Demo (in development, sign-in required)
