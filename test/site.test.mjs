@@ -26,6 +26,18 @@ function build(env = {}, args = []) {
   });
 }
 
+// The text a reader sees: tags dropped, entities decoded, whitespace collapsed.
+function textOf(html) {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/g, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ");
+}
+const squash = (s) => s.replace(/\s+/g, " ");
+
 let home;
 before(() => {
   const r = build();
