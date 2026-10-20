@@ -176,6 +176,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-nowline { position: absolute; left: 0; right: 0; border-top: 1px solid #b91c1c; pointer-events: none; }
 .sheet-dialog-end { display: flex; justify-content: flex-end; margin-top: 1rem; }
 .sheet-plan .sheet-task { cursor: grab; }
+.sheet-plan .sheet-task.is-picked { background: var(--chip); border-bottom-color: var(--accent); }
+.sheet-plan .sheet-title { cursor: pointer; }
+@media (max-width: 40rem) { .sheet-timeline-wrap { max-height: 45vh; } }
 
 /* Shutdown. */
 .sheet-shut { width: min(40rem, calc(100vw - 2rem)); }
