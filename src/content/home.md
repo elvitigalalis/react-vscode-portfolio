@@ -21,23 +21,16 @@ roles:
     On the CleverCAD team, I fixed and fuzz-tested a fleet-management REST API and ended a
     production outage.
 
-# Card text per project, keyed by resume.json slug.
+# Card summary per project, keyed by resume.json slug. A project with a write-up keeps its card
+# photo and demo in the write-up's front matter; one without a write-up may set `photo` and
+# `demo` here instead.
 projects:
   micromouse:
     summary: >-
       A small robot that maps an unknown maze and races to its centre. I captain Stony Brook's
       IEEE team and wrote the 2026 robot's firmware.
-    photo:
-      src: /images/micromouse.webp
-      alt: Close-up of a micromouse circuit board under a microscope, its traces and solder pads magnified
   workit:
     summary: >-
       A job board for internship and new-grad roles. I built the scraper that finds them and
       scheduled its import into the database.
-    photo:
-      src: /images/workit.webp
-      alt: WorkIt's landing page, with its headline and sign-up buttons above an illustrated city
-    demo:
-      url: https://workit-web-gamma.vercel.app
-      label: Demo (in development, sign-in required)
 ---
