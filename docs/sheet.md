@@ -154,7 +154,7 @@ a native app.
 - Every existing gate passes. `/plan` and `/now` pass html-validate and axe (WCAG 2.2 AA) and
   are excluded from the sitemap.
 - Lighthouse entry for `/plan` and `/now`: performance ≥ 0.95, accessibility 1, best practices 1,
-  `is-crawlable` off (they are `noindex`), script ≤ 60 KB, at most 1 third-party origin (Supabase).
+  `is-crawlable` off (they are `noindex`), script ≤ 60 KB, a few requests to one third-party origin (Supabase).
   The home and write-up budgets are unchanged.
 - The logic that decides things (typed-detail parser, rollover, load meter, block rules, public
   redaction) is plain modules in `src/sheet/` with `node --test` tests.

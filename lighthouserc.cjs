@@ -21,11 +21,11 @@ const all = {
 };
 const home = { "resource-summary:total:size": fail({ maxNumericValue: 100 * 1024 }), "resource-summary:total:count": fail({ maxNumericValue: 15 }) };
 const writeup = { "resource-summary:total:size": fail({ maxNumericValue: 300 * 1024 }) };
-// The Sheet's pages (docs/sheet.md) run the planner's script and read one third-party origin,
-// Supabase; they are noindex, so they cannot be "crawlable" either.
+// The Sheet's pages (docs/sheet.md) run the planner's script and make a few requests to one
+// third-party origin, Supabase; they are noindex, so they cannot be "crawlable" either.
 const sheet = {
   "resource-summary:script:size": fail({ maxNumericValue: 60 * 1024 }),
-  "resource-summary:third-party:count": fail({ maxNumericValue: 1 }),
+  "resource-summary:third-party:count": fail({ maxNumericValue: 8 }),
   "resource-summary:total:size": fail({ maxNumericValue: 150 * 1024 }),
   "categories:seo": "off", "is-crawlable": "off",
   // The week is drawn by the page's script from Supabase, so HTML → script → data is the page

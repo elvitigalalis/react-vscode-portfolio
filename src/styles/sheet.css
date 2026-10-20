@@ -8,7 +8,11 @@
   clip-path: inset(50%); white-space: nowrap;
 }
 
-.sheet-now { margin: 0 0 1rem; font-size: 1.0625rem; }
+/* The page keeps its shape while the week loads: the Right now line holds its height when empty
+   and the week area starts tall, so nothing below it jumps (Lighthouse CLS). */
+.sheet-now { margin: 0 0 1rem; font-size: 1.0625rem; min-height: 1.6em; }
+.sheet-now.is-empty { visibility: hidden; }
+.sheet-week-public { min-height: 60vh; align-content: start; }
 .sheet-label { color: var(--muted); font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.4rem; }
 .sheet-status { color: var(--muted); }
 
@@ -188,3 +192,4 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.5rem;
 }
 .sheet-dialog-end { gap: 0.5rem; }
+.sheet-week > .sheet-status { grid-column: 1 / -1; }
