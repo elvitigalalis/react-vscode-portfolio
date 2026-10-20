@@ -92,6 +92,10 @@
   border: 0; padding: 0; outline-offset: 2px;
 }
 .sheet-row.is-empty { cursor: text; }
+/* The add row's hint shows on hover and focus, and always on touch screens. */
+.sheet-add::placeholder { color: transparent; }
+.sheet-rows:hover .sheet-add::placeholder, .sheet-add:focus::placeholder { color: var(--muted); }
+@media (hover: none) { .sheet-add::placeholder { color: var(--muted); } }
 .sheet-rows.is-drop { background: var(--chip); }
 .is-ghost { opacity: 0.25; }
 .sheet-float {
