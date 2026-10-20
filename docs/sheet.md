@@ -35,8 +35,8 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
   right even on days Lisul never opens the planner.
 - **Config** lives in `src/site.mjs` as `SHEET = { supabaseUrl, anonKey, ownerEmail, timeZone,
   publicTags }`; all public values. Empty `supabaseUrl` → both pages say "not set up yet".
-- **Inactivity:** Supabase pauses free projects after a week with no requests. A weekly GitHub
-  Actions job reads `public_now` to keep it awake.
+- **Inactivity:** Supabase pauses free projects after a week with no requests. A GitHub Actions
+  job (`sheet-keepalive.yml`) reads `public_now` twice a week to keep it awake.
 
 ## Data
 
@@ -163,11 +163,16 @@ a native app.
 
 ## Setup Lisul does once
 
-1. Create a Supabase project; run `supabase/schema.sql` in its SQL editor.
-2. Google Cloud: OAuth client (web), add the two Calendar scopes, add himself as a test user.
-3. Supabase Auth: enable Google with that client; add `https://www.lisul-elvi.com/plan` as a
-   redirect URL.
-4. Put the project URL, anon key and his Google email in `SHEET` in `src/site.mjs`.
+1. Create a Supabase project. In `supabase/schema.sql`, replace `you@example.com` with the
+   Google account he will sign in with, then run the file in the project's SQL editor.
+2. Google Cloud: create an OAuth client (type "Web application") with Supabase's callback URL
+   (`https://<project>.supabase.co/auth/v1/callback`) as its redirect URI. On the consent
+   screen, add the scopes `calendar.app.created` and `calendar.events.readonly`, and add
+   himself as a test user.
+3. Supabase → Authentication → Providers: enable Google with that client's ID and secret.
+   Authentication → URL Configuration: add `https://www.lisul-elvi.com/plan/` (and
+   `http://localhost:4321/plan/` for local work) to the redirect URLs.
+4. Put the project URL and anon key in `SHEET` in `src/site.mjs`, push, and sign in at `/plan`.
 
 ## Sources
 
