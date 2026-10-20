@@ -162,6 +162,9 @@ a native app.
 
 ## Setup Lisul does once
 
+`bash tools/sheet-setup.sh` walks through these steps one screen at a time, checks each one
+worked, and writes the values into `src/site.mjs`.
+
 1. Create a Supabase project. In `supabase/schema.sql`, replace `you@example.com` with the
    Google account he will sign in with, then run the file in the project's SQL editor.
 2. Google Cloud: create an OAuth client (type "Web application") with Supabase's callback URL
