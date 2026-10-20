@@ -16,6 +16,7 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn" data-act="this-week">Today</button>
         <button type="button" class="sheet-btn" data-act="next-week" aria-label="Next week">→</button>
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
+        <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
       </div>
@@ -49,6 +50,7 @@ import "../../styles/sheet.css";
         <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>~45m · @3pm · #tag · !public</dt><dd>Estimate, fixed time, tag, visibility</dd>
         <dt>P</dt><dd>Plan today</dd>
+        <dt>O</dt><dd>Shut down</dd>
         <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
         <dt>← →</dt><dd>Previous or next week</dd>
         <dt>T</dt><dd>This week</dd>
@@ -59,6 +61,7 @@ import "../../styles/sheet.css";
     </dialog>
 
     <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
+    <dialog class="sheet-dialog sheet-shut" data-shut aria-labelledby="sheet-shut-title"></dialog>
 
   </section>
 </Base>
@@ -66,5 +69,6 @@ import "../../styles/sheet.css";
 <script>
   import { start } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday]);
+  import { setupShutdown } from "../../sheet/shutdown.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown]);
 </script>
