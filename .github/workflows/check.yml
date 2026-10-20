@@ -1,5 +1,6 @@
 # The built-site gate suite (npm run check) and its fixture tests (npm test), on every push and PR.
-# The weekly run also checks external links, which can flake, so pushes check internal ones only.
+# Every run checks external links too (LinkedIn excluded, a 429 accepted after retries); the
+# weekly run catches links that rot between pushes.
 name: Check
 on:
   push:
@@ -38,6 +39,8 @@ jobs:
       - name: Gate suite
         run: npm run check
         env:
-          CHECK_EXTERNAL_LINKS: ${{ github.event_name == 'schedule' && '1' || '' }}
+          CHECK_EXTERNAL_LINKS: "1"
+          # lychee sends it with github.com requests, which raises GitHub's rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
       - name: Gate fixture tests
         run: npm test
