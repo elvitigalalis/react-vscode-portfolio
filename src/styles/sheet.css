@@ -1,5 +1,6 @@
 /* The Sheet (/plan and /now): ruled paper rows, bold uppercase day names, today in the accent
    colour only. Same tokens as global.css; motion is a 0.25 s fade, off when reduced. */
+.sheet-page [hidden] { display: none !important; }
 .sheet-page { max-width: 80rem; margin: 0 auto; padding: 2rem 1rem 1rem; --row: 2.1rem; }
 .sheet-page h1 { font-size: clamp(1.75rem, 6vw, 2.25rem); letter-spacing: -0.01em; margin-bottom: 0.75rem; }
 .visually-hidden {
