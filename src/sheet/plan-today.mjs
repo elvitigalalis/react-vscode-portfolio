@@ -89,7 +89,7 @@ function draw() {
         Object.assign(el("button", { type: "button", className: "sheet-link", textContent: "Connect" }), { onclick: api.signIn }));
 
   const scroll = dialog.querySelector(".sheet-timeline-wrap")?.scrollTop;
-  dialog.replaceChildren(
+  dialog.replaceChildren(...[
     el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekday.charAt(0)}${weekday.slice(1).toLowerCase()} ${date}` }),
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
@@ -101,7 +101,7 @@ function draw() {
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
     el("form", { method: "dialog", className: "sheet-dialog-end" },
       el("button", { type: "submit", className: "sheet-btn primary", value: "done", textContent: "Done" })),
-  );
+  ].filter(Boolean));
   if (scroll != null) dialog.querySelector(".sheet-timeline-wrap").scrollTop = scroll;
 }
 
