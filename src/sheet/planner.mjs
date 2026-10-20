@@ -303,7 +303,7 @@ function openMenu(id, anchor) {
   const t = state.tasks.get(id);
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
   const r = anchor.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 260)}px`;
+  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 330)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
   menu.querySelector("button").focus();
@@ -318,6 +318,10 @@ async function menuAction(kind) {
     if (kind === "today") await moveTask(id, { day: today });
     if (kind === "tomorrow") await moveTask(id, { day: addDays(today, 1) });
     if (kind === "next-week") await moveTask(id, { day: addDays(weekStart(today), 7) });
+    // One day either way from where it is now; a Someday task counts from today.
+    if (kind === "day-before" || kind === "day-after") {
+      await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
+    }
     if (kind === "someday") await moveTask(id, { list: "Inbox" });
     if (kind === "visibility") await toggleVisibility(id);
     if (kind === "delete") await removeTask(id);
