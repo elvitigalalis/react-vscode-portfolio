@@ -38,11 +38,8 @@
   border-bottom: 1px solid var(--line); font-size: 0.9375rem; line-height: 1.25; padding: 0.25rem 0;
   overflow-wrap: anywhere;
 }
-/* One line per row, like ruled paper; the full text is in the title attribute. Phones wrap. */
-.sheet-row > span:not(.sheet-bar, .visually-hidden), .sheet-row > a, .sheet-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@media (max-width: 48rem) {
-  .sheet-row > span:not(.sheet-bar, .visually-hidden), .sheet-row > a, .sheet-title { white-space: normal; }
-}
+/* Long titles wrap onto more lines so the whole task is always readable. */
+.sheet-row > span:not(.sheet-bar, .visually-hidden), .sheet-row > a, .sheet-title { min-width: 0; }
 .sheet-stamps { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Done reads as faded but keeps WCAG contrast: muted ink and a strike, not low opacity. Bars
    carry no text, so they can fade. */
@@ -165,12 +162,12 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-hour { position: absolute; left: -3.25rem; right: 0; border-top: 1px solid var(--line); font-size: 0.6875rem; color: var(--muted); padding-left: 0.3rem; }
 .sheet-event, .sheet-block, .sheet-preview {
   position: absolute; left: 0.25rem; right: 0.5rem; border-radius: 0.3rem; padding: 0.1rem 0.4rem;
-  font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 0.75rem; line-height: 1.25; overflow: hidden; overflow-wrap: anywhere;
 }
 .sheet-event { background: var(--chip); color: var(--muted); }
 .sheet-block { background: color-mix(in srgb, var(--accent) 22%, var(--bg)); border-left: 3px solid var(--accent); display: flex; gap: 0.3rem; }
 .sheet-block.is-done { opacity: 0.4; }
-.sheet-block-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sheet-block-title { flex: 1; min-width: 0; overflow: hidden; }
 .sheet-block-x { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 0.2rem; align-self: flex-start; }
 .sheet-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; touch-action: none; }
 .sheet-preview { border: 1px dashed var(--accent); color: var(--accent); pointer-events: none; }
