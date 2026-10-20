@@ -60,4 +60,29 @@ writeFileSync(join(out, "favicon.ico"), ico([[16, p16], [32, p32]]));
 // No web manifest: the site is not an installable app, and Lighthouse counts the manifest
 // fetch as a render-blocking chain.
 png(mark({ radius: 0, scale: 0.8 }), 180, "apple-touch-icon.png");
-execFileSync("rm", ["-r", tmp, join(out, "favicon-16.png"), join(out, "favicon-32.png")]);
+execFileSync("rm", [join(out, "favicon-16.png"), join(out, "favicon-32.png")]);
+
+// The link-preview image, 1200×630: the mark, name, role and one line, in the site's colours
+// and system font, drawn by headless Chrome. Everything sits in the middle so a square crop
+// (iMessage, WhatsApp) keeps the mark and most of the name.
+const og = `<!doctype html><meta charset="utf-8"><style>
+html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+body { background: #fbfaf8; color: #1c1917; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+svg { width: 96px; height: 96px; margin-bottom: 40px; }
+h1 { margin: 0; font-size: 88px; font-weight: 700; letter-spacing: -0.025em; line-height: 1; }
+.role { margin: 22px 0 0; font-size: 40px; font-weight: 600; color: #9a3412; }
+.line { margin: 14px 0 0; font-size: 30px; color: #57534e; }
+.site { position: absolute; bottom: 40px; font-size: 22px; color: #57534e; letter-spacing: 0.02em; }
+</style>
+${mark()}
+<h1>Lisul Elvitigala</h1>
+<p class="role">Software Engineer</p>
+<p class="line">Computer Science at Stony Brook University</p>
+<p class="site">lisul-elvi.com</p>`;
+const page = join(tmp, "og.html");
+writeFileSync(page, og);
+const chrome = process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+execFileSync(chrome, ["--headless=new", "--hide-scrollbars", "--force-device-scale-factor=1",
+  "--window-size=1200,630", `--screenshot=${join(out, "og.png")}`, `file://${page}`], { stdio: "ignore" });
+execFileSync("rm", ["-r", tmp]);
