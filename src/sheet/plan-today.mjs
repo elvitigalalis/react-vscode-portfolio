@@ -61,7 +61,7 @@ function draw() {
     const top = minutesOn(b.starts_at, day, SHEET.timeZone);
     const end = minutesOn(b.ends_at, day, SHEET.timeZone);
     const box = el("div", { className: `sheet-block${t.done ? " is-done" : ""}` },
-      el("span", { className: "sheet-block-title", textContent: `${t.title}${b.gcal_id ? "" : " (not in Google)"}` }),
+      el("span", { className: "sheet-block-title", textContent: `${t.title}${b.gcal_id ? "" : " (not in Google)"}`, title: t.title }),
       el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `Remove block for ${t.title}` }),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
