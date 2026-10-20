@@ -62,8 +62,7 @@ tasks jumping days across time zones.
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
 - **No notifications, badges or sounds.** Google Calendar does any reminding.
-- Week navigation: `←` `→` change week, `T` jumps to this week; the week heading also returns to
-  today.
+- Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
 - The site's own colours, system fonts, light and dark mode. Motion is limited to 0.25 s opacity
@@ -109,7 +108,7 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
   is created as an event on the "Time blocks" Google calendar: its title is the task's title if
   public, **"Busy" if private** (Ellie's privacy mode). One task may have several blocks.
 - **Resizing a block writes the new length back to the estimate** and the meter updates at once.
-- `D` sends the selected task to tomorrow, `Z` to Someday.
+- `D` sends the focused task to tomorrow, `Z` to Someday.
 - Opening it after 3 pm plans tomorrow instead.
 - "Done" closes it and marks the day planned.
 
@@ -123,7 +122,7 @@ block never deletes the task. Changing one block never moves another.
 The "Shut down" button appears on today's header from two hours before shutdown time (`O` works
 any time).
 
-1. Two columns, **Done** and **Missed**. Dragging between them completes or reopens a task.
+1. Two columns, **Done** and **Missed**. Clicking a task moves it to the other column.
 2. One box: *What went well, what got in the way?* (private, always).
 3. **Finish:** nothing is saved before this. Missed tasks move to tomorrow (counted as a roll),
    the day is marked shut down and gets a "Shutdown complete" stamp.
