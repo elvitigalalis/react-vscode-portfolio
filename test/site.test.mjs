@@ -375,15 +375,16 @@ test("every indexable page has full Open Graph and Twitter card tags", () => {
     assert.equal(one("og:image:height"), "630");
     assert.ok(one("og:image:alt").length >= 10, `${file}: og:image:alt`);
     assert.equal(one("twitter:card"), "summary_large_image");
+    assert.equal(one("twitter:image"), one("og:image"), `${file}: X gets the same image`);
   }
 });
 
-test("the preview image is 1200×630 and at most 300 KB", () => {
+test("the preview image is a 1200×630 PNG of at most 300 KB", () => {
   const url = decode(meta(home, "og:image")[0]);
   const buf = readFileSync(join(dist, new URL(url).pathname));
   assert.ok(buf.length <= 300 * 1024, `${buf.length} bytes`);
-  const { width, height } = imageSize(buf) ?? {};
-  assert.deepEqual({ width, height }, { width: 1200, height: 630 });
+  const { type, width, height } = imageSize(buf) ?? {};
+  assert.deepEqual({ type, width, height }, { type: "png", width: 1200, height: 630 });
 });
 
 test("iMessage gets a square 180×180 touch icon", () => {

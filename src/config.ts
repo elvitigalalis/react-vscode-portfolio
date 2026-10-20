@@ -7,11 +7,13 @@ export const siteConfig = {
   description:
     "Lisul Elvitigala, software engineer and Stony Brook computer science student: projects, experience, education and skills, with the résumé PDF.",
   resumePdf: RESUME_PDF,
-  // The link-preview image: 1200×630, no text in it (Apple and LinkedIn crop or reject otherwise).
+  // The link-preview image: 1200×630 PNG drawn by tools/brand.mjs. Name, role and one line,
+  // large and centred so a square crop (iMessage, WhatsApp) keeps them; PNG because LinkedIn
+  // does not take WebP; under WhatsApp's ~300 KB ceiling.
   ogImage: {
-    src: "/og.jpg",
+    src: "/og.png",
     width: 1200,
     height: 630,
-    alt: "Close-up of the micromouse robot's circuit board under a microscope: gold solder pads and green traces",
+    alt: "Lisul Elvitigala, Software Engineer: Computer Science at Stony Brook University",
   },
 };
