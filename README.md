@@ -36,6 +36,14 @@ push and PR. `node check/run.mjs <gate>` runs one gate over an existing `dist/`.
 | a11y | pa11y-ci with axe, WCAG 2.2 AA, on every page |
 | lighthouse | Lighthouse CI, mobile, budgets in `lighthouserc.cjs` |
 
+## The Sheet
+
+A weekly planner at `/plan` (Lisul only, Google sign-in) with a public view at `/now`, where
+private tasks show as black bars. Spec and one-time setup: [`docs/sheet.md`](docs/sheet.md).
+Code: `src/sheet/` (logic in `logic.mjs`, tested by `test/sheet.test.mjs`), the pages in
+`src/pages/plan` and `src/pages/now`, the database in `supabase/schema.sql`. Until `SHEET` in
+`src/site.mjs` has a Supabase URL, both pages say "not set up yet".
+
 ## Content notes
 
 - **Where content lives.** Résumé facts come only from `src/data/resume.json`. The home page's
