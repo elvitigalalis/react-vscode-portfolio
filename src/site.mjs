@@ -14,4 +14,7 @@ export const SHEET = {
   timeZone: "America/New_York",
   capacityMin: 330,
   shutdownAt: "17:00",
+  // The part of each day counted as free time for tasks, around his calendar events.
+  dayStartAt: "09:30",
+  dayEndAt: "22:00",
 };

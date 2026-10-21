@@ -4,7 +4,8 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
-  positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete,
+  positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock,
+  eventsOnDay, visibleEvents,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
 
@@ -26,6 +27,8 @@ export const state = {
   lists: new Set(["Inbox"]),
   parked: 0,
   calendars: [],    // extra Google calendar IDs, from settings
+  events: [],       // the week's Google events, never saved
+  eventsStale: false,
 };
 
 let root;
@@ -34,6 +37,7 @@ const now = () => localNow(new Date(), SHEET.timeZone);
 
 const tasksOn = (day) => [...state.tasks.values()].filter((t) => t.day === day).sort(byPosition);
 const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null && t.list === list).sort(byPosition);
+export const eventsOn = (day) => eventsOnDay(state.events, day, SHEET.timeZone);
 const lastPosition = (siblings) => (siblings.length ? siblings[siblings.length - 1].position : null);
 
 function setStatus(text) {
@@ -196,7 +200,45 @@ function addRow(where, label) {
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
 
-function dayColumn(day, rows) {
+// His calendar for the day, in gray above the tasks: read-only, and a click opens Google. A
+// busy day shows four and folds the rest into "+N more".
+const MAX_EVENTS = 4;
+const openEvents = new Set();
+
+function eventLines(day) {
+  const evs = eventsOn(day);
+  const nowMin = day === state.today ? now().minutes : null;
+  const all = openEvents.has(day);
+  const { shown, hidden } = all ? { shown: evs, hidden: 0 } : visibleEvents(evs, MAX_EVENTS, nowMin);
+  return { evs, nowMin, all, shown, hidden, lines: shown.length + (hidden || (all && evs.length > MAX_EVENTS) ? 1 : 0) };
+}
+
+// Every column's calendar takes as many lines as the busiest day's, so the task lines below
+// stay level across the week.
+function eventList(day, height) {
+  if (!height) return null;
+  const { evs, nowMin, all, shown, hidden, lines } = eventLines(day);
+  const ul = el("ul", { className: "sheet-events" }, ...shown.map((e) => {
+    const past = nowMin != null && !e.allDay && e.end <= nowMin;
+    const name = e.link
+      ? el("a", { href: e.link, target: "_blank", rel: "noopener", textContent: e.title, title: e.title })
+      : el("span", { textContent: e.title, title: e.title });
+    return el("li", { className: `sheet-event-row${past ? " is-past" : ""}` },
+      el("span", { className: "sheet-event-time", textContent: e.allDay ? "all day" : formatClock(Math.max(0, e.start)).replace(":00", "") }),
+      name);
+  }));
+  ul.setAttribute("aria-label", "Calendar");
+  if (hidden || (all && evs.length > MAX_EVENTS)) {
+    const more = el("button", { type: "button", className: "sheet-link sheet-events-more", textContent: hidden ? `+${hidden} more` : "Show less" });
+    more.dataset.act = "toggle-events";
+    more.dataset.day = day;
+    ul.append(el("li", {}, more));
+  }
+  for (let i = lines; i < height; i++) ul.append(el("li", { className: "sheet-event-row is-blank", ariaHidden: "true", textContent: "\u00a0" }));
+  return ul;
+}
+
+function dayColumn(day, rows, eventRows) {
   const list = tasksOn(day);
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
@@ -212,6 +254,7 @@ function dayColumn(day, rows) {
       allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
       day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     el("p", { className: "sheet-stamps", textContent: marks }),
+    eventList(day, eventRows),
     ul);
   section.dataset.day = day;
   return section;
@@ -230,7 +273,8 @@ export function render() {
   const days = weekDays(state.week);
   if (!days.includes(state.focus)) state.focus = days.includes(state.today) ? state.today : days[0];
   const rows = rowCount(Object.fromEntries(days.map((d) => [d, tasksOn(d)])));
-  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows)));
+  const eventRows = Math.max(...days.map((d) => eventLines(d).lines));
+  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, eventRows)));
   const first = dayLabel(days[0]);
   $("[data-week-title]").textContent = `Week of ${first.date}`;
 
@@ -238,6 +282,9 @@ export function render() {
   const newList = el("input", { className: "sheet-add sheet-newlist", type: "text", autocomplete: "off", placeholder: "New list…", ariaLabel: "New Someday list" });
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
+
+  const stale = $("[data-events-stale]");
+  stale.hidden = !state.eventsStale;
 
   const notice = $("[data-notice]");
   notice.hidden = !state.parked;
@@ -253,18 +300,43 @@ export const renderHooks = [];
 
 export async function load() {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayRows, parked] = await Promise.all([
+  const [tasks, blocks, dayRows, parked, settings] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
     api.parkedOn(state.today),
+    api.settings(),
   ]);
+  state.calendars = settings?.calendars ?? [];
+  await loadEvents(days);
   state.tasks = new Map(tasks.map((t) => [t.id, t]));
   state.blocks = blocks;
   state.days = Object.fromEntries(dayRows.map((d) => [d.day, d]));
   state.parked = parked.length;
   render();
   scrollToToday($("[data-week]"));
+}
+
+// Google's access lasts an hour. Until he reconnects, the week shows the last copy of its
+// events kept in this browser, and says so.
+const EVENTS_KEY = "sheet.events.";
+
+async function loadEvents(days) {
+  const key = EVENTS_KEY + days[0];
+  if (api.googleReady()) {
+    try {
+      state.events = await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone), state.calendars);
+      state.eventsStale = false;
+      try { localStorage.setItem(key, JSON.stringify(state.events)); } catch {}
+      return;
+    } catch (e) { console.error(e); }
+  }
+  try { state.events = JSON.parse(localStorage.getItem(key)) ?? []; } catch { state.events = []; }
+  state.eventsStale = true;
+}
+
+function forgetEvents() {
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith(EVENTS_KEY)) localStorage.removeItem(k); } catch {}
 }
 
 async function showWeek(monday) {
@@ -438,7 +510,13 @@ function wire() {
       }
       if (act === "help") return $("[data-help]").showModal();
       if (act === "undo") return undo();
-      if (act === "sign-out") { api.signOut(); location.reload(); return; }
+      if (act === "sign-out") { api.signOut(); forgetEvents(); location.reload(); return; }
+      if (act === "toggle-events") {
+        const day = e.target.closest("[data-day]").dataset.day;
+        if (!openEvents.delete(day)) openEvents.add(day);
+        return render();
+      }
+      if (act === "connect") return api.signIn();
       return actHooks[act]?.();
     }
     const move = e.target.closest("[data-move]")?.dataset.move;
