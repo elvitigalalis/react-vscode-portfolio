@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock,
-  eventsOnDay, visibleEvents,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
 
@@ -38,6 +38,15 @@ const now = () => localNow(new Date(), SHEET.timeZone);
 const tasksOn = (day) => [...state.tasks.values()].filter((t) => t.day === day).sort(byPosition);
 const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null && t.list === list).sort(byPosition);
 export const eventsOn = (day) => eventsOnDay(state.events, day, SHEET.timeZone);
+const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+
+// Time for tasks on a day: the 5h30 budget, or less when his events leave less free time
+// between 9:30 am and 10 pm (on today, between now and 10 pm).
+export function dayCapacity(day) {
+  const from = Math.max(clock(SHEET.dayStartAt), day === state.today ? now().minutes : 0);
+  const free = freeMinutes(eventsOn(day), from, clock(SHEET.dayEndAt));
+  return { free, capacity: Math.min(SHEET.capacityMin, free) };
+}
 const lastPosition = (siblings) => (siblings.length ? siblings[siblings.length - 1].position : null);
 
 function setStatus(text) {
@@ -181,11 +190,13 @@ export function taskRow(t) {
   li.dataset.id = t.id;
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
-  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}. Edit`);
+  const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
+  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${t.rolls} time${t.rolls > 1 ? "s" : ""}` }) : null,
     title,
     t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
+    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
     t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
     el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),

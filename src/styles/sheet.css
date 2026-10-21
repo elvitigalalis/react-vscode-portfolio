@@ -85,6 +85,8 @@
   padding: 0; cursor: text; overflow-wrap: anywhere;
 }
 .sheet-meta { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.sheet-clash { color: #b45309; font-size: 0.8125rem; cursor: help; }
+@media (prefers-color-scheme: dark) { .sheet-clash { color: #fbbf24; } }
 .sheet-roll { color: var(--muted); font-size: 0.8125rem; }
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 /* Check and menu sit over the row's right end on hover, so titles keep the full width. */
