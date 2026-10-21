@@ -115,7 +115,7 @@ function draw() {
 async function fetchEvents() {
   events = [];
   if (!api.googleReady()) return;
-  try { events = await api.busyEvents(zonedIso(day, 0, SHEET.timeZone), zonedIso(day, 1440, SHEET.timeZone)); } catch (e) { console.error(e); }
+  try { events = (await api.calendarEvents(zonedIso(day, 0, SHEET.timeZone), zonedIso(day, 1440, SHEET.timeZone), state.calendars)).filter((e) => !e.allDay); } catch (e) { console.error(e); }
 }
 
 async function open() {
