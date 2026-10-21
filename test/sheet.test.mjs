@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock,
+  addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, rollMark, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents,
 } from "../src/sheet/logic.mjs";
@@ -61,6 +61,9 @@ test("formatting minutes and clock times", () => {
   assert.equal(formatMinutes(45), "45m");
   assert.equal(formatClock(16 * 60 + 40), "4:40 pm");
   assert.equal(formatClock(0), "12:00 am");
+  assert.equal(formatSpan(8 * 60, 9 * 60 + 20), "8–9:20 am");
+  assert.equal(formatSpan(11 * 60 + 30, 13 * 60), "11:30 am–1 pm");
+  assert.equal(formatSpan(22 * 60, 26 * 60), "10 pm–12 am");
 });
 
 test("the week grid: rows line up at the busiest day plus one", () => {
