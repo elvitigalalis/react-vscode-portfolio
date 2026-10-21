@@ -109,6 +109,13 @@ export function formatClock(mins) {
   return `${h % 12 || 12}:${pad(m)} ${h < 12 ? "am" : "pm"}`;
 }
 
+// An event's time on the day, short: "8–9:20 am", "11:30 am–1 pm". Parts past midnight are cut.
+export function formatSpan(start, end) {
+  const [a, b] = [Math.max(0, start), Math.min(1440, end)].map((m) => formatClock(m).replace(":00", ""));
+  const [ta, ma] = a.split(" ");
+  return ma === b.split(" ")[1] && end < 1440 ? `${ta}–${b}` : `${a}–${b}`;
+}
+
 // --- The week grid -----------------------------------------------------------------------
 
 export const byPosition = (a, b) => a.position - b.position;
