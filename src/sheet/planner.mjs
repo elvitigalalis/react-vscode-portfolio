@@ -336,11 +336,11 @@ async function menuAction(kind) {
 export const dropTargets = [];
 let drag = null;
 
-function dropSpot(x, y) {
+function dropSpot(x, y, id) {
   const under = document.elementFromPoint(x, y);
   const ul = under?.closest(".sheet-rows");
   if (!ul || !root.contains(ul)) return null;
-  const rows = [...ul.querySelectorAll(".sheet-task")].filter((r) => r.dataset.id !== drag.id);
+  const rows = [...ul.querySelectorAll(".sheet-task")].filter((r) => r.dataset.id !== id);
   const after = rows.find((r) => { const b = r.getBoundingClientRect(); return y < b.top + b.height / 2; });
   const idx = after ? rows.indexOf(after) : rows.length;
   const pos = (r) => state.tasks.get(r.dataset.id).position;
@@ -390,7 +390,7 @@ function onPointerMove(e) {
   drag.float.style.transform = `translate(${e.clientX + 8}px, ${e.clientY + 8}px)`;
   root.querySelectorAll(".is-drop").forEach((n) => n.classList.remove("is-drop"));
   for (const t of dropTargets) if (t.over?.(e, drag)) return;
-  dropSpot(e.clientX, e.clientY)?.ul.classList.add("is-drop");
+  dropSpot(e.clientX, e.clientY, drag.id)?.ul.classList.add("is-drop");
 }
 
 async function onPointerUp(e) {
@@ -403,7 +403,7 @@ async function onPointerUp(e) {
   root.querySelectorAll(".is-drop").forEach((n) => n.classList.remove("is-drop"));
   try {
     for (const t of dropTargets) if (await t.drop?.(e, d)) { render(); return; }
-    const spot = dropSpot(e.clientX, e.clientY);
+    const spot = dropSpot(e.clientX, e.clientY, d.id);
     if (spot) await moveTask(d.id, spot.where, spot.position);
   } catch (err) { failed(err); }
   render();
