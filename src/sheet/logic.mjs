@@ -153,6 +153,47 @@ export function blockOnComplete(block, now) {
   return { action: "keep" };
 }
 
+// --- Calendar events in the week ---------------------------------------------------------
+
+// A day's events from Google, as minutes past that day's midnight. All-day events cover every
+// day from their start date up to (not including) their end date. All-day first, then by start.
+export function eventsOnDay(events, day, timeZone) {
+  return events.flatMap((e) => {
+    if (e.allDay) return e.starts_at <= day && day < e.ends_at ? [{ ...e, start: 0, end: 1440 }] : [];
+    const start = minutesOn(e.starts_at, day, timeZone);
+    const end = minutesOn(e.ends_at, day, timeZone);
+    return end > 0 && start < 1440 ? [{ ...e, start, end }] : [];
+  }).sort((a, b) => (b.allDay - a.allDay) || a.start - b.start);
+}
+
+// Minutes between `from` and `to` that no busy event covers. All-day and "free" events don't count.
+export function freeMinutes(dayEvents, from, to) {
+  const spans = dayEvents.filter((e) => e.busy && !e.allDay)
+    .map((e) => [Math.max(from, e.start), Math.min(to, e.end)]).filter(([a, b]) => b > a)
+    .sort((x, y) => x[0] - y[0]);
+  let busy = 0;
+  let upTo = from;
+  for (const [a, b] of spans) {
+    if (b <= upTo) continue;
+    busy += b - Math.max(a, upTo);
+    upTo = b;
+  }
+  return Math.max(0, to - from - busy);
+}
+
+// The busy event a fixed-time task ("@3:45" → 225 minutes) lands in, if any.
+export const clashWith = (atMin, dayEvents) =>
+  dayEvents.find((e) => e.busy && !e.allDay && atMin >= e.start && atMin < e.end) ?? null;
+
+// Which events a column shows when it has more than `max`: events that have ended (before
+// `nowMin`, on today only) give way first, oldest first, then the latest ones. Order is kept.
+export function visibleEvents(dayEvents, max, nowMin = null) {
+  if (dayEvents.length <= max) return { shown: dayEvents, hidden: 0 };
+  const ended = (e) => nowMin != null && !e.allDay && e.end <= nowMin;
+  const keep = new Set([...dayEvents.filter((e) => !ended(e)), ...dayEvents.filter(ended).reverse()].slice(0, max));
+  return { shown: dayEvents.filter((e) => keep.has(e)), hidden: dayEvents.length - max };
+}
+
 // --- Rollover display --------------------------------------------------------------------
 
 export const ROLL_MARKS = ["", "②", "③"];
