@@ -346,6 +346,17 @@ async function loadEvents(days) {
   state.eventsStale = true;
 }
 
+async function saveCalendars() {
+  const ids = [...new Set($("#sheet-cal-ids").value.split(/\s+/).filter(Boolean))];
+  try {
+    await api.saveSettings({ calendars: ids });
+    state.calendars = ids;
+    $("[data-calendars]").close();
+    await loadEvents(weekDays(state.week));
+    render();
+  } catch (e) { failed(e); }
+}
+
 function forgetEvents() {
   try { for (const k of Object.keys(localStorage)) if (k.startsWith(EVENTS_KEY)) localStorage.removeItem(k); } catch {}
 }
@@ -528,6 +539,12 @@ function wire() {
         return render();
       }
       if (act === "connect") return api.signIn();
+      if (act === "calendars") {
+        $("#sheet-cal-ids").value = state.calendars.join("\n");
+        return $("[data-calendars]").showModal();
+      }
+      if (act === "close-calendars") return $("[data-calendars]").close();
+      if (act === "save-calendars") return saveCalendars();
       return actHooks[act]?.();
     }
     const move = e.target.closest("[data-move]")?.dataset.move;

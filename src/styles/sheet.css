@@ -210,6 +210,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.5rem;
 }
 .sheet-dialog-end { gap: 0.5rem; }
+#sheet-cal-ids { margin-top: 0.75rem; font-family: ui-monospace, Menlo, monospace; font-size: 0.8125rem; }
 .sheet-week > .sheet-status { grid-column: 1 / -1; }
 
 /* Tablets (iPad portrait): seven columns would be ~90 px each, so the week becomes a row of
