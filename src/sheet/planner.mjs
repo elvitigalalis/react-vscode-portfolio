@@ -4,7 +4,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
-  positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock,
+  positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, visibleEvents, freeMinutes, clashWith,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
@@ -224,18 +224,18 @@ function eventLines(day) {
   return { evs, nowMin, all, shown, hidden, lines: shown.length + (hidden || (all && evs.length > MAX_EVENTS) ? 1 : 0) };
 }
 
-// Every column's calendar takes as many lines as the busiest day's, so the task lines below
-// stay level across the week.
-function eventList(day, height) {
-  if (!height) return null;
-  const { evs, nowMin, all, shown, hidden, lines } = eventLines(day);
+// Each event shows its time range and full name. On wide screens the columns share grid rows
+// (subgrid), so the task lines below stay level across the week however long the names are.
+function eventList(day, any) {
+  if (!any) return null;
+  const { evs, nowMin, all, shown, hidden } = eventLines(day);
   const ul = el("ul", { className: "sheet-events" }, ...shown.map((e) => {
     const past = nowMin != null && !e.allDay && e.end <= nowMin;
     const name = e.link
       ? el("a", { href: e.link, target: "_blank", rel: "noopener", textContent: e.title, title: e.title })
       : el("span", { textContent: e.title, title: e.title });
     return el("li", { className: `sheet-event-row${past ? " is-past" : ""}` },
-      el("span", { className: "sheet-event-time", textContent: e.allDay ? "all day" : formatClock(Math.max(0, e.start)).replace(":00", "") }),
+      el("span", { className: "sheet-event-time", textContent: e.allDay ? "all day" : formatSpan(e.start, e.end) }),
       name);
   }));
   ul.setAttribute("aria-label", "Calendar");
@@ -245,11 +245,10 @@ function eventList(day, height) {
     more.dataset.day = day;
     ul.append(el("li", {}, more));
   }
-  for (let i = lines; i < height; i++) ul.append(el("li", { className: "sheet-event-row is-blank", ariaHidden: "true", textContent: "\u00a0" }));
   return ul;
 }
 
-function dayColumn(day, rows, eventRows) {
+function dayColumn(day, rows, anyEvents) {
   const list = tasksOn(day);
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
@@ -265,7 +264,7 @@ function dayColumn(day, rows, eventRows) {
       allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
       day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     el("p", { className: "sheet-stamps", textContent: marks }),
-    eventList(day, eventRows),
+    eventList(day, anyEvents),
     ul);
   section.dataset.day = day;
   return section;
@@ -284,8 +283,8 @@ export function render() {
   const days = weekDays(state.week);
   if (!days.includes(state.focus)) state.focus = days.includes(state.today) ? state.today : days[0];
   const rows = rowCount(Object.fromEntries(days.map((d) => [d, tasksOn(d)])));
-  const eventRows = Math.max(...days.map((d) => eventLines(d).lines));
-  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, eventRows)));
+  const anyEvents = days.some((d) => eventsOn(d).length);
+  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, anyEvents)));
   const first = dayLabel(days[0]);
   $("[data-week-title]").textContent = `Week of ${first.date}`;
 
