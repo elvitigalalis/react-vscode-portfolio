@@ -7,7 +7,7 @@ import {
   addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, planningDay, snap,
   formatMinutes, formatClock, byPosition, DEFAULT_EST,
 } from "./logic.mjs";
-import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed } from "./planner.mjs";
+import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity } from "./planner.mjs";
 
 const START = 7 * 60;
 const END = 23 * 60;
@@ -26,7 +26,7 @@ const blocksOn = (d) => state.blocks.filter((b) => minutesOn(b.starts_at, d, SHE
 const shutdownAt = (d) => clock((state.days[d]?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5));
 
 function meter(d) {
-  const m = load(tasksOn(d), SHEET.capacityMin);
+  const m = load(tasksOn(d), dayCapacity(d).capacity);
   const local = localNow(new Date(), SHEET.timeZone);
   const from = d === local.day ? Math.max(local.minutes, 9 * 60) : 9 * 60;
   return { ...m, finish: finishAt(from, m.total) };
@@ -115,7 +115,7 @@ function draw() {
 async function fetchEvents() {
   events = [];
   if (!api.googleReady()) return;
-  try { events = await api.busyEvents(zonedIso(day, 0, SHEET.timeZone), zonedIso(day, 1440, SHEET.timeZone)); } catch (e) { console.error(e); }
+  try { events = (await api.calendarEvents(zonedIso(day, 0, SHEET.timeZone), zonedIso(day, 1440, SHEET.timeZone), state.calendars)).filter((e) => !e.allDay); } catch (e) { console.error(e); }
 }
 
 async function open() {
@@ -273,9 +273,16 @@ export function setupPlanToday(root) {
   // Each day's header shows its planned load, coloured near and over capacity.
   renderHooks.push(() => {
     for (const head of root.querySelectorAll(".sheet-day")) {
-      const m = load(tasksOn(head.dataset.day), SHEET.capacityMin);
+      const { free, capacity } = dayCapacity(head.dataset.day);
+      const m = load(tasksOn(head.dataset.day), capacity);
       if (!m.total) continue;
-      head.querySelector(".sheet-head").append(el("span", { className: `sheet-load-chip is-${m.level}`, textContent: formatMinutes(m.total), title: `${formatMinutes(m.total)} planned of ${formatMinutes(m.capacity)}` }));
+      // When events leave less than the usual budget, the chip shows what's left: "2h45 / 3h10".
+      const short = capacity < SHEET.capacityMin;
+      head.querySelector(".sheet-head").append(el("span", {
+        className: `sheet-load-chip is-${m.level}`,
+        textContent: short ? `${formatMinutes(m.total)} / ${formatMinutes(capacity)}` : formatMinutes(m.total),
+        title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(clock(SHEET.dayStartAt))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(SHEET.capacityMin)}.`,
+      }));
     }
   });
 }

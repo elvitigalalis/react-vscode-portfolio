@@ -10,6 +10,9 @@ create table if not exists settings (
   time_zone text not null default 'America/New_York',
   gcal_calendar_id text               -- the "Time blocks" Google calendar, once created
 );
+-- Extra Google calendars whose events show in the week, besides his main one. Owner-only, like
+-- the rest of settings, so the IDs never reach /now.
+alter table settings add column if not exists calendars text[] not null default '{}';
 
 create table if not exists tasks (
   id uuid primary key default gen_random_uuid(),

@@ -17,12 +17,14 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn" data-act="next-week" aria-label="Next week">→</button>
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
+        <button type="button" class="sheet-btn" data-act="calendars">Calendars</button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
       </div>
     </div>
     <p class="sheet-status" data-status>Loading…</p>
     <p class="sheet-notice" data-notice hidden></p>
+    <p class="sheet-notice" data-events-stale hidden>Google Calendar needs reconnecting to show new events. <button type="button" class="sheet-link" data-act="connect">Connect</button></p>
     <div class="sheet-daynav" data-daynav hidden>
       <button type="button" class="sheet-btn" data-act="prev-day" aria-label="Previous day">‹</button>
       <button type="button" class="sheet-btn" data-act="next-day" aria-label="Next day">›</button>
@@ -61,6 +63,18 @@ import "../../styles/sheet.css";
         <dt>⌘Z</dt><dd>Undo</dd>
       </dl>
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
+    </dialog>
+
+    <dialog class="sheet-dialog" data-calendars aria-labelledby="sheet-cal-title">
+      <h2 id="sheet-cal-title">Calendars</h2>
+      <p class="small">Your main Google calendar always shows. To add another one, like a class schedule: in Google Calendar, open Settings, click the calendar under "Settings for my calendars", and copy its Calendar ID from "Integrate calendar". Paste one ID per line.</p>
+      <label class="visually-hidden" for="sheet-cal-ids">Extra calendar IDs, one per line</label>
+      <textarea id="sheet-cal-ids" class="sheet-reflect" rows="4" spellcheck="false" placeholder="abc123@group.calendar.google.com"></textarea>
+      <p class="small">Only you see these events. They never show on /now.</p>
+      <div class="sheet-dialog-end">
+        <button type="button" class="sheet-btn" data-act="close-calendars">Cancel</button>
+        <button type="button" class="sheet-btn primary" data-act="save-calendars">Save</button>
+      </div>
     </dialog>
 
     <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
