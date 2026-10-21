@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, rollMark, barWidth, rightNow,
+  eventsOnDay, freeMinutes, clashWith, visibleEvents,
 } from "../src/sheet/logic.mjs";
 
 test("dates: weeks start on Monday and cross month ends", () => {
@@ -102,4 +103,45 @@ test("rollover marks and the public view's redaction", () => {
   assert.equal(rightNow({ public: true, title: "WorkIt auth" }), "WorkIt auth");
   assert.equal(rightNow({ public: false, title: null }), "Heads down");
   assert.equal(rightNow({ public: null }), null);
+});
+
+test("calendar events: placed on their days, all-day first", () => {
+  const tz = "America/New_York";
+  const events = [
+    { title: "Hitachi sync", allDay: false, busy: true, starts_at: "2026-10-21T17:00:00Z", ends_at: "2026-10-21T18:00:00Z" },
+    { title: "Lecture", allDay: false, busy: true, starts_at: "2026-10-21T13:30:00Z", ends_at: "2026-10-21T14:50:00Z" },
+    { title: "Trip", allDay: true, busy: false, starts_at: "2026-10-21", ends_at: "2026-10-23" },
+    { title: "Late show", allDay: false, busy: true, starts_at: "2026-10-22T03:00:00Z", ends_at: "2026-10-22T05:00:00Z" },
+  ];
+  const wed = eventsOnDay(events, "2026-10-21", tz);
+  assert.deepEqual(wed.map((e) => [e.title, e.start]), [["Trip", 0], ["Lecture", 570], ["Hitachi sync", 780], ["Late show", 1380]]);
+  // The all-day trip covers Thursday too; the show that runs past midnight spills into it.
+  assert.deepEqual(eventsOnDay(events, "2026-10-22", tz).map((e) => e.title), ["Trip", "Late show"]);
+  assert.deepEqual(eventsOnDay(events, "2026-10-23", tz), []);
+});
+
+test("calendar events: free time skips overlaps, all-day and free events", () => {
+  const day = [
+    { busy: true, allDay: false, start: 600, end: 690 },  // 10:00-11:30
+    { busy: true, allDay: false, start: 660, end: 720 },  // 11:00-12:00, overlaps
+    { busy: false, allDay: false, start: 800, end: 900 }, // marked free in Google
+    { busy: true, allDay: true, start: 0, end: 1440 },
+    { busy: true, allDay: false, start: 1300, end: 1400 }, // runs past the window's end
+  ];
+  // 9:30 am to 10 pm is 750 minutes; 120 are taken before noon and 20 at the end.
+  assert.equal(freeMinutes(day, 570, 1320), 610);
+  assert.equal(freeMinutes([], 1400, 1320), 0);
+  assert.equal(clashWith(675, day).start, 600);
+  assert.equal(clashWith(850, day), null);
+  assert.equal(clashWith(500, day), null);
+});
+
+test("calendar events: a full column hides ended events first", () => {
+  const evs = [1, 2, 3, 4, 5, 6].map((h) => ({ title: `e${h}`, allDay: false, start: h * 120, end: h * 120 + 60 }));
+  assert.deepEqual(visibleEvents(evs.slice(0, 3), 4), { shown: evs.slice(0, 3), hidden: 0 });
+  assert.deepEqual(visibleEvents(evs, 4).shown.map((e) => e.title), ["e1", "e2", "e3", "e4"]);
+  // At 7:30 the first three have ended, so the column shows what's left in the day.
+  const later = visibleEvents(evs, 4, 450);
+  assert.deepEqual(later.shown.map((e) => e.title), ["e3", "e4", "e5", "e6"]);
+  assert.equal(later.hidden, 2);
 });
