@@ -119,12 +119,30 @@ async function google(path, { method = "GET", body } = {}) {
   return res.status === 204 || method === "DELETE" ? null : res.json();
 }
 
-// His own events between two instants, shown in gray while planning.
-export async function busyEvents(fromIso, toIso) {
+// His events between two instants, from his main calendar and any extra calendars he added.
+// Only his browser reads them; they are never saved. An extra calendar that fails is skipped.
+// "busy" is false for events Google marks as free; those don't take time from the day.
+export async function calendarEvents(fromIso, toIso, extra = []) {
   const q = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime" });
-  const { items = [] } = await google(`calendars/primary/events?${q}`);
-  return items.filter((e) => e.start?.dateTime && e.transparency !== "transparent")
-    .map((e) => ({ title: e.summary ?? "Busy", starts_at: e.start.dateTime, ends_at: e.end.dateTime }));
+  const lists = await Promise.all(["primary", ...extra].map(async (id) => {
+    try { return (await google(`calendars/${encodeURIComponent(id)}/events?${q}`)).items ?? []; }
+    catch (e) { if (id === "primary") throw e; console.error(e); return []; }
+  }));
+  // The same event can sit on two calendars he reads; show it once.
+  const seen = new Set();
+  return lists.flat().filter((e) => {
+    const key = `${e.iCalUID}|${e.start?.dateTime ?? e.start?.date}`;
+    if (e.status === "cancelled" || !e.start || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map((e) => ({
+    title: e.summary ?? "Busy",
+    allDay: !e.start.dateTime,
+    busy: e.transparency !== "transparent",
+    starts_at: e.start.dateTime ?? e.start.date,
+    ends_at: e.end.dateTime ?? e.end.date,
+    link: e.htmlLink ?? null,
+  }));
 }
 
 // The "Time blocks" calendar, created on first use and remembered in settings.

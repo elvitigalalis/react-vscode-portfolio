@@ -25,6 +25,7 @@ export const state = {
   days: {},
   lists: new Set(["Inbox"]),
   parked: 0,
+  calendars: [],    // extra Google calendar IDs, from settings
 };
 
 let root;
