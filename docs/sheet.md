@@ -27,8 +27,9 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
   return a private task's length, never its title, so private titles never leave the database.
 - **Google Calendar: from the browser,** with the Google access token Supabase hands back at
   sign-in. Scopes: `calendar.app.created` (create and manage one "Time blocks" calendar) and
-  `calendar.events.readonly` (show his real events in gray while planning). When the token
-  expires (1 h) the planner asks him to sign in again; Google remembers consent, so it is one click.
+  `calendar.events.readonly` (show his real events in gray in the week and while planning). When
+  the token expires (1 h) the week keeps the last copy of its events (kept in his browser,
+  cleared on sign-out) and offers "Connect"; Google remembers consent, so it is one click.
 - **The Sheet writes to Google, never reads its own blocks back.** The database is the source of
   truth for blocks; each block stores its Google event ID.
 - **Rollover runs in the database** (`pg_cron`, hourly and idempotent, using the owner's time zone), so `/now` is
@@ -46,6 +47,7 @@ tasks   id, title, day (date, null = Someday), list (Someday list name), positio
         done (bool), rolls (int), created_at
 blocks  id, task_id → tasks, starts_at, ends_at, gcal_id
 days    day (date pk), planned (bool), shutdown (bool), reflection (text, never public)
+settings  owner_email, gcal_calendar_id ("Time blocks"), calendars (extra calendar IDs to read)
 ```
 
 A day is a plain local date string (`2026-10-20`), never a timestamp: Ellie's changelog is full of
@@ -58,6 +60,16 @@ tasks jumping days across time zones.
   the busiest day plus one empty row.
 - **Day header:** weekday in bold uppercase with slight letter-spacing, date beside it in muted
   text. **Today is marked by the accent colour only** (header text and its 2px rule).
+- **His calendar sits above each day's tasks** (Things 3, Todoist): small gray lines, all-day
+  events first, then by time. Read-only; a click opens the event in Google. Events that have
+  ended today fade. Past four, the rest fold into "+N more" (ended ones fold first). Every
+  column's calendar takes as many lines as the busiest day's, so task lines stay level.
+  Events come from his main calendar plus any extra calendar IDs he pastes into **Calendars**.
+  They are read in his browser and never saved to the database, so `/now` never sees them.
+- **Day load chip:** the day's undone estimates. Its budget is 5 h 30, or less when his events
+  leave less free time between 9:30 am and 10 pm (today: from now). Then it reads `2h45 / 3h10`.
+  All-day events and events marked free in Google don't count. Amber within 15 %, red over.
+- **Clash mark:** an `@3:45` task that lands inside a busy event shows ⚠ ("Clashes with …").
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
@@ -101,7 +113,8 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
 15-minute snap) with his Google events in gray.
 
 - **Load meter** in the header: `3h20 / 5h30`, the sum of today's undone estimates against the
-  daily capacity (default 5 h 30). Amber within 15 % of capacity, red over it.
+  day's budget (5 h 30, or the free time around his events, as in the week). Amber within 15 %
+  of it, red over it.
 - **Finish line:** "Done ≈ 4:40 pm · shutdown 5:00 pm". The shutdown line on the timeline can be
   dragged; it is saved per day.
 - **Drag a task onto the timeline → a block as tall as its estimate** (30 min if none). The block
