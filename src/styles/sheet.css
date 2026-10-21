@@ -33,6 +33,15 @@
 .sheet-stamps { margin: 0.2rem 0 0; min-height: 1.2rem; color: var(--muted); font-size: 0.75rem; }
 
 .sheet-rows { list-style: none; }
+
+/* His calendar above the tasks: small, gray, read-only. */
+.sheet-events { list-style: none; margin: 0.15rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--line); font-size: 0.75rem; line-height: 1.3; color: var(--muted); }
+.sheet-event-row { display: flex; gap: 0.35rem; padding: 0.1rem 0; overflow-wrap: anywhere; }
+.sheet-event-row.is-past { opacity: 0.55; }
+.sheet-event-time { flex: none; min-width: 4.6em; font-variant-numeric: tabular-nums; }
+.sheet-event-row a { color: inherit; text-decoration: none; min-width: 0; }
+.sheet-event-row a:hover { color: var(--fg); text-decoration: underline; }
+.sheet-events .sheet-events-more { font-size: 0.75rem; color: var(--muted); }
 .sheet-row {
   display: flex; align-items: center; gap: 0.4rem; min-height: var(--row);
   border-bottom: 1px solid var(--line); font-size: 0.9375rem; line-height: 1.25; padding: 0.25rem 0;
@@ -145,6 +154,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   .sheet-planner .sheet-day:not(.is-focus) { display: none; }
   .sheet-planner .sheet-daynav:not([hidden]) { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
   .sheet-planner .sheet-row.is-empty:not(.is-add) { display: none; }
+  .sheet-event-row.is-blank { display: none; }
+  .sheet-events:not(:has(.sheet-event-row:not(.is-blank), .sheet-events-more)) { display: none; }
 }
 
 /* Plan today: task list beside a timeline. */
