@@ -60,8 +60,8 @@ tasks jumping days across time zones.
   the busiest day plus one empty row.
 - **Day header:** weekday in bold uppercase with slight letter-spacing, date beside it in muted
   text. **Today is marked by the accent colour only** (header text and its 2px rule).
-- **His calendar sits above each day's tasks** (Things 3, Todoist): small gray lines, all-day
-  events first, then by time. Read-only; a click opens the event in Google. Events that have
+- **His calendar sits above each day's tasks** (Things 3, Todoist): small gray lines, one line
+  per event (full name on hover), all-day events first, then by time. Read-only; a click opens the event in Google. Events that have
   ended today fade. Past four, the rest fold into "+N more" (ended ones fold first). Every
   column's calendar takes as many lines as the busiest day's, so task lines stay level.
   Events come from his main calendar plus any extra calendar IDs he pastes into **Calendars**.

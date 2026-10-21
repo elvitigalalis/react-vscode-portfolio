@@ -36,9 +36,12 @@
 
 /* His calendar above the tasks: small, gray, read-only. */
 .sheet-events { list-style: none; margin: 0.15rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--line); font-size: 0.75rem; line-height: 1.3; color: var(--muted); }
-.sheet-event-row { display: flex; gap: 0.35rem; padding: 0.1rem 0; overflow-wrap: anywhere; }
+/* One line per event so a long class name can't push the tasks down; the full name is on hover
+   and in Google. */
+.sheet-event-row { display: flex; gap: 0.35rem; padding: 0.1rem 0; white-space: nowrap; }
+.sheet-event-row > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sheet-event-row.is-past { opacity: 0.55; }
-.sheet-event-time { flex: none; min-width: 4.6em; font-variant-numeric: tabular-nums; }
+.sheet-event-time { flex: none; min-width: 3.9em; font-variant-numeric: tabular-nums; }
 .sheet-event-row a { color: inherit; text-decoration: none; min-width: 0; }
 .sheet-event-row a:hover { color: var(--fg); text-decoration: underline; }
 .sheet-events .sheet-events-more { font-size: 0.75rem; color: var(--muted); }
