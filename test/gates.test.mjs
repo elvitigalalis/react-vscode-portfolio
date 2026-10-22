@@ -4,7 +4,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { deflateSync } from "node:zlib";
 import { dirname, join } from "node:path";
@@ -15,7 +15,7 @@ import { lint } from "../check/lint.mjs";
 import { length } from "../check/writeup.mjs";
 import { tags } from "../check/tags.mjs";
 import { html, links, lighthouse, a11y } from "../check/tools.mjs";
-import { escapeRe, ORIGIN, RESUME_PDF } from "../check/lib.mjs";
+import { escapeRe, htmlPages, ORIGIN, RESUME_PDF } from "../check/lib.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const realDist = join(root, "dist");
@@ -214,8 +214,7 @@ function png(width, height, pad = 0) {
 }
 
 const PREVIEW = /<meta (?:property|name)="(?:og|twitter):[^>]*>|<script type="application\/ld\+json">[\s\S]*?<\/script>/g;
-const pages = (d) => ["index.html", "404.html", "now/index.html", "plan/index.html", ...resume.projects.map((p) => `projects/${p.slug}/index.html`)].filter((f) => existsSync(join(d, f)));
-const eachPage = (d, edit) => { for (const f of pages(d)) write(d, f, edit(read(d, f), f)); };
+const eachPage = (d, edit) => { for (const f of htmlPages(d)) write(d, f, edit(read(d, f), f)); };
 // The build as it was before any preview tags, structured data or sitemap existed.
 function bare(d) {
   eachPage(d, (h) => h.replace(PREVIEW, ""));
