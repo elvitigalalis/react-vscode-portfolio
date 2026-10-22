@@ -41,7 +41,8 @@ const entry = (matchingUrlPattern, ...parts) => ({ matchingUrlPattern, preset: "
 
 module.exports = {
   ci: {
-    collect: { staticDistDir: "./dist", numberOfRuns: 3, settings: { chromeFlags: "--no-sandbox --headless=new" } },
+    // LHCI audits only the first 5 pages it finds unless told otherwise; 0 means every page.
+    collect: { staticDistDir: "./dist", numberOfRuns: 3, maxAutodiscoverUrls: 0, settings: { chromeFlags: "--no-sandbox --headless=new" } },
     assert: {
       assertMatrix: [
         entry("/404\\.html$", home, notFound),
