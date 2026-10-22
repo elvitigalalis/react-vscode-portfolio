@@ -76,7 +76,8 @@ h3 { font-size: 1.0625rem; }
 ul, ol { margin: 0; padding: 0; }
 img { max-width: 100%; height: auto; display: block; }
 
-.wrap { max-width: 50rem; margin: 0 auto; padding: 0 1rem; }
+/* 64rem fills a laptop screen; text inside it keeps a readable measure (.summary, .bullets). */
+.wrap { max-width: 64rem; margin: 0 auto; padding: 0 1rem; }
 /* One rhythm: --gap between sections, nothing trailing at a section's end, so every gap matches. */
 :root { --gap: 4.5rem; }
 section.wrap { padding-top: var(--gap); padding-bottom: 0; scroll-margin-top: 3rem; }
@@ -116,7 +117,7 @@ section.hero { padding-top: 2.5rem; }
 }
 
 /* First screen: the text, and beside it a plant grown from this build's commit (src/plant/). */
-.hero { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 2rem; align-items: end; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: 3rem; align-items: end; }
 .hero-plant { margin: 0; }
 .hero-plant svg { display: block; width: 100%; height: auto; }
 .hero-plant figcaption {
@@ -167,9 +168,9 @@ section.hero { padding-top: 2.5rem; }
 }
 .dates { margin: 0; color: var(--muted); font-size: 0.75rem; padding-top: 0.3rem; font-variant-numeric: tabular-nums; }
 .meta { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9375rem; }
-.summary { margin: 0.5rem 0 0; }
+.summary { margin: 0.5rem 0 0; max-width: 44rem; }
 /* Bullets are the résumé verbatim; quieter than the summary so each card reads summary-first. */
-.bullets { padding-left: 1.1rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.9375rem; }
+.bullets { max-width: 44rem; padding-left: 1.1rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.9375rem; }
 .bullets li { margin-bottom: 0.3rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin-top: 0.6rem; }
 .tags li { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.6875rem; }
@@ -181,7 +182,7 @@ section.hero { padding-top: 2.5rem; }
 
 /* Project cards: photo beside the text, stacked on phones. */
 .card {
-  display: grid; grid-template-columns: 15rem 1fr; gap: 1.25rem;
+  display: grid; grid-template-columns: 18rem 1fr; gap: 1.5rem;
   border: 1px solid var(--line); border-radius: 0.6rem; padding: 1.25rem; margin-bottom: 1.5rem;
 }
 .card img { border-radius: 0.4rem; aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
