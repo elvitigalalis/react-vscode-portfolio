@@ -514,3 +514,11 @@ test("a write-up opens with a way back, its links as buttons, and an On this pag
     for (const id of targets) assert.match(html, new RegExp(`<h2 id="${escapeRe(id)}"`), `${slug}: #${id} exists`);
   }
 });
+
+test("Now lives in the footer, not the top bar", () => {
+  for (const page of ["index.html", "404.html", ...writeupSlugs().map((s) => `projects/${s}/index.html`)]) {
+    const html = readFileSync(join(dist, page), "utf8");
+    assert.doesNotMatch(html.match(/<header class="topbar"[\s\S]*?<\/header>/)[0], /href="\/now\/"/, `${page}: top bar`);
+    assert.match(html.match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/now\/">Now<\/a>/, `${page}: footer`);
+  }
+});
