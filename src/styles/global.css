@@ -75,17 +75,20 @@ body {
   color: var(--fg);
   font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-a { color: var(--accent); text-underline-offset: 0.15em; }
+a { color: var(--accent); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
 a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-h1, h2, h3 { line-height: 1.2; margin: 0; }
-h2 { font-size: 1.5rem; margin-bottom: 1.25rem; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 0.2rem; }
+::selection { background: var(--btn); color: var(--accent-fg); }
+h1, h2, h3 { line-height: 1.2; margin: 0; text-wrap: balance; }
+p, li { text-wrap: pretty; }
+h2 { font-size: 1.875rem; letter-spacing: -0.01em; margin-bottom: 1.5rem; }
 h3 { font-size: 1.0625rem; }
 ul, ol { margin: 0; padding: 0; }
 img { max-width: 100%; height: auto; display: block; }
 
 .wrap { max-width: 50rem; margin: 0 auto; padding: 0 1rem; }
-section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3rem; }
+section.wrap { padding-top: 4rem; padding-bottom: 1rem; scroll-margin-top: 3rem; }
+section.hero { padding-top: 2rem; }
 
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 1rem; top: 0.5rem; z-index: 2; background: var(--bg); padding: 0.25rem 0.5rem; }
@@ -144,7 +147,7 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
   .hero { display: block; }
   .hero-plant { display: none; }
 }
-.kicker { margin: 0 0 0.35rem; color: var(--muted); font-size: 0.9375rem; letter-spacing: 0.02em; }
+.kicker { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.75rem; }
 .hero h1 { font-size: clamp(2.25rem, 7vw, 3.25rem); letter-spacing: -0.02em; }
 .thesis { font-size: 1.125rem; margin: 0.75rem 0 1.25rem; max-width: 40rem; }
 .cta, .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; }
@@ -158,20 +161,25 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .btn.primary { background: var(--btn); border-color: var(--btn); color: var(--accent-fg); }
 .btn.primary:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 1.5rem 0 1rem; font-size: 0.9375rem; }
-.kv dt { color: var(--muted); }
+.kv dt { color: var(--muted); font-size: 0.75rem; padding-top: 0.2rem; }
 .kv dd { margin: 0; }
 .contact { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; list-style: none; font-size: 0.9375rem; }
 
 /* Entries: date column on the left, collapsing above the text on phones. */
 .entries { list-style: none; }
 .entry { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.25rem 1.25rem; margin-bottom: 2rem; }
-.dates { margin: 0; color: var(--muted); font-size: 0.875rem; padding-top: 0.15rem; }
+/* Dates, labels and tags: small capitals in the system monospace, so they read as metadata. */
+.dates, .tags li, .kv dt, .kicker {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.dates { margin: 0; color: var(--muted); font-size: 0.75rem; padding-top: 0.3rem; font-variant-numeric: tabular-nums; }
 .meta { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9375rem; }
 .summary { margin: 0.5rem 0 0; }
-.bullets { padding-left: 1.1rem; margin-top: 0.5rem; }
+/* Bullets are the résumé verbatim; quieter than the summary so each card reads summary-first. */
+.bullets { padding-left: 1.1rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.9375rem; }
 .bullets li { margin-bottom: 0.3rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin-top: 0.6rem; }
-.tags li { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8125rem; }
+.tags li { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.6875rem; }
 .more { font-weight: 600; }
 @media (max-width: 40rem) {
   .entry { grid-template-columns: 1fr; }
@@ -233,3 +241,6 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .fig-svg .bar.accent { fill: var(--accent); }
 
 .card, .glance { background: var(--card); }
+
+/* Links that leave the site say so. */
+main a[href^="http"]:not(.btn)::after, .footer a[href^="http"]::after { content: "\2009\2197"; font-size: 0.85em; }
