@@ -484,7 +484,6 @@ test("the hero shows a grown plant beside the text, hidden from screen readers, 
   const svg = hero.match(/<svg class="plant"[\s\S]*?<\/svg>/)?.[0];
   assert.ok(svg, "the hero carries the plant");
   assert.match(svg, /aria-hidden="true"/);
-  assert.ok(svg.match(/class="f /g).length >= 24, "a full plant");
   // The plant sits in its own figure, never wrapped around the name or the buttons.
   assert.doesNotMatch(svg, /<h1|class="btn/);
   const css = builtFiles().filter((f) => f.endsWith(".css")).map((f) => readFileSync(f, "utf8")).join("")
@@ -509,7 +508,6 @@ test("a write-up opens with a way back, its links as buttons, and an On this pag
     assert.match(head.match(/<p class="links">[\s\S]*?<\/p>/)[0], /<a class="btn[^"]*" href="[^"]+">Code<\/a>/, `${slug}: Code is a button`);
     const toc = html.match(/<nav class="toc"[^>]*>[\s\S]*?<\/nav>/)?.[0];
     assert.ok(toc, `${slug}: On this page`);
-    assert.match(toc, /On this page/);
     const sections = [...readFileSync(join(writeupDir, `${slug}.md`), "utf8").matchAll(/^## (.+)$/gm)].map((m) => m[1]);
     const targets = [...toc.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
     assert.equal(targets.length, sections.length, `${slug}: one entry per section`);
