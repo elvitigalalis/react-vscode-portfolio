@@ -1,4 +1,5 @@
-/* Cream page, ivory cards, one royal blue accent. System fonts, no motion. Dark mode follows the OS. */
+/* Cream page, ivory cards, one royal blue accent; dark mode is the same warm palette at night, with a
+   sand-gold accent. System fonts, no motion. Dark mode follows the OS. */
 :root {
   --bg: #f6f0e1;
   --fg: #1b1f33;
@@ -12,14 +13,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e1430;
+    --bg: #1b1915;
     --fg: #f3ecdc;
-    --muted: #b8b0a0;
-    --line: #232c55;
-    --chip: #18214a;
-    --card: #121a3d;
-    --accent: #9db2ff;
-    --accent-fg: #0e1430;
+    --muted: #b5ab97;
+    --line: #36312a;
+    --chip: #2e2a23;
+    --card: #23201b;
+    --accent: #e3cc98;
+    --accent-fg: #1b1915;
     }
 }
 
