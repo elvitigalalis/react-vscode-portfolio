@@ -1,0 +1,81 @@
+---
+// How the hero's plant grows (src/plant/grow.mjs), with three plants grown from earlier commits
+// of this site. Every number here is read off grow.mjs or test/plant.test.mjs.
+import Base from "../layouts/Base.astro";
+import { siteConfig } from "../config";
+import { growPlant } from "../plant/grow.mjs";
+
+const source = "https://github.com/elvitigalalis/react-vscode-portfolio/blob/main/src/plant/grow.mjs";
+// Merge commits from the redesign's history; any seed works, these are just real ones.
+const seeds = ["9a91ee4", "8952782", "d3b041f"];
+---
+
+<Base
+  title={`How the plant grows · ${siteConfig.title}`}
+  description="How the plant on lisul-elvi.com grows: a seeded branching algorithm that turns each build's commit hash into a different SVG plant, at build time, with no JavaScript."
+  path="/plant/"
+>
+  <article class="writeup">
+    <header class="writeup-head">
+      <a class="back" href="/">← Home</a>
+      <h1>How the plant grows</h1>
+      <p class="links"><a class="btn primary" href={source}>Code</a></p>
+    </header>
+    <p class="tldr">
+      The plant beside my name is grown from the commit the site was built from. A small seeded
+      branching algorithm turns the commit hash into an SVG, so every deploy grows a new plant,
+      and the same commit always grows the same one.
+    </p>
+    <figure>
+      <div class="grown-row">
+        {seeds.map((seed) => (
+          <figure class="grown">
+            <Fragment set:html={growPlant(seed)} />
+            <figcaption>Commit <code>{seed}</code></figcaption>
+          </figure>
+        ))}
+      </div>
+      <figcaption>Three plants grown from earlier commits of this site.</figcaption>
+    </figure>
+    <div class="prose">
+      <h2 id="seed">From commit to seed</h2>
+      <p>
+        The build reads its own commit, hashes it with FNV-1a into a 32-bit number, and seeds
+        mulberry32, a tiny pseudo-random generator, with it. Every random choice below comes from
+        that generator in a fixed order, which is why a commit always grows the same plant.
+      </p>
+      <h2 id="branching">Branching</h2>
+      <ul>
+        <li>The trunk starts at the bottom centre of a 320 × 380 frame, leaning up to about 7° off vertical.</li>
+        <li>Each stem is a quadratic curve that bends up to about 20° along its length.</li>
+        <li>At its end a stem splits into one to three shorter stems, each 68–86% as long. The trunk and its first limbs always split in two, so no plant comes out bare.</li>
+        <li>Every new stem is pulled 15% of the way back toward vertical, which keeps the plant upright.</li>
+        <li>A stem stops splitting five levels up, when it is shorter than 14 units, or once the plant has 48 stems, and it ends in a leaf.</li>
+        <li>The middle stems sprout one or two leaves on alternating sides, in one of three greens.</li>
+      </ul>
+      <h2 id="frame">Fitting the frame</h2>
+      <p>
+        A tall seed can grow past the edges. The generator shrinks the plant about its base, 3% at a
+        time, until every stem fits and every leaf has a full leaf's length of room, then slides it
+        sideways if one side still pokes out.
+      </p>
+      <h2 id="motion">Drawing it in</h2>
+      <p>
+        Each stem and leaf records when it grew. Stems draw themselves along their length and leaves
+        fade in, a generation every 0.11 s, so the whole plant is in after about 1.2 s. It is plain
+        CSS, and it runs only for visitors whose system allows motion; everyone else sees the grown
+        plant.
+      </p>
+      <h2 id="tests">Tests</h2>
+      <p>
+        The plant is built into the HTML, so the page loads no JavaScript for it. Tests grow 300
+        plants and check that each one stays inside its frame, weighs at most 15 KB (they run about
+        6 to 12 KB), and has at least 24 leaves, and that 20 seeds grow 20 different plants.
+      </p>
+    </div>
+    <nav class="writeup-end" aria-label="More">
+      <a href="/">← Home</a>
+      <a href={source}>Source</a>
+    </nav>
+  </article>
+</Base>
