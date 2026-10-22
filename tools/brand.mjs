@@ -9,7 +9,7 @@ import { join } from "node:path";
 const out = new URL("../public/", import.meta.url).pathname;
 // The site's accent and its ink colours (src/styles/global.css), light then dark.
 const LIGHT = { bg: "#2346c8", fg: "#fffdf6" };
-const DARK = { bg: "#9db2ff", fg: "#0e1430" };
+const DARK = { bg: "#e3cc98", fg: "#1b1915" };
 
 // L and E, each 10 wide and 20 tall with 4-unit strokes, inside x 4..28, y 6..26.
 const LETTERS = "M4 6h4v16h6v4H4zM18 6h10v4h-6v4h4v4h-4v4h6v4H18z";
