@@ -1,5 +1,5 @@
 /* Cream page, ivory cards, one royal blue accent; dark mode is the same warm palette at night, with a
-   sand-gold accent. System fonts, no motion. Dark mode follows the OS. */
+   sand-gold accent. System fonts, no motion. Dark mode follows the OS until the visitor picks one. */
 :root {
   --bg: #f6f0e1;
   --fg: #1b1f33;
@@ -9,10 +9,14 @@
   --card: #fffdf6;
   --accent: #2346c8;
   --accent-fg: #fffdf6;
+  --warn: #b45309;
+  --danger: #b91c1c;
   color-scheme: light dark;
 }
+/* Dark tokens apply when the OS asks for dark and the visitor has not picked light, or when they
+   picked dark with the switch in the top bar (data-theme on <html>, set before first paint). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1b1915;
     --fg: #f3ecdc;
     --muted: #b5ab97;
@@ -21,8 +25,25 @@
     --card: #23201b;
     --accent: #e3cc98;
     --accent-fg: #1b1915;
-    }
+    --warn: #fbbf24;
+    --danger: #f87171;
+    color-scheme: dark;
+  }
 }
+:root[data-theme="dark"] {
+  --bg: #1b1915;
+  --fg: #f3ecdc;
+  --muted: #b5ab97;
+  --line: #36312a;
+  --chip: #2e2a23;
+  --card: #23201b;
+  --accent: #e3cc98;
+  --accent-fg: #1b1915;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -54,9 +75,26 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .topbar a { color: var(--fg); text-decoration: none; }
 .topbar a:hover { color: var(--accent); text-decoration: underline; }
 .topbar .home { font-weight: 600; }
+.topbar .end { display: flex; align-items: center; gap: 1.1rem; }
+.theme-toggle {
+  display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0; margin-right: -0.4rem;
+  background: none; border: 0; border-radius: 0.4rem; color: var(--fg); cursor: pointer;
+}
+.theme-toggle:hover { color: var(--accent); background: var(--chip); }
+.theme-toggle svg { width: 1.15rem; height: 1.15rem; }
+/* Show the moon in light mode and the sun in dark mode: each icon names where a click goes. */
+.theme-toggle .sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .sun { display: block; }
+  :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
+}
 @media (max-width: 34rem) {
   .topbar .home { display: none; }
-  .topbar ul { width: 100%; justify-content: space-between; gap: 0.5rem; }
+  .topbar .end { width: 100%; gap: 0.25rem; }
+  .topbar ul { flex: 1; justify-content: space-between; gap: 0.5rem; font-size: 0.875rem; }
+  .topbar .wide { display: none; }
 }
 
 /* First screen. */
