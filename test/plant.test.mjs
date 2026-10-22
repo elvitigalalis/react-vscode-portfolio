@@ -16,19 +16,18 @@ test("different seeds grow different plants", () => {
 });
 
 test("every plant stays inside its frame, leaves and all", () => {
-  // A leaf is at most 26 units long, so its base needs that much room from every edge.
-  const LEAF = 26;
   for (let i = 0; i < 300; i++) {
     const svg = growPlant(`seed-${i}`);
     const [, , w, h] = svg.match(/viewBox="([^"]+)"/)[1].split(" ").map(Number);
+    const inside = (x, y, room = 0) => x >= room && x <= w - room && y >= room && y <= h - room;
     for (const [, d] of svg.matchAll(/class="s" d="([^"]+)"/g)) {
       const nums = d.match(/-?\d+(\.\d+)?/g).map(Number);
-      for (let j = 0; j < nums.length; j += 2) {
-        assert.ok(nums[j] >= 0 && nums[j] <= w && nums[j + 1] >= 0 && nums[j + 1] <= h, `seed-${i}: stem point ${nums[j]},${nums[j + 1]} is outside ${w}×${h}`);
-      }
+      for (let j = 0; j < nums.length; j += 2) assert.ok(inside(nums[j], nums[j + 1]), `seed-${i}: stem point ${nums[j]},${nums[j + 1]} is outside ${w}×${h}`);
     }
-    for (const [, x, y] of svg.matchAll(/translate\((-?[\d.]+) (-?[\d.]+)\)/g)) {
-      assert.ok(+x >= LEAF && +x <= w - LEAF && +y >= LEAF && +y <= h - LEAF, `seed-${i}: leaf at ${x},${y} pokes out of ${w}×${h}`);
+    // A leaf is drawn from its base along +x to its tip at (length, 0), then placed and turned, so
+    // its base needs its own length of room on every side, whichever way it points.
+    for (const [, d, x, y] of svg.matchAll(/class="f f\d" d="M0 0C[^ ]+ [^ ]+ [^ ]+ [^ ]+ ([\d.]+) 0C[^"]*" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g)) {
+      assert.ok(inside(+x, +y, +d), `seed-${i}: a ${d}-long leaf at ${x},${y} pokes out of ${w}×${h}`);
     }
   }
 });

@@ -6,6 +6,7 @@
 const W = 320, H = 380;
 const GROUND = H - 8;
 const LEAF = 26; // the longest a leaf grows
+const STEP = 0.11; // seconds between generations: the whole plant is in by about 1.2 s
 
 // FNV-1a: any seed string (a commit hash, a word) to a 32-bit integer.
 function hash(seed) {
@@ -25,7 +26,7 @@ function prng(seed) {
   };
 }
 
-const r1 = (n) => Math.round(n * 10) / 10;
+const round1 = (n) => Math.round(n * 10) / 10;
 
 // A point on the quadratic curve p0 -> p2 with control c, at t in [0, 1].
 const quad = (p0, c, p2, t) => {
@@ -47,7 +48,6 @@ function curveLength(p0, c, p2) {
 export function growPlant(seed) {
   const rand = prng(hash(seed));
   const between = (a, b) => a + (b - a) * rand();
-  const STEP = 0.16; // seconds between generations
   const stems = [], leaves = [];
 
   function leaf(x, y, angle, size, t) {
@@ -68,7 +68,7 @@ export function growPlant(seed) {
     }
     // Past 48 stems a plant gets crowded (and heavy), so stems stop splitting and end in a leaf.
     if (depth >= 5 || len < 14 || stems.length >= 48) {
-      leaf(p2.x, p2.y, angle + between(-0.2, 0.2), between(16, 26), (gen + 1) * STEP);
+      leaf(p2.x, p2.y, angle + between(-0.2, 0.2), between(16, LEAF), (gen + 1) * STEP);
       return;
     }
     // The trunk and its first limbs always fork, so no plant comes out bare.
@@ -85,31 +85,32 @@ export function growPlant(seed) {
 
   // Fit the frame: shrink about the base until every stem point is inside it and every leaf base
   // has a full leaf's length of room, then slide sideways if one side still pokes out.
-  const fit = (s) => {
-    const at = (p) => ({ x: W / 2 + (p.x - W / 2) * s, y: GROUND + (p.y - GROUND) * s });
-    const xs = [
-      ...stems.flatMap((b) => [b.p0, b.c, b.p2]).map((p) => [at(p).x, 0]),
-      ...leaves.map((f) => [at(f).x, LEAF]),
-    ];
-    const lo = Math.max(...xs.map(([x, m]) => m - x)), hi = Math.max(...xs.map(([x, m]) => x + m - W));
-    const dx = lo > 0 ? lo : hi > 0 ? -hi : 0;
-    const ok = lo + hi <= 0
-      && stems.every((b) => [b.p0, b.c, b.p2].every((p) => at(p).y >= 0))
-      && leaves.every((f) => at(f).y >= LEAF && at(f).y <= H - LEAF);
-    return ok && { s, dx, at: (p) => ({ x: at(p).x + dx, y: at(p).y }) };
+  const points = stems.flatMap((b) => [b.p0, b.c, b.p2]);
+  const fitAt = (scale) => {
+    const shrink = (p) => ({ x: W / 2 + (p.x - W / 2) * scale, y: GROUND + (p.y - GROUND) * scale });
+    // How far the plant pokes past the left and right edges (negative: room to spare).
+    const reach = [...points.map((p) => ({ x: shrink(p).x, room: 0 })), ...leaves.map((lf) => ({ x: shrink(lf).x, room: LEAF }))];
+    const overLeft = Math.max(...reach.map((r) => r.room - r.x));
+    const overRight = Math.max(...reach.map((r) => r.x + r.room - W));
+    const fits = overLeft + overRight <= 0
+      && points.every((p) => shrink(p).y >= 0)
+      && leaves.every((lf) => shrink(lf).y >= LEAF && shrink(lf).y <= H - LEAF);
+    if (!fits) return null;
+    const dx = overLeft > 0 ? overLeft : overRight > 0 ? -overRight : 0;
+    return { scale, place: (p) => ({ x: shrink(p).x + dx, y: shrink(p).y }) };
   };
-  let f;
-  for (let s = 1; !(f = fit(s)); s *= 0.97);
+  let frame = null;
+  for (let scale = 1; !frame; scale *= 0.97) frame = fitAt(scale);
 
   const stemTags = stems.map(({ p0, c, p2, width, t }) => {
-    const [a, b, e] = [p0, c, p2].map(f.at);
-    return `<path class="s" d="M${r1(a.x)} ${r1(a.y)}Q${r1(b.x)} ${r1(b.y)} ${r1(e.x)} ${r1(e.y)}" stroke-width="${r1(width * f.s)}" style="--l:${Math.ceil(curveLength(a, b, e))};--t:${r1(t * 100) / 100}s"/>`;
+    const [a, b, e] = [p0, c, p2].map(frame.place);
+    return `<path class="s" d="M${round1(a.x)} ${round1(a.y)}Q${round1(b.x)} ${round1(b.y)} ${round1(e.x)} ${round1(e.y)}" stroke-width="${round1(width * frame.scale)}" style="--l:${Math.ceil(curveLength(a, b, e))};--t:${round1(t * 100) / 100}s"/>`;
   });
   // A leaf: two curves from base to tip, drawn pointing right, then turned to its angle about the base.
   const leafTags = leaves.map((lf) => {
-    const { x, y } = f.at(lf), L = lf.L * f.s, w = lf.w * f.s;
-    const d = `M0 0C${r1(L * 0.3)} ${r1(-w)} ${r1(L * 0.75)} ${r1(-w * 0.9)} ${r1(L)} 0C${r1(L * 0.75)} ${r1(w * 0.9)} ${r1(L * 0.3)} ${r1(w)} 0 0Z`;
-    return `<path class="f f${lf.tone}" d="${d}" transform="translate(${r1(x)} ${r1(y)}) rotate(${Math.round(lf.angle * 180 / Math.PI)})" style="--t:${r1(lf.t * 100) / 100}s"/>`;
+    const { x, y } = frame.place(lf), L = lf.L * frame.scale, w = lf.w * frame.scale;
+    const d = `M0 0C${round1(L * 0.3)} ${round1(-w)} ${round1(L * 0.75)} ${round1(-w * 0.9)} ${round1(L)} 0C${round1(L * 0.75)} ${round1(w * 0.9)} ${round1(L * 0.3)} ${round1(w)} 0 0Z`;
+    return `<path class="f f${lf.tone}" d="${d}" transform="translate(${round1(x)} ${round1(y)}) rotate(${Math.round(lf.angle * 180 / Math.PI)})" style="--t:${round1(lf.t * 100) / 100}s"/>`;
   });
   return `<svg class="plant" viewBox="0 0 ${W} ${H}" aria-hidden="true" focusable="false"><g class="stems">${stemTags.join("")}</g><g class="leaves">${leafTags.join("")}</g></svg>`;
 }
