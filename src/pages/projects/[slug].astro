@@ -18,7 +18,9 @@ export async function getStaticPaths() {
 }
 
 const { entry, project: p } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
+// "On this page": the write-up's own sections, in order.
+const sections = headings.filter((h) => h.depth === 2);
 // `demo` is the card's Demo link too, label and all, so the two can never disagree.
 const { description, summary, video, screenshot, demo } = entry.data;
 ---
@@ -28,10 +30,11 @@ const { description, summary, video, screenshot, demo } = entry.data;
   {video && <link slot="head" rel="preload" as="image" href={video.poster} fetchpriority="high" />}
   <article class="writeup">
     <header class="writeup-head">
+      <a class="back" href="/#projects">← All projects</a>
       <h1>{p.title}</h1>
       <p class="meta">{p.role && <>{p.role} · </>}{p.dates}</p>
       <Tags items={p.stack} />
-      <p class="links"><a href={p.url}>Code</a>{demo && <> · <a href={demo.url}>{demo.label}</a></>}</p>
+      <p class="links"><a class="btn primary" href={p.url}>Code</a>{demo && <a class="btn" href={demo.url}>{demo.label}</a>}</p>
     </header>
     <p class="tldr">{summary}</p>
     {video && (
@@ -58,6 +61,12 @@ const { description, summary, video, screenshot, demo } = entry.data;
       <h2 id="glance-h">At a glance</h2>
       <ul class="bullets">{p.bullets.map((b) => <li>{b}</li>)}</ul>
     </aside>
+    {sections.length > 0 && (
+      <nav class="toc" aria-labelledby="toc-h">
+        <h2 id="toc-h">On this page</h2>
+        <ol>{sections.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ol>
+      </nav>
+    )}
     <div class="prose">
       <Content />
     </div>

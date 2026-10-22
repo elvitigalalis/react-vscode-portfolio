@@ -1,33 +1,47 @@
 ---
-// The first screen: who, what, where, and the two buttons, all as plain text.
+// The first screen: who, what, where, and the two buttons as text, with a plant grown from this
+// build's commit beside them (src/plant/grow.mjs). The plant is decoration only.
 import { siteConfig } from "../config";
+import { growPlant } from "../plant/grow.mjs";
+import { shortCommit } from "../build-info.mjs";
 import { profileLink, resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 
 const { basics, education, experience } = resume;
 const graduating = education[0].date.replace(/^Expected\s+/, "");
 const current = experience.filter((e) => /Present$/.test(e.dates));
+// resume.json lists roles newest first, so the first one that has ended is the latest past role.
+const previous = experience.find((e) => !/Present$/.test(e.dates));
 const github = profileLink("GitHub");
 const linkedin = profileLink("LinkedIn");
+
+const seed = shortCommit || "lisul";
 ---
 
 <section class="hero wrap" id="top" aria-labelledby="name">
-  <p class="kicker">{home.kicker}</p>
-  <h1 id="name">{basics.name}</h1>
-  <p class="thesis">{home.thesis}</p>
-  <p class="cta">
-    <a class="btn primary" href="#projects">Projects →</a>
-    <a class="btn" href={siteConfig.resumePdf}>Résumé (PDF)</a>
-  </p>
-  <dl class="kv">
-    <dt>Location</dt><dd>{home.location}</dd>
-    <dt>Graduating</dt><dd>{graduating}</dd>
-    {current.length > 0 && <><dt>Currently</dt><dd>{current.map((e) => `${e.title}, ${e.company}`).join("; ")}</dd></>}
-    <dt>Citizenship</dt><dd>{basics.citizenship}</dd>
-  </dl>
-  <ul class="contact">
-    <li><a href={`mailto:${basics.email}`}>{basics.email}</a></li>
-    {github && <li><a href={github.url}>{github.label}</a></li>}
-    {linkedin && <li><a href={linkedin.url}>{linkedin.label}</a></li>}
-  </ul>
+  <div class="hero-text">
+    <p class="kicker">{home.kicker}</p>
+    <h1 id="name">{basics.name}</h1>
+    <p class="thesis">{home.thesis}</p>
+    <p class="cta">
+      <a class="btn primary" href="#projects">Projects →</a>
+      <a class="btn" href={siteConfig.resumePdf}>Résumé (PDF)</a>
+    </p>
+    <dl class="kv">
+      <dt>Location</dt><dd>{home.location}</dd>
+      <dt>Graduating</dt><dd>{graduating}</dd>
+      {current.length > 0 && <><dt>Currently</dt><dd>{current.map((e) => `${e.title}, ${e.company}`).join("; ")}</dd></>}
+      {previous && <><dt>Previously</dt><dd>{previous.title}, {previous.company}</dd></>}
+      <dt>Citizenship</dt><dd>{basics.citizenship}</dd>
+    </dl>
+    <ul class="contact">
+      <li><a href={`mailto:${basics.email}`}>{basics.email}</a></li>
+      {github && <li><a href={github.url}>{github.label}</a></li>}
+      {linkedin && <li><a href={linkedin.url}>{linkedin.label}</a></li>}
+    </ul>
+  </div>
+  <figure class="hero-plant" aria-hidden="true">
+    <Fragment set:html={growPlant(seed)} />
+    <figcaption>Grown from commit {seed}</figcaption>
+  </figure>
 </section>

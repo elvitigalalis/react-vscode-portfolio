@@ -78,7 +78,7 @@ tasks jumping days across time zones.
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
-- The site's own colours, system fonts, light and dark mode. Motion is limited to 0.25 s opacity
+- The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
   fades and is off under `prefers-reduced-motion`.
 
 ## Adding and editing (Tweek, Ellie, TeuxDeux)
