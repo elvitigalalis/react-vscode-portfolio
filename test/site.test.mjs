@@ -52,12 +52,15 @@ test("the résumé PDF keeps its old public path", () => {
   assert.ok(home.includes(`href="${RESUME_PDF}"`));
 });
 
-test("no client JS beyond the inline hash script, except on The Sheet's pages", () => {
-  // JSON-LD is data, not code, so it does not count.
+test("no client JS beyond three tiny inline scripts, except on The Sheet's pages", () => {
+  // JSON-LD is data, not code, so it does not count. The rest: the old-hash redirect, the theme
+  // pick applied before first paint, and the top bar's light/dark switch and Plan link.
   const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !m[1].includes("ld+json"));
-  assert.equal(scripts.length, 1);
-  assert.doesNotMatch(scripts[0][1], /src=/);
-  assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
+  assert.deepEqual(scripts.map((m) => m[1].trim()).sort(), ["", "data-theme-init", "data-topbar"]);
+  for (const [, attrs, code] of scripts) {
+    assert.doesNotMatch(attrs, /src=/);
+    assert.ok(code.length < 1024, `${attrs.trim() || "hash"} script stays tiny`);
+  }
   // Script files exist only for /plan and /now (docs/sheet.md): no other page loads one, and every
   // one is loaded by those pages, directly or through another script's import.
   const rel = (f) => f.slice(dist.length);
