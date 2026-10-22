@@ -1,23 +1,29 @@
-/* One accent colour, system fonts, no motion. Dark mode follows the OS. */
+/* Ivory and cream with a royal blue accent; sage leaves are the only ornament. System fonts, no motion.
+   Dark mode follows the OS. */
 :root {
-  --bg: #f8f9fb;
-  --fg: #0f1b2d;
-  --muted: #4a5568;
-  --line: #e2e6ec;
-  --chip: #eef1f5;
-  --accent: #1e3a5f;
-  --accent-fg: #ffffff;
+  --bg: #fdfbf3;
+  --fg: #1b1f33;
+  --muted: #5c5648;
+  --line: #e6dcc2;
+  --chip: #f3ead3;
+  --card: #f8f2e2;
+  --accent: #2346c8;
+  --accent-fg: #fdfbf3;
+  --leaf: #6f8f5e;
+  --sprig: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3.5 21.5C8 16.5 13 10.5 20.5 3' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round'/%3E%3Cpath d='M7.2 17.6C3.6 17.5 1.6 15 1.5 11.6c3.4.3 5.6 2.6 5.7 6z'/%3E%3Cpath d='M9.4 15.2c.6-3.4 3.2-5 6.6-4.6-.6 3.4-3.2 5-6.6 4.6z'/%3E%3Cpath d='M12.2 11.9C9 10.9 7.8 8.1 8.6 4.9c3 1.1 4.3 3.8 3.6 7z'/%3E%3Cpath d='M14.6 9.2c1.3-3 4-4 7.1-3-1.3 3-4 4-7.1 3z'/%3E%3Cpath d='M20.5 3c-3.2-.4-5.3.9-6.2 3.8 3.1.6 5.3-.8 6.2-3.8z'/%3E%3C/svg%3E");
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b1320;
-    --fg: #e6e9ef;
-    --muted: #9aa6b8;
-    --line: #1f2a3a;
-    --chip: #142033;
-    --accent: #9fb9e3;
-    --accent-fg: #0b1320;
+    --bg: #0e1430;
+    --fg: #f3ecdc;
+    --muted: #b8b0a0;
+    --line: #232c55;
+    --chip: #18214a;
+    --card: #121a3d;
+    --accent: #9db2ff;
+    --accent-fg: #0e1430;
+    --leaf: #9cba88;
   }
 }
 
@@ -129,7 +135,7 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .prose p, .prose ul { margin: 0 0 1rem; }
 .prose ul { padding-left: 1.2rem; }
 .prose li { margin-bottom: 0.35rem; }
-.todo { background: #fef08a; color: #0f1b2d; padding: 0 0.2em; }
+.todo { background: #fef08a; color: #1b1f33; padding: 0 0.2em; }
 .writeup-end { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; font-weight: 600; }
 /* Drawn figures follow the page's colours, light or dark. */
 .writeup figure svg.fig-svg { max-width: 26rem; margin: 0 auto; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -142,3 +148,32 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .fig-svg .grid { stroke: var(--line); stroke-width: 2; }
 .fig-svg .bar { fill: var(--muted); }
 .fig-svg .bar.accent { fill: var(--accent); }
+
+/* Plants: a sprig before each section heading, leaf-green bullets, one faint sprig by the name,
+   and a sprig sitting on the footer rule. All decorative, so none of it carries meaning. */
+section.wrap > h2, .prose h2 { display: flex; align-items: center; gap: 0.5rem; }
+section.wrap > h2::before, .prose h2::before {
+  content: ""; flex: none; width: 1.1em; height: 1.1em; background: var(--leaf);
+  -webkit-mask: var(--sprig) center / contain no-repeat; mask: var(--sprig) center / contain no-repeat;
+}
+.bullets li::marker, .prose li::marker { color: var(--leaf); }
+.card, .glance { background: var(--card); }
+.hero { position: relative; }
+.hero::after {
+  content: ""; position: absolute; top: 1rem; right: 0.5rem; width: 8.5rem; height: 8.5rem;
+  background: var(--leaf); opacity: 0.18; transform: rotate(-12deg); pointer-events: none;
+  -webkit-mask: var(--sprig) center / contain no-repeat; mask: var(--sprig) center / contain no-repeat;
+}
+@media (max-width: 52rem) { .hero::after { display: none; } }
+.footer { position: relative; }
+.footer::before {
+  content: ""; position: absolute; top: -0.85rem; left: 50%; width: 1.7rem; height: 1.7rem; margin-left: -0.85rem;
+  background: var(--leaf);
+  -webkit-mask: var(--sprig) center / contain no-repeat; mask: var(--sprig) center / contain no-repeat;
+}
+/* The rule breaks around the sprig instead of running through it. */
+.footer { border-top: 0; }
+.footer::after {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(to right, var(--line) calc(50% - 1.5rem), transparent 0 calc(50% + 1.5rem), var(--line) 0);
+}
