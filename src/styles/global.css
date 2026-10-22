@@ -13,6 +13,10 @@
   --accent-fg: #fff9f1;
   --btn: #566553;
   --btn-hover: #4f5d4c;
+  --stem: #6b5a48;
+  --leaf-1: #9eab9a;
+  --leaf-2: #879183;
+  --leaf-3: #b7c2b3;
   --warn: #b45309;
   --danger: #b91c1c;
   color-scheme: light dark;
@@ -32,6 +36,10 @@
     --accent-fg: #1b1915;
     --btn: #9eab9a;
     --btn-hover: #b3bfaf;
+    --stem: #8a7864;
+    --leaf-1: #7d8b79;
+    --leaf-2: #66725f;
+    --leaf-3: #9eab9a;
     --warn: #fbbf24;
     --danger: #f87171;
     color-scheme: dark;
@@ -49,6 +57,10 @@
   --accent-fg: #1b1915;
   --btn: #9eab9a;
   --btn-hover: #b3bfaf;
+  --stem: #8a7864;
+  --leaf-1: #7d8b79;
+  --leaf-2: #66725f;
+  --leaf-3: #9eab9a;
   --warn: #fbbf24;
   --danger: #f87171;
   color-scheme: dark;
@@ -107,8 +119,31 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
   .topbar .wide { display: none; }
 }
 
-/* First screen. */
-.hero { padding-top: 2rem; }
+/* First screen: the text, and beside it a plant grown from this build's commit (src/plant/). */
+.hero { padding-top: 2rem; display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 2rem; align-items: end; }
+.hero-plant { margin: 0; }
+.hero-plant svg { display: block; width: 100%; height: auto; }
+.hero-plant figcaption {
+  margin-top: 0.35rem; text-align: center; color: var(--muted);
+  font: 0.6875rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.plant .s { fill: none; stroke: var(--stem); stroke-linecap: round; }
+.plant .f1 { fill: var(--leaf-1); }
+.plant .f2 { fill: var(--leaf-2); }
+.plant .f3 { fill: var(--leaf-3); }
+/* It grows once, in the order it grew: stems draw on, then leaves fade in. Leaves fade rather than
+   scale, since a CSS transform would replace each leaf's own placement. */
+@media (prefers-reduced-motion: no-preference) {
+  .plant .s { stroke-dasharray: var(--l); stroke-dashoffset: var(--l); animation: plant-draw 0.6s ease-out var(--t) forwards; }
+  .plant .f { opacity: 0; animation: plant-leaf 0.5s ease-out var(--t) forwards; }
+}
+@keyframes plant-draw { to { stroke-dashoffset: 0; } }
+@keyframes plant-leaf { to { opacity: 1; } }
+/* Phones keep the first screen for the facts. */
+@media (max-width: 46rem) {
+  .hero { display: block; }
+  .hero-plant { display: none; }
+}
 .kicker { margin: 0 0 0.35rem; color: var(--muted); font-size: 0.9375rem; letter-spacing: 0.02em; }
 .hero h1 { font-size: clamp(2.25rem, 7vw, 3.25rem); letter-spacing: -0.02em; }
 .thesis { font-size: 1.125rem; margin: 0.75rem 0 1.25rem; max-width: 40rem; }
