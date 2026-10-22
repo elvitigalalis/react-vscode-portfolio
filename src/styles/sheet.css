@@ -78,7 +78,7 @@
   border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.35rem 0.7rem; min-height: 2rem; cursor: pointer;
 }
 .sheet-btn:hover { border-color: var(--muted); }
-.sheet-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.sheet-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-btn); font-weight: 600; }
 .sheet-btn kbd { font: inherit; font-size: 0.75rem; opacity: 0.75; margin-left: 0.25rem; }
 .sheet-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
@@ -210,7 +210,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.5rem;
 }
 .sheet-dialog-end { gap: 0.5rem; }
-#sheet-cal-ids { margin-top: 0.75rem; font-family: ui-monospace, Menlo, monospace; font-size: 0.8125rem; }
+#sheet-cal-ids { margin-top: 0.75rem; font-family: var(--mono); font-size: 0.8125rem; }
 .sheet-week > .sheet-status { grid-column: 1 / -1; }
 
 /* Tablets (iPad portrait): seven columns would be ~90 px each, so the week becomes a row of

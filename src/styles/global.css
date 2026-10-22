@@ -1,76 +1,39 @@
 /* 60-30-10: ivory-cream surfaces, brown text and beige rules, and deep sage only for links and the
-   one main button in each place. Dark mode is the same palette at night.
-   System fonts, no motion. Dark mode follows the OS until the visitor picks one. */
+   one main button in each place. Dark mode is the same palette at night. Headings in Fraunces, text
+   in Inter (self-hosted below), metadata in the system monospace. The only motion is the hero plant
+   growing in once, and only for visitors who allow motion.
+   Each colour is light-dark(day, night): the OS picks unless the visitor used the top bar's switch,
+   which sets data-theme on <html> before first paint and so forces color-scheme. */
 :root {
-  --bg: #f9f3ea;
-  --fg: #2e261e;
-  --muted: #6b5a48;
-  --line: #e7d8c9;
-  --line-strong: #cdbca8;
-  --chip: #efe4d6;
-  --card: #fffcf7;
-  --accent: #4f5d4c;
-  --accent-fg: #fff9f1;
-  --btn: #566553;
-  --btn-hover: #4f5d4c;
-  --stem: #6b5a48;
-  --leaf-1: #9eab9a;
-  --leaf-2: #879183;
-  --leaf-3: #b7c2b3;
-  --warn: #b45309;
-  --danger: #b91c1c;
+  color-scheme: light dark;
+  --bg: light-dark(#f9f3ea, #1b1915);
+  --fg: light-dark(#2e261e, #f6eee3);
+  --muted: light-dark(#6b5a48, #bfb2a1);
+  --line: light-dark(#e7d8c9, #38322a);
+  --line-strong: light-dark(#cdbca8, #4f463b);
+  --chip: light-dark(#efe4d6, #2f2a23);
+  --card: light-dark(#fffcf7, #24211c);
+  --accent: light-dark(#4f5d4c, #a9b6a5);
+  --btn: light-dark(#566553, #9eab9a);
+  --btn-hover: light-dark(#4f5d4c, #b3bfaf);
+  --on-btn: light-dark(#fff9f1, #1b1915);
+  --stem: light-dark(#6b5a48, #8a7864);
+  --leaf-1: light-dark(#9eab9a, #7d8b79);
+  --leaf-2: light-dark(#879183, #66725f);
+  --leaf-3: light-dark(#b7c2b3, #9eab9a);
+  --warn: light-dark(#b45309, #fbbf24);
+  --danger: light-dark(#b91c1c, #f87171);
   --serif: "Fraunces", "Fraunces Fallback", Georgia, serif;
   --sans: "Inter", "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --heading-weight: 500;
-  color-scheme: light dark;
-}
-/* Dark tokens apply when the OS asks for dark and the visitor has not picked light, or when they
-   picked dark with the switch in the top bar (data-theme on <html>, set before first paint). */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #1b1915;
-    --fg: #f6eee3;
-    --muted: #bfb2a1;
-    --line: #38322a;
-    --line-strong: #4f463b;
-    --chip: #2f2a23;
-    --card: #24211c;
-    --accent: #a9b6a5;
-    --accent-fg: #1b1915;
-    --btn: #9eab9a;
-    --btn-hover: #b3bfaf;
-    --stem: #8a7864;
-    --leaf-1: #7d8b79;
-    --leaf-2: #66725f;
-    --leaf-3: #9eab9a;
-    --warn: #fbbf24;
-    --danger: #f87171;
-    --heading-weight: 450;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #1b1915;
-  --fg: #f6eee3;
-  --muted: #bfb2a1;
-  --line: #38322a;
-  --line-strong: #4f463b;
-  --chip: #2f2a23;
-  --card: #24211c;
-  --accent: #a9b6a5;
-  --accent-fg: #1b1915;
-  --btn: #9eab9a;
-  --btn-hover: #b3bfaf;
-  --stem: #8a7864;
-  --leaf-1: #7d8b79;
-  --leaf-2: #66725f;
-  --leaf-3: #9eab9a;
-  --warn: #fbbf24;
-  --danger: #f87171;
-  --heading-weight: 450;
-  color-scheme: dark;
 }
 :root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+/* Light text on a dark page looks heavier, so dark headings drop a little weight. light-dark()
+   only takes colours, so this one value is set per scheme. */
+:root[data-theme="dark"] { --heading-weight: 450; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --heading-weight: 450; } }
 
 /* Two self-hosted fonts (research/site-fonts.md in resume-2027): Fraunces for headings, at its
    display size with soft terminals, and Inter for text. Both are SIL OFL, cut to Latin; licences
@@ -103,12 +66,12 @@ body {
 a { color: var(--accent); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
 a:hover { text-decoration-thickness: 2px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 0.2rem; }
-::selection { background: var(--btn); color: var(--accent-fg); }
+::selection { background: var(--btn); color: var(--on-btn); }
 h1, h2, h3 { line-height: 1.2; margin: 0; text-wrap: balance; }
 h1, h2 { font-family: var(--serif); font-weight: var(--heading-weight); }
 h3 { font-weight: 600; }
 p, li { text-wrap: pretty; }
-h2 { font-size: 1.875rem; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 1.5rem; }
+h2 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 1.5rem; }
 h3 { font-size: 1.0625rem; }
 ul, ol { margin: 0; padding: 0; }
 img { max-width: 100%; height: auto; display: block; }
@@ -150,12 +113,12 @@ section.hero { padding-top: 2rem; }
 }
 
 /* First screen: the text, and beside it a plant grown from this build's commit (src/plant/). */
-.hero { padding-top: 2rem; display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 2rem; align-items: end; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 2rem; align-items: end; }
 .hero-plant { margin: 0; }
 .hero-plant svg { display: block; width: 100%; height: auto; }
 .hero-plant figcaption {
   margin-top: 0.35rem; text-align: center; color: var(--muted);
-  font: 0.6875rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.08em; text-transform: uppercase;
+  font: 0.6875rem/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
 }
 .plant .s { fill: none; stroke: var(--stem); stroke-linecap: round; }
 .plant .f1 { fill: var(--leaf-1); }
@@ -165,7 +128,7 @@ section.hero { padding-top: 2rem; }
    scale, since a CSS transform would replace each leaf's own placement. */
 @media (prefers-reduced-motion: no-preference) {
   .plant .s { stroke-dasharray: var(--l); stroke-dashoffset: var(--l); animation: plant-draw 0.6s ease-out var(--t) forwards; }
-  .plant .f { opacity: 0; animation: plant-leaf 0.5s ease-out var(--t) forwards; }
+  .plant .f { opacity: 0; animation: plant-leaf 0.4s ease-out var(--t) forwards; }
 }
 @keyframes plant-draw { to { stroke-dashoffset: 0; } }
 @keyframes plant-leaf { to { opacity: 1; } }
@@ -185,7 +148,7 @@ section.hero { padding-top: 2rem; }
 }
 .btn:hover { background: var(--chip); }
 /* Only the main action is filled; the rest stay outlined so it stands out. */
-.btn.primary { background: var(--btn); border-color: var(--btn); color: var(--accent-fg); }
+.btn.primary { background: var(--btn); border-color: var(--btn); color: var(--on-btn); }
 .btn.primary:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 1.5rem 0 1rem; font-size: 0.9375rem; }
 .kv dt { color: var(--muted); font-size: 0.75rem; padding-top: 0.2rem; }
@@ -197,7 +160,7 @@ section.hero { padding-top: 2rem; }
 .entry { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.25rem 1.25rem; margin-bottom: 2rem; }
 /* Dates, labels and tags: small capitals in the system monospace, so they read as metadata. */
 .dates, .tags li, .kv dt, .kicker {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.06em;
+  font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
 }
 .dates { margin: 0; color: var(--muted); font-size: 0.75rem; padding-top: 0.3rem; font-variant-numeric: tabular-nums; }
 .meta { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9375rem; }
@@ -247,7 +210,7 @@ section.hero { padding-top: 2rem; }
 .writeup-head .btn { font-size: 0.875rem; padding: 0.4rem 0.8rem; }
 .toc { margin: 0 0 2rem; padding: 0 0 0 1rem; border-left: 2px solid var(--line); }
 .toc h2 {
-  font: 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase;
+  font: 0.75rem/1.4 var(--mono); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem;
 }
 .toc ol { padding-left: 1.2rem; font-size: 0.9375rem; }
@@ -281,4 +244,4 @@ section.hero { padding-top: 2rem; }
 .card, .glance { background: var(--card); }
 
 /* Links that leave the site say so. */
-main a[href^="http"]:not(.btn)::after, .footer a[href^="http"]::after { content: "\2009\2197"; font-size: 0.85em; }
+main a[href^="http"]::after, .footer a[href^="http"]::after { content: "\2009\2197"; font-size: 0.85em; }
