@@ -1,9 +1,9 @@
 ---
-// The first screen: who, what, where, and the two buttons, all as plain text, with a plant grown
-// from this build's commit beside them (src/plant/grow.mjs). The plant is decoration only.
-import { execSync } from "node:child_process";
+// The first screen: who, what, where, and the two buttons as text, with a plant grown from this
+// build's commit beside them (src/plant/grow.mjs). The plant is decoration only.
 import { siteConfig } from "../config";
 import { growPlant } from "../plant/grow.mjs";
+import { shortCommit } from "../build-info.mjs";
 import { profileLink, resume } from "../data/resume";
 import { frontmatter as home } from "../content/home.md";
 
@@ -15,11 +15,7 @@ const previous = experience.find((e) => !/Present$/.test(e.dates));
 const github = profileLink("GitHub");
 const linkedin = profileLink("LinkedIn");
 
-let commit = process.env.GITHUB_SHA ?? "";
-if (!commit) {
-  try { commit = execSync("git rev-parse HEAD", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch {}
-}
-const seed = commit.slice(0, 7) || "lisul";
+const seed = shortCommit || "lisul";
 ---
 
 <section class="hero wrap" id="top" aria-labelledby="name">
