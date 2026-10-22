@@ -241,7 +241,18 @@ section.hero { padding-top: 2rem; }
 /* Write-ups: one narrow reading column; figures span it, each led in by a sentence. */
 .writeup { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem 0; }
 .writeup h1 { font-size: clamp(1.75rem, 6vw, 2.25rem); letter-spacing: -0.01em; }
-.writeup-head .links { margin: 0.6rem 0 0; font-weight: 600; }
+.writeup-head .back { display: inline-block; margin-bottom: 1rem; font-size: 0.9375rem; text-decoration: none; }
+.writeup-head .back:hover { text-decoration: underline; }
+.writeup-head .links { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0 0; }
+.writeup-head .btn { font-size: 0.875rem; padding: 0.4rem 0.8rem; }
+.toc { margin: 0 0 2rem; padding: 0 0 0 1rem; border-left: 2px solid var(--line); }
+.toc h2 {
+  font: 0.75rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem;
+}
+.toc ol { padding-left: 1.2rem; font-size: 0.9375rem; }
+.toc li { margin-bottom: 0.2rem; }
+.prose h2 { scroll-margin-top: 4rem; }
 .tldr { font-size: 1.125rem; margin: 1.5rem 0; }
 .writeup figure { margin: 1.25rem 0 1.75rem; }
 .writeup figure img, .writeup figure video, .writeup figure svg { display: block; width: 100%; height: auto; border-radius: 0.4rem; }

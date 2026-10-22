@@ -500,3 +500,19 @@ test("the first screen names the most recent past role beside the current one", 
   const past = resume.experience.find((e) => !/Present$/.test(e.dates));
   assert.match(hero, new RegExp(`<dt>Previously</dt>\\s*<dd>${escapeRe(`${past.title}, ${past.company}`)}</dd>`));
 });
+
+test("a write-up opens with a way back, its links as buttons, and an On this page list", () => {
+  for (const slug of writeupSlugs()) {
+    const html = writeupHtml(slug);
+    const head = html.match(/<header class="writeup-head"[\s\S]*?<\/header>/)[0];
+    assert.match(head, /^<header class="writeup-head"[^>]*>\s*<a[^>]*href="\/#projects"[^>]*>← All projects<\/a>/, `${slug}: back link first`);
+    assert.match(head.match(/<p class="links">[\s\S]*?<\/p>/)[0], /<a class="btn[^"]*" href="[^"]+">Code<\/a>/, `${slug}: Code is a button`);
+    const toc = html.match(/<nav class="toc"[^>]*>[\s\S]*?<\/nav>/)?.[0];
+    assert.ok(toc, `${slug}: On this page`);
+    assert.match(toc, /On this page/);
+    const sections = [...readFileSync(join(writeupDir, `${slug}.md`), "utf8").matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+    const targets = [...toc.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(targets.length, sections.length, `${slug}: one entry per section`);
+    for (const id of targets) assert.match(html, new RegExp(`<h2 id="${escapeRe(id)}"`), `${slug}: #${id} exists`);
+  }
+});
