@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 const out = new URL("../public/", import.meta.url).pathname;
 // The site's accent and its ink colours (src/styles/global.css), light then dark.
-const LIGHT = { bg: "#2346c8", fg: "#fffdf6" };
+const LIGHT = { bg: "#6e5320", fg: "#fffdf6" };
 const DARK = { bg: "#e3cc98", fg: "#1b1915" };
 
 // L and E, each 10 wide and 20 tall with 4-unit strokes, inside x 4..28, y 6..26.
@@ -67,11 +67,11 @@ execFileSync("rm", [join(out, "favicon-16.png"), join(out, "favicon-32.png")]);
 // (iMessage, WhatsApp) keeps the mark and most of the name.
 const og = `<!doctype html><meta charset="utf-8"><style>
 html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
-body { background: #f6f0e1; color: #1b1f33; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+body { background: #f6f0e1; color: #26211a; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 svg { width: 96px; height: 96px; margin-bottom: 40px; }
 h1 { margin: 0; font-size: 88px; font-weight: 700; letter-spacing: -0.025em; line-height: 1; }
-.role { margin: 22px 0 0; font-size: 40px; font-weight: 600; color: #2346c8; }
+.role { margin: 22px 0 0; font-size: 40px; font-weight: 600; color: #6e5320; }
 .line { margin: 14px 0 0; font-size: 30px; color: #5c5648; }
 .site { position: absolute; bottom: 40px; font-size: 22px; color: #5c5648; letter-spacing: 0.02em; }
 </style>
