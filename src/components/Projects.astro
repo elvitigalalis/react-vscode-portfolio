@@ -25,7 +25,7 @@ const writeups = new Map((await getCollection("writeups")).map((w) => [w.id, w.d
           <img
             src={extra.photo.src}
             srcset={`${extra.photo.src.replace(/\.webp$/, "-360.webp")} 360w, ${extra.photo.src} 640w`}
-            sizes="(max-width: 40rem) calc(100vw - 4rem), 15rem"
+            sizes="(max-width: 40rem) calc(100vw - 5.5rem), 18rem"
             alt={extra.photo.alt}
             width="640"
             height="480"
