@@ -24,7 +24,7 @@ import { resume } from "../data/resume";
   </nav>
 </header>
 
-<script is:inline>
+<script is:inline data-topbar>
   (() => {
     try { if (localStorage.getItem("sheet.session")) document.querySelector("[data-owner]").hidden = false; } catch {}
     const btn = document.querySelector("[data-theme-toggle]");
