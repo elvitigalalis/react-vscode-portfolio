@@ -105,10 +105,12 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .cta, .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; }
 .btn {
   display: inline-block; padding: 0.55rem 1rem; border-radius: 0.4rem;
-  border: 1px solid var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9375rem;
+  border: 1px solid var(--line); background: var(--card); color: var(--accent);
+  text-decoration: none; font-weight: 600; font-size: 0.9375rem;
 }
-.btn.primary { background: var(--accent); color: var(--accent-fg); }
-.btn:hover { text-decoration: underline; }
+/* Buttons are ivory cards; the main one is set apart by an accent border, not a fill. */
+.btn.primary { border-color: var(--accent); }
+.btn:hover { text-decoration: underline; border-color: var(--accent); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 1.5rem 0 1rem; font-size: 0.9375rem; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
