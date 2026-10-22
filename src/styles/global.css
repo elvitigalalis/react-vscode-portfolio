@@ -1,17 +1,18 @@
-/* Cream page, ivory cards, brown links and sage buttons; dark mode is the same palette at night.
+/* 60-30-10: ivory-cream surfaces, brown text and beige rules, and deep sage only for links and the
+   one main button in each place. Dark mode is the same palette at night.
    System fonts, no motion. Dark mode follows the OS until the visitor picks one. */
 :root {
-  --bg: #f6ece0;
+  --bg: #f9f3ea;
   --fg: #2e261e;
   --muted: #6b5a48;
   --line: #e7d8c9;
-  --chip: #e7d8c9;
-  --card: #fff4e9;
-  --accent: #6b5a48;
-  --accent-fg: #fff4e9;
-  --btn: #9eab9a;
-  --btn-fg: #2e261e;
-  --btn-line: #879183;
+  --line-strong: #cdbca8;
+  --chip: #efe4d6;
+  --card: #fffcf7;
+  --accent: #4f5d4c;
+  --accent-fg: #fff9f1;
+  --btn: #566553;
+  --btn-hover: #4f5d4c;
   --warn: #b45309;
   --danger: #b91c1c;
   color-scheme: light dark;
@@ -20,30 +21,34 @@
    picked dark with the switch in the top bar (data-theme on <html>, set before first paint). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #1d1a16;
-    --fg: #fff4e9;
-    --muted: #b9ab9a;
-    --line: #3a332b;
-    --chip: #332d26;
-    --card: #27231e;
-    --accent: #9eab9a;
-    --accent-fg: #1d1a16;
-    --btn-fg: #1d1a16;
+    --bg: #1b1915;
+    --fg: #f6eee3;
+    --muted: #bfb2a1;
+    --line: #38322a;
+    --line-strong: #4f463b;
+    --chip: #2f2a23;
+    --card: #24211c;
+    --accent: #a9b6a5;
+    --accent-fg: #1b1915;
+    --btn: #9eab9a;
+    --btn-hover: #b3bfaf;
     --warn: #fbbf24;
     --danger: #f87171;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #1d1a16;
-  --fg: #fff4e9;
-  --muted: #b9ab9a;
-  --line: #3a332b;
-  --chip: #332d26;
-  --card: #27231e;
-  --accent: #9eab9a;
-  --accent-fg: #1d1a16;
-  --btn-fg: #1d1a16;
+  --bg: #1b1915;
+  --fg: #f6eee3;
+  --muted: #bfb2a1;
+  --line: #38322a;
+  --line-strong: #4f463b;
+  --chip: #2f2a23;
+  --card: #24211c;
+  --accent: #a9b6a5;
+  --accent-fg: #1b1915;
+  --btn: #9eab9a;
+  --btn-hover: #b3bfaf;
   --warn: #fbbf24;
   --danger: #f87171;
   color-scheme: dark;
@@ -110,10 +115,13 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .cta, .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; }
 .btn {
   display: inline-block; padding: 0.55rem 1rem; border-radius: 0.4rem;
-  border: 1px solid var(--btn-line); background: var(--btn); color: var(--btn-fg);
+  border: 1px solid var(--line-strong); background: transparent; color: var(--fg);
   text-decoration: none; font-weight: 600; font-size: 0.9375rem;
 }
-.btn:hover { text-decoration: underline; background: var(--btn-line); }
+.btn:hover { background: var(--chip); }
+/* Only the main action is filled; the rest stay outlined so it stands out. */
+.btn.primary { background: var(--btn); border-color: var(--btn); color: var(--accent-fg); }
+.btn.primary:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 1.5rem 0 1rem; font-size: 0.9375rem; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
@@ -128,7 +136,7 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .bullets { padding-left: 1.1rem; margin-top: 0.5rem; }
 .bullets li { margin-bottom: 0.3rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin-top: 0.6rem; }
-.tags li { background: var(--chip); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8125rem; }
+.tags li { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8125rem; }
 .more { font-weight: 600; }
 @media (max-width: 40rem) {
   .entry { grid-template-columns: 1fr; }
