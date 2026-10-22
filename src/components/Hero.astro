@@ -28,6 +28,7 @@ const seed = shortCommit || "lisul";
       <a class="btn" href={siteConfig.resumePdf}>Résumé (PDF)</a>
     </p>
     <dl class="kv">
+      {home.open && <><dt>Open to</dt><dd>{home.open}</dd></>}
       <dt>Location</dt><dd>{home.location}</dd>
       <dt>Graduating</dt><dd>{graduating}</dd>
       {current.length > 0 && <><dt>Currently</dt><dd>{current.map((e) => `${e.title}, ${e.company}`).join("; ")}</dd></>}
