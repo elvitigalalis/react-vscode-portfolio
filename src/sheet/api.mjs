@@ -5,6 +5,7 @@ import { SHEET } from "../site.mjs";
 export const configured = Boolean(SHEET.supabaseUrl && SHEET.anonKey);
 
 const SCOPES = "https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.events.readonly";
+// The top bar (src/components/Header.astro) reads this key too, to show the owner a Plan link.
 const KEY = "sheet.session";
 // Google access tokens last an hour; treat them as stale a few minutes early.
 const GOOGLE_TTL = 55 * 60 * 1000;
