@@ -17,6 +17,9 @@ type Props = SeoProps;
     <!-- The visitor's light/dark pick, applied before first paint so the page never flashes the other theme. -->
     <script is:inline data-theme-init>try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}</script>
     <Seo {...Astro.props} />
+    <!-- The two fonts (global.css), fetched in parallel with the stylesheet. -->
+    <link rel="preload" href="/fonts/fraunces-display.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/inter-text.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f3ea" />
