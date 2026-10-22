@@ -56,12 +56,15 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+/* Fluid scale (utopia.fyi): the root size holds at 16px up to a 1280px screen and grows to 20px at
+   2000px, so on big screens the column, type, photos and spacing grow together (every size is in
+   rem) and lines keep the same character count. The rem term keeps browser zoom working. */
+html { -webkit-text-size-adjust: 100%; font-size: clamp(100%, 0.5556rem + 0.5556vw, 125%); }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 400 17px/1.6 var(--sans);
+  font: 400 1.0625rem/1.6 var(--sans);
 }
 a { color: var(--accent); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
 a:hover { text-decoration-thickness: 2px; }
@@ -238,7 +241,7 @@ section.hero { padding-top: 2.5rem; }
 .todo { background: #fef08a; color: #2e261e; padding: 0 0.2em; }
 .writeup-end { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; font-weight: 600; }
 /* Drawn figures follow the page's colours, light or dark. */
-.writeup figure svg.fig-svg { max-width: 26rem; margin: 0 auto; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.writeup figure svg.fig-svg { max-width: 26rem; margin: 0 auto; font: 0.8125rem system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 /* /plant/: three plants side by side, each over its seed. */
 .grown-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
 .writeup .grown { margin: 0; text-align: center; }
