@@ -514,3 +514,26 @@ test("a write-up opens with a way back, its links as buttons, and an On this pag
     for (const id of targets) assert.match(html, new RegExp(`<h2 id="${escapeRe(id)}"`), `${slug}: #${id} exists`);
   }
 });
+
+test("Now lives in the footer, not the top bar", () => {
+  for (const page of ["index.html", "404.html", ...writeupSlugs().map((s) => `projects/${s}/index.html`)]) {
+    const html = readFileSync(join(dist, page), "utf8");
+    assert.doesNotMatch(html.match(/<header class="topbar"[\s\S]*?<\/header>/)[0], /href="\/now\/"/, `${page}: top bar`);
+    assert.match(html.match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/now\/">Now<\/a>/, `${page}: footer`);
+  }
+});
+
+test("the first screen says what Lisul is open to, first in the facts list", () => {
+  const kv = home.match(/<dl class="kv">[\s\S]*?<\/dl>/)[0];
+  assert.match(kv, /^<dl class="kv">\s*<dt>Open to<\/dt>\s*<dd>Summer 2027 software engineering internships<\/dd>/);
+});
+
+test("/plant/ explains the hero's plant, shows plants grown from earlier commits, and the footer links it", () => {
+  const html = readFileSync(join(dist, "plant/index.html"), "utf8");
+  assert.match(html, /<h1>How the plant grows<\/h1>/);
+  const grown = [...html.matchAll(/<figure class="grown">\s*<svg class="plant"[^>]*aria-hidden="true"[\s\S]*?<\/svg>\s*<figcaption>Commit <code>([0-9a-f]{7})<\/code><\/figcaption>/g)];
+  assert.equal(grown.length, 3, "three sample plants, each captioned with its seed");
+  assert.match(html, /href="https:\/\/github\.com\/elvitigalalis\/react-vscode-portfolio\/blob\/main\/src\/plant\/grow\.mjs"/, "links the generator's source");
+  for (const page of ["index.html", "plant/index.html"])
+    assert.match(readFileSync(join(dist, page), "utf8").match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/plant\/">How the plant grows<\/a>/, page);
+});

@@ -19,10 +19,12 @@ const repo = "https://github.com/elvitigalalis/react-vscode-portfolio";
       <li><a href={`mailto:${resume.basics.email}`}>Email</a></li>
       {resume.basics.links.map((l) => <li><a href={l.url}>{profileOf(l.url) ?? l.label}</a></li>)}
       <li><a href={siteConfig.resumePdf}>Résumé (PDF)</a></li>
+      <li><a href="/now/">Now</a></li>
     </ul>
     <p class="small">
       Updated <time datetime={iso}>{updated}</time>
       {shortCommit && <> · built from <a href={`${repo}/commit/${commit}`}><code>{shortCommit}</code></a></>}
+      {" · "}<a href="/plant/">How the plant grows</a>
     </p>
   </div>
 </footer>
