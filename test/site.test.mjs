@@ -494,3 +494,9 @@ test("the hero shows a grown plant beside the text, hidden from screen readers, 
   const outside = css.replace(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{(?:[^{}]|\{[^{}]*\})*\}/g, "");
   assert.doesNotMatch(outside, /\.plant[^{]*\{[^}]*animation/, "no plant animation outside that query");
 });
+
+test("the first screen names the most recent past role beside the current one", () => {
+  const hero = home.match(/<section class="hero[^"]*"[\s\S]*?<\/section>/)[0];
+  const past = resume.experience.find((e) => !/Present$/.test(e.dates));
+  assert.match(hero, new RegExp(`<dt>Previously</dt>\\s*<dd>${escapeRe(`${past.title}, ${past.company}`)}</dd>`));
+});
