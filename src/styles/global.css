@@ -77,8 +77,11 @@ ul, ol { margin: 0; padding: 0; }
 img { max-width: 100%; height: auto; display: block; }
 
 .wrap { max-width: 50rem; margin: 0 auto; padding: 0 1rem; }
-section.wrap { padding-top: 4rem; padding-bottom: 1rem; scroll-margin-top: 3rem; }
-section.hero { padding-top: 2rem; }
+/* One rhythm: --gap between sections, nothing trailing at a section's end, so every gap matches. */
+:root { --gap: 4.5rem; }
+section.wrap { padding-top: var(--gap); padding-bottom: 0; scroll-margin-top: 3rem; }
+section.wrap > :last-child, .entries > :last-child, .card:last-child { margin-bottom: 0; }
+section.hero { padding-top: 2.5rem; }
 
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 1rem; top: 0.5rem; z-index: 2; background: var(--bg); padding: 0.25rem 0.5rem; }
@@ -157,7 +160,7 @@ section.hero { padding-top: 2rem; }
 
 /* Entries: date column on the left, collapsing above the text on phones. */
 .entries { list-style: none; }
-.entry { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.25rem 1.25rem; margin-bottom: 2rem; }
+.entry { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.25rem 1.25rem; margin-bottom: 2.5rem; }
 /* Dates, labels and tags: small capitals in the system monospace, so they read as metadata. */
 .dates, .tags li, .kv dt, .kicker {
   font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
@@ -171,6 +174,7 @@ section.hero { padding-top: 2rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin-top: 0.6rem; }
 .tags li { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.6875rem; }
 .more { font-weight: 600; }
+#experience .entries { margin-bottom: 1.5rem; }
 @media (max-width: 40rem) {
   .entry { grid-template-columns: 1fr; }
 }
@@ -178,7 +182,7 @@ section.hero { padding-top: 2rem; }
 /* Project cards: photo beside the text, stacked on phones. */
 .card {
   display: grid; grid-template-columns: 15rem 1fr; gap: 1.25rem;
-  border: 1px solid var(--line); border-radius: 0.6rem; padding: 1rem; margin-bottom: 1.25rem;
+  border: 1px solid var(--line); border-radius: 0.6rem; padding: 1.25rem; margin-bottom: 1.5rem;
 }
 .card img { border-radius: 0.4rem; aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
 .card h3 { margin-top: 0.15rem; }
@@ -197,7 +201,7 @@ section.hero { padding-top: 2rem; }
   .skills dd { margin-bottom: 0.6rem; }
 }
 
-.footer { border-top: 1px solid var(--line); margin-top: 2.5rem; padding: 1.5rem 0 2rem; }
+.footer { border-top: 1px solid var(--line); margin-top: var(--gap); padding: 1.5rem 0 2.5rem; }
 .small { color: var(--muted); font-size: 0.875rem; margin: 0.75rem 0 0; }
 .small a { color: var(--muted); }
 
