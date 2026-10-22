@@ -478,3 +478,19 @@ test("home JSON-LD: WebSite and ProfilePage about a Person, from resume.json", (
   assert.ok(!("telephone" in person), "the phone number stays off the site");
   assert.ok(!("worksFor" in person), "no employer claim for a past role");
 });
+
+test("the hero shows a grown plant beside the text, hidden from screen readers, animated only when motion is welcome", () => {
+  const hero = home.match(/<section class="hero[^"]*"[\s\S]*?<\/section>/)[0];
+  const svg = hero.match(/<svg class="plant"[\s\S]*?<\/svg>/)?.[0];
+  assert.ok(svg, "the hero carries the plant");
+  assert.match(svg, /aria-hidden="true"/);
+  assert.ok(svg.match(/class="f /g).length >= 24, "a full plant");
+  // The plant sits in its own figure, never wrapped around the name or the buttons.
+  assert.doesNotMatch(svg, /<h1|class="btn/);
+  const css = builtFiles().filter((f) => f.endsWith(".css")).map((f) => readFileSync(f, "utf8")).join("")
+    + [...home.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("");
+  const grow = css.match(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{[\s\S]*?\.plant[\s\S]*?animation/);
+  assert.ok(grow, "the draw-in lives inside a no-preference motion query");
+  const outside = css.replace(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{(?:[^{}]|\{[^{}]*\})*\}/g, "");
+  assert.doesNotMatch(outside, /\.plant[^{]*\{[^}]*animation/, "no plant animation outside that query");
+});
