@@ -8,8 +8,8 @@ import { join } from "node:path";
 
 const out = new URL("../public/", import.meta.url).pathname;
 // The site's accent and its ink colours (src/styles/global.css), light then dark.
-const LIGHT = { bg: "#6e5320", fg: "#fffdf6" };
-const DARK = { bg: "#e3cc98", fg: "#1b1915" };
+const LIGHT = { bg: "#6b5a48", fg: "#fff4e9" };
+const DARK = { bg: "#9eab9a", fg: "#1d1a16" };
 
 // L and E, each 10 wide and 20 tall with 4-unit strokes, inside x 4..28, y 6..26.
 const LETTERS = "M4 6h4v16h6v4H4zM18 6h10v4h-6v4h4v4h-4v4h6v4H18z";
@@ -67,13 +67,13 @@ execFileSync("rm", [join(out, "favicon-16.png"), join(out, "favicon-32.png")]);
 // (iMessage, WhatsApp) keeps the mark and most of the name.
 const og = `<!doctype html><meta charset="utf-8"><style>
 html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
-body { background: #f6f0e1; color: #26211a; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+body { background: #f6ece0; color: #2e261e; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 svg { width: 96px; height: 96px; margin-bottom: 40px; }
 h1 { margin: 0; font-size: 88px; font-weight: 700; letter-spacing: -0.025em; line-height: 1; }
-.role { margin: 22px 0 0; font-size: 40px; font-weight: 600; color: #6e5320; }
-.line { margin: 14px 0 0; font-size: 30px; color: #5c5648; }
-.site { position: absolute; bottom: 40px; font-size: 22px; color: #5c5648; letter-spacing: 0.02em; }
+.role { margin: 22px 0 0; font-size: 40px; font-weight: 600; color: #6b5a48; }
+.line { margin: 14px 0 0; font-size: 30px; color: #6b5a48; }
+.site { position: absolute; bottom: 40px; font-size: 22px; color: #6b5a48; letter-spacing: 0.02em; }
 </style>
 ${mark()}
 <h1>Lisul Elvitigala</h1>
