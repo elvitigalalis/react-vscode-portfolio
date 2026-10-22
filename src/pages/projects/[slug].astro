@@ -51,7 +51,7 @@ const { description, summary, video, screenshot, demo } = entry.data;
         <img
           src={screenshot.src}
           srcset={`${screenshot.src.replace(/\.webp$/, "-720.webp")} 720w, ${screenshot.src} ${screenshot.width}w`}
-          sizes="(max-width: 40rem) calc(100vw - 2rem), 38rem"
+          sizes="(max-width: 40rem) calc(100vw - 2.5rem), 36rem"
           alt={screenshot.alt} width={screenshot.width} height={screenshot.height} decoding="async"
         />
         <figcaption>{screenshot.caption}</figcaption>
