@@ -1,14 +1,17 @@
-/* Cream page, ivory cards, warm ink and one antique-gold accent; dark mode is the same palette at
-   night. System fonts, no motion. Dark mode follows the OS until the visitor picks one. */
+/* Cream page, ivory cards, brown links and sage buttons; dark mode is the same palette at night.
+   System fonts, no motion. Dark mode follows the OS until the visitor picks one. */
 :root {
-  --bg: #f6f0e1;
-  --fg: #26211a;
-  --muted: #5c5648;
-  --line: #e3d7ba;
-  --chip: #efe5cb;
-  --card: #fffdf6;
-  --accent: #6e5320;
-  --accent-fg: #fffdf6;
+  --bg: #f6ece0;
+  --fg: #2e261e;
+  --muted: #6b5a48;
+  --line: #e7d8c9;
+  --chip: #e7d8c9;
+  --card: #fff4e9;
+  --accent: #6b5a48;
+  --accent-fg: #fff4e9;
+  --btn: #9eab9a;
+  --btn-fg: #2e261e;
+  --btn-line: #879183;
   --warn: #b45309;
   --danger: #b91c1c;
   color-scheme: light dark;
@@ -17,28 +20,30 @@
    picked dark with the switch in the top bar (data-theme on <html>, set before first paint). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #1b1915;
-    --fg: #f3ecdc;
-    --muted: #b5ab97;
-    --line: #36312a;
-    --chip: #2e2a23;
-    --card: #23201b;
-    --accent: #e3cc98;
-    --accent-fg: #1b1915;
+    --bg: #1d1a16;
+    --fg: #fff4e9;
+    --muted: #b9ab9a;
+    --line: #3a332b;
+    --chip: #332d26;
+    --card: #27231e;
+    --accent: #9eab9a;
+    --accent-fg: #1d1a16;
+    --btn-fg: #1d1a16;
     --warn: #fbbf24;
     --danger: #f87171;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #1b1915;
-  --fg: #f3ecdc;
-  --muted: #b5ab97;
-  --line: #36312a;
-  --chip: #2e2a23;
-  --card: #23201b;
-  --accent: #e3cc98;
-  --accent-fg: #1b1915;
+  --bg: #1d1a16;
+  --fg: #fff4e9;
+  --muted: #b9ab9a;
+  --line: #3a332b;
+  --chip: #332d26;
+  --card: #27231e;
+  --accent: #9eab9a;
+  --accent-fg: #1d1a16;
+  --btn-fg: #1d1a16;
   --warn: #fbbf24;
   --danger: #f87171;
   color-scheme: dark;
@@ -105,12 +110,10 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .cta, .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; }
 .btn {
   display: inline-block; padding: 0.55rem 1rem; border-radius: 0.4rem;
-  border: 1px solid var(--line); background: var(--card); color: var(--accent);
+  border: 1px solid var(--btn-line); background: var(--btn); color: var(--btn-fg);
   text-decoration: none; font-weight: 600; font-size: 0.9375rem;
 }
-/* Buttons are ivory cards; the main one is set apart by an accent border, not a fill. */
-.btn.primary { border-color: var(--accent); }
-.btn:hover { text-decoration: underline; border-color: var(--accent); }
+.btn:hover { text-decoration: underline; background: var(--btn-line); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 1.5rem 0 1rem; font-size: 0.9375rem; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
@@ -172,7 +175,7 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .prose p, .prose ul { margin: 0 0 1rem; }
 .prose ul { padding-left: 1.2rem; }
 .prose li { margin-bottom: 0.35rem; }
-.todo { background: #fef08a; color: #26211a; padding: 0 0.2em; }
+.todo { background: #fef08a; color: #2e261e; padding: 0 0.2em; }
 .writeup-end { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; font-weight: 600; }
 /* Drawn figures follow the page's colours, light or dark. */
 .writeup figure svg.fig-svg { max-width: 26rem; margin: 0 auto; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
