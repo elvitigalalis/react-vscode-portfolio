@@ -12,7 +12,7 @@ Research that backs each choice is summarised under "Sources" at the end.
 | Path | Who | What |
 |---|---|---|
 | `/plan` | Lisul only (Google sign-in) | The planner. `noindex`, not in the sitemap. |
-| `/now` | Everyone | The public week. `noindex` in v1, linked from the top bar as "Now". |
+| `/now` | Everyone | The public week. `noindex` in v1, linked from the footer as "Now". |
 
 Both are pages of this Astro site, built and deployed like every other page. The home page and
 write-ups do not change and keep their budgets (no third-party requests, ≤ 5 KB JS).
