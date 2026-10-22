@@ -54,12 +54,20 @@ Code: `src/sheet/` (logic in `logic.mjs`, tested by `test/sheet.test.mjs`), the 
   Citizenship row beyond the spec's Location / Graduating / Currently, and the thesis runs two
   sentences where the spec asks for one. Both are kept on purpose: citizenship is a résumé fact
   recruiters screen for, and the second sentence names the micromouse work next to Hitachi Rail.
+- **Deliberate departures from research/site-ia.md (resume-2027).** That plan had no theme
+  switch, no web fonts and no animation. Three were added on purpose in the 2026-10 redesign:
+  a light/dark switch in the top bar (Lisul asked for one; it is hidden without JS and the OS still
+  decides until a visitor picks), two self-hosted fonts, Fraunces and Inter, about 60 KB under
+  their own Lighthouse budget (research/site-fonts.md), and a plant grown from the build's commit
+  beside the hero that draws in once, only when the visitor allows motion (research/design-survey.md
+  chose it as the site's one signature element). The plant is generated at build time, so it adds
+  no client JS.
 
 ### How a write-up's length is counted
 
 One rule, in `check/writeup.mjs`, serves the `length` gate and the tests. It counts every word
 of rendered text in the write-up's `<article>` except the header (title, role, dates, tags,
-links), the "At a glance" box and every figure with its caption. So the summary, the body and
+links), the "At a glance" box, the "On this page" list and every figure with its caption. So the summary, the body and
 the closing links count; the clip or screenshot under the summary does not. A word is any run
 of characters between spaces that holds a letter or digit ("2.75°" counts, "→" does not). The
 2–4 figures include the lead clip (Micromouse) or screenshot (WorkIt).
