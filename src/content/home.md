@@ -8,6 +8,8 @@ thesis: >-
   I was a software engineer intern at Hitachi Rail in 2026, bringing live bus GPS into dispatch.
   I also wrote the C++ firmware for Stony Brook's micromouse robot.
 location: Stony Brook, NY
+# The first line of the hero's facts: what Lisul is looking for.
+open: Summer 2027 software engineering internships
 
 # At most one context sentence per role, keyed by company.
 roles:
@@ -33,4 +35,8 @@ projects:
     summary: >-
       A job board for internship and new-grad roles. I built the scraper that finds them and
       scheduled its import into the database.
+
+# Where each number above comes from, when resume.json does not print it.
+sources:
+  - "Lisul, first-hand (October 2026): looking for Summer 2027 software engineering internships."
 ---

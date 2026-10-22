@@ -522,3 +522,8 @@ test("Now lives in the footer, not the top bar", () => {
     assert.match(html.match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/now\/">Now<\/a>/, `${page}: footer`);
   }
 });
+
+test("the first screen says what Lisul is open to, first in the facts list", () => {
+  const kv = home.match(/<dl class="kv">[\s\S]*?<\/dl>/)[0];
+  assert.match(kv, /^<dl class="kv">\s*<dt>Open to<\/dt>\s*<dd>Summer 2027 software engineering internships<\/dd>/);
+});
