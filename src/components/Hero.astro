@@ -10,6 +10,8 @@ import { frontmatter as home } from "../content/home.md";
 const { basics, education, experience } = resume;
 const graduating = education[0].date.replace(/^Expected\s+/, "");
 const current = experience.filter((e) => /Present$/.test(e.dates));
+// resume.json lists roles newest first, so the first one that has ended is the latest past role.
+const previous = experience.find((e) => !/Present$/.test(e.dates));
 const github = profileLink("GitHub");
 const linkedin = profileLink("LinkedIn");
 
@@ -33,6 +35,7 @@ const seed = commit.slice(0, 7) || "lisul";
       <dt>Location</dt><dd>{home.location}</dd>
       <dt>Graduating</dt><dd>{graduating}</dd>
       {current.length > 0 && <><dt>Currently</dt><dd>{current.map((e) => `${e.title}, ${e.company}`).join("; ")}</dd></>}
+      {previous && <><dt>Previously</dt><dd>{previous.title}, {previous.company}</dd></>}
       <dt>Citizenship</dt><dd>{basics.citizenship}</dd>
     </dl>
     <ul class="contact">
