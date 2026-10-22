@@ -1,24 +1,58 @@
-/* One accent colour, system fonts, no motion. Dark mode follows the OS. */
+/* 60-30-10: ivory-cream surfaces, brown text and beige rules, and deep sage only for links and the
+   one main button in each place. Dark mode is the same palette at night. Headings in Fraunces, text
+   in Inter (self-hosted below), metadata in the system monospace. The only motion is the hero plant
+   growing in once, and only for visitors who allow motion.
+   Each colour is light-dark(day, night): the OS picks unless the visitor used the top bar's switch,
+   which sets data-theme on <html> before first paint and so forces color-scheme. */
 :root {
-  --bg: #fbfaf8;
-  --fg: #1c1917;
-  --muted: #57534e;
-  --line: #e7e5e4;
-  --chip: #f1efec;
-  --accent: #9a3412;
-  --accent-fg: #ffffff;
   color-scheme: light dark;
+  --bg: light-dark(#f9f3ea, #1b1915);
+  --fg: light-dark(#2e261e, #f6eee3);
+  --muted: light-dark(#6b5a48, #bfb2a1);
+  --line: light-dark(#e7d8c9, #38322a);
+  --line-strong: light-dark(#cdbca8, #4f463b);
+  --chip: light-dark(#efe4d6, #2f2a23);
+  --card: light-dark(#fffcf7, #24211c);
+  --accent: light-dark(#4f5d4c, #a9b6a5);
+  --btn: light-dark(#566553, #9eab9a);
+  --btn-hover: light-dark(#4f5d4c, #b3bfaf);
+  --on-btn: light-dark(#fff9f1, #1b1915);
+  --stem: light-dark(#6b5a48, #8a7864);
+  --leaf-1: light-dark(#9eab9a, #7d8b79);
+  --leaf-2: light-dark(#879183, #66725f);
+  --leaf-3: light-dark(#b7c2b3, #9eab9a);
+  --warn: light-dark(#b45309, #fbbf24);
+  --danger: light-dark(#b91c1c, #f87171);
+  --serif: "Fraunces", "Fraunces Fallback", Georgia, serif;
+  --sans: "Inter", "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --heading-weight: 500;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #131211;
-    --fg: #e7e5e4;
-    --muted: #a8a29e;
-    --line: #2e2b29;
-    --chip: #211f1d;
-    --accent: #fdba74;
-    --accent-fg: #1c1917;
-  }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+/* Light text on a dark page looks heavier, so dark headings drop a little weight. light-dark()
+   only takes colours, so this one value is set per scheme. */
+:root[data-theme="dark"] { --heading-weight: 450; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --heading-weight: 450; } }
+
+/* Two self-hosted fonts (research/site-fonts.md in resume-2027): Fraunces for headings, at its
+   display size with soft terminals, and Inter for text. Both are SIL OFL, cut to Latin; licences
+   sit beside them in /fonts/. The fallbacks are metric-matched so the page does not shift on swap. */
+@font-face {
+  font-family: "Fraunces"; src: url("/fonts/fraunces-display.woff2") format("woff2");
+  font-weight: 300 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Inter"; src: url("/fonts/inter-text.woff2") format("woff2");
+  font-weight: 400 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Fraunces Fallback"; src: local("Georgia");
+  size-adjust: 98.7%; ascent-override: 99.1%; descent-override: 25.8%; line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Inter Fallback"; src: local("Arial");
+  size-adjust: 107.5%; ascent-override: 90.1%; descent-override: 22.4%; line-gap-override: 0%;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -27,19 +61,27 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font: 400 17px/1.6 var(--sans);
 }
-a { color: var(--accent); text-underline-offset: 0.15em; }
+a { color: var(--accent); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
 a:hover { text-decoration-thickness: 2px; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-h1, h2, h3 { line-height: 1.2; margin: 0; }
-h2 { font-size: 1.5rem; margin-bottom: 1.25rem; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 0.2rem; }
+::selection { background: var(--btn); color: var(--on-btn); }
+h1, h2, h3 { line-height: 1.2; margin: 0; text-wrap: balance; }
+h1, h2 { font-family: var(--serif); font-weight: var(--heading-weight); }
+h3 { font-weight: 600; }
+p, li { text-wrap: pretty; }
+h2 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 1.5rem; }
 h3 { font-size: 1.0625rem; }
 ul, ol { margin: 0; padding: 0; }
 img { max-width: 100%; height: auto; display: block; }
 
 .wrap { max-width: 50rem; margin: 0 auto; padding: 0 1rem; }
-section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3rem; }
+/* One rhythm: --gap between sections, nothing trailing at a section's end, so every gap matches. */
+:root { --gap: 4.5rem; }
+section.wrap { padding-top: var(--gap); padding-bottom: 0; scroll-margin-top: 3rem; }
+section.wrap > :last-child, .entries > :last-child, .card:last-child { margin-bottom: 0; }
+section.hero { padding-top: 2.5rem; }
 
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 1rem; top: 0.5rem; z-index: 2; background: var(--bg); padding: 0.25rem 0.5rem; }
@@ -50,40 +92,89 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .topbar ul { display: flex; gap: 1.1rem; list-style: none; font-size: 0.9375rem; }
 .topbar a { color: var(--fg); text-decoration: none; }
 .topbar a:hover { color: var(--accent); text-decoration: underline; }
-.topbar .home { font-weight: 600; }
+.topbar .home { font-family: var(--serif); font-weight: 600; font-size: 1.0625rem; }
+.topbar .end { display: flex; align-items: center; gap: 1.1rem; }
+.theme-toggle {
+  display: grid; place-items: center; width: 2rem; height: 2rem; padding: 0; margin-right: -0.4rem;
+  background: none; border: 0; border-radius: 0.4rem; color: var(--fg); cursor: pointer;
+}
+.theme-toggle:hover { color: var(--accent); background: var(--chip); }
+.theme-toggle svg { width: 1.15rem; height: 1.15rem; }
+/* Show the moon in light mode and the sun in dark mode: each icon names where a click goes. */
+.theme-toggle .sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .sun { display: block; }
+  :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
+}
 @media (max-width: 34rem) {
   .topbar .home { display: none; }
-  .topbar ul { width: 100%; justify-content: space-between; gap: 0.5rem; }
+  .topbar .end { width: 100%; gap: 0.25rem; }
+  .topbar ul { flex: 1; justify-content: space-between; gap: 0.5rem; font-size: 0.875rem; }
+  .topbar .wide { display: none; }
 }
 
-/* First screen. */
-.hero { padding-top: 2rem; }
-.kicker { margin: 0 0 0.35rem; color: var(--muted); font-size: 0.9375rem; letter-spacing: 0.02em; }
-.hero h1 { font-size: clamp(2.25rem, 7vw, 3.25rem); letter-spacing: -0.02em; }
+/* First screen: the text, and beside it a plant grown from this build's commit (src/plant/). */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 15rem; gap: 2rem; align-items: end; }
+.hero-plant { margin: 0; }
+.hero-plant svg { display: block; width: 100%; height: auto; }
+.hero-plant figcaption {
+  margin-top: 0.35rem; text-align: center; color: var(--muted);
+  font: 0.6875rem/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.plant .s { fill: none; stroke: var(--stem); stroke-linecap: round; }
+.plant .f1 { fill: var(--leaf-1); }
+.plant .f2 { fill: var(--leaf-2); }
+.plant .f3 { fill: var(--leaf-3); }
+/* It grows once, in the order it grew: stems draw on, then leaves fade in. Leaves fade rather than
+   scale, since a CSS transform would replace each leaf's own placement. */
+@media (prefers-reduced-motion: no-preference) {
+  .plant .s { stroke-dasharray: var(--l); stroke-dashoffset: var(--l); animation: plant-draw 0.6s ease-out var(--t) forwards; }
+  .plant .f { opacity: 0; animation: plant-leaf 0.4s ease-out var(--t) forwards; }
+}
+@keyframes plant-draw { to { stroke-dashoffset: 0; } }
+@keyframes plant-leaf { to { opacity: 1; } }
+/* Phones keep the first screen for the facts. */
+@media (max-width: 46rem) {
+  .hero { display: block; }
+  .hero-plant { display: none; }
+}
+.kicker { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.75rem; }
+.hero h1 { font-size: clamp(2.5rem, 1.6rem + 4vw, 3.5rem); line-height: 1.05; letter-spacing: -0.02em; }
 .thesis { font-size: 1.125rem; margin: 0.75rem 0 1.25rem; max-width: 40rem; }
 .cta, .buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0; }
 .btn {
   display: inline-block; padding: 0.55rem 1rem; border-radius: 0.4rem;
-  border: 1px solid var(--accent); text-decoration: none; font-weight: 600; font-size: 0.9375rem;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--fg);
+  text-decoration: none; font-weight: 600; font-size: 0.9375rem;
 }
-.btn.primary { background: var(--accent); color: var(--accent-fg); }
-.btn:hover { text-decoration: underline; }
+.btn:hover { background: var(--chip); }
+/* Only the main action is filled; the rest stay outlined so it stands out. */
+.btn.primary { background: var(--btn); border-color: var(--btn); color: var(--on-btn); }
+.btn.primary:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 1.5rem 0 1rem; font-size: 0.9375rem; }
-.kv dt { color: var(--muted); }
+.kv dt { color: var(--muted); font-size: 0.75rem; padding-top: 0.2rem; }
 .kv dd { margin: 0; }
 .contact { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; list-style: none; font-size: 0.9375rem; }
 
 /* Entries: date column on the left, collapsing above the text on phones. */
 .entries { list-style: none; }
-.entry { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.25rem 1.25rem; margin-bottom: 2rem; }
-.dates { margin: 0; color: var(--muted); font-size: 0.875rem; padding-top: 0.15rem; }
+.entry { display: grid; grid-template-columns: 9.5rem 1fr; gap: 0.25rem 1.25rem; margin-bottom: 2.5rem; }
+/* Dates, labels and tags: small capitals in the system monospace, so they read as metadata. */
+.dates, .tags li, .kv dt, .kicker {
+  font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em;
+}
+.dates { margin: 0; color: var(--muted); font-size: 0.75rem; padding-top: 0.3rem; font-variant-numeric: tabular-nums; }
 .meta { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.9375rem; }
 .summary { margin: 0.5rem 0 0; }
-.bullets { padding-left: 1.1rem; margin-top: 0.5rem; }
+/* Bullets are the résumé verbatim; quieter than the summary so each card reads summary-first. */
+.bullets { padding-left: 1.1rem; margin-top: 0.5rem; color: var(--muted); font-size: 0.9375rem; }
 .bullets li { margin-bottom: 0.3rem; }
 .tags { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; margin-top: 0.6rem; }
-.tags li { background: var(--chip); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8125rem; }
+.tags li { background: var(--chip); color: var(--muted); border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.6875rem; }
 .more { font-weight: 600; }
+#experience .entries { margin-bottom: 1.5rem; }
 @media (max-width: 40rem) {
   .entry { grid-template-columns: 1fr; }
 }
@@ -91,7 +182,7 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 /* Project cards: photo beside the text, stacked on phones. */
 .card {
   display: grid; grid-template-columns: 15rem 1fr; gap: 1.25rem;
-  border: 1px solid var(--line); border-radius: 0.6rem; padding: 1rem; margin-bottom: 1.25rem;
+  border: 1px solid var(--line); border-radius: 0.6rem; padding: 1.25rem; margin-bottom: 1.5rem;
 }
 .card img { border-radius: 0.4rem; aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
 .card h3 { margin-top: 0.15rem; }
@@ -110,14 +201,25 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
   .skills dd { margin-bottom: 0.6rem; }
 }
 
-.footer { border-top: 1px solid var(--line); margin-top: 2.5rem; padding: 1.5rem 0 2rem; }
+.footer { border-top: 1px solid var(--line); margin-top: var(--gap); padding: 1.5rem 0 2.5rem; }
 .small { color: var(--muted); font-size: 0.875rem; margin: 0.75rem 0 0; }
 .small a { color: var(--muted); }
 
 /* Write-ups: one narrow reading column; figures span it, each led in by a sentence. */
 .writeup { max-width: 40rem; margin: 0 auto; padding: 2rem 1rem 0; }
 .writeup h1 { font-size: clamp(1.75rem, 6vw, 2.25rem); letter-spacing: -0.01em; }
-.writeup-head .links { margin: 0.6rem 0 0; font-weight: 600; }
+.writeup-head .back { display: inline-block; margin-bottom: 1rem; font-size: 0.9375rem; text-decoration: none; }
+.writeup-head .back:hover { text-decoration: underline; }
+.writeup-head .links { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1rem 0 0; }
+.writeup-head .btn { font-size: 0.875rem; padding: 0.4rem 0.8rem; }
+.toc { margin: 0 0 2rem; padding: 0 0 0 1rem; border-left: 2px solid var(--line); }
+.toc h2 {
+  font: 0.75rem/1.4 var(--mono); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.5rem;
+}
+.toc ol { padding-left: 1.2rem; font-size: 0.9375rem; }
+.toc li { margin-bottom: 0.2rem; }
+.prose h2 { scroll-margin-top: 4rem; }
 .tldr { font-size: 1.125rem; margin: 1.5rem 0; }
 .writeup figure { margin: 1.25rem 0 1.75rem; }
 .writeup figure img, .writeup figure video, .writeup figure svg { display: block; width: 100%; height: auto; border-radius: 0.4rem; }
@@ -129,7 +231,7 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .prose p, .prose ul { margin: 0 0 1rem; }
 .prose ul { padding-left: 1.2rem; }
 .prose li { margin-bottom: 0.35rem; }
-.todo { background: #fef08a; color: #1c1917; padding: 0 0.2em; }
+.todo { background: #fef08a; color: #2e261e; padding: 0 0.2em; }
 .writeup-end { display: flex; justify-content: space-between; border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; font-weight: 600; }
 /* Drawn figures follow the page's colours, light or dark. */
 .writeup figure svg.fig-svg { max-width: 26rem; margin: 0 auto; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -142,3 +244,8 @@ section.wrap { padding-top: 2.5rem; padding-bottom: 1rem; scroll-margin-top: 3re
 .fig-svg .grid { stroke: var(--line); stroke-width: 2; }
 .fig-svg .bar { fill: var(--muted); }
 .fig-svg .bar.accent { fill: var(--accent); }
+
+.card, .glance { background: var(--card); }
+
+/* Links that leave the site say so. */
+main a[href^="http"]::after, .footer a[href^="http"]::after { content: "\2009\2197"; font-size: 0.85em; }

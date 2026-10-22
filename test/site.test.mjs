@@ -52,12 +52,15 @@ test("the résumé PDF keeps its old public path", () => {
   assert.ok(home.includes(`href="${RESUME_PDF}"`));
 });
 
-test("no client JS beyond the inline hash script, except on The Sheet's pages", () => {
-  // JSON-LD is data, not code, so it does not count.
+test("no client JS beyond three tiny inline scripts, except on The Sheet's pages", () => {
+  // JSON-LD is data, not code, so it does not count. The rest: the old-hash redirect, the theme
+  // pick applied before first paint, and the top bar's light/dark switch and Plan link.
   const scripts = [...home.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)].filter((m) => !m[1].includes("ld+json"));
-  assert.equal(scripts.length, 1);
-  assert.doesNotMatch(scripts[0][1], /src=/);
-  assert.ok(scripts[0][2].length < 1024, "hash script stays tiny");
+  assert.deepEqual(scripts.map((m) => m[1].trim()).sort(), ["", "data-theme-init", "data-topbar"]);
+  for (const [, attrs, code] of scripts) {
+    assert.doesNotMatch(attrs, /src=/);
+    assert.ok(code.length < 1024, `${attrs.trim() || "hash"} script stays tiny`);
+  }
   // Script files exist only for /plan and /now (docs/sheet.md): no other page loads one, and every
   // one is loaded by those pages, directly or through another script's import.
   const rel = (f) => f.slice(dist.length);
@@ -474,4 +477,40 @@ test("home JSON-LD: WebSite and ProfilePage about a Person, from resume.json", (
   assert.deepEqual(person.alumniOf, { "@type": "CollegeOrUniversity", name: "Stony Brook University" });
   assert.ok(!("telephone" in person), "the phone number stays off the site");
   assert.ok(!("worksFor" in person), "no employer claim for a past role");
+});
+
+test("the hero shows a grown plant beside the text, hidden from screen readers, animated only when motion is welcome", () => {
+  const hero = home.match(/<section class="hero[^"]*"[\s\S]*?<\/section>/)[0];
+  const svg = hero.match(/<svg class="plant"[\s\S]*?<\/svg>/)?.[0];
+  assert.ok(svg, "the hero carries the plant");
+  assert.match(svg, /aria-hidden="true"/);
+  // The plant sits in its own figure, never wrapped around the name or the buttons.
+  assert.doesNotMatch(svg, /<h1|class="btn/);
+  const css = builtFiles().filter((f) => f.endsWith(".css")).map((f) => readFileSync(f, "utf8")).join("")
+    + [...home.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("");
+  const grow = css.match(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{[\s\S]*?\.plant[\s\S]*?animation/);
+  assert.ok(grow, "the draw-in lives inside a no-preference motion query");
+  const outside = css.replace(/@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{(?:[^{}]|\{[^{}]*\})*\}/g, "");
+  assert.doesNotMatch(outside, /\.plant[^{]*\{[^}]*animation/, "no plant animation outside that query");
+});
+
+test("the first screen names the most recent past role beside the current one", () => {
+  const hero = home.match(/<section class="hero[^"]*"[\s\S]*?<\/section>/)[0];
+  const past = resume.experience.find((e) => !/Present$/.test(e.dates));
+  assert.match(hero, new RegExp(`<dt>Previously</dt>\\s*<dd>${escapeRe(`${past.title}, ${past.company}`)}</dd>`));
+});
+
+test("a write-up opens with a way back, its links as buttons, and an On this page list", () => {
+  for (const slug of writeupSlugs()) {
+    const html = writeupHtml(slug);
+    const head = html.match(/<header class="writeup-head"[\s\S]*?<\/header>/)[0];
+    assert.match(head, /^<header class="writeup-head"[^>]*>\s*<a[^>]*href="\/#projects"[^>]*>← All projects<\/a>/, `${slug}: back link first`);
+    assert.match(head.match(/<p class="links">[\s\S]*?<\/p>/)[0], /<a class="btn[^"]*" href="[^"]+">Code<\/a>/, `${slug}: Code is a button`);
+    const toc = html.match(/<nav class="toc"[^>]*>[\s\S]*?<\/nav>/)?.[0];
+    assert.ok(toc, `${slug}: On this page`);
+    const sections = [...readFileSync(join(writeupDir, `${slug}.md`), "utf8").matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+    const targets = [...toc.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(targets.length, sections.length, `${slug}: one entry per section`);
+    for (const id of targets) assert.match(html, new RegExp(`<h2 id="${escapeRe(id)}"`), `${slug}: #${id} exists`);
+  }
 });

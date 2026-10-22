@@ -1,6 +1,6 @@
 // Gates that wrap an outside checker. Each returns its findings as problem lines.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { escapeRe, htmlPages, ORIGIN, serve } from "./lib.mjs";
@@ -68,14 +68,16 @@ export async function a11y({ root, dist }) {
       },
       urls: htmlPages(dist).map((f) => `${server.url}/${f}`),
     }));
-    // Async spawn: the server above must keep answering while pa11y-ci runs.
+    // Async spawn: the server above must keep answering while pa11y-ci runs. Its stdout goes to a
+    // file, not a pipe: pa11y-ci exits before a pipe drains, which cut reports over 64 KB short.
+    const reportPath = join(work, "report.json");
+    const fd = openSync(reportPath, "w");
     const out = await new Promise((ok, fail) => {
-      const p = spawn(join(root, "node_modules/.bin/pa11y-ci"), ["--json", "--config", config], { cwd: work });
-      let stdout = "", stderr = "";
-      p.stdout.on("data", (d) => (stdout += d));
+      const p = spawn(join(root, "node_modules/.bin/pa11y-ci"), ["--json", "--config", config], { cwd: work, stdio: ["ignore", fd, "pipe"] });
+      let stderr = "";
       p.stderr.on("data", (d) => (stderr += d));
       p.on("error", fail);
-      p.on("close", () => ok({ stdout, stderr }));
+      p.on("close", () => { closeSync(fd); ok({ stdout: readFileSync(reportPath, "utf8"), stderr }); });
     });
     let report;
     try { report = JSON.parse(out.stdout); } catch { return ["pa11y-ci gave no report:", ...(out.stdout + out.stderr).split("\n").filter(Boolean)]; }

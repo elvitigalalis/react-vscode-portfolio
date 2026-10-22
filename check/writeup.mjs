@@ -1,8 +1,8 @@
 // Length gate: each write-up runs 700 to 1,200 words with 2 to 4 figures (spec #152 aims at
 // 1,000 words). What counts, one rule for this gate and the tests: every
 // word of rendered text in the page's <article>, except its header (title, role, dates, tags,
-// links), the "At a glance" box (résumé bullets, mirrored), and every <figure> with its
-// caption (the clip or screenshot, diagrams, charts and photos). A word is a run of
+// links), the "At a glance" box (résumé bullets, mirrored), the "On this page" list (the
+// section headings again), and every <figure> with its caption (the clip or screenshot, diagrams, charts and photos). A word is a run of
 // non-space characters holding a letter or digit, so "2.75°" counts and "→" does not.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -17,6 +17,7 @@ export function writeupText(html) {
   return textOf(articleOf(html)
     .replace(/<header\b[^>]*class="writeup-head"[\s\S]*?<\/header>/, "")
     .replace(/<aside\b[^>]*id="at-a-glance"[\s\S]*?<\/aside>/, "")
+    .replace(/<nav\b[^>]*class="toc"[\s\S]*?<\/nav>/, "")
     .replace(/<figure\b[\s\S]*?<\/figure>/g, "")
     .replace(/<[^>]+>/g, " ")).trim(); // a tag separates words: "1.01°.</p><h2>The" is two
 }

@@ -11,7 +11,8 @@ const all = {
   "cumulative-layout-shift": fail({ maxNumericValue: 0.1 }),
   "total-blocking-time": fail({ maxNumericValue: 200 }),
   "resource-summary:script:size": fail({ maxNumericValue: 5 * 1024 }),
-  "resource-summary:font:size": fail({ maxNumericValue: 0 }),
+  // Two self-hosted fonts, Fraunces and Inter (global.css): about 60 KB together.
+  "resource-summary:font:size": fail({ maxNumericValue: 64 * 1024 }),
   "resource-summary:third-party:count": fail({ maxNumericValue: 0 }),
   // The local static server does not gzip; GitHub Pages does.
   "uses-text-compression": "off",
@@ -19,7 +20,8 @@ const all = {
   // insight compares it with the CSS size. Byte budgets above still cap image weight.
   "image-delivery-insight": "warn",
 };
-const home = { "resource-summary:total:size": fail({ maxNumericValue: 100 * 1024 }), "resource-summary:total:count": fail({ maxNumericValue: 15 }) };
+// The home page gets 100 KB for everything but the fonts, plus the fonts' own 64 KB.
+const home = { "resource-summary:total:size": fail({ maxNumericValue: (100 + 64) * 1024 }), "resource-summary:total:count": fail({ maxNumericValue: 15 }) };
 const writeup = { "resource-summary:total:size": fail({ maxNumericValue: 300 * 1024 }) };
 // The Sheet's pages (docs/sheet.md) run the planner's script and make a few requests to one
 // third-party origin, Supabase; they are noindex, so they cannot be "crawlable" either.
