@@ -50,7 +50,8 @@ shutdown delete the proposed blocks for their day.
 
 `^fri`, `^10/30` or `^tomorrow` sets the due date, shown as a chip while typing and stripped on
 save, like the other typed details (`parseEntry`). The task shows it as "due Fri". /now never
-shows due dates.
+shows due dates. `atRisk` decides at risk: due within two days (or past due), not done, and no
+block starting before the due day ends in the owner's time zone; the week marks it ⚠.
 
 ## Proposals
 
