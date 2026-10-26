@@ -93,7 +93,7 @@ tasks jumping days across time zones.
   - `!p` (or `!private`) → private; `!public` makes it public again when editing
   - `^fri`, `^10/30` or `^tomorrow` → due date, counted from the task's day (today for Someday):
     a weekday or month/day is its next occurrence on or after that day. It shows as "due Fri"
-    (⚠ when at risk), typing a new one changes it, and the menu's "Clear due date" removes it.
+    (⚠ when at risk; a proposed block doesn't clear that until approved), typing a new one changes it, and the menu's "Clear due date" removes it.
     /now never shows it ([sheet-nudges.md](sheet-nudges.md)).
 - **Tasks are public by default.** Private ones carry a small "private" label in the planner.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To

@@ -203,10 +203,11 @@ export const googleStep = (block) => (block.proposed ? "create" : block.gcal_id 
 
 // A task is at risk when it is due within two days (or already past due), not done, and has no
 // block that starts before its due date is over (midnight after it, in the owner's time zone).
+// Proposed blocks are not planned time yet, so they don't count.
 export function atRisk(task, blocks, today, timeZone) {
   if (!task.due || task.done || dayDiff(task.due, today) > 2) return false;
   const end = Date.parse(zonedIso(addDays(task.due, 1), 0, timeZone));
-  return !blocks.some((b) => b.task_id === task.id && Date.parse(b.starts_at) < end);
+  return !blocks.some((b) => b.task_id === task.id && !b.proposed && Date.parse(b.starts_at) < end);
 }
 
 // --- Calendar events in the week ---------------------------------------------------------

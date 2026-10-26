@@ -245,6 +245,14 @@ test("at risk: a block before the due date ends clears it, one after doesn't", (
   assert.equal(atRisk(task, [block("2026-10-31T18:00:00Z", "t2")], "2026-10-30", tz), true);
 });
 
+test("at risk: a proposed block doesn't clear it until it is approved", () => {
+  const tz = "America/New_York";
+  const task = { id: "t1", due: "2026-10-31", done: false };
+  const proposed = { task_id: "t1", starts_at: "2026-10-31T18:00:00Z", ends_at: "2026-10-31T19:00:00Z", proposed: true };
+  assert.equal(atRisk(task, [proposed], "2026-10-30", tz), true);
+  assert.equal(atRisk(task, [{ ...proposed, proposed: false }], "2026-10-30", tz), false);
+});
+
 test("at risk: the due day's end follows daylight saving", () => {
   const tz = "America/New_York";
   // Clocks go back on Sunday 2026-11-01, so it ends at 05:00 UTC, not 04:00.
