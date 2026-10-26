@@ -137,16 +137,18 @@ begin
 end $$;
 revoke execute on function roll_tasks(uuid[], date) from public, anon, authenticated;
 
--- Delete the proposed blocks of the days before `before` (or of day `d` only): a proposal
--- lapses at the end of its day.
-create or replace function lapse_proposals(d date, before boolean default false) returns void
+-- A proposal lapses at the end of its day: these delete the proposed blocks of day `d`, or of
+-- the days before it.
+drop function if exists lapse_proposals(date, boolean);
+create or replace function lapse_proposals_on(d date) returns void
 language sql security definer set search_path = public as $$
-  delete from blocks
-  where proposed and case when before
-    then (starts_at at time zone (select time_zone from settings))::date < d
-    else (starts_at at time zone (select time_zone from settings))::date = d end
+  delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d
 $$;
-revoke execute on function lapse_proposals(date, boolean) from public, anon, authenticated;
+create or replace function lapse_proposals_before(d date) returns void
+language sql security definer set search_path = public as $$
+  delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date < d
+$$;
+revoke execute on function lapse_proposals_on(date), lapse_proposals_before(date) from public, anon, authenticated;
 
 -- Nightly (run hourly; a no-op once done): everything left behind rolls to today, and
 -- earlier days' proposals lapse.
@@ -154,7 +156,7 @@ create or replace function nightly_roll() returns void
 language plpgsql security definer set search_path = public as $$
 declare today date := sheet_today();
 begin
-  perform lapse_proposals(today, true);
+  perform lapse_proposals_before(today);
   perform roll_tasks(array(select id from tasks
     where day < today and not done and at_time is null), today);
 end $$;
@@ -168,7 +170,7 @@ begin
   if not is_owner() then raise exception 'not the owner'; end if;
   insert into days (day, shutdown, reflection) values (d, true, reflection)
   on conflict (day) do update set shutdown = true, reflection = excluded.reflection;
-  perform lapse_proposals(d);
+  perform lapse_proposals_on(d);
   perform roll_tasks(array(select id from tasks
     where day = d and not done and at_time is null), d + 1);
 end $$;
