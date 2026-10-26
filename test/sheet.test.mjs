@@ -32,9 +32,9 @@ test("dates: a local clock time becomes the right instant, across daylight savin
 
 test("typed details: estimate, time, tag and visibility come out of the title", () => {
   assert.deepEqual(parseEntry("Ship WorkIt auth ~45m #workit"),
-    { title: "Ship WorkIt auth", est_min: 45, at_time: null, tag: "workit", public: true });
+    { title: "Ship WorkIt auth", est_min: 45, at_time: null, tag: "workit", public: true, due: null });
   assert.deepEqual(parseEntry("Dentist @3pm !private"),
-    { title: "Dentist", est_min: null, at_time: "15:00", tag: null, public: false });
+    { title: "Dentist", est_min: null, at_time: "15:00", tag: null, public: false, due: null });
   assert.equal(parseEntry("Read ~1h30").est_min, 90);
   assert.equal(parseEntry("Read ~2h").est_min, 120);
   assert.equal(parseEntry("Read ~90").est_min, 90);
@@ -52,6 +52,48 @@ test("typed details: tasks are public by default and odd text stays in the title
   assert.equal(parseEntry("Email me@site.com about ~").title, "Email me@site.com about ~");
   assert.equal(parseEntry("Room @3").title, "Room @3");
   assert.equal(parseEntry("C# notes").title, "C# notes");
+});
+
+test("due dates: ^tomorrow is the day after the task's day", () => {
+  const e = parseEntry("Essay ^tomorrow", "2026-10-31");
+  assert.equal(e.due, "2026-11-01");
+  assert.equal(e.title, "Essay");
+});
+
+test("due dates: a weekday rolls to its next occurrence from the task's day", () => {
+  // 2026-10-28 is a Wednesday.
+  assert.equal(parseEntry("Lab report ^fri", "2026-10-28").due, "2026-10-30");
+  assert.equal(parseEntry("Lab report ^Friday", "2026-10-28").due, "2026-10-30");
+  assert.equal(parseEntry("Lab report ^wed", "2026-10-28").due, "2026-10-28");
+  assert.equal(parseEntry("Lab report ^tue", "2026-10-28").due, "2026-11-03");
+  // Across the weekend: from Saturday, "mon" is two days on and "sat" is the same day.
+  assert.equal(parseEntry("Pset ^mon", "2026-10-31").due, "2026-11-02");
+  assert.equal(parseEntry("Pset ^sat", "2026-10-31").due, "2026-10-31");
+  assert.equal(parseEntry("Pset ^sun", "2026-10-31").due, "2026-11-01");
+  assert.equal(parseEntry("Pset ^thurs", "2026-10-31").due, "2026-11-05");
+});
+
+test("due dates: month/day is the next such date, crossing the year end", () => {
+  assert.equal(parseEntry("Essay ^10/30", "2026-10-26").due, "2026-10-30");
+  assert.equal(parseEntry("Essay ^1/5", "2026-12-20").due, "2027-01-05");
+  assert.equal(parseEntry("Essay ^10/26", "2026-10-26").due, "2026-10-26");
+  assert.equal(parseEntry("Essay ^2/29", "2026-10-26").due, "2028-02-29");
+});
+
+test("due dates: text that is not a date stays in the title", () => {
+  assert.deepEqual(parseEntry("Read ^fr", "2026-10-26"), { title: "Read ^fr", est_min: null, at_time: null, tag: null, public: true, due: null });
+  assert.equal(parseEntry("Read ^13/40", "2026-10-26").title, "Read ^13/40");
+  assert.equal(parseEntry("Read ^2/30", "2026-10-26").title, "Read ^2/30");
+  assert.equal(parseEntry("x^2 practice", "2026-10-26").title, "x^2 practice");
+  assert.equal(parseEntry("Read ^", "2026-10-26").title, "Read ^");
+  assert.equal(parseEntry("Read ^someday", "2026-10-26").due, null);
+});
+
+test("due dates: combine with the other typed details in any order", () => {
+  assert.deepEqual(parseEntry("OS homework ^fri ~45m @3pm #cse !p", "2026-10-26"),
+    { title: "OS homework", est_min: 45, at_time: "15:00", tag: "cse", public: false, due: "2026-10-30" });
+  assert.deepEqual(parseEntry("#cse ^10/30 Lab ~1h", "2026-10-26"),
+    { title: "Lab", est_min: 60, at_time: null, tag: "cse", public: true, due: "2026-10-30" });
 });
 
 test("formatting minutes and clock times", () => {
