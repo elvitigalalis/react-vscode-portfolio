@@ -92,6 +92,8 @@
 }
 .sheet-meta { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .sheet-clash { color: var(--warn); font-size: 0.8125rem; cursor: help; }
+.sheet-risk { color: var(--warn); cursor: help; }
+.sheet-typed { white-space: nowrap; }
 .sheet-roll { color: var(--muted); font-size: 0.8125rem; }
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 /* Check and menu sit over the row's right end on hover, so titles keep the full width. */
@@ -141,6 +143,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   background: none; border: 0; border-radius: 0.25rem; padding: 0.4rem 0.6rem; cursor: pointer;
 }
 .sheet-menu button:hover, .sheet-menu button:focus-visible { background: var(--chip); }
+.sheet-menu button[hidden] { display: none; }
 .sheet-toast {
   position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 5;
   background: var(--fg); color: var(--bg); border-radius: 0.4rem; padding: 0.5rem 0.9rem; font-size: 0.875rem;

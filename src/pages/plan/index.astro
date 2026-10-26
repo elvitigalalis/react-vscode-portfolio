@@ -41,6 +41,7 @@ import "../../styles/sheet.css";
       <button type="button" data-move="day-after">Day after</button>
       <button type="button" data-move="someday">To Someday</button>
       <button type="button" data-move="visibility">Make private</button>
+      <button type="button" data-move="clear-due" hidden>Clear due date</button>
       <button type="button" data-move="delete">Delete</button>
     </div>
 
@@ -53,6 +54,7 @@ import "../../styles/sheet.css";
       <dl class="sheet-keys">
         <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>~45m · @3pm · #tag</dt><dd>Estimate, fixed time, tag</dd>
+        <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (⚠) within two days with no block</dd>
         <dt>!p</dt><dd>Private: /now shows a bar, Google says Busy</dd>
         <dt>P</dt><dd>Plan today</dd>
         <dt>O</dt><dd>Shut down</dd>
