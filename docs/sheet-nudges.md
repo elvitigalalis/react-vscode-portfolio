@@ -25,8 +25,11 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
   - **Sending:** `pg_cron` calls it every minute (through `pg_net`). It works out what's due
     with the same module /plan's tests cover (`src/sheet/nudges.mjs`), sends it through the
     Telegram Bot API, and logs each message so none is sent twice.
-  - **Taps:** it is the bot's webhook for Done and Snooze, and ignores any chat that isn't
-    Lisul's (the chat ID is in `settings`).
+  - **Taps:** it is the bot's webhook for Done and Snooze. It checks Telegram's
+    `X-Telegram-Bot-Api-Secret-Token` header against `TELEGRAM_WEBHOOK_SECRET` (a function
+    secret, given to `setWebhook` as its `secret_token`) and ignores, without a reply, any chat
+    that isn't Lisul's (the chat ID is in `settings`). The same module decides what a tap changes
+    (`handleTap`); the function writes it, answers the tap and edits the message.
 
   The bot token is a function secret. Messages are fixed templates.
 
@@ -36,7 +39,9 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
   cron job proves itself with a shared secret header (`SHEET_CRON_SECRET`, a function secret);
   the job reads the function's URL and that secret from Supabase Vault, so neither is in the repo.
 - **Google Calendar is still edited only from the browser.** When /plan opens, it brings Google
-  in line with any change made away from it, such as a block a Done tap shortened.
+  in line with any change made away from it, such as a block a Done tap shortened: a tap that
+  shortens or deletes a block with an event leaves a `gcal_pending` row, which /plan applies and
+  deletes once Google is connected.
 - **The "Time blocks" events have no alerts** while Telegram is on, so nothing pings twice.
 
 ## Data
@@ -47,6 +52,7 @@ blocks    + proposed (bool, default false)
 settings  + telegram_chat_id, nudges_on (bool)
 nudges    id, block_id (null for the brief and check-in), kind (brief | start | repeat |
           snooze | checkin), day, send_at, sent_at; unique (block_id, kind, day, send_at)
+gcal_pending  gcal_id (primary key), ends_at (null = delete the event)
 ```
 
 The function claims a `nudges` row before sending (`sent_at` stays null until Telegram accepts
@@ -103,7 +109,10 @@ every day, weekends included.
 - **Done** marks the task done and applies the block rules (the block ends now). /plan updates
   the Google event when it next opens. The message is edited to read "✓ Done".
 - **Snooze 10 min** sends the nudge again 10 minutes later in place of the repeat. The block
-  doesn't move.
+  doesn't move. The message reads "Snoozed until 2:13 pm · OS homework", or "No nudges left
+  today · OS homework" when the day's six are already sent or waiting.
+- A tap on a block that has since been deleted changes nothing; the message reads "That block is
+  no longer on the plan."
 - **Private tasks** show their real titles: messages go only to Lisul.
 - Moving or deleting a block before it starts moves or cancels its nudge. Nudges are worked out
   from the blocks each minute, not booked ahead.
@@ -156,10 +165,11 @@ Each step ships on its own and leaves the planner working:
 it, after re-running the schema):
 1. Message @BotFather, create a bot and paste its token into the script (hidden), which checks
    it and puts it on the clipboard to paste in as the function's secret, with a random
-   `SHEET_CRON_SECRET` it makes.
+   `SHEET_CRON_SECRET` and `TELEGRAM_WEBHOOK_SECRET` it makes.
 2. Send the bot one message, so the script can read the chat ID.
-3. Deploy the function, then run the SQL the script copies, which puts the function's URL and
-   the cron secret in Vault and saves the chat ID.
+3. Deploy the function; the script then registers it as the bot's webhook (`setWebhook` with
+   the webhook secret as `secret_token`). Run the SQL the script copies, which puts the
+   function's URL and the cron secret in Vault and saves the chat ID.
 4. Add Supabase's MCP connector to Claude, limited to the planner's project, and create "The
    Sheet" Claude Project with the instructions from `sheet-claude.md`.
 
