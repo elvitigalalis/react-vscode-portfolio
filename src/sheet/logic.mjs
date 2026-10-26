@@ -185,6 +185,16 @@ export function blockOnComplete(block, now) {
   return { action: "keep" };
 }
 
+// --- Due dates --------------------------------------------------------------------------
+
+// A task is at risk when it is due within two days (or already past due), not done, and has no
+// block that starts before its due date is over (midnight after it, in the owner's time zone).
+export function atRisk(task, blocks, today, timeZone) {
+  if (!task.due || task.done || dayDiff(task.due, today) > 2) return false;
+  const end = Date.parse(zonedIso(addDays(task.due, 1), 0, timeZone));
+  return !blocks.some((b) => b.task_id === task.id && Date.parse(b.starts_at) < end);
+}
+
 // --- Calendar events in the week ---------------------------------------------------------
 
 // A day's events from Google, as minutes past that day's midnight. All-day events cover every
