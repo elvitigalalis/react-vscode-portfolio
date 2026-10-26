@@ -239,11 +239,11 @@ ENV_FILE=.env
 [[ -f src/site.mjs && -f supabase/schema.sql ]] || { warn "Run this from the lisul-elvi-site repo root (the sheet branch)."; exit 1; }
 
 if [[ "$MODE" == telegram ]]; then
-  TOTAL_STAGES=7
-  banner "The Sheet: update the tables and connect Telegram"
+  TOTAL_STAGES=8
+  banner "The Sheet: update the tables, connect Telegram and Claude"
 else
-  TOTAL_STAGES=13
-  banner "The Sheet: connect Supabase, Google Calendar and Telegram"
+  TOTAL_STAGES=14
+  banner "The Sheet: connect Supabase, Google Calendar, Telegram and Claude"
 fi
 
 # ── 1 ────────────────────────────────────────────────────────────────────
@@ -488,6 +488,39 @@ unset SHEET_CRON_SECRET
 say ""
 say "The first morning brief arrives at 8:00 tomorrow (or today, if it's before 11 pm and"
 say "today's hasn't gone out). To see the job's runs: Integrations → Cron in the dashboard."
+pause "Press Enter for the Claude step"
+
+# ── 14 ───────────────────────────────────────────────────────────────────
+# Supabase's hosted MCP server (https://supabase.com/docs/guides/getting-started/mcp):
+# https://mcp.supabase.com/mcp, where ?project_ref= scopes it to one project (and turns off the
+# account tools) and ?features= keeps only the named tool groups ("database" has execute_sql).
+# read_only=true would run every query as a read-only user, but Claude must insert proposed
+# blocks, so it stays off. Sign-in is OAuth in the browser: no token passes through here.
+# Custom connectors in Claude: Customize → Connectors → Add → Add custom connector
+# (https://support.claude.com/en/articles/11175166). Rules: docs/sheet-claude.md (ADR 0001).
+stage "Claude: the Supabase connector and \"The Sheet\" project"
+say "Claude plans your day from your own Claude app. It reaches the planner through"
+say "Supabase's connector, limited to this one project, and your calendar through its own."
+open_url "https://claude.ai/customize/connectors"
+note "(In the Claude app: Customize → Connectors.)"
+step "Click '+ Add', then 'Add custom connector'. Name: Supabase (The Sheet)."
+step "URL (on your clipboard now):"
+copy "https://mcp.supabase.com/mcp?project_ref=$SHEET_REF&features=database"
+note "https://mcp.supabase.com/mcp?project_ref=$SHEET_REF&features=database"
+note "Not the Supabase connector from the directory: that one reaches every project you own."
+step "Click 'Continue' through the sign-in settings, then 'Add'. Sign in to Supabase when"
+step "asked and pick the organization that holds 'the-sheet'."
+step "Also make sure the Google Calendar connector is on, signed in as $SHEET_OWNER_EMAIL."
+pause "Press Enter once both connectors are added"
+open_url "https://claude.ai/projects"
+step "'New project'. Name: The Sheet. Create it."
+step "Open its instructions ('Set project instructions') and paste (on your clipboard now)."
+copy "$(cat docs/sheet-claude.md)"
+note "If the clipboard didn't work, paste the contents of docs/sheet-claude.md."
+note "When the rules change, edit docs/sheet-claude.md and paste it again: the repo is the master."
+step "In a chat in the project, use '+' → Connectors to turn on both connectors."
+say ""
+say "Then try it: say \"plan my day\". The proposal shows dashed in /plan until you approve it."
 pause "Press Enter to finish"
 
 finish
