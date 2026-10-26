@@ -26,18 +26,18 @@ const WEBHOOK_SECRET = env("TELEGRAM_WEBHOOK_SECRET");
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
-  if (CRON_SECRET && same(req.headers.get("x-sheet-cron") ?? "", CRON_SECRET)) {
+  if (CRON_SECRET && secretMatches(req.headers.get("x-sheet-cron") ?? "", CRON_SECRET)) {
     return Response.json(await send(new Date()));
   }
-  if (WEBHOOK_SECRET && same(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
+  if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await tap(await req.json(), new Date());
     return new Response("ok");
   }
   return new Response("forbidden", { status: 403 });
 });
 
-// Compares two secrets without stopping at the first difference.
-function same(a: string, b: string) {
+// Whether a header holds the secret, compared without stopping at the first difference.
+function secretMatches(a: string, b: string) {
   const x = new TextEncoder().encode(a);
   const y = new TextEncoder().encode(b);
   let diff = x.length ^ y.length;
@@ -83,8 +83,8 @@ async function send(now: Date) {
   for (const m of whatToSend(snap, now) as Message[]) {
     // Claim the log row first: if another run got there, the claim returns nothing and this
     // one skips the message, so it goes out once.
-    const claim = m.kind === "snooze" ? await claimSnooze(m) : await claimNew(m);
-    if (!claim) continue;
+    const c = await claim(m);
+    if (!c) continue;
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Open /plan otherwise.
       await telegram("sendMessage", {
@@ -94,37 +94,36 @@ async function send(now: Date) {
       });
     } catch (e) {
       // Give the claim back so the next minute tries again.
-      await (m.kind === "snooze"
-        ? db(`nudges?id=eq.${claim.id}`, { method: "PATCH", body: JSON.stringify({ sent_at: null }) })
-        : db(`nudges?id=eq.${claim.id}`, { method: "DELETE" }));
+      await c.giveBack();
       throw e;
     }
-    if (m.kind !== "snooze") await db(`nudges?id=eq.${claim.id}`, { method: "PATCH", body: JSON.stringify({ sent_at: new Date().toISOString() }) });
+    await c.sent();
     sent.push(m.kind);
   }
   return { sent };
 }
 
-// Most messages are claimed by inserting their log row; the unique key turns a second insert away.
-async function claimNew(m: Message) {
-  const [claim] = await db("nudges?on_conflict=block_id,kind,day,send_at", {
+const setSentAt = (id: string, sent_at: string | null) => db(`nudges?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ sent_at }) });
+
+// A snooze's row was logged by its tap, unsent; claiming it fills in sent_at, which only one run
+// can do. Any other message is claimed by inserting its log row, which the unique key turns away
+// the second time, and gets sent_at once Telegram has it.
+async function claim(m: Message) {
+  if (m.kind === "snooze") {
+    const key = `block_id=eq.${m.block_id}&kind=eq.snooze&day=eq.${m.day}&send_at=eq.${encodeURIComponent(m.send_at)}&sent_at=is.null`;
+    const [row] = await db(`nudges?${key}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ sent_at: new Date().toISOString() }),
+    });
+    return row && { giveBack: () => setSentAt(row.id, null), sent: async () => {} };
+  }
+  const [row] = await db("nudges?on_conflict=block_id,kind,day,send_at", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
     body: JSON.stringify({ block_id: m.block_id, kind: m.kind, day: m.day, send_at: m.send_at }),
   });
-  return claim;
-}
-
-// A snooze's row was logged by its tap, unsent; claiming it fills in sent_at, which only one run
-// can do.
-async function claimSnooze(m: Message) {
-  const key = `block_id=eq.${m.block_id}&kind=eq.snooze&day=eq.${m.day}&send_at=eq.${encodeURIComponent(m.send_at)}&sent_at=is.null`;
-  const [claim] = await db(`nudges?${key}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ sent_at: new Date().toISOString() }),
-  });
-  return claim;
+  return row && { giveBack: () => db(`nudges?id=eq.${row.id}`, { method: "DELETE" }), sent: () => setSentAt(row.id, new Date().toISOString()) };
 }
 
 // --- Taps ---------------------------------------------------------------------------------
