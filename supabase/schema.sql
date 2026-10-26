@@ -57,6 +57,25 @@ create table if not exists days (
   reflection text                    -- never public
 );
 
+-- Telegram (docs/sheet-nudges.md): the chat the bot writes to, set by tools/sheet-setup.sh, and
+-- the switch that turns the messages off.
+alter table settings add column if not exists telegram_chat_id bigint;
+alter table settings add column if not exists nudges_on boolean not null default true;
+
+-- One row per Telegram message sent. The unique key is what stops a message going out twice:
+-- the telegram function claims a row before sending. No foreign key on block_id: the row
+-- outlives a block deleted later, so the day's nudge budget still counts it.
+create table if not exists nudges (
+  id uuid primary key default gen_random_uuid(),
+  block_id uuid,                     -- null for the brief and the check-in
+  kind text not null check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin')),
+  day date not null,
+  send_at timestamptz not null,      -- the minute it was due
+  sent_at timestamptz,               -- null while it is being sent
+  unique nulls not distinct (block_id, kind, day, send_at)
+);
+create index if not exists nudges_day on nudges (day);
+
 create or replace function touch() returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
 drop trigger if exists tasks_touch on tasks;
@@ -72,15 +91,18 @@ alter table settings enable row level security;
 alter table tasks enable row level security;
 alter table blocks enable row level security;
 alter table days enable row level security;
+alter table nudges enable row level security;
 drop policy if exists owner_all on settings;
 drop policy if exists owner_all on tasks;
 drop policy if exists owner_all on blocks;
 drop policy if exists owner_all on days;
+drop policy if exists owner_all on nudges;
 create policy owner_all on settings for all using (is_owner()) with check (is_owner());
 create policy owner_all on tasks for all using (is_owner()) with check (is_owner());
 create policy owner_all on blocks for all using (is_owner()) with check (is_owner());
 create policy owner_all on days for all using (is_owner()) with check (is_owner());
-revoke all on settings, tasks, blocks, days from anon;
+create policy owner_all on nudges for all using (is_owner()) with check (is_owner());
+revoke all on settings, tasks, blocks, days, nudges from anon;
 
 -- Today in the owner's time zone.
 create or replace function sheet_today() returns date
@@ -172,6 +194,21 @@ grant select on public_week, public_days, public_now to anon, authenticated;
 create extension if not exists pg_cron;
 select cron.unschedule(jobid) from cron.job where jobname = 'sheet-rollover';
 select cron.schedule('sheet-rollover', '5 * * * *', 'select public.nightly_roll()');
+
+-- Every minute, call the telegram Edge Function to send what's due (docs/sheet-nudges.md). Its
+-- URL and the shared secret it checks live in Vault, put there by tools/sheet-setup.sh, so no
+-- secret is in this file; until they exist the job does nothing.
+create extension if not exists pg_net;
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-telegram';
+select cron.schedule('sheet-telegram', '* * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_telegram_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "send"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_telegram_url')
+$job$);
 
 -- Set the owner: the Google account that signs in to /plan.
 insert into settings (owner_email) values ('you@example.com')

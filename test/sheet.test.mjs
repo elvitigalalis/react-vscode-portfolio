@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
-  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk,
+  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel,
 } from "../src/sheet/logic.mjs";
 
 test("dates: weeks start on Monday and cross month ends", () => {
@@ -260,4 +260,11 @@ test("at risk: the due day's end follows daylight saving", () => {
   const block = (starts_at) => ({ task_id: "t1", starts_at, ends_at: new Date(Date.parse(starts_at) + 1_800_000).toISOString() });
   assert.equal(atRisk(task, [block("2026-11-02T04:30:00Z")], "2026-10-31", tz), false); // 11:30 pm Sunday
   assert.equal(atRisk(task, [block("2026-11-02T05:00:00Z")], "2026-10-31", tz), true);  // 12:00 am Monday
+});
+
+test("due dates: shown as a weekday within the coming week, a date otherwise", () => {
+  assert.equal(dueLabel("2026-10-30", "2026-10-26"), "due Fri");
+  assert.equal(dueLabel("2026-10-26", "2026-10-26"), "due Mon");
+  assert.equal(dueLabel("2026-11-02", "2026-10-26"), "due Nov 2");
+  assert.equal(dueLabel("2026-10-25", "2026-10-26"), "due Oct 25");
 });

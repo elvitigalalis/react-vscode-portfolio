@@ -29,6 +29,12 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
     Lisul's (the chat ID is in `settings`).
 
   The bot token is a function secret. Messages are fixed templates.
+
+  The function lives in `supabase/functions/telegram/` and imports `src/sheet/nudges.mjs`
+  straight from `src/`, so it is deployed with server-side bundling (`supabase functions deploy
+  telegram --use-api --no-verify-jwt`), which follows imports outside `supabase/functions`. The
+  cron job proves itself with a shared secret header (`SHEET_CRON_SECRET`, a function secret);
+  the job reads the function's URL and that secret from Supabase Vault, so neither is in the repo.
 - **Google Calendar is still edited only from the browser.** When /plan opens, it brings Google
   in line with any change made away from it, such as a block a Done tap shortened.
 - **The "Time blocks" events have no alerts** while Telegram is on, so nothing pings twice.
@@ -39,9 +45,13 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
 tasks     + due (date, null = no due date)
 blocks    + proposed (bool, default false)
 settings  + telegram_chat_id, nudges_on (bool)
-nudges    id, block_id → blocks (null for the brief and check-in), kind (brief | start |
-          repeat | snooze | checkin), day, send_at, sent_at
+nudges    id, block_id (null for the brief and check-in), kind (brief | start | repeat |
+          snooze | checkin), day, send_at, sent_at; unique (block_id, kind, day, send_at)
 ```
+
+The function claims a `nudges` row before sending (`sent_at` stays null until Telegram accepts
+it), so two runs in the same minute can't both send. `block_id` has no foreign key: the log keeps
+rows for blocks deleted later, so the day's budget still counts them.
 
 Rows with `proposed = true` never reach `public_week`, `public_now` or Google. Rollover and
 shutdown delete the proposed blocks for their day.
@@ -81,7 +91,7 @@ every day, weekends included.
 
 | Kind | When | Text (template) | Buttons |
 |---|---|---|---|
-| Morning brief | 8:00 | "Today: 5 tasks, 3 blocks. At risk: OS homework (due Fri). Nothing planned yet: say "plan my day" to Claude." With more than 6 blocks: "8 blocks, nudging the first 6." On an empty day: "Nothing on today." | Open /plan |
+| Morning brief | 8:00, or the first run after it if one was missed | One line each: "Today: 5 tasks, 0 blocks." "At risk: OS homework (due Fri)." "Nothing planned yet: say "plan my day" to Claude." With more than 6 blocks the first line reads "Today: 5 tasks, 8 blocks, nudging the first 6." On an empty day (no tasks, blocks or at-risk tasks): "Nothing on today." | Open /plan |
 | Nudge | The start of an approved block | "▶ 2:00 pm · OS homework (45 min)" | Done, Snooze 10 min |
 | Repeat | 10 min after a nudge, if the task isn't done or snoozed | "Still on: OS homework" | Done, Snooze 10 min |
 | Check-in | Shutdown time, unless the day is already shut down | "Shutdown time. 4 done, 2 left." | Open /plan |
@@ -137,10 +147,15 @@ Each step ships on its own and leaves the planner working:
 
 ## Setup Lisul does once
 
-`tools/sheet-setup.sh` gains a Telegram step:
-1. Message @BotFather, create a bot and paste its token in as the function's secret.
+`tools/sheet-setup.sh` gains a Telegram step (`bash tools/sheet-setup.sh telegram` runs only
+it, after re-running the schema):
+1. Message @BotFather, create a bot and paste its token into the script (hidden), which checks
+   it and puts it on the clipboard to paste in as the function's secret, with a random
+   `SHEET_CRON_SECRET` it makes.
 2. Send the bot one message, so the script can read the chat ID.
-3. Add Supabase's MCP connector to Claude, limited to the planner's project, and create "The
+3. Deploy the function, then run the SQL the script copies, which puts the function's URL and
+   the cron secret in Vault and saves the chat ID.
+4. Add Supabase's MCP connector to Claude, limited to the planner's project, and create "The
    Sheet" Claude Project with the instructions from `sheet-claude.md`.
 
 Claude never handles the token.
