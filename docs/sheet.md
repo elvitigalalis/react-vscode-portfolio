@@ -136,7 +136,8 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
   resizing a proposed block approves it too, and × turns it down. In the week, each one shows
   dashed under its task with its time and Approve. A proposal has no Google event and never
   reaches /now; one never approved lapses at shutdown or the nightly rollover.
-- `D` sends the focused task to tomorrow, `Z` to Someday.
+- `D` sends the focused task to tomorrow, `Z` to Someday. A block can be focused: `↑` `↓` move
+  it 15 minutes, `A` approves a proposed one, and `Shift+A` approves all.
 - Opening it after 3 pm plans tomorrow instead.
 - "Done" closes it and marks the day planned.
 

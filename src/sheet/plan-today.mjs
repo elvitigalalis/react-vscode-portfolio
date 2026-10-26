@@ -67,6 +67,9 @@ function draw() {
       el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed ? "Turn down" : "Remove"} block for ${t.title}` }),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
+    // Focusable, so a block can be moved and approved from the keyboard (see the dialog's keys).
+    box.tabIndex = 0;
+    box.ariaLabel = `${t.title}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
     Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
     timeline.append(box);
   }
@@ -104,7 +107,7 @@ function draw() {
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
     el("p", { className: "small", textContent: picked
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
-      : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday." }),
+      : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday; ↑ ↓ move the focused block." }),
     google,
     proposals ? el("p", { className: "sheet-notice" }, `Claude proposed ${proposals} block${proposals === 1 ? "" : "s"}, shown dashed. `,
       el("button", { type: "button", className: "sheet-link sheet-approve-all", textContent: "Approve all" })) : null,
@@ -292,6 +295,25 @@ export function setupPlanToday(root) {
       draw();
     }
   }, true);
+  // Keys on a focused block: ↑ ↓ move it 15 minutes, A approves it; Shift+A approves them all.
+  dialog.addEventListener("keydown", async (e) => {
+    if (e.metaKey || e.ctrlKey || e.target.closest?.("input")) return;
+    const box = e.target.closest?.(".sheet-block");
+    const id = box?.dataset.block;
+    const b = id && state.blocks.find((x) => x.id === id);
+    let act;
+    if (e.key === "A" && e.shiftKey) act = approveAll;
+    else if (b && e.key.toLowerCase() === "a" && b.proposed) act = () => saveBlock(b);
+    else if (b && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      const start = minutesOn(b.starts_at, day, SHEET.timeZone) + (e.key === "ArrowUp" ? -15 : 15);
+      act = () => moveBlock(id, Math.max(START, Math.min(END - 15, start)));
+    }
+    if (!act) return;
+    e.preventDefault();
+    try { await act(); } catch (err) { failed(err); }
+    draw();
+    dialog.querySelector(`[data-block="${id}"]`)?.focus();
+  });
   dialog.addEventListener("keydown", async (e) => {
     const li = e.target.closest?.(".sheet-task");
     if (!li || e.target.closest("input") || e.metaKey || e.ctrlKey) return;
