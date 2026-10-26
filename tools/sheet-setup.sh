@@ -209,10 +209,15 @@ finish() {
 # webhook secrets) are never written to disk: they live in this shell until pasted where they
 # belong.
 
-# copy TEXT puts TEXT on the clipboard (macOS pbcopy), or prints it if there's no clipboard.
+# copy TEXT puts TEXT on the clipboard (macOS pbcopy). Without a clipboard it never prints TEXT,
+# which may be a secret: it writes it to a file only you can read and prints the file's path. The
+# file is deleted when the script ends.
+CLIP_FILE=""
 copy() {
-  if command -v pbcopy >/dev/null 2>&1; then printf '%s' "$1" | pbcopy; printf '  %s✓ copied to your clipboard%s\n' "$GREEN" "$RESET"
-  else note "Copy this: $1"; fi
+  if command -v pbcopy >/dev/null 2>&1; then printf '%s' "$1" | pbcopy; printf '  %s✓ copied to your clipboard%s\n' "$GREEN" "$RESET"; return; fi
+  if [ -z "$CLIP_FILE" ]; then CLIP_FILE=$(mktemp); trap 'rm -f "$CLIP_FILE"' EXIT; fi
+  printf '%s' "$1" > "$CLIP_FILE"
+  note "No clipboard here, so it's in $CLIP_FILE (only you can read it): copy it from there, e.g. cat it in another terminal."
 }
 
 # telegram_api METHOD calls the Bot API with $TELEGRAM_BOT_TOKEN. The URL goes to curl on stdin,
