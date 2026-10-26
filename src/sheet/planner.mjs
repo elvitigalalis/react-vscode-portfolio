@@ -544,7 +544,7 @@ function wire() {
       }
       if (act === "close-calendars") return $("[data-calendars]").close();
       if (act === "save-calendars") return saveCalendars();
-      return actHooks[act]?.();
+      return actHooks[act]?.(e);
     }
     const move = e.target.closest("[data-move]")?.dataset.move;
     if (move) return menuAction(move);
