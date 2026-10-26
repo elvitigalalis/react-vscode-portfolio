@@ -76,6 +76,14 @@ create table if not exists nudges (
 );
 create index if not exists nudges_day on nudges (day);
 
+-- Google events a Done tap changed while /plan was closed (Telegram can't reach Google): end the
+-- event at ends_at, or delete it when ends_at is null. /plan applies them when it opens, then
+-- deletes the rows.
+create table if not exists gcal_pending (
+  gcal_id text primary key,
+  ends_at timestamptz
+);
+
 create or replace function touch() returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
 drop trigger if exists tasks_touch on tasks;
@@ -92,17 +100,20 @@ alter table tasks enable row level security;
 alter table blocks enable row level security;
 alter table days enable row level security;
 alter table nudges enable row level security;
+alter table gcal_pending enable row level security;
 drop policy if exists owner_all on settings;
 drop policy if exists owner_all on tasks;
 drop policy if exists owner_all on blocks;
 drop policy if exists owner_all on days;
 drop policy if exists owner_all on nudges;
+drop policy if exists owner_all on gcal_pending;
 create policy owner_all on settings for all using (is_owner()) with check (is_owner());
 create policy owner_all on tasks for all using (is_owner()) with check (is_owner());
 create policy owner_all on blocks for all using (is_owner()) with check (is_owner());
 create policy owner_all on days for all using (is_owner()) with check (is_owner());
 create policy owner_all on nudges for all using (is_owner()) with check (is_owner());
-revoke all on settings, tasks, blocks, days, nudges from anon;
+create policy owner_all on gcal_pending for all using (is_owner()) with check (is_owner());
+revoke all on settings, tasks, blocks, days, nudges, gcal_pending from anon;
 
 -- Today in the owner's time zone.
 create or replace function sheet_today() returns date
