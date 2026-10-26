@@ -1,17 +1,20 @@
 // The telegram Edge Function (docs/sheet-nudges.md): The Sheet's only server code. pg_cron calls
-// it every minute (supabase/schema.sql, "sheet-telegram") to send what's due. Which messages are
-// due, and their wording, is decided in src/sheet/nudges.mjs, the module /plan's tests cover; this
-// file only reads the day, sends through the Telegram Bot API and keeps the log.
+// it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
+// webhook for Done and Snooze taps. Which messages are due, their wording and what a tap changes
+// are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
+// day, talks to the Telegram Bot API and writes what the module says.
 //
 // Deploy from the repo root with server-side bundling, which follows the import out of
 // supabase/functions (tools/sheet-setup.sh does this):
 //   npx supabase functions deploy telegram --use-api --no-verify-jwt
 // --no-verify-jwt because neither caller has a Supabase sign-in: the cron job proves itself with
-// the shared secret below, and Telegram's webhook will with its own secret token header.
+// the shared secret below, and Telegram's webhook with its own secret token header (the
+// secret_token tools/sheet-setup.sh passes to setWebhook).
 //
-// Secrets (function secrets, set by Lisul, never in the repo): TELEGRAM_BOT_TOKEN and
-// SHEET_CRON_SECRET. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
-import { whatToSend } from "../../../src/sheet/nudges.mjs";
+// Secrets (function secrets, set by Lisul, never in the repo): TELEGRAM_BOT_TOKEN,
+// SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
+// provided by Supabase.
+import { whatToSend, handleTap } from "../../../src/sheet/nudges.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 
 const env = (name: string) => Deno.env.get(name) ?? "";
@@ -19,14 +22,17 @@ const SUPABASE_URL = env("SUPABASE_URL");
 const SERVICE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
+const WEBHOOK_SECRET = env("TELEGRAM_WEBHOOK_SECRET");
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
   if (CRON_SECRET && same(req.headers.get("x-sheet-cron") ?? "", CRON_SECRET)) {
     return Response.json(await send(new Date()));
   }
-  // The bot's webhook (Done and Snooze taps) goes here, behind Telegram's
-  // X-Telegram-Bot-Api-Secret-Token header.
+  if (WEBHOOK_SECRET && same(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
+    await tap(await req.json(), new Date());
+    return new Response("ok");
+  }
   return new Response("forbidden", { status: 403 });
 });
 
@@ -119,6 +125,51 @@ async function claimSnooze(m: Message) {
     body: JSON.stringify({ sent_at: new Date().toISOString() }),
   });
   return claim;
+}
+
+// --- Taps ---------------------------------------------------------------------------------
+
+type Change = { table: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean };
+
+// A second tap on the same button meets the row the first one wrote: a snooze stays as logged,
+// and a pending Google edit takes the latest end.
+const UPSERT: Record<string, string> = {
+  nudges: "on_conflict=block_id,kind,day,send_at",
+  gcal_pending: "on_conflict=gcal_id",
+};
+const RESOLVE: Record<string, string> = { nudges: "ignore-duplicates", gcal_pending: "merge-duplicates" };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Done or Snooze on a nudge. A tap from any chat but Lisul's, or any other update, is ignored
+// without a word. The message's buttons go when its text is edited.
+async function tap(update: { callback_query?: { id: string; data?: string; message?: { message_id: number; chat: { id: number } } } }, now: Date) {
+  const q = update.callback_query;
+  if (!q?.message) return;
+  const snap = await snapshot(now);
+  if (String(q.message.chat.id) !== String(snap.settings.telegram_chat_id)) return;
+  const [, action, block_id] = /^(done|snooze):(.+)$/.exec(q.data ?? "") ?? [];
+  if (!action || !UUID.test(block_id)) return;
+  // A nudge from an earlier day can name a block outside today's snapshot: add it and its task.
+  if (!snap.blocks.some((b: { id: string }) => b.id === block_id)) {
+    const [b] = await db(`blocks?select=*&id=eq.${block_id}`);
+    if (b) {
+      snap.blocks.push(...(await db(`blocks?select=*&task_id=eq.${b.task_id}`)));
+      snap.tasks.push(...(await db(`tasks?select=*&id=eq.${b.task_id}`)));
+    }
+  }
+  const { changes, text } = handleTap({ action, block_id }, snap, now) as { changes: Change[]; text: string };
+  for (const c of changes) {
+    if (c.insert) {
+      await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
+    } else if (c.update) {
+      await db(`${c.table}?id=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
+    } else if (c.delete) {
+      await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
+    }
+  }
+  await telegram("answerCallbackQuery", { callback_query_id: q.id });
+  // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
+  await telegram("editMessageText", { chat_id: q.message.chat.id, message_id: q.message.message_id, text }).catch(() => {});
 }
 
 async function telegram(method: string, body: unknown) {
