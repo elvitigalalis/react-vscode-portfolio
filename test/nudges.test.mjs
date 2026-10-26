@@ -3,7 +3,7 @@
 // unless a test says otherwise.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { whatToSend, handleTap } from "../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock } from "../src/sheet/nudges.mjs";
 
 const day = "2026-10-26";
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42, nudges_on: true };
@@ -502,4 +502,30 @@ test("Snooze: refused when the nudge would come back in quiet hours, and nothing
   });
   // At 10:49 pm it still comes back at 10:59.
   assert.equal(handleTap({ action: "snooze", block_id: "b1" }, late, at("2026-10-27T02:49:00Z")).text, "Snoozed until 10:59 pm · OS homework");
+});
+
+// --- Reading a tap -------------------------------------------------------------------------
+
+const ID = "0b6c1f9e-3d1a-4c55-9a43-2f7d8e6b1c20";
+const update = (data, chat = 42) => ({ callback_query: { id: "q1", data, message: { message_id: 7, chat: { id: chat } } } });
+
+test("reading a tap: Done and Snooze from Lisul's chat name the action and block", () => {
+  assert.deepEqual(readTap(update(`done:${ID}`), settings), { action: "done", block_id: ID, query_id: "q1", chat_id: 42, message_id: 7 });
+  assert.deepEqual(readTap(update(`snooze:${ID.toUpperCase()}`), settings), { action: "snooze", block_id: ID.toUpperCase(), query_id: "q1", chat_id: 42, message_id: 7 });
+});
+
+test("reading a tap: another chat, another update or bad data is ignored", () => {
+  assert.equal(readTap(update(`done:${ID}`, 99), settings), null);
+  assert.equal(readTap({ message: { text: "hi" } }, settings), null);
+  assert.equal(readTap({ callback_query: { id: "q1", data: `done:${ID}` } }, settings), null); // no message
+  assert.equal(readTap(update(`delete:${ID}`), settings), null);
+  assert.equal(readTap(update("done:b1"), settings), null);
+  assert.equal(readTap(update(`done:${ID}),id.neq.x`), settings), null);
+  assert.equal(readTap(update(undefined), settings), null);
+});
+
+test("reading a tap: a block outside today's snapshot has to be looked up", () => {
+  const snap = tapped();
+  assert.equal(needsTappedBlock(snap, { block_id: "b1" }), false);
+  assert.equal(needsTappedBlock(snap, { block_id: ID }), true);
 });

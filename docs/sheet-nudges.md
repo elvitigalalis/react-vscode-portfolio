@@ -28,7 +28,7 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
   - **Taps:** it is the bot's webhook for Done and Snooze. It checks Telegram's
     `X-Telegram-Bot-Api-Secret-Token` header against `TELEGRAM_WEBHOOK_SECRET` (a function
     secret, given to `setWebhook` as its `secret_token`) and ignores, without a reply, any chat
-    that isn't Lisul's (the chat ID is in `settings`). The same module decides what a tap changes
+    that isn't Lisul's (the chat ID is in `settings`). The same module reads the tap (`readTap`) and decides what it changes
     (`handleTap`); the function writes it, answers the tap and edits the message.
 
   The bot token is a function secret. Messages are fixed templates.

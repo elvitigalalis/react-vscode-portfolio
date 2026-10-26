@@ -156,6 +156,24 @@ function checkin({ tasks, day: row, today, tz }) {
 
 // --- Taps ----------------------------------------------------------------------------------
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// A Telegram update, read as a tap on a nudge's Done or Snooze:
+//   { action: "done" | "snooze", block_id, query_id, chat_id, message_id }
+// or null for anything else, which the webhook ignores without a word: any other update, a chat
+// that isn't Lisul's, or callback data that isn't "done:" or "snooze:" and a block's UUID.
+export function readTap(update, settings) {
+  const q = update.callback_query;
+  if (!q?.message || String(q.message.chat.id) !== String(settings.telegram_chat_id)) return null;
+  const [, action, block_id] = /^(done|snooze):(.+)$/.exec(q.data ?? "") ?? [];
+  if (!action || !UUID.test(block_id)) return null;
+  return { action, block_id, query_id: q.id, chat_id: q.message.chat.id, message_id: q.message.message_id };
+}
+
+// A nudge from an earlier day can name a block outside today's snapshot. The webhook then adds
+// that block, its task's other blocks and its task before handleTap runs.
+export const needsTappedBlock = (snapshot, tap) => !snapshot.blocks.some((b) => b.id === tap.block_id);
+
 const DONE = "✓ Done";
 const GONE = "That block is no longer on the plan.";
 
