@@ -18,7 +18,7 @@ The day a task must be finished by. It is optional and separate from the day the
 _Avoid_: Deadline
 
 **At risk**:
-A task due within two days that has no block before its due date.
+An undone task due within two days, or already past due, with no approved block starting before its due day ends. A block any time on the due day clears it.
 _Avoid_: Overdue, urgent
 
 **Block**:
@@ -36,6 +36,10 @@ _Avoid_: Suggestion, AI plan, draft
 **Approve**:
 To accept a proposed block (or a whole proposal), turning it into a real block.
 _Avoid_: Accept, confirm, commit
+
+**Turn down**:
+To remove a proposed block (× on the timeline) without approving it. Completing a task turns down its proposed blocks.
+_Avoid_: Reject, decline, dismiss
 
 **Roll**:
 A task left undone at the end of its day moving to the next day.

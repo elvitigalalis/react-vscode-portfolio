@@ -202,8 +202,8 @@ export const googleStep = (block) => (block.proposed ? "create" : block.gcal_id 
 // Telegram is on once the bot knows his chat and the switch in settings is on.
 export const telegramOn = (settings) => Boolean(settings?.nudges_on && settings?.telegram_chat_id);
 
-// The alerts on a "Time blocks" event: none while Telegram nudges him, so nothing pings twice,
-// and Google's default as the backup while it's off.
+// The alerts on a "Time blocks" event: none while Telegram nudges him, so no block is announced
+// twice, and Google's default as the backup while it's off.
 export const blockReminders = (settings) => (telegramOn(settings) ? { useDefault: false, overrides: [] } : { useDefault: true });
 
 // --- Due dates --------------------------------------------------------------------------
