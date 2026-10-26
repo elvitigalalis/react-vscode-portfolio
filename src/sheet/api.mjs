@@ -103,6 +103,9 @@ export const deleteBlock = (id) => rest(`blocks?id=eq.${id}`, { method: "DELETE"
 export const upsertDay = (day, patch) => rest("days", { method: "POST", body: { day, ...patch }, prefer: "resolution=merge-duplicates" });
 export const saveSettings = (patch) => rest("settings?id=eq.true", { method: "PATCH", body: patch });
 export const shutDown = (d, reflection) => rest("rpc/shut_down", { method: "POST", body: { d, reflection } });
+// Google edits a Telegram tap left for the browser (supabase/schema.sql, gcal_pending).
+export const listGcalPending = () => rest("gcal_pending");
+export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${encodeURIComponent(gcalId)}`, { method: "DELETE" });
 
 // --- Google Calendar ---------------------------------------------------------------------
 

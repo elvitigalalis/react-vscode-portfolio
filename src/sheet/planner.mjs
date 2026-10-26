@@ -369,6 +369,18 @@ async function loadEvents(days) {
   state.eventsStale = true;
 }
 
+// A Done tap in Telegram shortens or deletes a block while the browser may be closed, and only
+// the browser can edit Google: bring those events in line on opening. Without Google, they wait.
+async function syncGoogle() {
+  if (!api.googleReady()) return;
+  try {
+    for (const p of await api.listGcalPending()) {
+      await (p.ends_at ? api.patchEvent(p.gcal_id, { end: { dateTime: p.ends_at } }) : api.deleteEvent(p.gcal_id));
+      await api.clearGcalPending(p.gcal_id);
+    }
+  } catch (e) { console.error(e); }
+}
+
 async function saveCalendars() {
   const ids = [...new Set($("#sheet-cal-ids").value.split(/\s+/).filter(Boolean))];
   try {
@@ -665,6 +677,7 @@ export async function start(node, plugins = []) {
     $("[data-tools]").hidden = false;
     $("[data-daynav]").hidden = false;
     setStatus(null);
+    await syncGoogle();
     await load();
   } catch (e) { failed(e); }
 }
