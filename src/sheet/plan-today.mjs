@@ -1,11 +1,12 @@
 // Plan today (docs/sheet.md): today's tasks beside a timeline with Lisul's Google events in gray.
 // Dropping a task makes a block as tall as its estimate, written to the "Time blocks" calendar;
 // resizing a block writes its length back to the estimate. A load meter keeps the day honest.
+// Blocks Claude proposed show dashed until approved (docs/sheet-nudges.md).
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, planningDay, snap,
-  formatMinutes, formatClock, byPosition, DEFAULT_EST,
+  formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, DEFAULT_EST,
 } from "./logic.mjs";
 import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity } from "./planner.mjs";
 
@@ -60,9 +61,10 @@ function draw() {
     if (!t) continue;
     const top = minutesOn(b.starts_at, day, SHEET.timeZone);
     const end = minutesOn(b.ends_at, day, SHEET.timeZone);
-    const box = el("div", { className: `sheet-block${t.done ? " is-done" : ""}` },
-      el("span", { className: "sheet-block-title", textContent: `${t.title}${b.gcal_id ? "" : " (not in Google)"}`, title: t.title }),
-      el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `Remove block for ${t.title}` }),
+    const box = el("div", { className: `sheet-block${t.done ? " is-done" : ""}${b.proposed ? " is-proposed" : ""}` },
+      el("span", { className: "sheet-block-title", textContent: `${t.title}${b.proposed ? " (proposed)" : b.gcal_id ? "" : " (not in Google)"}`, title: t.title }),
+      b.proposed ? el("button", { type: "button", className: "sheet-link sheet-approve", textContent: "Approve", ariaLabel: `Approve block for ${t.title}` }) : null,
+      el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed ? "Turn down" : "Remove"} block for ${t.title}` }),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
     Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
@@ -93,6 +95,7 @@ function draw() {
     : el("p", { className: "sheet-notice" }, "Google Calendar is not connected, so blocks stay here. ",
         Object.assign(el("button", { type: "button", className: "sheet-link", textContent: "Connect" }), { onclick: api.signIn }));
 
+  const proposals = proposedOn(state.blocks, day, SHEET.timeZone).length;
   const scroll = dialog.querySelector(".sheet-timeline-wrap")?.scrollTop;
   dialog.replaceChildren(...[
     el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekday.charAt(0)}${weekday.slice(1).toLowerCase()} ${date}` }),
@@ -103,6 +106,8 @@ function draw() {
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday." }),
     google,
+    proposals ? el("p", { className: "sheet-notice" }, `Claude proposed ${proposals} block${proposals === 1 ? "" : "s"}, shown dashed. `,
+      el("button", { type: "button", className: "sheet-link sheet-approve-all", textContent: "Approve all" })) : null,
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
@@ -145,13 +150,33 @@ async function removeBlock(id) {
   state.blocks = state.blocks.filter((x) => x.id !== id);
 }
 
-// The estimate is the time blocked for the task, so resizing changes both.
+// Saves a block's new times. A proposed block is approved by it: it gets its Google event now,
+// exactly as a dragged-on task does. Approving alone saves no new times.
+async function saveBlock(b, times = {}) {
+  const t = state.tasks.get(b.task_id);
+  const { starts_at = b.starts_at, ends_at = b.ends_at } = times;
+  const change = { ...times };
+  const step = api.googleReady() ? googleStep(b) : null;
+  if (step === "create") change.gcal_id = await api.createEvent(t.title, t.public, starts_at, ends_at);
+  if (step === "patch") await api.patchEvent(b.gcal_id, api.eventTimes(starts_at, ends_at));
+  if (b.proposed) change.proposed = false;
+  Object.assign(b, await api.updateBlock(b.id, change));
+}
+
+const approveAll = async () => { for (const b of proposedOn(state.blocks, day, SHEET.timeZone)) await saveBlock(b); };
+
+// Dragging a block moves it and keeps its length.
+async function moveBlock(id, startMin) {
+  const b = state.blocks.find((x) => x.id === id);
+  const len = Math.round((new Date(b.ends_at) - new Date(b.starts_at)) / 60_000);
+  await saveBlock(b, { starts_at: zonedIso(day, startMin, SHEET.timeZone), ends_at: zonedIso(day, startMin + len, SHEET.timeZone) });
+}
+
+// The estimate is the time blocked for the task, so resizing changes both. Proposals don't count.
 async function resizeBlock(id, endMin) {
   const b = state.blocks.find((x) => x.id === id);
-  const ends_at = zonedIso(day, endMin, SHEET.timeZone);
-  if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: ends_at } });
-  Object.assign(b, await api.updateBlock(id, { ends_at }));
-  const total = state.blocks.filter((x) => x.task_id === b.task_id)
+  await saveBlock(b, { ends_at: zonedIso(day, endMin, SHEET.timeZone) });
+  const total = state.blocks.filter((x) => x.task_id === b.task_id && !x.proposed)
     .reduce((s, x) => s + Math.round((new Date(x.ends_at) - new Date(x.starts_at)) / 60_000), 0);
   state.tasks.set(b.task_id, await api.updateTask(b.task_id, { est_min: total }));
 }
@@ -183,18 +208,25 @@ const timelineDrop = {
   },
 };
 
-// Resizing a block's bottom edge and moving the shutdown line.
+// Resizing a block's bottom edge, moving a block, and moving the shutdown line. On touch a
+// block's body scrolls the timeline instead of moving; its bottom edge still resizes.
 function onPointerDown(e) {
-  const handle = e.target.closest(".sheet-resize, .sheet-shutline");
+  const handle = e.target.closest(".sheet-resize, .sheet-shutline")
+    ?? (e.pointerType !== "touch" && !e.target.closest("button") ? e.target.closest(".sheet-block") : null);
   if (!handle) return;
   e.preventDefault();
   e.stopPropagation();
   const box = handle.closest(".sheet-block, .sheet-shutline");
   const block = box.dataset.block;
+  const moving = handle === box && block;
   const top = parseFloat(box.style.top);
+  const rawAt = (ev) => START + (ev.clientY - timelineBox().top) / PX;
+  const grab = rawAt(e) - (START + top / PX);
+  const startAt = (ev) => Math.max(START, Math.min(END - 15, snap(rawAt(ev) - grab)));
   const move = (ev) => {
     const at = minuteAt(ev.clientY, timelineBox());
-    if (block) box.style.height = `${Math.max(15 * PX, y(at) - top)}px`;
+    if (moving) box.style.top = `${y(startAt(ev))}px`;
+    else if (block) box.style.height = `${Math.max(15 * PX, y(at) - top)}px`;
     else { box.style.top = `${y(at)}px`; box.firstChild.textContent = `Shutdown ${formatClock(at)}`; }
   };
   const up = async (ev) => {
@@ -202,7 +234,10 @@ function onPointerDown(e) {
     document.removeEventListener("pointerup", up);
     const at = minuteAt(ev.clientY, timelineBox());
     try {
-      if (block) {
+      if (moving) {
+        // A click on a block is not a move.
+        if (startAt(ev) !== startAt(e)) await moveBlock(block, startAt(ev));
+      } else if (block) {
         const start = START + top / PX;
         await resizeBlock(block, Math.max(start + 15, at));
       } else {
@@ -228,6 +263,14 @@ export function setupPlanToday(root) {
 
   dialog.addEventListener("pointerdown", onPointerDown, true);
   dialog.addEventListener("click", async (e) => {
+    const ok = e.target.closest(".sheet-approve, .sheet-approve-all");
+    if (ok) {
+      try {
+        if (ok.classList.contains("sheet-approve")) await saveBlock(state.blocks.find((b) => b.id === ok.closest(".sheet-block").dataset.block));
+        else await approveAll();
+      } catch (err) { failed(err); }
+      return draw();
+    }
     const x = e.target.closest(".sheet-block-x");
     if (x) {
       try { await removeBlock(x.closest(".sheet-block").dataset.block); } catch (err) { failed(err); }
@@ -270,6 +313,24 @@ export function setupPlanToday(root) {
     picked = null;
     render();
   });
+  // In the week, each proposed block shows dashed under its task, with its time and Approve.
+  renderHooks.push(() => {
+    for (const col of root.querySelectorAll(".sheet-day")) {
+      const d = col.dataset.day;
+      for (const b of proposedOn(state.blocks, d, SHEET.timeZone)) {
+        const row = col.querySelector(`.sheet-task[data-id="${b.task_id}"]`);
+        if (!row) continue;
+        const span = formatSpan(minutesOn(b.starts_at, d, SHEET.timeZone), minutesOn(b.ends_at, d, SHEET.timeZone));
+        const ok = el("button", { type: "button", className: "sheet-link", textContent: "Approve", ariaLabel: `Approve ${span} block for ${state.tasks.get(b.task_id).title}` });
+        Object.assign(ok.dataset, { act: "approve", block: b.id });
+        row.append(el("span", { className: "sheet-proposal", title: "Proposed by Claude" }, el("span", { textContent: `${span} proposed` }), ok));
+      }
+    }
+  });
+  actHooks.approve = async (e) => {
+    try { await saveBlock(state.blocks.find((b) => b.id === e.target.closest("[data-block]").dataset.block)); } catch (err) { failed(err); }
+    render();
+  };
   // Each day's header shows its planned load, coloured near and over capacity.
   renderHooks.push(() => {
     for (const head of root.querySelectorAll(".sheet-day")) {
