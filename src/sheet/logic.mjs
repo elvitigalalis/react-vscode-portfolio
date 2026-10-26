@@ -210,6 +210,13 @@ export function atRisk(task, blocks, today, timeZone) {
   return !blocks.some((b) => b.task_id === task.id && !b.proposed && Date.parse(b.starts_at) < end);
 }
 
+// "due Fri" within the coming week, "due Oct 30" further off or once it has passed. The week
+// and the Telegram messages both show it.
+export function dueLabel(due, today) {
+  const { weekday, date } = dayLabel(due);
+  return `due ${due >= today && due < addDays(today, 7) ? weekday[0] + weekday.slice(1).toLowerCase() : date}`;
+}
+
 // --- Calendar events in the week ---------------------------------------------------------
 
 // A day's events from Google, as minutes past that day's midnight. All-day events cover every

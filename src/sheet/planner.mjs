@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk, dueLabel,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
 
@@ -192,11 +192,7 @@ async function clearDue(id) {
 
 // --- Rendering ---------------------------------------------------------------------------
 
-// "due Fri" within the coming week, "due Oct 30" further off or once it has passed.
-function dueText(due) {
-  const { weekday, date } = dayLabel(due);
-  return `due ${due >= state.today && due < addDays(state.today, 7) ? weekday[0] + weekday.slice(1).toLowerCase() : date}`;
-}
+const dueText = (due) => dueLabel(due, state.today);
 
 // The details typed so far, shown beside the input as one chip ("45m · 3:00 pm · due Fri").
 function typedChip(input) {
