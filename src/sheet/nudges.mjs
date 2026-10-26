@@ -11,6 +11,8 @@ import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramO
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
 export const BRIEF_AT = 8 * 60;
+// The latest a check-in goes out, for a shutdown line at 11 pm or later.
+export const CHECKIN_LATEST = QUIET_FROM - 5;
 // The nudge budget: nudges, repeats and snoozes a day, not counting the brief or the check-in.
 export const BUDGET = 6;
 // The repeat follows a nudge Lisul hasn't acted on by this long after.
@@ -146,8 +148,10 @@ function checkin({ tasks, day: row, today, tz }) {
   const todays = tasks.filter((t) => t.day === today);
   if (row?.shutdown || !todays.length) return [];
   const [h, m] = (row?.shutdown_at ?? SHEET.shutdownAt).split(":").map(Number);
+  // A shutdown line in quiet hours still gets its check-in, just before them.
+  const at = Math.min(h * 60 + m, CHECKIN_LATEST);
   const done = todays.filter((t) => t.done).length;
-  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, h * 60 + m, tz), text: `Shutdown time. ${done} done, ${todays.length - done} left.`, buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
+  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: `Shutdown time. ${done} done, ${todays.length - done} left.`, buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
 }
 
 // --- Taps ----------------------------------------------------------------------------------
@@ -172,12 +176,14 @@ export function handleTap(tap, snapshot, now) {
 
 // Snooze logs the nudge again, unsent, for ten minutes on (from the tap's minute, so a repeated
 // tap meets the log's unique key); whatToSend sends it in the repeat's place. It takes a budget
-// slot now, so with none free it is refused, and the message says so.
+// slot now, so with none free it is refused, and the message says so; so is one that would come
+// back in quiet hours, when it could never be sent.
 function snooze(b, task, snapshot, now) {
   const day = dayOf(snapshot, now);
-  if (freeSlots(day) <= 0) return { changes: [], text: `No nudges left today · ${task.title}` };
   const minute = Math.floor(now.getTime() / 60_000) * 60_000;
   const send_at = new Date(minute + SNOOZE_FOR).toISOString();
+  if (minutesOn(send_at, day.today, day.tz) >= QUIET_FROM) return { changes: [], text: `Too close to quiet hours · ${task.title}` };
+  if (freeSlots(day) <= 0) return { changes: [], text: `No nudges left today · ${task.title}` };
   const row = { block_id: b.id, kind: "snooze", day: day.today, send_at, sent_at: null };
   return { changes: [{ table: "nudges", insert: row }], text: `Snoozed until ${formatClock(minutesOn(send_at, day.today, day.tz))} · ${task.title}` };
 }
