@@ -1,7 +1,7 @@
 // The telegram Edge Function (docs/sheet-nudges.md): The Sheet's only server code. pg_cron calls
 // it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
-// webhook for Done and Snooze taps. Which messages are due, their wording and what a tap changes
-// are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
+// webhook for Done and Snooze taps. Which messages are due, their wording, what counts as a tap
+// and what it changes are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
 // day, talks to the Telegram Bot API and writes what the module says.
 //
 // Deploy from the repo root with server-side bundling, which follows the import out of
@@ -14,7 +14,7 @@
 // Secrets (function secrets, set by Lisul, never in the repo): TELEGRAM_BOT_TOKEN,
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase.
-import { whatToSend, handleTap } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock } from "../../../src/sheet/nudges.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 
 const env = (name: string) => Deno.env.get(name) ?? "";
@@ -138,26 +138,21 @@ const UPSERT: Record<string, string> = {
   gcal_pending: "on_conflict=gcal_id",
 };
 const RESOLVE: Record<string, string> = { nudges: "ignore-duplicates", gcal_pending: "merge-duplicates" };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Done or Snooze on a nudge. A tap from any chat but Lisul's, or any other update, is ignored
-// without a word. The message's buttons go when its text is edited.
-async function tap(update: { callback_query?: { id: string; data?: string; message?: { message_id: number; chat: { id: number } } } }, now: Date) {
-  const q = update.callback_query;
-  if (!q?.message) return;
+// Done or Snooze on a nudge; readTap decides what counts as one. The message's buttons go when
+// its text is edited.
+async function tap(update: unknown, now: Date) {
   const snap = await snapshot(now);
-  if (String(q.message.chat.id) !== String(snap.settings.telegram_chat_id)) return;
-  const [, action, block_id] = /^(done|snooze):(.+)$/.exec(q.data ?? "") ?? [];
-  if (!action || !UUID.test(block_id)) return;
-  // A nudge from an earlier day can name a block outside today's snapshot: add it and its task.
-  if (!snap.blocks.some((b: { id: string }) => b.id === block_id)) {
-    const [b] = await db(`blocks?select=*&id=eq.${block_id}`);
+  const t = readTap(update, snap.settings);
+  if (!t) return;
+  if (needsTappedBlock(snap, t)) {
+    const [b] = await db(`blocks?select=*&id=eq.${t.block_id}`);
     if (b) {
       snap.blocks.push(...(await db(`blocks?select=*&task_id=eq.${b.task_id}`)));
       snap.tasks.push(...(await db(`tasks?select=*&id=eq.${b.task_id}`)));
     }
   }
-  const { changes, text } = handleTap({ action, block_id }, snap, now) as { changes: Change[]; text: string };
+  const { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
   for (const c of changes) {
     if (c.insert) {
       await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
@@ -167,9 +162,9 @@ async function tap(update: { callback_query?: { id: string; data?: string; messa
       await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
     }
   }
-  await telegram("answerCallbackQuery", { callback_query_id: q.id });
+  await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
-  await telegram("editMessageText", { chat_id: q.message.chat.id, message_id: q.message.message_id, text }).catch(() => {});
+  await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text }).catch(() => {});
 }
 
 async function telegram(method: string, body: unknown) {
