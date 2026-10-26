@@ -75,15 +75,12 @@ async function send(now: Date) {
   const snap = await snapshot(now);
   const sent = [];
   for (const m of whatToSend(snap, now) as Message[]) {
-    // Claim the log row first: if another run got there, the insert returns nothing and this
+    // Claim the log row first: if another run got there, the claim returns nothing and this
     // one skips the message, so it goes out once.
-    const [claim] = await db("nudges?on_conflict=block_id,kind,day,send_at", {
-      method: "POST",
-      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
-      body: JSON.stringify({ block_id: m.block_id, kind: m.kind, day: m.day, send_at: m.send_at }),
-    });
+    const claim = m.kind === "snooze" ? await claimSnooze(m) : await claimNew(m);
     if (!claim) continue;
     try {
+      // The buttons sit in one row: Done and Snooze 10 min under a nudge, Open /plan otherwise.
       await telegram("sendMessage", {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
@@ -91,13 +88,37 @@ async function send(now: Date) {
       });
     } catch (e) {
       // Give the claim back so the next minute tries again.
-      await db(`nudges?id=eq.${claim.id}`, { method: "DELETE" });
+      await (m.kind === "snooze"
+        ? db(`nudges?id=eq.${claim.id}`, { method: "PATCH", body: JSON.stringify({ sent_at: null }) })
+        : db(`nudges?id=eq.${claim.id}`, { method: "DELETE" }));
       throw e;
     }
-    await db(`nudges?id=eq.${claim.id}`, { method: "PATCH", body: JSON.stringify({ sent_at: new Date().toISOString() }) });
+    if (m.kind !== "snooze") await db(`nudges?id=eq.${claim.id}`, { method: "PATCH", body: JSON.stringify({ sent_at: new Date().toISOString() }) });
     sent.push(m.kind);
   }
   return { sent };
+}
+
+// Most messages are claimed by inserting their log row; the unique key turns a second insert away.
+async function claimNew(m: Message) {
+  const [claim] = await db("nudges?on_conflict=block_id,kind,day,send_at", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+    body: JSON.stringify({ block_id: m.block_id, kind: m.kind, day: m.day, send_at: m.send_at }),
+  });
+  return claim;
+}
+
+// A snooze's row was logged by its tap, unsent; claiming it fills in sent_at, which only one run
+// can do.
+async function claimSnooze(m: Message) {
+  const key = `block_id=eq.${m.block_id}&kind=eq.snooze&day=eq.${m.day}&send_at=eq.${encodeURIComponent(m.send_at)}&sent_at=is.null`;
+  const [claim] = await db(`nudges?${key}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ sent_at: new Date().toISOString() }),
+  });
+  return claim;
 }
 
 async function telegram(method: string, body: unknown) {
