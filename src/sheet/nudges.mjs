@@ -1,11 +1,12 @@
-// The Telegram messages (docs/sheet-nudges.md, "Messages"): which are due at a given minute.
+// The Telegram messages (docs/sheet-nudges.md, "Messages"): which are due at a given minute, and
+// what a Done or Snooze tap on one changes.
 // Kept free of the network so node --test covers it; the `telegram` Edge Function
 // (supabase/functions/telegram) imports it, so the rules live only here.
 //
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn } from "./logic.mjs";
+import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -120,4 +121,49 @@ function checkin({ tasks, day: row, today, tz }) {
   const [h, m] = (row?.shutdown_at ?? SHEET.shutdownAt).split(":").map(Number);
   const done = todays.filter((t) => t.done).length;
   return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, h * 60 + m, tz), text: `Shutdown time. ${done} done, ${todays.length - done} left.`, buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
+}
+
+// --- Taps ----------------------------------------------------------------------------------
+
+const DONE = "✓ Done";
+const GONE = "That block is no longer on the plan.";
+
+// A tap on a nudge's Done or Snooze, { action: "done" | "snooze", block_id }, at `now`, against
+// the same snapshot whatToSend takes. Returns the changes for the Edge Function to make and the
+// tapped message's new text:
+//   { table, insert: row } | { table, id, update: fields } | { table, id, delete: true }
+// Telegram can't edit Google Calendar, so a block whose event changes leaves a gcal_pending row
+// ({ gcal_id, ends_at }, ends_at null for a deleted event) for /plan to apply when it opens.
+export function handleTap(tap, snapshot, now) {
+  const b = snapshot.blocks.find((x) => x.id === tap.block_id);
+  const task = b && snapshot.tasks.find((t) => t.id === b.task_id);
+  // A block deleted or moved off the plan since its nudge went out: nothing left to act on.
+  if (!task) return { changes: [], text: GONE };
+  if (task.done) return { changes: [], text: DONE };
+  return tap.action === "snooze" ? snooze(b, task, snapshot, now) : done(task, snapshot, now);
+}
+
+// Snooze logs the nudge again, unsent, for ten minutes on (from the tap's minute, so a repeated
+// tap meets the log's unique key); whatToSend sends it in the repeat's place. It counts toward
+// the budget, so once six are sent or waiting it would never go out, and the message says so.
+function snooze(b, task, { settings, log }, now) {
+  if (log.filter((n) => BUDGETED.includes(n.kind)).length >= BUDGET) return { changes: [], text: `No nudges left today · ${task.title}` };
+  const tz = settings.time_zone;
+  const minute = Math.floor(now.getTime() / 60_000) * 60_000;
+  const send_at = new Date(minute + SNOOZE_FOR).toISOString();
+  const { day } = localNow(now, tz);
+  const row = { block_id: b.id, kind: "snooze", day, send_at, sent_at: null };
+  return { changes: [{ table: "nudges", insert: row }], text: `Snoozed until ${formatClock(minutesOn(send_at, day, tz))} · ${task.title}` };
+}
+
+// Done marks the task done and applies the block rules to each of its blocks, as /plan does.
+function done(task, { blocks }, now) {
+  const changes = blocks.filter((b) => b.task_id === task.id).flatMap((b) => {
+    const r = blockOnComplete(b, now);
+    if (r.action === "keep") return [];
+    const ends_at = r.action === "shrink" ? r.ends_at : null;
+    const pending = b.gcal_id ? [{ table: "gcal_pending", insert: { gcal_id: b.gcal_id, ends_at } }] : [];
+    return [r.action === "shrink" ? { table: "blocks", id: b.id, update: { ends_at } } : { table: "blocks", id: b.id, delete: true }, ...pending];
+  });
+  return { changes: [...changes, { table: "tasks", id: task.id, update: { done: true } }], text: DONE };
 }
