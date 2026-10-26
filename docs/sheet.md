@@ -45,7 +45,7 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
 ```
 tasks   id, title, day (date, null = Someday), list (Someday list name), position,
         est_min (null = no estimate), at_time (time, null = untimed), tag, public (bool),
-        done (bool), rolls (int), created_at
+        done (bool), rolls (int), due (date, null = none), created_at
 blocks  id, task_id → tasks, starts_at, ends_at, gcal_id
 days    day (date pk), planned (bool), shutdown (bool), reflection (text, never public)
 settings  owner_email, gcal_calendar_id ("Time blocks"), calendars (extra calendar IDs to read)
@@ -91,9 +91,14 @@ tasks jumping days across time zones.
   - `@3pm` / `@15:00` → fixed time (the task stays on its day and never rolls)
   - `#workit` → tag
   - `!p` (or `!private`) → private; `!public` makes it public again when editing
+  - `^fri`, `^10/30` or `^tomorrow` → due date, counted from the task's day (today for Someday):
+    a weekday or month/day is its next occurrence on or after that day. It shows as "due Fri"
+    (⚠ when at risk), typing a new one changes it, and the menu's "Clear due date" removes it.
+    /now never shows it ([sheet-nudges.md](sheet-nudges.md)).
 - **Tasks are public by default.** Private ones carry a small "private" label in the planner.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To
-  tomorrow, To next week, Day before, Day after, To Someday, Public/Private, Delete. This menu is also the keyboard and
+  tomorrow, To next week, Day before, Day after, To Someday, Public/Private, Clear due date (when
+  it has one), Delete. This menu is also the keyboard and
   screen-reader way to do everything drag does.
 - **Drag** a task within a day, between days, or to and from Someday (Pointer Events). On touch,
   hold a task for 0.3 s to pick it up, so a swipe still scrolls. The dragged task leaves a 25 % ghost.
@@ -153,7 +158,7 @@ A skipped shutdown costs nothing: the nightly rollover does the same move.
 - Each day can carry **"Planned ✓"** and **"Shut down ✓"** stamps. No times.
 - A done public task whose tag matches a write-up (`#workit`, `#micromouse`) links to it.
 - A handwritten-style margin note in the site's own type: *P.S. the redacted bars are life stuff.*
-- **Never shown:** times, estimates, Someday lists, rollover counts, reflections, Google events,
+- **Never shown:** times, estimates, due dates, Someday lists, rollover counts, reflections, Google events,
   streaks, totals. "Last updated" shows the date only.
 - One small reward when every task today is done: the day's header gets a check mark (no
   animation).
