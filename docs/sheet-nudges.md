@@ -105,12 +105,16 @@ every day, weekends included.
 | Check-in | Shutdown time, unless the day is already shut down | "Shutdown time. 4 done, 2 left." | Open /plan |
 
 - **Nudge budget:** six a day, counting nudges, repeats and snoozes; the brief and the check-in
-  don't count. The first six by time get sent. Blocks that start before 8 am get no nudge.
+  don't count. A block can be nudged when it is approved, its task isn't done, and it starts
+  between 8 am and 11 pm (so blocks that start before 8 am get no nudge). The nudges at the start
+  of the first six such blocks are kept for them; repeats, snoozes and later blocks' nudges use
+  only the slots left after those, so a repeat in the morning never costs an afternoon block its
+  nudge. A snooze waiting to go out holds its slot.
 - **Done** marks the task done and applies the block rules (the block ends now). /plan updates
   the Google event when it next opens. The message is edited to read "✓ Done".
 - **Snooze 10 min** sends the nudge again 10 minutes later in place of the repeat. The block
   doesn't move. The message reads "Snoozed until 2:13 pm · OS homework", or "No nudges left
-  today · OS homework" when the day's six are already sent or waiting.
+  today · OS homework" when no slot is free (nothing is logged then).
 - A tap on a block that has since been deleted changes nothing; the message reads "That block is
   no longer on the plan."
 - **Private tasks** show their real titles: messages go only to Lisul.

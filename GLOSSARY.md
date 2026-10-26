@@ -68,7 +68,7 @@ The message at shutdown time that asks Lisul to do the shutdown; skipped if the 
 _Avoid_: End-of-day reminder, review prompt
 
 **Nudge budget**:
-The most nudges Lisul gets in one day: six, counting repeats and snoozes but not the morning brief or the check-in.
+The most nudges Lisul gets in one day: six, counting repeats and snoozes but not the morning brief or the check-in. The first six blocks' nudges are kept for them; repeats and snoozes get only the slots left.
 _Avoid_: Limit, cap
 
 **Quiet hours**:
