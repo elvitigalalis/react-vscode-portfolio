@@ -1,8 +1,9 @@
 // The Telegram messages (src/sheet/nudges.mjs): what is due at a given minute, worked out from a
-// snapshot of the day. Monday 2026-10-26 in New York (EDT, UTC-4) unless a test says otherwise.
+// snapshot of the day, and what a tap changes. Monday 2026-10-26 in New York (EDT, UTC-4)
+// unless a test says otherwise.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { whatToSend } from "../src/sheet/nudges.mjs";
+import { whatToSend, handleTap } from "../src/sheet/nudges.mjs";
 
 const day = "2026-10-26";
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42, nudges_on: true };
@@ -306,4 +307,93 @@ test("check-in: an empty day stays quiet after its brief", () => {
 test("budget: the check-in still goes out once the six are spent", () => {
   const log = [0, 1, 2, 3, 4, 5].map((i) => sent(`b${i}`, "start", hour(13 + i)));
   assert.deepEqual(whatToSend(study(log), at(hour(21))).map((m) => m.kind), ["checkin"]);
+});
+
+// --- Taps ----------------------------------------------------------------------------------
+
+// The nudge for homework's 2:00-2:45 pm block went out; its Google event is "ev1".
+const tapped = (extra = {}) => homework({
+  blocks: [block("b1", "t1", "2026-10-26T18:00:00Z", "2026-10-26T18:45:00Z", { gcal_id: "ev1" })],
+  log: [briefSent, sent("b1", "start", "2026-10-26T18:00:00.000Z")],
+  ...extra,
+});
+
+test("Done during a block: the task is done, the block ends now and Google is told later", () => {
+  assert.deepEqual(handleTap({ action: "done", block_id: "b1" }, tapped(), at("2026-10-26T18:20:30Z")), {
+    changes: [
+      { table: "blocks", id: "b1", update: { ends_at: "2026-10-26T18:20:30.000Z" } },
+      { table: "gcal_pending", insert: { gcal_id: "ev1", ends_at: "2026-10-26T18:20:30.000Z" } },
+      { table: "tasks", id: "t1", update: { done: true } },
+    ],
+    text: "✓ Done",
+  });
+});
+
+test("Done before a block: the block is deleted, and so is its Google event later", () => {
+  assert.deepEqual(handleTap({ action: "done", block_id: "b1" }, tapped(), at("2026-10-26T17:50:00Z")), {
+    changes: [
+      { table: "blocks", id: "b1", delete: true },
+      { table: "gcal_pending", insert: { gcal_id: "ev1", ends_at: null } },
+      { table: "tasks", id: "t1", update: { done: true } },
+    ],
+    text: "✓ Done",
+  });
+});
+
+test("Done after a block: the task is done and the block stays as it was", () => {
+  assert.deepEqual(handleTap({ action: "done", block_id: "b1" }, tapped(), at("2026-10-26T19:00:00Z")), {
+    changes: [{ table: "tasks", id: "t1", update: { done: true } }],
+    text: "✓ Done",
+  });
+});
+
+test("Done: the block rules apply to each of the task's blocks, and one without an event leaves Google alone", () => {
+  const snap = tapped({ blocks: [
+    block("b1", "t1", "2026-10-26T18:00:00Z", "2026-10-26T18:45:00Z"),
+    block("b2", "t1", "2026-10-26T20:00:00Z", "2026-10-26T20:30:00Z", { gcal_id: "ev2" }),
+  ] });
+  assert.deepEqual(handleTap({ action: "done", block_id: "b1" }, snap, at("2026-10-26T18:30:00Z")).changes, [
+    { table: "blocks", id: "b1", update: { ends_at: "2026-10-26T18:30:00.000Z" } },
+    { table: "blocks", id: "b2", delete: true },
+    { table: "gcal_pending", insert: { gcal_id: "ev2", ends_at: null } },
+    { table: "tasks", id: "t1", update: { done: true } },
+  ]);
+});
+
+test("Done twice: once the task is done, a second tap changes nothing", () => {
+  const snap = tapped({ tasks: [task("t1", "OS homework", { done: true })] });
+  assert.deepEqual(handleTap({ action: "done", block_id: "b1" }, snap, at("2026-10-26T18:25:00Z")), { changes: [], text: "✓ Done" });
+});
+
+test("a tap on a block that is gone changes nothing and says so", () => {
+  const gone = { changes: [], text: "That block is no longer on the plan." };
+  assert.deepEqual(handleTap({ action: "done", block_id: "b9" }, tapped(), at("2026-10-26T18:20:00Z")), gone);
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b9" }, tapped(), at("2026-10-26T18:20:00Z")), gone);
+});
+
+test("Snooze: logs the nudge for ten minutes after the tap, and nothing else changes", () => {
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b1" }, tapped(), at("2026-10-26T18:03:20Z")), {
+    changes: [{ table: "nudges", insert: snoozed }], // 2:13 pm, unsent
+    text: "Snoozed until 2:13 pm · OS homework",
+  });
+});
+
+test("Snooze: the logged nudge replaces the repeat and comes at 2:13 pm", () => {
+  const { changes } = handleTap({ action: "snooze", block_id: "b1" }, tapped(), at("2026-10-26T18:03:20Z"));
+  const snap = tapped({ log: [...tapped().log, ...changes.map((c) => c.insert)] });
+  assert.deepEqual(whatToSend(snap, at("2026-10-26T18:10:00Z")), []);
+  assert.deepEqual(whatToSend(snap, at("2026-10-26T18:13:00Z")).map((m) => [m.kind, m.send_at]), [["snooze", "2026-10-26T18:13:00.000Z"]]);
+});
+
+test("Snooze: once the day's six nudges are spent, nothing is logged and the message says so", () => {
+  const log = [briefSent, ...[0, 1, 2, 3, 4].map((i) => sent(`b${i + 2}`, "start", `2026-10-26T1${3 + i}:00:00.000Z`)),
+    sent("b1", "start", "2026-10-26T18:00:00.000Z")];
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b1" }, tapped({ log }), at("2026-10-26T18:03:00Z")), {
+    changes: [], text: "No nudges left today · OS homework",
+  });
+});
+
+test("Snooze on a task that is already done logs nothing", () => {
+  const snap = tapped({ tasks: [task("t1", "OS homework", { done: true })] });
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b1" }, snap, at("2026-10-26T18:03:00Z")), { changes: [], text: "✓ Done" });
 });
