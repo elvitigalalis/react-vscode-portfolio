@@ -151,14 +151,28 @@ export const planningDay = ({ day, minutes }) => (minutes >= 15 * 60 ? addDays(d
 
 export const snap = (mins, step = 15) => Math.round(mins / step) * step;
 
-// What completing a task does to one of its blocks (Sunsama's rules).
+// What completing a task does to one of its blocks (Sunsama's rules). A proposed block is
+// turned down: nothing is left to approve.
 export function blockOnComplete(block, now) {
+  if (block.proposed) return { action: "delete" };
   const start = new Date(block.starts_at);
   const end = new Date(block.ends_at);
   if (now < start) return { action: "delete" };
   if (now < end) return { action: "shrink", ends_at: now.toISOString() };
   return { action: "keep" };
 }
+
+// --- Proposals ---------------------------------------------------------------------------
+
+// A day's proposed blocks (docs/sheet-nudges.md), earliest first. They are Claude's until
+// approved, and lapse at the day's shutdown or the nightly rollover.
+export const proposedOn = (blocks, day, timeZone) => blocks
+  .filter((b) => b.proposed && localNow(new Date(b.starts_at), timeZone).day === day)
+  .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+// What moving or resizing a block does in Google. A proposed block has no event: changing it
+// approves it, so its event is made then, as when a task is dragged on.
+export const googleStep = (block) => (block.proposed ? "create" : block.gcal_id ? "patch" : null);
 
 // --- Calendar events in the week ---------------------------------------------------------
 
