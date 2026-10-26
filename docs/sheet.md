@@ -46,7 +46,7 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
 tasks   id, title, day (date, null = Someday), list (Someday list name), position,
         est_min (null = no estimate), at_time (time, null = untimed), tag, public (bool),
         done (bool), rolls (int), created_at
-blocks  id, task_id → tasks, starts_at, ends_at, gcal_id
+blocks  id, task_id → tasks, starts_at, ends_at, gcal_id, proposed (bool: Claude's, not yet approved)
 days    day (date pk), planned (bool), shutdown (bool), reflection (text, never public)
 settings  owner_email, gcal_calendar_id ("Time blocks"), calendars (extra calendar IDs to read)
 ```
@@ -108,6 +108,7 @@ tasks jumping days across time zones.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.
+- Proposed blocks of earlier days are deleted: a proposal lapses at the end of its day.
 
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
@@ -123,12 +124,20 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
   is created as an event on the "Time blocks" Google calendar: its title is the task's title if
   public, **"Busy" if private** (Ellie's privacy mode). One task may have several blocks.
 - **Resizing a block writes the new length back to the estimate** and the meter updates at once.
+  Dragging a block's body moves it and keeps its length (mouse only: on touch it scrolls).
+- **Proposed blocks** ([sheet-nudges.md](sheet-nudges.md)) show as dashed outlines with an
+  **Approve** button, and the header reads "Claude proposed 3 blocks, shown dashed. Approve
+  all". Approving creates the block's Google event, exactly as dragging a task does; moving or
+  resizing a proposed block approves it too, and × turns it down. In the week, each one shows
+  dashed under its task with its time and Approve. A proposal has no Google event and never
+  reaches /now; one never approved lapses at shutdown or the nightly rollover.
 - `D` sends the focused task to tomorrow, `Z` to Someday.
 - Opening it after 3 pm plans tomorrow instead.
 - "Done" closes it and marks the day planned.
 
 **Block rules** (Sunsama): The Sheet only ever edits events it created. Completing a task during
 its block shrinks the block to end now; completing it before the block starts deletes the block.
+Completing a task turns down its proposed blocks.
 Deleting a task deletes its blocks. Moving a task to another day deletes its blocks. Removing a
 block never deletes the task. Changing one block never moves another.
 
@@ -140,7 +149,8 @@ any time).
 1. Two columns, **Done** and **Missed**. Clicking a task moves it to the other column.
 2. One box: *What went well, what got in the way?* (private, always).
 3. **Finish:** nothing is saved before this. Missed tasks move to tomorrow (counted as a roll),
-   the day is marked shut down and gets a "Shutdown complete" stamp.
+   the day's unapproved proposed blocks are deleted, and the day is marked shut down and gets a
+   "Shutdown complete" stamp.
 
 A skipped shutdown costs nothing: the nightly rollover does the same move.
 
@@ -149,7 +159,8 @@ A skipped shutdown costs nothing: the nightly rollover does the same move.
 - The same week, read-only. **Public tasks show their title** (struck through when done).
   **Private tasks show as a black bar the length of their title** (capped at the column width).
 - **"Right now"** above the week: during a block of a public task, that task's title; during a
-  private task's block, "Heads down"; otherwise nothing. It refreshes every minute.
+  private task's block, "Heads down"; otherwise nothing. Proposed blocks never count. It
+  refreshes every minute.
 - Each day can carry **"Planned ✓"** and **"Shut down ✓"** stamps. No times.
 - A done public task whose tag matches a write-up (`#workit`, `#micromouse`) links to it.
 - A handwritten-style margin note in the site's own type: *P.S. the redacted bars are life stuff.*
