@@ -1,6 +1,7 @@
 // The Sheet's network side: Supabase Auth and REST through plain fetch (no client library), and
 // Google Calendar with the Google token Supabase hands back at sign-in (docs/sheet.md).
 import { SHEET } from "../site.mjs";
+import { blockReminders } from "./logic.mjs";
 
 export const configured = Boolean(SHEET.supabaseUrl && SHEET.anonKey);
 
@@ -148,9 +149,11 @@ export async function calendarEvents(fromIso, toIso, extra = []) {
 
 // The "Time blocks" calendar, created on first use and remembered in settings.
 let calendarId = null;
+let settingsRow;
+const settingsOnce = async () => (settingsRow ??= await settings());
 async function blocksCalendar() {
   if (calendarId) return calendarId;
-  calendarId = (await settings())?.gcal_calendar_id ?? null;
+  calendarId = (await settingsOnce())?.gcal_calendar_id ?? null;
   if (calendarId) return calendarId;
   const cal = await google("calendars", { method: "POST", body: { summary: "Time blocks", timeZone: SHEET.timeZone } });
   calendarId = cal.id;
@@ -158,14 +161,17 @@ async function blocksCalendar() {
   return calendarId;
 }
 
-// A private task's block is titled "Busy" in Google.
-const eventBody = (title, isPublic, starts_at, ends_at) => ({
+// A private task's block is titled "Busy" in Google. It has no alerts while Telegram nudges him.
+const eventBody = (title, isPublic, starts_at, ends_at, reminders) => ({
   summary: isPublic ? title : "Busy",
   start: { dateTime: starts_at }, end: { dateTime: ends_at },
+  reminders,
 });
 
 export async function createEvent(title, isPublic, starts_at, ends_at) {
-  const ev = await google(`calendars/${encodeURIComponent(await blocksCalendar())}/events`, { method: "POST", body: eventBody(title, isPublic, starts_at, ends_at) });
+  const cal = await blocksCalendar();
+  const body = eventBody(title, isPublic, starts_at, ends_at, blockReminders(await settingsOnce()));
+  const ev = await google(`calendars/${encodeURIComponent(cal)}/events`, { method: "POST", body });
   return ev.id;
 }
 

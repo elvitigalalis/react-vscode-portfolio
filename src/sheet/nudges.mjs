@@ -5,7 +5,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock } from "./logic.mjs";
+import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -31,8 +31,8 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // send_at is the minute the message belongs to (it may be earlier than `now` if a run was late)
 // and a button has either a url or callback data ("done:<block id>", "snooze:<block id>").
 export function whatToSend(snapshot, now) {
-  const { time_zone: tz, nudges_on, telegram_chat_id } = snapshot.settings;
-  if (!nudges_on || !telegram_chat_id) return [];
+  if (!telegramOn(snapshot.settings)) return [];
+  const tz = snapshot.settings.time_zone;
   const { day: today, minutes } = localNow(now, tz);
   if (minutes < BRIEF_AT || minutes >= QUIET_FROM) return [];
   // Proposed blocks aren't part of the plan until approved: they count for nothing here.
