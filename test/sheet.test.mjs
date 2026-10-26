@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, rollMark, barWidth, rightNow,
-  eventsOnDay, freeMinutes, clashWith, visibleEvents,
+  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk,
 } from "../src/sheet/logic.mjs";
 
 test("dates: weeks start on Monday and cross month ends", () => {
@@ -189,4 +189,40 @@ test("calendar events: a full column hides ended events first", () => {
   const later = visibleEvents(evs, 4, 450);
   assert.deepEqual(later.shown.map((e) => e.title), ["e3", "e4", "e5", "e6"]);
   assert.equal(later.hidden, 2);
+});
+
+test("at risk: due within two days with no block, across a weekend", () => {
+  const tz = "America/New_York";
+  const task = (due) => ({ id: "t1", due, done: false });
+  // Friday 2026-10-30: due Friday, Saturday and Sunday are at risk; Monday is three days off.
+  assert.equal(atRisk(task("2026-10-30"), [], "2026-10-30", tz), true);
+  assert.equal(atRisk(task("2026-10-31"), [], "2026-10-30", tz), true);
+  assert.equal(atRisk(task("2026-11-01"), [], "2026-10-30", tz), true);
+  assert.equal(atRisk(task("2026-11-02"), [], "2026-10-30", tz), false);
+  assert.equal(atRisk(task(null), [], "2026-10-30", tz), false);
+});
+
+test("at risk: done tasks never are", () => {
+  assert.equal(atRisk({ id: "t1", due: "2026-10-30", done: true }, [], "2026-10-30", "America/New_York"), false);
+});
+
+test("at risk: a block before the due date ends clears it, one after doesn't", () => {
+  const tz = "America/New_York";
+  const task = { id: "t1", due: "2026-10-31", done: false };
+  const block = (starts_at, task_id = "t1") => ({ task_id, starts_at, ends_at: new Date(Date.parse(starts_at) + 3_600_000).toISOString() });
+  // 2 pm on Saturday the 31st, the due day itself, counts as before it is due.
+  assert.equal(atRisk(task, [block("2026-10-31T18:00:00Z")], "2026-10-30", tz), false);
+  // 9 am on Sunday the 1st is after it.
+  assert.equal(atRisk(task, [block("2026-11-01T14:00:00Z")], "2026-10-30", tz), true);
+  // Another task's block doesn't count.
+  assert.equal(atRisk(task, [block("2026-10-31T18:00:00Z", "t2")], "2026-10-30", tz), true);
+});
+
+test("at risk: the due day's end follows daylight saving", () => {
+  const tz = "America/New_York";
+  // Clocks go back on Sunday 2026-11-01, so it ends at 05:00 UTC, not 04:00.
+  const task = { id: "t1", due: "2026-11-01", done: false };
+  const block = (starts_at) => ({ task_id: "t1", starts_at, ends_at: new Date(Date.parse(starts_at) + 1_800_000).toISOString() });
+  assert.equal(atRisk(task, [block("2026-11-02T04:30:00Z")], "2026-10-31", tz), false); // 11:30 pm Sunday
+  assert.equal(atRisk(task, [block("2026-11-02T05:00:00Z")], "2026-10-31", tz), true);  // 12:00 am Monday
 });
