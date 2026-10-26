@@ -71,8 +71,14 @@ shutdown delete the proposed blocks for their day.
 
 `^fri`, `^10/30` or `^tomorrow` sets the due date, shown as a chip while typing and stripped on
 save, like the other typed details (`parseEntry`). The task shows it as "due Fri". /now never
-shows due dates. `atRisk` decides at risk: due within two days (or past due), not done, and no
-block starting before the due day ends in the owner's time zone; the week marks it ⚠.
+shows due dates. `atRisk` decides at risk. A task is at risk when all three hold:
+- it is not done;
+- its due date is at most two days after today, or already past (an overdue task counts);
+- it has no approved block that starts before its due day ends (midnight after the due date, in
+  the owner's time zone). A block at any time on the due day clears it, as does any earlier
+  block, even one already over. Proposed blocks don't count.
+
+The week marks an at-risk task ⚠.
 
 ## Proposals
 
