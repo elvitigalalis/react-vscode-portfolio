@@ -380,7 +380,7 @@ async function syncGoogle() {
   if (!api.googleReady()) return;
   try {
     for (const p of await api.listGcalPending()) {
-      await (p.ends_at ? api.patchEvent(p.gcal_id, { end: { dateTime: p.ends_at } }) : api.deleteEvent(p.gcal_id));
+      await (p.ends_at ? api.patchEvent(p.gcal_id, api.eventTimes(null, p.ends_at)) : api.deleteEvent(p.gcal_id));
       await api.clearGcalPending(p.gcal_id);
     }
   } catch (e) { console.error(e); }

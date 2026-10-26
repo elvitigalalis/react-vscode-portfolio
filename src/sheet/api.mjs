@@ -174,7 +174,7 @@ async function blocksCalendar() {
 // A private task's block is titled "Busy" in Google. It has no alerts while Telegram nudges him.
 const eventBody = (title, isPublic, starts_at, ends_at, reminders) => ({
   summary: isPublic ? title : "Busy",
-  start: { dateTime: starts_at }, end: { dateTime: ends_at },
+  ...eventTimes(starts_at, ends_at),
   reminders,
 });
 
@@ -193,6 +193,7 @@ export async function deleteEvent(id) {
   await google(`calendars/${encodeURIComponent(await blocksCalendar())}/events/${id}`, { method: "DELETE" });
 }
 
-export const eventTimes = (starts_at, ends_at) => ({ start: { dateTime: starts_at }, end: { dateTime: ends_at } });
+// An event's times; a null start leaves the start as it is.
+export const eventTimes = (starts_at, ends_at) => ({ ...(starts_at && { start: { dateTime: starts_at } }), end: { dateTime: ends_at } });
 export const eventTitle = (title, isPublic) => ({ summary: isPublic ? title : "Busy" });
 export const eventReminders = (settings) => ({ reminders: blockReminders(settings) });
