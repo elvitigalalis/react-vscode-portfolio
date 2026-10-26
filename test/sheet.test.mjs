@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
-  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel,
+  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders,
 } from "../src/sheet/logic.mjs";
 
 test("dates: weeks start on Monday and cross month ends", () => {
@@ -164,6 +164,16 @@ test("proposals: moving or resizing a proposed block approves it, making its Goo
   assert.equal(googleStep({ proposed: false, gcal_id: "ev1" }), "patch");
   // A block made while Google was off has no event to change.
   assert.equal(googleStep({ proposed: false, gcal_id: null }), null);
+});
+
+test("calendar alerts: block events have none while Telegram is on, Google's default while off", () => {
+  const none = { useDefault: false, overrides: [] };
+  const google = { useDefault: true };
+  assert.deepEqual(blockReminders({ telegram_chat_id: 42, nudges_on: true }), none);
+  assert.deepEqual(blockReminders({ telegram_chat_id: 42, nudges_on: false }), google);
+  // Not yet linked to a chat, nothing would be sent, so Google keeps reminding.
+  assert.deepEqual(blockReminders({ telegram_chat_id: null, nudges_on: true }), google);
+  assert.deepEqual(blockReminders(null), google);
 });
 
 test("rollover marks and the public view's redaction", () => {
