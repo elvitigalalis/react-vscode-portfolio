@@ -50,7 +50,9 @@ nudges    id, block_id (null for the brief and check-in), kind (brief | start | 
 ```
 
 The function claims a `nudges` row before sending (`sent_at` stays null until Telegram accepts
-it), so two runs in the same minute can't both send. `block_id` has no foreign key: the log keeps
+it), so two runs in the same minute can't both send. A Snooze tap logs its nudge ahead, with
+`send_at` ten minutes after the tap and `sent_at` null; the function claims that row by filling in
+`sent_at`. `block_id` has no foreign key: the log keeps
 rows for blocks deleted later, so the day's budget still counts them.
 
 Rows with `proposed = true` never reach `public_week`, `public_now` or Google. Rollover and
@@ -105,6 +107,9 @@ every day, weekends included.
 - **Private tasks** show their real titles: messages go only to Lisul.
 - Moving or deleting a block before it starts moves or cancels its nudge. Nudges are worked out
   from the blocks each minute, not booked ahead.
+- A late run still sends what it missed, for the minute it was due: a nudge or repeat while its
+  block is still on, the brief and the check-in until 11 pm.
+- A day with no tasks gets its brief ("Nothing on today.") and no check-in.
 
 ## Rules file: `sheet-claude.md`
 
