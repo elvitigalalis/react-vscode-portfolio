@@ -42,7 +42,10 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
   in line with any change made away from it, such as a block a Done tap shortened: a tap that
   shortens or deletes a block with an event leaves a `gcal_pending` row, which /plan applies and
   deletes once Google is connected.
-- **The "Time blocks" events have no alerts** while Telegram is on, so nothing pings twice.
+- **The "Time blocks" events have no alerts** while Telegram is on, so no block is announced
+  twice, and Google's default alert while it is off. The **Telegram on/off** button in /plan's
+  top bar, beside Calendars, sets `nudges_on` and patches the alerts of the events of today's
+  and later blocks to match (only with Google connected).
 
 ## Data
 

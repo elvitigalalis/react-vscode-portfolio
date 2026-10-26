@@ -27,6 +27,7 @@ export const state = {
   lists: new Set(["Inbox"]),
   parked: 0,
   calendars: [],    // extra Google calendar IDs, from settings
+  settings: null,   // the settings row
   events: [],       // the week's Google events, never saved
   eventsStale: false,
 };
@@ -317,6 +318,9 @@ export function render() {
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
 
+  const on = Boolean(state.settings?.nudges_on);
+  Object.assign($('[data-act="telegram"]'), { textContent: `Telegram ${on ? "on" : "off"}`, ariaLabel: `Telegram nudges are ${on ? "on" : "off"}. Switch them ${on ? "off" : "on"}` });
+
   const stale = $("[data-events-stale]");
   stale.hidden = !state.eventsStale;
 
@@ -341,6 +345,7 @@ export async function load() {
     api.parkedOn(state.today),
     api.settings(),
   ]);
+  state.settings = settings;
   state.calendars = settings?.calendars ?? [];
   await loadEvents(days);
   state.tasks = new Map(tasks.map((t) => [t.id, t]));
@@ -389,6 +394,19 @@ async function saveCalendars() {
     $("[data-calendars]").close();
     await loadEvents(weekDays(state.week));
     render();
+  } catch (e) { failed(e); }
+}
+
+// Telegram on or off. The "Time blocks" events from today on follow it: no alerts while Telegram
+// nudges him, Google's default alert as the backup while it's off.
+async function toggleTelegram() {
+  const settings = { ...state.settings, nudges_on: !state.settings.nudges_on };
+  try {
+    await api.saveSettings({ nudges_on: settings.nudges_on });
+    state.settings = settings;
+    render();
+    if (!api.googleReady()) return setStatus("Saved. Connect Google Calendar and switch again to change the blocks' alerts.");
+    for (const b of await api.eventBlocksFrom(zonedIso(now().day, 0, SHEET.timeZone))) await api.patchEvent(b.gcal_id, api.eventReminders(settings));
   } catch (e) { failed(e); }
 }
 
@@ -582,6 +600,7 @@ function wire() {
       }
       if (act === "close-calendars") return $("[data-calendars]").close();
       if (act === "save-calendars") return saveCalendars();
+      if (act === "telegram") return toggleTelegram();
       return actHooks[act]?.(e);
     }
     const move = e.target.closest("[data-move]")?.dataset.move;
