@@ -205,8 +205,9 @@ finish() {
 #   bash tools/sheet-setup.sh telegram   only the tables and the Telegram stages, for a project
 #                                        that is already set up
 # Public values (project URL, anon key, owner email, chat ID) are remembered in .env (gitignored)
-# so a re-run skips what's done. Secrets (the Google client secret, the bot token, the cron
-# secret) are never written to disk: they live in this shell until pasted where they belong.
+# so a re-run skips what's done. Secrets (the Google client secret, the bot token, the cron and
+# webhook secrets) are never written to disk: they live in this shell until pasted where they
+# belong.
 
 # copy TEXT puts TEXT on the clipboard (macOS pbcopy), or prints it if there's no clipboard.
 copy() {
@@ -434,9 +435,10 @@ pause
 
 # ── 12 ───────────────────────────────────────────────────────────────────
 stage "Supabase: the telegram function and its secrets"
-say "One Edge Function sends the messages. It needs the bot token, and a second secret that"
-say "proves the minute job is the one calling it."
+say "One Edge Function sends the messages and takes your taps. It needs the bot token, a"
+say "secret that proves the minute job is the one calling it, and one that proves Telegram is."
 SHEET_CRON_SECRET=$(openssl rand -hex 32)
+TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)
 open_url "https://supabase.com/dashboard/project/$SHEET_REF/functions/secrets"
 step "Add a secret named TELEGRAM_BOT_TOKEN; its value is on your clipboard:"
 copy "$TELEGRAM_BOT_TOKEN"
@@ -444,8 +446,10 @@ pause "Press Enter once it's saved"
 step "Add a secret named SHEET_CRON_SECRET; its value (just made, random) is on your clipboard:"
 copy "$SHEET_CRON_SECRET"
 pause "Press Enter once it's saved"
+step "Add a secret named TELEGRAM_WEBHOOK_SECRET; its value (just made, random) is on your clipboard:"
+copy "$TELEGRAM_WEBHOOK_SECRET"
+pause "Press Enter once it's saved"
 printf '' | pbcopy 2>/dev/null || true
-unset TELEGRAM_BOT_TOKEN
 say "Now deploy the function. The Supabase CLI signs in through your browser first."
 step "npx supabase login"
 step "npx supabase functions deploy telegram --use-api --no-verify-jwt --project-ref $SHEET_REF"
@@ -468,6 +472,19 @@ while :; do
   confirm "Skip this check and go on anyway?" && break
   pause "Press Enter to check again"
 done
+# The bot's webhook: Telegram sends Done and Snooze taps to the function, with the webhook secret
+# in its X-Telegram-Bot-Api-Secret-Token header. The secret is hex, so it needs no escaping, and
+# it goes to curl on stdin with the token.
+say "Pointing the bot's Done and Snooze buttons at the function."
+hook="setWebhook?url=$SHEET_SUPABASE_URL/functions/v1/telegram&secret_token=$TELEGRAM_WEBHOOK_SECRET&allowed_updates=%5B%22callback_query%22%5D"
+if [[ "$(telegram_api "$hook" | json 'j.ok')" == true ]]; then
+  printf '  %s✓ the bot sends taps to the function%s
+' "$GREEN" "$RESET"
+else
+  warn "Telegram refused the webhook. Re-run 'bash tools/sheet-setup.sh telegram' to try again."
+  SKIPPED+=("the bot's webhook (re-run the telegram stages)")
+fi
+unset TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET hook
 
 # ── 13 ───────────────────────────────────────────────────────────────────
 stage "Supabase: start the minute job"
