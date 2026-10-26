@@ -33,21 +33,44 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // and a button has either a url or callback data ("done:<block id>", "snooze:<block id>").
 export function whatToSend(snapshot, now) {
   if (!telegramOn(snapshot.settings)) return [];
-  const tz = snapshot.settings.time_zone;
-  const { day: today, minutes } = localNow(now, tz);
-  if (minutes < BRIEF_AT || minutes >= QUIET_FROM) return [];
-  // Proposed blocks aren't part of the plan until approved: they count for nothing here.
-  const day = { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), today, tz, now: now.getTime() };
+  const day = dayOf(snapshot, now);
+  if (day.minutes < BRIEF_AT || day.minutes >= QUIET_FROM) return [];
   // Each kind of message is one rule over the same day.
   const due = [brief(day), ...starts(day), ...repeats(day), ...snoozes(day), ...checkin(day)]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
-  // The budget goes to the first nudges by time; the brief and check-in are outside it.
-  let used = snapshot.log.filter((n) => BUDGETED.includes(n.kind) && !pending(n)).length;
-  return due.filter((m) => !BUDGETED.includes(m.kind) || used++ < BUDGET);
+  // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
+  let { kept, used, held } = budget(day);
+  return due.filter((m) => {
+    if (!BUDGETED.includes(m.kind) || m.kind === "snooze") return true;
+    if (m.kind === "start" && kept.has(m.block_id)) held--;
+    if (used + held >= BUDGET) return false;
+    used++;
+    return true;
+  });
+}
+
+// The day as the rules see it. Proposed blocks aren't part of the plan until approved: they
+// count for nothing here.
+function dayOf(snapshot, now) {
+  const tz = snapshot.settings.time_zone;
+  const { day: today, minutes } = localNow(now, tz);
+  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), today, minutes, tz, now: now.getTime() };
 }
 
 const BUDGETED = ["start", "repeat", "snooze"];
+
+// The budget, kept predictable: the nudges at the start of the day's first six blocks that can
+// be nudged are kept for them, and repeats, snoozes and later blocks' nudges get only the slots
+// left. Returns the blocks whose nudges are kept, the slots used (sent, or a snooze waiting) and
+// the slots held for kept nudges still to go out.
+function budget(day) {
+  const kept = new Set(live(day).slice(0, BUDGET).map(({ b }) => b.id));
+  const used = day.log.filter((n) => BUDGETED.includes(n.kind)).length;
+  const held = running(day).filter(({ b }) => kept.has(b.id) && !startSent(day.log, b)).length;
+  return { kept, used, held };
+}
+const freeSlots = (day) => { const { used, held } = budget(day); return BUDGET - used - held; };
 
 // A snooze logged by a tap and not yet sent (see SNOOZE_FOR).
 const pending = (n) => n.kind === "snooze" && !n.sent_at;
@@ -78,8 +101,8 @@ const nudgeText = (b, task, { today, tz }) =>
   `▶ ${formatClock(minutesOn(b.starts_at, today, tz))} · ${task.title} (${Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000)} min)`;
 
 // The blocks that can still be nudged, with their tasks: today's, starting outside quiet hours
-// (so a block before 8 am never gets one), whose task isn't done.
-const live = ({ blocks, tasks, today, tz }) => blocks.flatMap((b) => {
+// (so a block before 8 am never gets one), whose task isn't done; earliest first.
+const live = ({ blocks, tasks, today, tz }) => [...blocks].sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at)).flatMap((b) => {
   const start = minutesOn(b.starts_at, today, tz);
   const task = tasks.find((t) => t.id === b.task_id);
   return start >= BRIEF_AT && start < QUIET_FROM && task && !task.done ? [{ b, task }] : [];
@@ -96,14 +119,16 @@ function starts(day) {
   });
 }
 
+// Whether the nudge at a block's start (at its current start) is in the log.
+const startSent = (log, b) => log.some((n) => n.block_id === b.id && n.kind === "start" && Date.parse(n.send_at) === Date.parse(b.starts_at));
+
 // One repeat per nudge that went out, ten minutes after it.
 function repeats(day) {
   return running(day).flatMap(({ b, task }) => {
-    const start = new Date(b.starts_at).toISOString();
-    if (!day.log.some((n) => n.block_id === b.id && n.kind === "start" && Date.parse(n.send_at) === Date.parse(start))) return [];
+    if (!startSent(day.log, b)) return [];
     // A snooze takes the repeat's place.
     if (day.log.some((n) => n.block_id === b.id && n.kind === "snooze")) return [];
-    return [{ kind: "repeat", block_id: b.id, day: day.today, send_at: new Date(Date.parse(start) + REPEAT_AFTER).toISOString(), text: `Still on: ${task.title}`, buttons: tapButtons(b.id) }];
+    return [{ kind: "repeat", block_id: b.id, day: day.today, send_at: new Date(Date.parse(b.starts_at) + REPEAT_AFTER).toISOString(), text: `Still on: ${task.title}`, buttons: tapButtons(b.id) }];
   });
 }
 
@@ -144,16 +169,15 @@ export function handleTap(tap, snapshot, now) {
 }
 
 // Snooze logs the nudge again, unsent, for ten minutes on (from the tap's minute, so a repeated
-// tap meets the log's unique key); whatToSend sends it in the repeat's place. It counts toward
-// the budget, so once six are sent or waiting it would never go out, and the message says so.
-function snooze(b, task, { settings, log }, now) {
-  if (log.filter((n) => BUDGETED.includes(n.kind)).length >= BUDGET) return { changes: [], text: `No nudges left today · ${task.title}` };
-  const tz = settings.time_zone;
+// tap meets the log's unique key); whatToSend sends it in the repeat's place. It takes a budget
+// slot now, so with none free it is refused, and the message says so.
+function snooze(b, task, snapshot, now) {
+  const day = dayOf(snapshot, now);
+  if (freeSlots(day) <= 0) return { changes: [], text: `No nudges left today · ${task.title}` };
   const minute = Math.floor(now.getTime() / 60_000) * 60_000;
   const send_at = new Date(minute + SNOOZE_FOR).toISOString();
-  const { day } = localNow(now, tz);
-  const row = { block_id: b.id, kind: "snooze", day, send_at, sent_at: null };
-  return { changes: [{ table: "nudges", insert: row }], text: `Snoozed until ${formatClock(minutesOn(send_at, day, tz))} · ${task.title}` };
+  const row = { block_id: b.id, kind: "snooze", day: day.today, send_at, sent_at: null };
+  return { changes: [{ table: "nudges", insert: row }], text: `Snoozed until ${formatClock(minutesOn(send_at, day.today, day.tz))} · ${task.title}` };
 }
 
 // Done marks the task done and applies the block rules to each of its blocks, as /plan does.

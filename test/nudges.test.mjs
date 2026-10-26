@@ -266,12 +266,49 @@ test("budget: repeats and snoozes count toward the six", () => {
   assert.deepEqual(whatToSend(study(log), at(hour(17))), []);
 });
 
-test("budget: the first six by time are the ones sent", () => {
-  // Five gone out; a late run finds b4's repeat (5:10 pm) and b5's nudge (6:00 pm) both due.
+test("budget: the first six blocks' nudges are kept for them, ahead of a repeat", () => {
+  // Five gone out; a late run finds b4's repeat (1:10 pm) and b5's nudge (2:00 pm) both due.
   const log = [0, 1, 2, 3, 4].map((i) => sent(`b${i}`, "start", hour(13 + i)));
   const snap = study(log);
   snap.blocks[4] = block("b4", "t1", hour(17), hour(19)); // 1:00-3:00 pm, still on
-  assert.deepEqual(whatToSend(snap, at(hour(18))).map((m) => [m.kind, m.block_id]), [["repeat", "b4"]]);
+  assert.deepEqual(whatToSend(snap, at(hour(18))).map((m) => [m.kind, m.block_id]), [["start", "b5"]]);
+});
+
+test("budget: with six blocks to nudge, no repeat takes a later block's nudge", () => {
+  const snap = study([sent("b0", "start", hour(13))]);
+  assert.deepEqual(whatToSend(snap, at("2026-10-26T13:10:00Z")), []);
+});
+
+test("budget: with fewer than six blocks, the slots left go to repeats", () => {
+  const snap = study([sent("b0", "start", hour(13))]);
+  snap.blocks = snap.blocks.slice(0, 3); // 9:00, 10:00 and 11:00 am: three nudges kept, three free
+  assert.deepEqual(whatToSend(snap, at("2026-10-26T13:10:00Z")).map((m) => [m.kind, m.block_id]), [["repeat", "b0"]]);
+});
+
+test("budget: a block that can't be nudged keeps no slot", () => {
+  // Seven blocks, but b6's task is done and b7 starts at 7:00 am: six can be nudged, then a seventh
+  // block (b8) can't take a slot from them.
+  const snap = study([sent("b0", "start", hour(13))]);
+  snap.tasks.push(task("t2", "Read", { done: true }), task("t3", "Run"));
+  snap.blocks = [...snap.blocks.slice(0, 5),
+    block("b6", "t2", hour(19), "2026-10-26T19:30:00Z"),
+    block("b7", "t3", "2026-10-26T11:00:00Z", "2026-10-26T11:30:00Z"),
+    block("b8", "t3", hour(20), "2026-10-26T20:30:00Z")];
+  // Five Study blocks and b8 are the six: b0's repeat has no slot.
+  assert.deepEqual(whatToSend(snap, at("2026-10-26T13:10:00Z")), []);
+  snap.blocks.pop(); // without b8, only five can be nudged, so one slot is free
+  assert.deepEqual(whatToSend(snap, at("2026-10-26T13:10:00Z")).map((m) => m.kind), ["repeat"]);
+});
+
+test("budget: a seventh block's nudge goes out only into a slot left free", () => {
+  // All six slots spent on b0-b5's nudges: b6 (3:00 pm) gets nothing.
+  const log = [0, 1, 2, 3, 4, 5].map((i) => sent(`b${i}`, "start", hour(13 + i)));
+  assert.deepEqual(whatToSend(study(log), at(hour(19))), []);
+  // b2's task done before its nudge (no slot used): its slot passes to b6.
+  const snap = study([0, 1, 3, 4, 5].map((i) => sent(`b${i}`, "start", hour(13 + i))));
+  snap.tasks.push(task("t2", "Done early", { done: true }));
+  snap.blocks[2] = { ...snap.blocks[2], task_id: "t2" };
+  assert.deepEqual(whatToSend(snap, at(hour(19))).map((m) => [m.kind, m.block_id]), [["start", "b6"]]);
 });
 
 // --- Check-in ------------------------------------------------------------------------------
@@ -396,4 +433,31 @@ test("Snooze: once the day's six nudges are spent, nothing is logged and the mes
 test("Snooze on a task that is already done logs nothing", () => {
   const snap = tapped({ tasks: [task("t1", "OS homework", { done: true })] });
   assert.deepEqual(handleTap({ action: "snooze", block_id: "b1" }, snap, at("2026-10-26T18:03:00Z")), { changes: [], text: "✓ Done" });
+});
+
+test("Snooze: no slot while later blocks' nudges hold the rest, and nothing is logged", () => {
+  // b1 at 2:00 pm, then five more blocks from 3:00 pm: with b1's nudge sent, all six are spoken for.
+  const later = [0, 1, 2, 3, 4].map((i) => block(`b${i + 2}`, "t2", `2026-10-26T${19 + i}:00:00Z`, `2026-10-26T${19 + i}:30:00Z`));
+  const snap = tapped({ tasks: [task("t1", "OS homework"), task("t2", "Study")], blocks: [...tapped().blocks, ...later] });
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b1" }, snap, at("2026-10-26T18:03:00Z")), {
+    changes: [], text: "No nudges left today · OS homework",
+  });
+});
+
+test("Snooze: a snooze waiting to go out holds its slot", () => {
+  // Four blocks: b0 (1:00-3:00 pm) nudged and repeated, b1 (2:00 pm) nudged and snoozed until
+  // 2:13, b2 and b3 still to come. Four slots used or waiting and two kept: none for b0.
+  const snap = snapshot({
+    tasks: [task("t1", "Study")],
+    blocks: [block("b0", "t1", hour(17), hour(19)), block("b1", "t1", hour(18), "2026-10-26T18:30:00Z"),
+      block("b2", "t1", hour(20), "2026-10-26T20:30:00Z"), block("b3", "t1", hour(21), "2026-10-26T21:30:00Z")],
+    log: [briefSent, sent("b0", "start", hour(17)), sent("b0", "repeat", "2026-10-26T17:10:00.000Z"),
+      sent("b1", "start", hour(18)), { ...snoozed, block_id: "b1" }],
+  });
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b0" }, snap, at("2026-10-26T18:05:00Z")), {
+    changes: [], text: "No nudges left today · Study",
+  });
+  // Once b3 is gone, a slot is free.
+  snap.blocks.pop();
+  assert.equal(handleTap({ action: "snooze", block_id: "b0" }, snap, at("2026-10-26T18:05:00Z")).changes.length, 1);
 });
