@@ -82,6 +82,18 @@ test("morning brief: more than six blocks says which get nudged", () => {
   assert.equal(brief.text, "Today: 1 task, 8 blocks, nudging the first 6.");
 });
 
+test("morning brief: \"nudging the first 6\" counts only blocks that can be nudged", () => {
+  const tasks = [task("t1", "Study"), task("t2", "Read", { done: true })];
+  // Five half-hour blocks from 9:00 am, one at 7:00 am and one for a done task: five can be nudged.
+  const blocks = [...Array.from({ length: 5 }, (_, i) => block(`b${i}`, "t1",
+    new Date(Date.parse("2026-10-26T13:00:00Z") + i * 3_600_000).toISOString(),
+    new Date(Date.parse("2026-10-26T13:30:00Z") + i * 3_600_000).toISOString())),
+  block("b5", "t1", "2026-10-26T11:00:00Z", "2026-10-26T11:30:00Z"),
+  block("b6", "t2", "2026-10-26T20:00:00Z", "2026-10-26T20:30:00Z")];
+  const [brief] = whatToSend(snapshot({ tasks, blocks }), at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text, "Today: 2 tasks, 7 blocks.");
+});
+
 test("morning brief: an empty day says so and nothing else", () => {
   assert.deepEqual(whatToSend(snapshot(), at("2026-10-26T12:00:00Z")), [{
     kind: "brief", block_id: null, day, send_at: "2026-10-26T12:00:00.000Z",
