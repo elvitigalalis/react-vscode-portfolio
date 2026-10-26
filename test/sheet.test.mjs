@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, snap, blockOnComplete, rollMark, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents,
 } from "../src/sheet/logic.mjs";
 
@@ -95,6 +95,33 @@ test("block rules: completing early deletes, during shrinks, after keeps", () =>
   assert.deepEqual(blockOnComplete(block, new Date("2026-10-20T16:00:00Z")), { action: "delete" });
   assert.deepEqual(blockOnComplete(block, new Date("2026-10-20T17:30:00Z")), { action: "shrink", ends_at: "2026-10-20T17:30:00.000Z" });
   assert.deepEqual(blockOnComplete(block, new Date("2026-10-20T19:00:00Z")), { action: "keep" });
+});
+
+test("block rules: completing a task turns down its proposed blocks, whenever it happens", () => {
+  const block = { starts_at: "2026-10-20T17:00:00Z", ends_at: "2026-10-20T18:00:00Z", proposed: true };
+  assert.deepEqual(blockOnComplete(block, new Date("2026-10-20T16:00:00Z")), { action: "delete" });
+  assert.deepEqual(blockOnComplete(block, new Date("2026-10-20T17:30:00Z")), { action: "delete" });
+  assert.deepEqual(blockOnComplete(block, new Date("2026-10-20T19:00:00Z")), { action: "delete" });
+});
+
+test("proposals: a day's proposed blocks, by start, in the owner's time zone", () => {
+  const tz = "America/New_York";
+  const blocks = [
+    { id: "late", starts_at: "2026-10-21T03:30:00Z", proposed: true },  // 11:30 pm on the 20th
+    { id: "real", starts_at: "2026-10-20T14:00:00Z", proposed: false },
+    { id: "early", starts_at: "2026-10-20T13:00:00Z", proposed: true }, // 9 am
+    { id: "next", starts_at: "2026-10-21T04:30:00Z", proposed: true },  // 12:30 am on the 21st
+  ];
+  assert.deepEqual(proposedOn(blocks, "2026-10-20", tz).map((b) => b.id), ["early", "late"]);
+  assert.deepEqual(proposedOn(blocks, "2026-10-21", tz).map((b) => b.id), ["next"]);
+  assert.deepEqual(proposedOn(blocks, "2026-10-22", tz), []);
+});
+
+test("proposals: moving or resizing a proposed block approves it, making its Google event", () => {
+  assert.equal(googleStep({ proposed: true, gcal_id: null }), "create");
+  assert.equal(googleStep({ proposed: false, gcal_id: "ev1" }), "patch");
+  // A block made while Google was off has no event to change.
+  assert.equal(googleStep({ proposed: false, gcal_id: null }), null);
 });
 
 test("rollover marks and the public view's redaction", () => {
