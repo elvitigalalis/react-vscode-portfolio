@@ -40,6 +40,9 @@ create table if not exists blocks (
   ends_at timestamptz not null check (ends_at > starts_at),
   gcal_id text
 );
+-- A block Claude proposed (docs/sheet-nudges.md). It has no Google event and never reaches the
+-- public views until Lisul approves it in /plan; unapproved, it lapses at the end of its day.
+alter table blocks add column if not exists proposed boolean not null default false;
 create index if not exists blocks_task on blocks (task_id);
 create index if not exists blocks_time on blocks (starts_at, ends_at);
 
@@ -98,23 +101,38 @@ begin
 end $$;
 revoke execute on function roll_tasks(uuid[], date) from public, anon, authenticated;
 
--- Nightly (run hourly; a no-op once done): everything left behind rolls to today.
+-- Delete the proposed blocks of the days before `before` (or of day `d` only): a proposal
+-- lapses at the end of its day.
+create or replace function lapse_proposals(d date, before boolean default false) returns void
+language sql security definer set search_path = public as $$
+  delete from blocks
+  where proposed and case when before
+    then (starts_at at time zone (select time_zone from settings))::date < d
+    else (starts_at at time zone (select time_zone from settings))::date = d end
+$$;
+revoke execute on function lapse_proposals(date, boolean) from public, anon, authenticated;
+
+-- Nightly (run hourly; a no-op once done): everything left behind rolls to today, and
+-- earlier days' proposals lapse.
 create or replace function nightly_roll() returns void
 language plpgsql security definer set search_path = public as $$
 declare today date := sheet_today();
 begin
+  perform lapse_proposals(today, true);
   perform roll_tasks(array(select id from tasks
     where day < today and not done and at_time is null), today);
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
--- Shutdown: save the reflection, mark the day, roll its missed tasks to the next day.
+-- Shutdown: save the reflection, mark the day, let its proposals lapse, roll its missed tasks
+-- to the next day.
 create or replace function shut_down(d date, reflection text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if not is_owner() then raise exception 'not the owner'; end if;
   insert into days (day, shutdown, reflection) values (d, true, reflection)
   on conflict (day) do update set shutdown = true, reflection = excluded.reflection;
+  perform lapse_proposals(d);
   perform roll_tasks(array(select id from tasks
     where day = d and not done and at_time is null), d + 1);
 end $$;
@@ -123,6 +141,7 @@ grant execute on function shut_down(date, text) to authenticated;
 
 -- Public views. They run with the table owner's rights, so they read past row-level security,
 -- and they are the only way visitors see anything. A private task gives its length, not its title.
+-- Proposed blocks are not part of the plan, so they never show (only public_now reads blocks).
 create or replace view public_week as
   select id, day, position, done, public,
          case when public then title end as title,
@@ -141,7 +160,7 @@ create or replace view public_now as
     select case when t.public then t.title end as title,
            case when t.public then t.tag end as tag, t.public
     from blocks b join tasks t on t.id = b.task_id
-    where now() >= b.starts_at and now() < b.ends_at
+    where not b.proposed and now() >= b.starts_at and now() < b.ends_at
     order by b.starts_at limit 1
   ) n on true;
 
