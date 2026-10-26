@@ -100,7 +100,8 @@ async function dropBlocks(id) {
 }
 
 export async function addTask(text, where) {
-  const parsed = parseEntry(text);
+  // A due date counts from the task's day; a Someday task's counts from today.
+  const parsed = parseEntry(text, where.day ?? state.today);
   if (!parsed.title) return;
   const siblings = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const task = await api.insertTask({
@@ -157,13 +158,13 @@ async function removeTask(id) {
 
 async function editTask(id, text) {
   const t = state.tasks.get(id);
-  const parsed = parseEntry(text);
+  const parsed = parseEntry(text, t.day ?? state.today);
   if (!parsed.title) return removeTask(id);
   // Details typed while editing apply; ones not typed stay as they were.
   const change = { title: parsed.title };
-  for (const k of ["est_min", "at_time", "tag"]) if (parsed[k] !== null) change[k] = parsed[k];
+  for (const k of ["est_min", "at_time", "tag", "due"]) if (parsed[k] !== null) change[k] = parsed[k];
   if (/(^|\s)!(public|private|p)(\s|$)/i.test(text)) change.public = parsed.public;
-  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public };
+  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public, due: t.due };
   await patch(id, change);
   if (change.public !== undefined && change.public !== before.public) await retitleBlocks(id);
   offerUndo("Edited.", () => patch(id, before));
