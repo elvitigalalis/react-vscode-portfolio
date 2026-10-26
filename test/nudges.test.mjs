@@ -223,6 +223,15 @@ test("quiet hours: a repeat that would fall after 11 pm isn't sent", () => {
   assert.deepEqual(whatToSend(snap, at("2026-10-27T03:05:00Z")), []);
 });
 
+test("quiet hours: a repeat due at 11 pm exactly isn't sent", () => {
+  const snap = homework({
+    blocks: [block("b1", "t1", "2026-10-27T02:50:00Z", "2026-10-27T03:30:00Z")], // 10:50-11:30 pm
+    log: [briefSent, sent("b1", "start", "2026-10-27T02:50:00.000Z"), sent(null, "checkin", "2026-10-26T21:00:00.000Z")],
+  });
+  assert.deepEqual(whatToSend(snap, at("2026-10-27T02:59:00Z")), []);
+  assert.deepEqual(whatToSend(snap, at("2026-10-27T03:00:00Z")), []);
+});
+
 test("nudge: never twice, even when the run repeats in the same minute or later", () => {
   const snap = homework({ log: [briefSent, sent("b1", "start", "2026-10-26T18:00:00.000Z")] });
   assert.deepEqual(whatToSend(snap, at("2026-10-26T18:00:40Z")), []);
@@ -342,6 +351,14 @@ test("check-in: follows the shutdown line saved for the day", () => {
   const [checkin] = whatToSend(snap, at("2026-10-26T22:30:00Z")); // 6:30 pm
   assert.equal(checkin.kind, "checkin");
   assert.equal(checkin.send_at, "2026-10-26T22:30:00.000Z");
+});
+
+test("check-in: a shutdown line at 11 pm or later sends it at 10:55 pm", () => {
+  const snap = snapshot({ tasks: sixTasks, day: { day, shutdown: false, shutdown_at: "23:30:00" }, log: [briefSent] });
+  assert.deepEqual(whatToSend(snap, at("2026-10-27T02:54:00Z")), []);
+  const [checkin] = whatToSend(snap, at("2026-10-27T02:55:00Z")); // 10:55 pm
+  assert.equal(checkin.kind, "checkin");
+  assert.equal(checkin.send_at, "2026-10-27T02:55:00.000Z");
 });
 
 test("check-in: skipped when the day is already shut down", () => {
@@ -472,4 +489,17 @@ test("Snooze: a snooze waiting to go out holds its slot", () => {
   // Once b3 is gone, a slot is free.
   snap.blocks.pop();
   assert.equal(handleTap({ action: "snooze", block_id: "b0" }, snap, at("2026-10-26T18:05:00Z")).changes.length, 1);
+});
+
+test("Snooze: refused when the nudge would come back in quiet hours, and nothing is logged", () => {
+  const late = tapped({
+    blocks: [block("b1", "t1", "2026-10-27T02:40:00Z", "2026-10-27T03:20:00Z")], // 10:40-11:20 pm
+    log: [briefSent, sent("b1", "start", "2026-10-27T02:40:00.000Z")],
+  });
+  // A tap at 10:50 pm would send it at 11:00 pm.
+  assert.deepEqual(handleTap({ action: "snooze", block_id: "b1" }, late, at("2026-10-27T02:50:30Z")), {
+    changes: [], text: "Too close to quiet hours · OS homework",
+  });
+  // At 10:49 pm it still comes back at 10:59.
+  assert.equal(handleTap({ action: "snooze", block_id: "b1" }, late, at("2026-10-27T02:49:00Z")).text, "Snoozed until 10:59 pm · OS homework");
 });

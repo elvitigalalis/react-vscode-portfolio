@@ -102,7 +102,7 @@ every day, weekends included.
 | Morning brief | 8:00, or the first run after it if one was missed | One line each: "Today: 5 tasks, 0 blocks." "At risk: OS homework (due Fri)." "Nothing planned yet: say "plan my day" to Claude." With more than 6 blocks that can be nudged (see the budget below) the first line reads "Today: 5 tasks, 8 blocks, nudging the first 6." On an empty day (no tasks, blocks or at-risk tasks): "Nothing on today." | Open /plan |
 | Nudge | The start of an approved block | "▶ 2:00 pm · OS homework (45 min)" | Done, Snooze 10 min |
 | Repeat | 10 min after a nudge, if the task isn't done or snoozed | "Still on: OS homework" | Done, Snooze 10 min |
-| Check-in | Shutdown time, unless the day is already shut down | "Shutdown time. 4 done, 2 left." | Open /plan |
+| Check-in | Shutdown time (10:55 pm if the shutdown line is at 11 pm or later), unless the day is already shut down | "Shutdown time. 4 done, 2 left." | Open /plan |
 
 - **Nudge budget:** six a day, counting nudges, repeats and snoozes; the brief and the check-in
   don't count. A block can be nudged when it is approved, its task isn't done, and it starts
@@ -114,7 +114,9 @@ every day, weekends included.
   the Google event when it next opens. The message is edited to read "✓ Done".
 - **Snooze 10 min** sends the nudge again 10 minutes later in place of the repeat. The block
   doesn't move. The message reads "Snoozed until 2:13 pm · OS homework", or "No nudges left
-  today · OS homework" when no slot is free (nothing is logged then).
+  today · OS homework" when no slot is free, or "Too close to quiet hours · OS homework" when
+  the nudge would come back at 11 pm or later; neither logs anything.
+- A repeat that would fall in quiet hours is not sent.
 - A tap on a block that has since been deleted changes nothing; the message reads "That block is
   no longer on the plan."
 - **Private tasks** show their real titles: messages go only to Lisul.
