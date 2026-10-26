@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
 
@@ -100,7 +100,8 @@ async function dropBlocks(id) {
 }
 
 export async function addTask(text, where) {
-  const parsed = parseEntry(text);
+  // A due date counts from the task's day; a Someday task's counts from today.
+  const parsed = parseEntry(text, where.day ?? state.today);
   if (!parsed.title) return;
   const siblings = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const task = await api.insertTask({
@@ -157,13 +158,13 @@ async function removeTask(id) {
 
 async function editTask(id, text) {
   const t = state.tasks.get(id);
-  const parsed = parseEntry(text);
+  const parsed = parseEntry(text, t.day ?? state.today);
   if (!parsed.title) return removeTask(id);
   // Details typed while editing apply; ones not typed stay as they were.
   const change = { title: parsed.title };
-  for (const k of ["est_min", "at_time", "tag"]) if (parsed[k] !== null) change[k] = parsed[k];
+  for (const k of ["est_min", "at_time", "tag", "due"]) if (parsed[k] !== null) change[k] = parsed[k];
   if (/(^|\s)!(public|private|p)(\s|$)/i.test(text)) change.public = parsed.public;
-  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public };
+  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public, due: t.due };
   await patch(id, change);
   if (change.public !== undefined && change.public !== before.public) await retitleBlocks(id);
   offerUndo("Edited.", () => patch(id, before));
@@ -183,7 +184,32 @@ async function toggleVisibility(id) {
   offerUndo(t.public ? "Now private." : "Now public.", async () => { await patch(id, { public: t.public }); await retitleBlocks(id); });
 }
 
+async function clearDue(id) {
+  const due = state.tasks.get(id).due;
+  await patch(id, { due: null });
+  offerUndo("Due date cleared.", () => patch(id, { due }));
+}
+
 // --- Rendering ---------------------------------------------------------------------------
+
+// "due Fri" within the coming week, "due Oct 30" further off or once it has passed.
+function dueText(due) {
+  const { weekday, date } = dayLabel(due);
+  return `due ${due >= state.today && due < addDays(state.today, 7) ? weekday[0] + weekday.slice(1).toLowerCase() : date}`;
+}
+
+// The details typed so far, shown beside the input as one chip ("45m · 3:00 pm · due Fri").
+function typedChip(input) {
+  const li = input.closest("li");
+  const day = input.dataset.day ?? state.tasks.get(li.dataset.id)?.day ?? state.today;
+  const p = parseEntry(input.value, day);
+  const text = [p.est_min && formatMinutes(p.est_min), p.at_time && formatClock(clock(p.at_time)), p.tag && `#${p.tag}`,
+    /(^|\s)!(private|p)(\s|$)/i.test(input.value) && "private", p.due && dueText(p.due)].filter(Boolean).join(" · ");
+  let chip = li.querySelector(".sheet-typed");
+  if (!chip) li.append(chip = el("span", { className: "sheet-meta sheet-typed" }));
+  chip.textContent = text;
+  chip.hidden = !text;
+}
 
 export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
@@ -191,13 +217,15 @@ export function taskRow(t) {
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
-  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  const risk = atRisk(t, state.blocks, state.today, SHEET.timeZone);
+  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${risk ? ", at risk" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${t.rolls} time${t.rolls > 1 ? "s" : ""}` }) : null,
     title,
     t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
+    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, textContent: `${risk ? "⚠ " : ""}${dueText(t.due)}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) }) : null,
     t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
     el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),
     el("button", { type: "button", className: "sheet-more", textContent: "⋯", ariaLabel: `More for ${t.title}` }),
@@ -396,6 +424,7 @@ function openMenu(id, anchor) {
   menuFor = id;
   const t = state.tasks.get(id);
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
+  menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
   const r = anchor.getBoundingClientRect();
   menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 330)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
@@ -418,6 +447,7 @@ async function menuAction(kind) {
     }
     if (kind === "someday") await moveTask(id, { list: "Inbox" });
     if (kind === "visibility") await toggleVisibility(id);
+    if (kind === "clear-due") await clearDue(id);
     if (kind === "delete") await removeTask(id);
   } catch (e) { failed(e); }
   render();
@@ -567,6 +597,10 @@ function wire() {
   root.addEventListener("contextmenu", (e) => {
     const li = e.target.closest(".sheet-task");
     if (li) { e.preventDefault(); if (!drag?.touch) openMenu(li.dataset.id, li); }
+  });
+
+  root.addEventListener("input", (e) => {
+    if (e.target.matches(".sheet-add:not(.sheet-newlist)")) typedChip(e.target);
   });
 
   root.addEventListener("keydown", async (e) => {

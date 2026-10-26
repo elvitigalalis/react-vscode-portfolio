@@ -32,6 +32,9 @@ create table if not exists tasks (
   check ((day is null) = (list is not null))
 );
 create index if not exists tasks_day on tasks (day);
+-- The day a task must be finished by (docs/sheet-nudges.md). Owner-only: the public views below
+-- list their columns by name and leave it out, so /now never sees a due date.
+alter table tasks add column if not exists due date;
 
 create table if not exists blocks (
   id uuid primary key default gen_random_uuid(),

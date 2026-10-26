@@ -65,12 +65,34 @@ const EST = /(?:^|\s)~(?:(\d+)h)?(?:(\d+)m?)?(?=\s|$)/i;
 const AT = /(?:^|\s)@(\d{1,2})(?::(\d{2}))?\s?(am|pm)?(?=\s|$)/i;
 const TAG = /(?:^|\s)#([a-z0-9][\w-]*)(?=\s|$)/i;
 const VIS = /(?:^|\s)!(public|private|p)(?=\s|$)/i;
+const DUE = /(?:^|\s)\^(\S+)(?=\s|$)/;
 
-// "Ship auth ~45m #workit" → { title: "Ship auth", est_min: 45, tag: "workit", public: true, ... }.
-// Tasks are public unless marked "!p" (or "!private"). A detail that does not parse stays in the title.
-export function parseEntry(text) {
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+// The date a "^..." due date names, counted from `day` (the task's day), or null if it names none.
+// A weekday ("fri", "thurs", "friday") is its next occurrence on or after `day`; so is a
+// month/day ("10/30"), which may fall next year (or, for 2/29, the next leap year).
+function dueDate(word, day) {
+  const w = word.toLowerCase();
+  if (w === "tomorrow") return addDays(day, 1);
+  const dow = w.length >= 3 ? WEEKDAYS.findIndex((d) => d.startsWith(w)) : -1;
+  if (dow >= 0) return addDays(day, (dow - toDate(day).getUTCDay() + 7) % 7);
+  const md = w.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!md) return null;
+  for (let y = Number(day.slice(0, 4)); y < Number(day.slice(0, 4)) + 8; y++) {
+    const date = `${y}-${pad(Number(md[1]))}-${pad(Number(md[2]))}`;
+    // Impossible dates ("2/30", "13/1") never survive the round trip through Date.
+    if (fromDate(toDate(date)) === date && date >= day) return date;
+  }
+  return null;
+}
+
+// "Ship auth ~45m #workit ^fri" → { title: "Ship auth", est_min: 45, tag: "workit", due: "2026-10-30", ... }.
+// Tasks are public unless marked "!p" (or "!private"). A due date counts from `day`, the task's
+// day. A detail that does not parse stays in the title.
+export function parseEntry(text, day) {
   let title = ` ${text.trim()} `;
-  const out = { est_min: null, at_time: null, tag: null, public: true };
+  const out = { est_min: null, at_time: null, tag: null, public: true, due: null };
 
   const est = title.match(EST);
   if (est && (est[1] || est[2])) {
@@ -92,6 +114,9 @@ export function parseEntry(text) {
   if (tag) { out.tag = tag[1].toLowerCase(); title = title.replace(tag[0], " "); }
   const vis = title.match(VIS);
   if (vis) { out.public = vis[1].toLowerCase() === "public"; title = title.replace(vis[0], " "); }
+  const due = title.match(DUE);
+  const date = due && dueDate(due[1], day);
+  if (date) { out.due = date; title = title.replace(due[0], " "); }
 
   out.title = title.replace(/\s+/g, " ").trim();
   return out;
@@ -173,6 +198,16 @@ export const proposedOn = (blocks, day, timeZone) => blocks
 // What moving or resizing a block does in Google. A proposed block has no event: changing it
 // approves it, so its event is made then, as when a task is dragged on.
 export const googleStep = (block) => (block.proposed ? "create" : block.gcal_id ? "patch" : null);
+
+// --- Due dates --------------------------------------------------------------------------
+
+// A task is at risk when it is due within two days (or already past due), not done, and has no
+// block that starts before its due date is over (midnight after it, in the owner's time zone).
+export function atRisk(task, blocks, today, timeZone) {
+  if (!task.due || task.done || dayDiff(task.due, today) > 2) return false;
+  const end = Date.parse(zonedIso(addDays(task.due, 1), 0, timeZone));
+  return !blocks.some((b) => b.task_id === task.id && Date.parse(b.starts_at) < end);
+}
 
 // --- Calendar events in the week ---------------------------------------------------------
 
