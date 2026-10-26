@@ -20,7 +20,8 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
 ## Architecture
 
 - **Storage: Supabase** (Postgres + Auth, free tier). The site stays static on GitHub Pages; the
-  browser talks to Supabase's REST API directly. No server of our own.
+  browser talks to Supabase's REST API directly. No server of our own (version 2 adds one Edge
+  Function for Telegram; see [sheet-nudges.md](sheet-nudges.md)).
 - **Owner sign-in: Supabase Auth with Google.** Row-level security lets only Lisul's account
   (one email, set in config) read or write tasks.
 - **Public data: two Postgres views** (`public_week`, `public_now`) readable by anyone. They
@@ -74,7 +75,7 @@ tasks jumping days across time zones.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
-- **No notifications, badges or sounds.** Google Calendar does any reminding.
+- **No badges or sounds.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)).
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
@@ -159,8 +160,11 @@ A skipped shutdown costs nothing: the nightly rollover does the same move.
 
 ## Out of scope for v1
 
+AI proposals and notifications came in version 2: [sheet-nudges.md](sheet-nudges.md).
+
+
 Recurring tasks, notes, subtasks, priorities, more than one tag per task, weekly review, focus
-mode, AI, auto-scheduling, notifications, sharing links, reading Google changes back, month view,
+mode, auto-scheduling, sharing links, reading Google changes back, month view,
 a native app.
 
 ## Quality bar
