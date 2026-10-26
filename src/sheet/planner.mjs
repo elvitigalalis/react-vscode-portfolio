@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk, dueLabel,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk, dueLabel, VIS, plural,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
 
@@ -164,7 +164,7 @@ async function editTask(id, text) {
   // Details typed while editing apply; ones not typed stay as they were.
   const change = { title: parsed.title };
   for (const k of ["est_min", "at_time", "tag", "due"]) if (parsed[k] !== null) change[k] = parsed[k];
-  if (/(^|\s)!(public|private|p)(\s|$)/i.test(text)) change.public = parsed.public;
+  if (VIS.test(text)) change.public = parsed.public;
   const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public, due: t.due };
   await patch(id, change);
   if (change.public !== undefined && change.public !== before.public) await retitleBlocks(id);
@@ -201,7 +201,7 @@ function typedChip(input) {
   const day = input.dataset.day ?? state.tasks.get(li.dataset.id)?.day ?? state.today;
   const p = parseEntry(input.value, day);
   const text = [p.est_min && formatMinutes(p.est_min), p.at_time && formatClock(clock(p.at_time)), p.tag && `#${p.tag}`,
-    /(^|\s)!(private|p)(\s|$)/i.test(input.value) && "private", p.due && dueText(p.due)].filter(Boolean).join(" · ");
+    !p.public && "private", p.due && dueText(p.due)].filter(Boolean).join(" · ");
   let chip = li.querySelector(".sheet-typed");
   if (!chip) li.append(chip = el("span", { className: "sheet-meta sheet-typed" }));
   chip.textContent = text;
@@ -217,7 +217,7 @@ export function taskRow(t) {
   const risk = atRisk(t, state.blocks, state.today, SHEET.timeZone);
   title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${risk ? ", at risk" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
-    rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${t.rolls} time${t.rolls > 1 ? "s" : ""}` }) : null,
+    rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
     t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
@@ -326,7 +326,7 @@ export function render() {
 
   const notice = $("[data-notice]");
   notice.hidden = !state.parked;
-  notice.textContent = `${state.parked} task${state.parked === 1 ? "" : "s"} moved to Someday.`;
+  notice.textContent = `${plural(state.parked, "task")} moved to Someday.`;
   for (const hook of renderHooks) hook();
 
   if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
