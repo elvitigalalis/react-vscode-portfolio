@@ -51,20 +51,25 @@ export function minutesOn(iso, day, timeZone) {
   return dayDiff(at.day, day) * 1440 + at.minutes;
 }
 
+// "Tue".
+export const weekdayName = (day) => toDate(day).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+
 export function dayLabel(day) {
-  const d = toDate(day);
   return {
-    weekday: d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }).toUpperCase(),
-    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+    weekday: weekdayName(day).toUpperCase(),
+    date: toDate(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
   };
 }
+
+// "1 task", "2 tasks".
+export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // --- Typed details -----------------------------------------------------------------------
 
 const EST = /(?:^|\s)~(?:(\d+)h)?(?:(\d+)m?)?(?=\s|$)/i;
 const AT = /(?:^|\s)@(\d{1,2})(?::(\d{2}))?\s?(am|pm)?(?=\s|$)/i;
 const TAG = /(?:^|\s)#([a-z0-9][\w-]*)(?=\s|$)/i;
-const VIS = /(?:^|\s)!(public|private|p)(?=\s|$)/i;
+export const VIS = /(?:^|\s)!(public|private|p)(?=\s|$)/i;
 const DUE = /(?:^|\s)\^(\S+)(?=\s|$)/;
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
@@ -176,6 +181,9 @@ export const planningDay = ({ day, minutes }) => (minutes >= 15 * 60 ? addDays(d
 
 export const snap = (mins, step = 15) => Math.round(mins / step) * step;
 
+// A block's length in minutes.
+export const blockMinutes = (b) => Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000);
+
 // What completing a task does to one of its blocks (Sunsama's rules). A proposed block is
 // turned down: nothing is left to approve.
 export function blockOnComplete(block, now) {
@@ -220,8 +228,7 @@ export function atRisk(task, blocks, today, timeZone) {
 // "due Fri" within the coming week, "due Oct 30" further off or once it has passed. The week
 // and the Telegram messages both show it.
 export function dueLabel(due, today) {
-  const { weekday, date } = dayLabel(due);
-  return `due ${due >= today && due < addDays(today, 7) ? weekday[0] + weekday.slice(1).toLowerCase() : date}`;
+  return `due ${due >= today && due < addDays(today, 7) ? weekdayName(due) : dayLabel(due).date}`;
 }
 
 // --- Calendar events in the week ---------------------------------------------------------

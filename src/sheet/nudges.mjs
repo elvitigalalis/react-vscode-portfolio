@@ -6,7 +6,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete } from "./logic.mjs";
+import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -22,7 +22,6 @@ export const REPEAT_AFTER = 10 * 60_000;
 export const SNOOZE_FOR = 10 * 60_000;
 
 const PLAN_URL = `${ORIGIN}/plan/`;
-const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // A snapshot of the day, as the Edge Function reads it:
 //   settings  the settings row (time_zone, telegram_chat_id, nudges_on)
@@ -102,7 +101,7 @@ const tapButtons = (id) => [{ text: "Done", callback_data: `done:${id}` }, { tex
 
 // "▶ 2:00 pm · OS homework (45 min)"
 const nudgeText = (b, task, { today, tz }) =>
-  `▶ ${formatClock(minutesOn(b.starts_at, today, tz))} · ${task.title} (${Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000)} min)`;
+  `▶ ${formatClock(minutesOn(b.starts_at, today, tz))} · ${task.title} (${blockMinutes(b)} min)`;
 
 // The blocks that can still be nudged, with their tasks: today's, starting outside quiet hours
 // (so a block before 8 am never gets one), whose task isn't done; earliest first.

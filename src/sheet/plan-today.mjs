@@ -7,6 +7,7 @@ import * as api from "./api.mjs";
 import {
   addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, planningDay, snap,
   formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, DEFAULT_EST,
+  blockMinutes, weekdayName, plural,
 } from "./logic.mjs";
 import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity } from "./planner.mjs";
 
@@ -36,7 +37,7 @@ function meter(d) {
 // --- The dialog --------------------------------------------------------------------------
 
 function draw() {
-  const { weekday, date } = dayLabel(day);
+  const { date } = dayLabel(day);
   const m = meter(day);
   const shut = shutdownAt(day);
   const late = m.finish > shut;
@@ -101,7 +102,7 @@ function draw() {
   const proposals = proposedOn(state.blocks, day, SHEET.timeZone).length;
   const scroll = dialog.querySelector(".sheet-timeline-wrap")?.scrollTop;
   dialog.replaceChildren(...[
-    el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekday.charAt(0)}${weekday.slice(1).toLowerCase()} ${date}` }),
+    el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekdayName(day)} ${date}` }),
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
@@ -109,7 +110,7 @@ function draw() {
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday; ↑ ↓ move the focused block." }),
     google,
-    proposals ? el("p", { className: "sheet-notice" }, `Claude proposed ${proposals} block${proposals === 1 ? "" : "s"}, shown dashed. `,
+    proposals ? el("p", { className: "sheet-notice" }, `Claude proposed ${plural(proposals, "block")}, shown dashed. `,
       el("button", { type: "button", className: "sheet-link sheet-approve-all", textContent: "Approve all" })) : null,
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
@@ -171,7 +172,7 @@ const approveAll = async () => { for (const b of proposedOn(state.blocks, day, S
 // Dragging a block moves it and keeps its length.
 async function moveBlock(id, startMin) {
   const b = state.blocks.find((x) => x.id === id);
-  const len = Math.round((new Date(b.ends_at) - new Date(b.starts_at)) / 60_000);
+  const len = blockMinutes(b);
   await saveBlock(b, { starts_at: zonedIso(day, startMin, SHEET.timeZone), ends_at: zonedIso(day, startMin + len, SHEET.timeZone) });
 }
 
@@ -180,7 +181,7 @@ async function resizeBlock(id, endMin) {
   const b = state.blocks.find((x) => x.id === id);
   await saveBlock(b, { ends_at: zonedIso(day, endMin, SHEET.timeZone) });
   const total = state.blocks.filter((x) => x.task_id === b.task_id && !x.proposed)
-    .reduce((s, x) => s + Math.round((new Date(x.ends_at) - new Date(x.starts_at)) / 60_000), 0);
+    .reduce((s, x) => s + blockMinutes(x), 0);
   state.tasks.set(b.task_id, await api.updateTask(b.task_id, { est_min: total }));
 }
 
