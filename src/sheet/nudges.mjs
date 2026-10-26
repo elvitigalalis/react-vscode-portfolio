@@ -81,12 +81,14 @@ const logged = (log, m) => log.some((n) => !pending(n) && n.block_id === m.block
 
 // The morning brief: what today holds, at 8:00. Private tasks show their real titles: the
 // messages go only to Lisul.
-function brief({ tasks, blocks, today, tz }) {
+// "Nudging the first 6" counts only the blocks that can be nudged.
+function brief(day) {
+  const { tasks, blocks, today, tz } = day;
   const todays = tasks.filter((t) => t.day === today);
   const blocksToday = blocks.filter((b) => { const m = minutesOn(b.starts_at, today, tz); return m >= 0 && m < 1440; });
   const risky = tasks.filter((t) => atRisk(t, blocks, today, tz)).sort((a, b) => a.due.localeCompare(b.due));
   const n = blocksToday.length;
-  const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${n > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
+  const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
   if (risky.length) lines.push(`At risk: ${risky.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
   if (!n) lines.push('Nothing planned yet: say "plan my day" to Claude.');
   const text = todays.length || n || risky.length ? lines.join("\n") : "Nothing on today.";
