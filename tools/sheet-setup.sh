@@ -199,15 +199,37 @@ finish() {
 # the whole file before the first prompt, so an edit mid-run can't break it.
 # ──────────────────────────────────────────────────────────────────────────
 
-# The Sheet's one-time setup (docs/sheet.md, "Setup Lisul does once"). Run from the repo root:
-#   bash tools/sheet-setup.sh
-# Public values (project URL, anon key, owner email) are remembered in .env (gitignored) so a
-# re-run skips what's done. The Google client secret is never written to disk.
+# The Sheet's one-time setup (docs/sheet.md and docs/sheet-nudges.md, "Setup Lisul does once").
+# Run from the repo root:
+#   bash tools/sheet-setup.sh            everything
+#   bash tools/sheet-setup.sh telegram   only the tables and the Telegram stages, for a project
+#                                        that is already set up
+# Public values (project URL, anon key, owner email, chat ID) are remembered in .env (gitignored)
+# so a re-run skips what's done. Secrets (the Google client secret, the bot token, the cron and
+# webhook secrets) are never written to disk: they live in this shell until pasted where they
+# belong.
 
-# copy TEXT puts TEXT on the clipboard (macOS pbcopy), or prints it if there's no clipboard.
+# copy TEXT puts TEXT on the clipboard (macOS pbcopy). Without a clipboard it never prints TEXT,
+# which may be a secret: it writes it to a file only you can read and prints the file's path. The
+# file is deleted when the script ends.
+CLIP_FILE=""
 copy() {
-  if command -v pbcopy >/dev/null 2>&1; then printf '%s' "$1" | pbcopy; printf '  %s✓ copied to your clipboard%s\n' "$GREEN" "$RESET"
-  else note "Copy this: $1"; fi
+  if command -v pbcopy >/dev/null 2>&1; then printf '%s' "$1" | pbcopy; printf '  %s✓ copied to your clipboard%s\n' "$GREEN" "$RESET"; return; fi
+  if [ -z "$CLIP_FILE" ]; then CLIP_FILE=$(mktemp); trap 'rm -f "$CLIP_FILE"' EXIT; fi
+  printf '%s' "$1" > "$CLIP_FILE"
+  note "No clipboard here, so it's in $CLIP_FILE (only you can read it): copy it from there, e.g. cat it in another terminal."
+}
+
+# telegram_api METHOD calls the Bot API with $TELEGRAM_BOT_TOKEN. The URL goes to curl on stdin,
+# so the token never shows up in the process list.
+telegram_api() {
+  printf 'url = "https://api.telegram.org/bot%s/%s"\n' "$TELEGRAM_BOT_TOKEN" "$1" | curl -s -K -
+}
+
+# json EXPR prints EXPR evaluated over the JSON on stdin (as `j`), or nothing if it fails.
+json() {
+  node --input-type=module -e "let s = ''; for await (const c of process.stdin) s += c;
+    try { const j = JSON.parse(s); const v = $1; if (v !== undefined && v !== null) console.log(v); } catch {}"
 }
 
 # api PATH prints the HTTP status of a public Supabase request.
@@ -217,11 +239,18 @@ api_status() {
 
 run_wizard() {
 
-TOTAL_STAGES=9
+MODE="${1:-all}"
+[[ "$MODE" == all || "$MODE" == telegram ]] || { warn "Usage: bash tools/sheet-setup.sh [telegram]"; exit 1; }
 ENV_FILE=.env
 [[ -f src/site.mjs && -f supabase/schema.sql ]] || { warn "Run this from the lisul-elvi-site repo root (the sheet branch)."; exit 1; }
 
-banner "The Sheet: connect Supabase and Google Calendar"
+if [[ "$MODE" == telegram ]]; then
+  TOTAL_STAGES=8
+  banner "The Sheet: update the tables, connect Telegram and Claude"
+else
+  TOTAL_STAGES=14
+  banner "The Sheet: connect Supabase, Google Calendar, Telegram and Claude"
+fi
 
 # ── 1 ────────────────────────────────────────────────────────────────────
 stage "Supabase: create the project"
@@ -259,7 +288,7 @@ write_env SHEET_ANON_KEY "$SHEET_ANON_KEY"
 pause
 
 # ── 3 ────────────────────────────────────────────────────────────────────
-stage "Supabase: create the tables"
+stage "Supabase: create or update the tables"
 say "Only one Google account may open /plan: the one you'll plan with."
 ask SHEET_OWNER_EMAIL "Your Google account email (the one with your calendar):"
 write_env SHEET_OWNER_EMAIL "$SHEET_OWNER_EMAIL"
@@ -278,6 +307,8 @@ while :; do
   confirm "Skip this check and go on anyway?" && break
 done
 rm -f "$SQL_FILE"
+
+if [[ "$MODE" == all ]]; then
 
 # ── 4 ────────────────────────────────────────────────────────────────────
 stage "Google Cloud: create a project and its sign-in screen"
@@ -369,6 +400,149 @@ fi
 say ""
 say "Try it locally:  npm run dev   then open http://localhost:4321/plan/ and sign in."
 say "Allow calendar access; 'Plan today' then creates a 'Time blocks' calendar on first use."
+pause "Press Enter for Telegram"
+
+fi
+
+# ── 10 ───────────────────────────────────────────────────────────────────
+stage "Telegram: create the bot"
+say "The bot sends you the morning brief. Only you will talk to it."
+open_url "https://t.me/BotFather"
+step "In Telegram, send @BotFather the message /newbot."
+step "Name: The Sheet. Username: anything ending in 'bot' (e.g. lisul_sheet_bot)."
+step "BotFather replies with a token like 123456789:AA…: copy it."
+note "The token is hidden as you paste it and is never written to disk."
+while :; do
+  ask_secret TELEGRAM_BOT_TOKEN "Paste the bot token:"
+  SHEET_BOT=$(telegram_api getMe | json 'j.ok ? j.result.username : null')
+  [[ -n "$SHEET_BOT" ]] && { printf '  %s✓ Telegram knows the bot @%s%s\n' "$GREEN" "$SHEET_BOT" "$RESET"; break; }
+  warn "Telegram didn't accept that token. Copy it again from BotFather's message."
+done
+pause
+
+# ── 11 ───────────────────────────────────────────────────────────────────
+stage "Telegram: send the bot one message"
+say "Telegram tells a bot your chat ID only once you've written to it."
+open_url "https://t.me/$SHEET_BOT"
+step "Press 'Start' (or send it any message, like 'hi')."
+while :; do
+  pause "Press Enter once you've sent it"
+  SHEET_TELEGRAM_CHAT_ID=$(telegram_api getUpdates | json 'j.result.map((u) => u.message?.chat).filter((c) => c?.type === "private").at(-1)?.id')
+  [[ -n "$SHEET_TELEGRAM_CHAT_ID" ]] && break
+  warn "The bot hasn't seen a message yet. Send it one and try again."
+  note "(This check stops working once the bot has a webhook; the chat ID in .env is kept.)"
+  if [[ -n "$(_existing SHEET_TELEGRAM_CHAT_ID || true)" ]] && confirm "Keep the chat ID saved last time?"; then
+    SHEET_TELEGRAM_CHAT_ID=$(_existing SHEET_TELEGRAM_CHAT_ID); break
+  fi
+done
+write_env SHEET_TELEGRAM_CHAT_ID "$SHEET_TELEGRAM_CHAT_ID"
+pause
+
+# ── 12 ───────────────────────────────────────────────────────────────────
+stage "Supabase: the telegram function and its secrets"
+say "One Edge Function sends the messages and takes your taps. It needs the bot token, a"
+say "secret that proves the minute job is the one calling it, and one that proves Telegram is."
+SHEET_CRON_SECRET=$(openssl rand -hex 32)
+TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)
+open_url "https://supabase.com/dashboard/project/$SHEET_REF/functions/secrets"
+step "Add a secret named TELEGRAM_BOT_TOKEN; its value is on your clipboard:"
+copy "$TELEGRAM_BOT_TOKEN"
+pause "Press Enter once it's saved"
+step "Add a secret named SHEET_CRON_SECRET; its value (just made, random) is on your clipboard:"
+copy "$SHEET_CRON_SECRET"
+pause "Press Enter once it's saved"
+step "Add a secret named TELEGRAM_WEBHOOK_SECRET; its value (just made, random) is on your clipboard:"
+copy "$TELEGRAM_WEBHOOK_SECRET"
+pause "Press Enter once it's saved"
+printf '' | pbcopy 2>/dev/null || true
+say "Now deploy the function. The Supabase CLI signs in through your browser first."
+step "npx supabase login"
+step "npx supabase functions deploy telegram --use-api --no-verify-jwt --project-ref $SHEET_REF"
+note "--use-api bundles on Supabase's side, which follows the import of src/sheet/nudges.mjs."
+if confirm "Run these two commands now?"; then
+  if npx -y supabase login && npx -y supabase functions deploy telegram --use-api --no-verify-jwt --project-ref "$SHEET_REF"; then
+    printf '  %s✓ deployed%s\n' "$GREEN" "$RESET"
+  else
+    warn "The deploy failed; see the message above."
+    SKIPPED+=("deploy the telegram function (the two commands above)")
+  fi
+else
+  SKIPPED+=("deploy the telegram function (the two commands above)")
+fi
+while :; do
+  # A call without the cron secret must be refused: that shows the function is up.
+  status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SHEET_SUPABASE_URL/functions/v1/telegram")
+  [[ "$status" == 403 ]] && { printf '  %s✓ the function answers%s\n' "$GREEN" "$RESET"; break; }
+  warn "The function answered $status, not 403. Check the deploy above."
+  confirm "Skip this check and go on anyway?" && break
+  pause "Press Enter to check again"
+done
+# The bot's webhook: Telegram sends Done and Snooze taps to the function, with the webhook secret
+# in its X-Telegram-Bot-Api-Secret-Token header. The secret is hex, so it needs no escaping, and
+# it goes to curl on stdin with the token.
+say "Pointing the bot's Done and Snooze buttons at the function."
+hook="setWebhook?url=$SHEET_SUPABASE_URL/functions/v1/telegram&secret_token=$TELEGRAM_WEBHOOK_SECRET&allowed_updates=%5B%22callback_query%22%5D"
+if [[ "$(telegram_api "$hook" | json 'j.ok')" == true ]]; then
+  printf '  %s✓ the bot sends taps to the function%s
+' "$GREEN" "$RESET"
+else
+  warn "Telegram refused the webhook. Re-run 'bash tools/sheet-setup.sh telegram' to try again."
+  SKIPPED+=("the bot's webhook (re-run the telegram stages)")
+fi
+unset TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET hook
+
+# ── 13 ───────────────────────────────────────────────────────────────────
+stage "Supabase: start the minute job"
+say "The job in schema.sql calls the function every minute once Vault holds its URL and the"
+say "cron secret. This SQL puts them there and saves your chat ID."
+vault_put() { # NAME VALUE: SQL that creates the Vault secret NAME, or replaces its value
+  printf "select vault.update_secret(id, '%s') from vault.secrets where name = '%s';\n" "$2" "$1"
+  printf "select vault.create_secret('%s', '%s') where not exists (select 1 from vault.secrets where name = '%s');\n" "$2" "$1" "$1"
+}
+copy "$(vault_put sheet_telegram_url "$SHEET_SUPABASE_URL/functions/v1/telegram")
+$(vault_put sheet_cron_secret "$SHEET_CRON_SECRET")
+update settings set telegram_chat_id = $SHEET_TELEGRAM_CHAT_ID, nudges_on = true;"
+open_url "https://supabase.com/dashboard/project/$SHEET_REF/sql/new"
+step "Paste into a new SQL editor tab (⌘V) and click 'Run'."
+pause "Press Enter once it says 'Success'"
+printf '' | pbcopy 2>/dev/null || true
+unset SHEET_CRON_SECRET
+say ""
+say "The first morning brief arrives at 8:00 tomorrow (or today, if it's before 11 pm and"
+say "today's hasn't gone out). To see the job's runs: Integrations → Cron in the dashboard."
+pause "Press Enter for the Claude step"
+
+# ── 14 ───────────────────────────────────────────────────────────────────
+# Supabase's hosted MCP server (https://supabase.com/docs/guides/getting-started/mcp):
+# https://mcp.supabase.com/mcp, where ?project_ref= scopes it to one project (and turns off the
+# account tools) and ?features= keeps only the named tool groups ("database" has execute_sql).
+# read_only=true would run every query as a read-only user, but Claude must insert proposed
+# blocks, so it stays off. Sign-in is OAuth in the browser: no token passes through here.
+# Custom connectors in Claude: Customize → Connectors → Add → Add custom connector
+# (https://support.claude.com/en/articles/11175166). Rules: docs/sheet-claude.md (ADR 0001).
+stage "Claude: the Supabase connector and \"The Sheet\" project"
+say "Claude plans your day from your own Claude app. It reaches the planner through"
+say "Supabase's connector, limited to this one project, and your calendar through its own."
+open_url "https://claude.ai/customize/connectors"
+note "(In the Claude app: Customize → Connectors.)"
+step "Click '+ Add', then 'Add custom connector'. Name: Supabase (The Sheet)."
+step "URL (on your clipboard now):"
+copy "https://mcp.supabase.com/mcp?project_ref=$SHEET_REF&features=database"
+note "https://mcp.supabase.com/mcp?project_ref=$SHEET_REF&features=database"
+note "Not the Supabase connector from the directory: that one reaches every project you own."
+step "Click 'Continue' through the sign-in settings, then 'Add'. Sign in to Supabase when"
+step "asked and pick the organization that holds 'the-sheet'."
+step "Also make sure the Google Calendar connector is on, signed in as $SHEET_OWNER_EMAIL."
+pause "Press Enter once both connectors are added"
+open_url "https://claude.ai/projects"
+step "'New project'. Name: The Sheet. Create it."
+step "Open its instructions ('Set project instructions') and paste (on your clipboard now)."
+copy "$(cat docs/sheet-claude.md)"
+note "If the clipboard didn't work, paste the contents of docs/sheet-claude.md."
+note "When the rules change, edit docs/sheet-claude.md and paste it again: the repo is the master."
+step "In a chat in the project, use '+' → Connectors to turn on both connectors."
+say ""
+say "Then try it: say \"plan my day\". The proposal shows dashed in /plan until you approve it."
 pause "Press Enter to finish"
 
 finish

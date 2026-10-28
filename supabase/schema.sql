@@ -32,6 +32,9 @@ create table if not exists tasks (
   check ((day is null) = (list is not null))
 );
 create index if not exists tasks_day on tasks (day);
+-- The day a task must be finished by (docs/sheet-nudges.md). Owner-only: the public views below
+-- list their columns by name and leave it out, so /now never sees a due date.
+alter table tasks add column if not exists due date;
 
 create table if not exists blocks (
   id uuid primary key default gen_random_uuid(),
@@ -40,6 +43,9 @@ create table if not exists blocks (
   ends_at timestamptz not null check (ends_at > starts_at),
   gcal_id text
 );
+-- A block Claude proposed (docs/sheet-nudges.md). It has no Google event and never reaches the
+-- public views until Lisul approves it in /plan; unapproved, it lapses at the end of its day.
+alter table blocks add column if not exists proposed boolean not null default false;
 create index if not exists blocks_task on blocks (task_id);
 create index if not exists blocks_time on blocks (starts_at, ends_at);
 
@@ -49,6 +55,33 @@ create table if not exists days (
   shutdown boolean not null default false,
   shutdown_at time,                  -- this day's shutdown line, when moved from the default
   reflection text                    -- never public
+);
+
+-- Telegram (docs/sheet-nudges.md): the chat the bot writes to, set by tools/sheet-setup.sh, and
+-- the switch that turns the messages off.
+alter table settings add column if not exists telegram_chat_id bigint;
+alter table settings add column if not exists nudges_on boolean not null default true;
+
+-- One row per Telegram message sent. The unique key is what stops a message going out twice:
+-- the telegram function claims a row before sending. No foreign key on block_id: the row
+-- outlives a block deleted later, so the day's nudge budget still counts it.
+create table if not exists nudges (
+  id uuid primary key default gen_random_uuid(),
+  block_id uuid,                     -- null for the brief and the check-in
+  kind text not null check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin')),
+  day date not null,
+  send_at timestamptz not null,      -- the minute it was due
+  sent_at timestamptz,               -- null while it is being sent
+  unique nulls not distinct (block_id, kind, day, send_at)
+);
+create index if not exists nudges_day on nudges (day);
+
+-- Google events a Done tap changed while /plan was closed (Telegram can't reach Google): end the
+-- event at ends_at, or delete it when ends_at is null. /plan applies them when it opens, then
+-- deletes the rows.
+create table if not exists gcal_pending (
+  gcal_id text primary key,
+  ends_at timestamptz
 );
 
 create or replace function touch() returns trigger language plpgsql as $$
@@ -66,15 +99,21 @@ alter table settings enable row level security;
 alter table tasks enable row level security;
 alter table blocks enable row level security;
 alter table days enable row level security;
+alter table nudges enable row level security;
+alter table gcal_pending enable row level security;
 drop policy if exists owner_all on settings;
 drop policy if exists owner_all on tasks;
 drop policy if exists owner_all on blocks;
 drop policy if exists owner_all on days;
+drop policy if exists owner_all on nudges;
+drop policy if exists owner_all on gcal_pending;
 create policy owner_all on settings for all using (is_owner()) with check (is_owner());
 create policy owner_all on tasks for all using (is_owner()) with check (is_owner());
 create policy owner_all on blocks for all using (is_owner()) with check (is_owner());
 create policy owner_all on days for all using (is_owner()) with check (is_owner());
-revoke all on settings, tasks, blocks, days from anon;
+create policy owner_all on nudges for all using (is_owner()) with check (is_owner());
+create policy owner_all on gcal_pending for all using (is_owner()) with check (is_owner());
+revoke all on settings, tasks, blocks, days, nudges, gcal_pending from anon;
 
 -- Today in the owner's time zone.
 create or replace function sheet_today() returns date
@@ -98,23 +137,40 @@ begin
 end $$;
 revoke execute on function roll_tasks(uuid[], date) from public, anon, authenticated;
 
--- Nightly (run hourly; a no-op once done): everything left behind rolls to today.
+-- A proposal lapses at the end of its day: these delete the proposed blocks of day `d`, or of
+-- the days before it.
+drop function if exists lapse_proposals(date, boolean);
+create or replace function lapse_proposals_on(d date) returns void
+language sql security definer set search_path = public as $$
+  delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d
+$$;
+create or replace function lapse_proposals_before(d date) returns void
+language sql security definer set search_path = public as $$
+  delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date < d
+$$;
+revoke execute on function lapse_proposals_on(date), lapse_proposals_before(date) from public, anon, authenticated;
+
+-- Nightly (run hourly; a no-op once done): everything left behind rolls to today, and
+-- earlier days' proposals lapse.
 create or replace function nightly_roll() returns void
 language plpgsql security definer set search_path = public as $$
 declare today date := sheet_today();
 begin
+  perform lapse_proposals_before(today);
   perform roll_tasks(array(select id from tasks
     where day < today and not done and at_time is null), today);
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
--- Shutdown: save the reflection, mark the day, roll its missed tasks to the next day.
+-- Shutdown: save the reflection, mark the day, let its proposals lapse, roll its missed tasks
+-- to the next day.
 create or replace function shut_down(d date, reflection text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   if not is_owner() then raise exception 'not the owner'; end if;
   insert into days (day, shutdown, reflection) values (d, true, reflection)
   on conflict (day) do update set shutdown = true, reflection = excluded.reflection;
+  perform lapse_proposals_on(d);
   perform roll_tasks(array(select id from tasks
     where day = d and not done and at_time is null), d + 1);
 end $$;
@@ -123,6 +179,7 @@ grant execute on function shut_down(date, text) to authenticated;
 
 -- Public views. They run with the table owner's rights, so they read past row-level security,
 -- and they are the only way visitors see anything. A private task gives its length, not its title.
+-- Proposed blocks are not part of the plan, so they never show (only public_now reads blocks).
 create or replace view public_week as
   select id, day, position, done, public,
          case when public then title end as title,
@@ -141,7 +198,7 @@ create or replace view public_now as
     select case when t.public then t.title end as title,
            case when t.public then t.tag end as tag, t.public
     from blocks b join tasks t on t.id = b.task_id
-    where now() >= b.starts_at and now() < b.ends_at
+    where not b.proposed and now() >= b.starts_at and now() < b.ends_at
     order by b.starts_at limit 1
   ) n on true;
 
@@ -150,6 +207,21 @@ grant select on public_week, public_days, public_now to anon, authenticated;
 create extension if not exists pg_cron;
 select cron.unschedule(jobid) from cron.job where jobname = 'sheet-rollover';
 select cron.schedule('sheet-rollover', '5 * * * *', 'select public.nightly_roll()');
+
+-- Every minute, call the telegram Edge Function to send what's due (docs/sheet-nudges.md). Its
+-- URL and the shared secret it checks live in Vault, put there by tools/sheet-setup.sh, so no
+-- secret is in this file; until they exist the job does nothing.
+create extension if not exists pg_net;
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-telegram';
+select cron.schedule('sheet-telegram', '* * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_telegram_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "send"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_telegram_url')
+$job$);
 
 -- Set the owner: the Google account that signs in to /plan.
 insert into settings (owner_email) values ('you@example.com')

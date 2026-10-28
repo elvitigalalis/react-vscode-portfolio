@@ -51,26 +51,53 @@ export function minutesOn(iso, day, timeZone) {
   return dayDiff(at.day, day) * 1440 + at.minutes;
 }
 
+// "Tue".
+export const weekdayName = (day) => toDate(day).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+
 export function dayLabel(day) {
-  const d = toDate(day);
   return {
-    weekday: d.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }).toUpperCase(),
-    date: d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+    weekday: weekdayName(day).toUpperCase(),
+    date: toDate(day).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
   };
 }
+
+// "1 task", "2 tasks".
+export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // --- Typed details -----------------------------------------------------------------------
 
 const EST = /(?:^|\s)~(?:(\d+)h)?(?:(\d+)m?)?(?=\s|$)/i;
 const AT = /(?:^|\s)@(\d{1,2})(?::(\d{2}))?\s?(am|pm)?(?=\s|$)/i;
 const TAG = /(?:^|\s)#([a-z0-9][\w-]*)(?=\s|$)/i;
-const VIS = /(?:^|\s)!(public|private|p)(?=\s|$)/i;
+export const VIS = /(?:^|\s)!(public|private|p)(?=\s|$)/i;
+const DUE = /(?:^|\s)\^(\S+)(?=\s|$)/;
 
-// "Ship auth ~45m #workit" → { title: "Ship auth", est_min: 45, tag: "workit", public: true, ... }.
-// Tasks are public unless marked "!p" (or "!private"). A detail that does not parse stays in the title.
-export function parseEntry(text) {
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+// The date a "^..." due date names, counted from `day` (the task's day), or null if it names none.
+// A weekday ("fri", "thurs", "friday") is its next occurrence on or after `day`; so is a
+// month/day ("10/30"), which may fall next year (or, for 2/29, the next leap year).
+function dueDate(word, day) {
+  const w = word.toLowerCase();
+  if (w === "tomorrow") return addDays(day, 1);
+  const dow = w.length >= 3 ? WEEKDAYS.findIndex((d) => d.startsWith(w)) : -1;
+  if (dow >= 0) return addDays(day, (dow - toDate(day).getUTCDay() + 7) % 7);
+  const md = w.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!md) return null;
+  for (let y = Number(day.slice(0, 4)); y < Number(day.slice(0, 4)) + 8; y++) {
+    const date = `${y}-${pad(Number(md[1]))}-${pad(Number(md[2]))}`;
+    // Impossible dates ("2/30", "13/1") never survive the round trip through Date.
+    if (fromDate(toDate(date)) === date && date >= day) return date;
+  }
+  return null;
+}
+
+// "Ship auth ~45m #workit ^fri" → { title: "Ship auth", est_min: 45, tag: "workit", due: "2026-10-30", ... }.
+// Tasks are public unless marked "!p" (or "!private"). A due date counts from `day`, the task's
+// day. A detail that does not parse stays in the title.
+export function parseEntry(text, day) {
   let title = ` ${text.trim()} `;
-  const out = { est_min: null, at_time: null, tag: null, public: true };
+  const out = { est_min: null, at_time: null, tag: null, public: true, due: null };
 
   const est = title.match(EST);
   if (est && (est[1] || est[2])) {
@@ -92,6 +119,9 @@ export function parseEntry(text) {
   if (tag) { out.tag = tag[1].toLowerCase(); title = title.replace(tag[0], " "); }
   const vis = title.match(VIS);
   if (vis) { out.public = vis[1].toLowerCase() === "public"; title = title.replace(vis[0], " "); }
+  const due = title.match(DUE);
+  const date = due && dueDate(due[1], day);
+  if (date) { out.due = date; title = title.replace(due[0], " "); }
 
   out.title = title.replace(/\s+/g, " ").trim();
   return out;
@@ -151,13 +181,54 @@ export const planningDay = ({ day, minutes }) => (minutes >= 15 * 60 ? addDays(d
 
 export const snap = (mins, step = 15) => Math.round(mins / step) * step;
 
-// What completing a task does to one of its blocks (Sunsama's rules).
+// A block's length in minutes.
+export const blockMinutes = (b) => Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000);
+
+// What completing a task does to one of its blocks (Sunsama's rules). A proposed block is
+// turned down: nothing is left to approve.
 export function blockOnComplete(block, now) {
+  if (block.proposed) return { action: "delete" };
   const start = new Date(block.starts_at);
   const end = new Date(block.ends_at);
   if (now < start) return { action: "delete" };
   if (now < end) return { action: "shrink", ends_at: now.toISOString() };
   return { action: "keep" };
+}
+
+// --- Proposals ---------------------------------------------------------------------------
+
+// A day's proposed blocks (docs/sheet-nudges.md), earliest first. They are Claude's until
+// approved, and lapse at the day's shutdown or the nightly rollover.
+export const proposedOn = (blocks, day, timeZone) => blocks
+  .filter((b) => b.proposed && localNow(new Date(b.starts_at), timeZone).day === day)
+  .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+// What moving or resizing a block does in Google. A proposed block has no event: changing it
+// approves it, so its event is made then, as when a task is dragged on.
+export const googleStep = (block) => (block.proposed ? "create" : block.gcal_id ? "patch" : null);
+
+// Telegram is on once the bot knows his chat and the switch in settings is on.
+export const telegramOn = (settings) => Boolean(settings?.nudges_on && settings?.telegram_chat_id);
+
+// The alerts on a "Time blocks" event: none while Telegram nudges him, so no block is announced
+// twice, and Google's default as the backup while it's off.
+export const blockReminders = (settings) => (telegramOn(settings) ? { useDefault: false, overrides: [] } : { useDefault: true });
+
+// --- Due dates --------------------------------------------------------------------------
+
+// A task is at risk when it is due within two days (or already past due), not done, and has no
+// block that starts before its due date is over (midnight after it, in the owner's time zone).
+// Proposed blocks are not planned time yet, so they don't count.
+export function atRisk(task, blocks, today, timeZone) {
+  if (!task.due || task.done || dayDiff(task.due, today) > 2) return false;
+  const end = Date.parse(zonedIso(addDays(task.due, 1), 0, timeZone));
+  return !blocks.some((b) => b.task_id === task.id && !b.proposed && Date.parse(b.starts_at) < end);
+}
+
+// "due Fri" within the coming week, "due Oct 30" further off or once it has passed. The week
+// and the Telegram messages both show it.
+export function dueLabel(due, today) {
+  return `due ${due >= today && due < addDays(today, 7) ? weekdayName(due) : dayLabel(due).date}`;
 }
 
 // --- Calendar events in the week ---------------------------------------------------------
