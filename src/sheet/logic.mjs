@@ -64,6 +64,10 @@ export function dayLabel(day) {
 // "1 task", "2 tasks".
 export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// A title that fits the tasks and campus_events checks (1 to 500 characters): trimmed, then cut
+// at 500 with no ellipsis. Feed titles and "Add to my day" both go through it.
+export const cutTitle = (s) => String(s ?? "").trim().slice(0, 500).trim();
+
 // --- Typed details -----------------------------------------------------------------------
 
 const EST = /(?:^|\s)~(?:(\d+)h)?(?:(\d+)m?)?(?=\s|$)/i;

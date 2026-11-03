@@ -61,6 +61,11 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
   - Malformed events are skipped, never thrown on.
 - **`feeds.mjs`:**
   - `courseTaskChanges(events, { tasks, seen, timeZone })` returns `{ insert, update, seen }`:
+    - only due dates count. D2L titles each item with its role: a `" - Due"` item is kept; an
+      `" - Availability Ends"` or `" - End Date"` item only when no `" - Due"` item has the same
+      base title; `" - Availability Starts"`, `" - Start Date"` and items with no such suffix
+      (class meetings, holidays, the instructor's events) are skipped. The task's title is the
+      base title, suffix stripped (`"Quiz 6 - Due"` → `"Quiz 6"`), cut to 500 characters;
     - new UIDs become task rows in list "Brightspace", with no day, a due date, `public: false`
       and `source: 'brightspace'`;
     - an already-seen UID that still has an undone task updates that task's title and due date;
