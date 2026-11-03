@@ -37,7 +37,7 @@ const uids = (events) => events.map((e) => e.uid);
 
 // --- campusDay ---------------------------------------------------------------------------
 
-test("campusDay: only events that start on that local day, including one at 11:30 pm", { todo: true }, async () => {
+test("campusDay: only events that start on that local day, including one at 11:30 pm", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("noon", "2026-11-04T17:00:00Z", "2026-11-04T18:00:00Z"),        // 12 pm Nov 4
@@ -50,7 +50,7 @@ test("campusDay: only events that start on that local day, including one at 11:3
   assert.deepEqual(uids(campusDay(events, DAY, tz, {})), ["early", "noon", "late"]);
 });
 
-test("campusDay: an event spanning midnight belongs to the day it starts", { todo: true }, async () => {
+test("campusDay: an event spanning midnight belongs to the day it starts", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const span = ev("span", "2026-11-04T04:00:00Z", "2026-11-04T06:00:00Z"); // 11 pm Nov 3 to 1 am Nov 4
   const long = ev("long", "2026-11-02T15:00:00Z", "2026-11-30T22:00:00Z"); // runs for weeks
@@ -59,7 +59,7 @@ test("campusDay: an event spanning midnight belongs to the day it starts", { tod
   assert.deepEqual(uids(campusDay([span, long], "2026-11-02", tz, {})), ["long"]);
 });
 
-test("campusDay: free food first, then by start time", { todo: true }, async () => {
+test("campusDay: free food first, then by start time", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("b", "2026-11-04T16:00:00Z", "2026-11-04T17:00:00Z"),
@@ -71,7 +71,7 @@ test("campusDay: free food first, then by start time", { todo: true }, async () 
   assert.deepEqual(uids(campusDay(events, DAY, tz, {})), ["food-early", "food-late", "a", "b", "c"]);
 });
 
-test("campusDay: practices, meetings and general body meetings are hidden unless showRoutine", { todo: true }, async () => {
+test("campusDay: practices, meetings and general body meetings are hidden unless showRoutine", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const at = (h) => [`2026-11-04T${h}:00:00Z`, `2026-11-04T${h}:30:00Z`];
   const events = [
@@ -89,7 +89,7 @@ test("campusDay: practices, meetings and general body meetings are hidden unless
     ["practice-type", "meeting-type", "gbm-title", "practice-title", "meeting-title", "social", "workshop"]);
 });
 
-test("campusDay: with no options, routine events are hidden and nothing else is filtered", { todo: true }, async () => {
+test("campusDay: with no options, routine events are hidden and nothing else is filtered", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("m", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { event_type: "Meeting" }),
@@ -99,7 +99,7 @@ test("campusDay: with no options, routine events are hidden and nothing else is 
   assert.deepEqual(uids(campusDay(events, DAY, tz)), ["s", "n"]);
 });
 
-test("campusDay: a tag filter keeps events carrying any listed tag, and routine stays hidden", { todo: true }, async () => {
+test("campusDay: a tag filter keeps events carrying any listed tag, and routine stays hidden", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("games", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { tags: ["Games"] }),
@@ -115,7 +115,7 @@ test("campusDay: a tag filter keeps events carrying any listed tag, and routine 
   assert.deepEqual(uids(campusDay(events, DAY, tz, { tags: [] })), ["games", "career", "arts", "none", "null"]);
 });
 
-test("campusDay: no rows gives an empty list, and the input is left unchanged", { todo: true }, async () => {
+test("campusDay: no rows gives an empty list, and the input is left unchanged", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   assert.deepEqual(campusDay([], DAY, tz, {}), []);
   assert.deepEqual(campusDay([], DAY, tz, { tags: ["Games"], showRoutine: true }), []);
@@ -127,7 +127,7 @@ test("campusDay: no rows gives an empty list, and the input is left unchanged", 
 
 // --- campusTags --------------------------------------------------------------------------
 
-test("campusTags: each tag in use with its count, by count then by name", { todo: true }, async () => {
+test("campusTags: each tag in use with its count, by count then by name", async () => {
   const { campusTags } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("1", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { tags: ["Games", "Health & Wellness"] }),
@@ -145,7 +145,7 @@ test("campusTags: each tag in use with its count, by count then by name", { todo
   ]);
 });
 
-test("campusTags: no rows, or no tags, gives an empty list", { todo: true }, async () => {
+test("campusTags: no rows, or no tags, gives an empty list", async () => {
   const { campusTags } = await import("../src/sheet/campus.mjs");
   assert.deepEqual(campusTags([]), []);
   assert.deepEqual(campusTags([ev("1", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { tags: null })]), []);
