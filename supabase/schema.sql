@@ -354,6 +354,7 @@ select cron.schedule('sheet-brightspace', '20 * * * *', $job$
     body := '{"job": "sync"}'::jsonb)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_brightspace_url')
+$job$);
 
 -- --- Campus events (docs/sheet-sources.md, v3) ----------------------------------------------
 -- SB Engaged's public events from today through 14 days ahead, kept by the campus Edge Function
