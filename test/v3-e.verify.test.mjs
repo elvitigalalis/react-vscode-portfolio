@@ -184,7 +184,7 @@ test("v3-e sheet-claude: the campus-picks query reads only real columns for day 
   assert.match(events[0], /<D>/, "for the day being planned");
 });
 
-test("v3-e sheet-claude: campus picks name up to 5 events, one line each on why", { todo: true }, async () => {
+test("v3-e sheet-claude: campus picks name up to 5 events, one line each on why", async () => {
   const { assert, read } = await load();
   const section = campusSection(read("docs/sheet-claude.md"));
   assert.ok(section, "a Campus picks step heading");
@@ -195,7 +195,7 @@ test("v3-e sheet-claude: campus picks name up to 5 events, one line each on why"
   assert.match(section, /interest profile/i);
 });
 
-test("v3-e sheet-claude: free food and fitting around blocks count for an event", { todo: true }, async () => {
+test("v3-e sheet-claude: free food and fitting around blocks count for an event", async () => {
   const { assert, read } = await load();
   const section = campusSection(read("docs/sheet-claude.md"));
   assert.ok(section, "a Campus picks step heading");
@@ -205,7 +205,7 @@ test("v3-e sheet-claude: free food and fitting around blocks count for an event"
   assert.match(section, /in (an event's|its) favou?r|counts? for|prefer/i);
 });
 
-test("v3-e sheet-claude: a campus pick is never written without Lisul's say-so", { todo: true }, async () => {
+test("v3-e sheet-claude: a campus pick is never written without Lisul's say-so", async () => {
   const { assert, read } = await load();
   const doc = read("docs/sheet-claude.md");
   const section = campusSection(doc);
@@ -223,7 +223,7 @@ test("v3-e sheet-claude: a campus pick is never written without Lisul's say-so",
   assert.doesNotMatch(section, /\b(suggestion|recommendation)s?\b/i);
 });
 
-test("v3-e sheet-claude: the reply shows the campus picks", { todo: true }, async () => {
+test("v3-e sheet-claude: the reply shows the campus picks", async () => {
   const { assert, read } = await load();
   const doc = read("docs/sheet-claude.md");
   const reply = doc.slice(doc.search(/^## Reply$/m));
