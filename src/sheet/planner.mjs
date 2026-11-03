@@ -267,8 +267,8 @@ export function taskRow(t) {
 const taskBox = (props) => el("textarea", { className: "sheet-add", rows: 1, autocomplete: "off", spellcheck: true, ...props });
 const fitBox = (box) => { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; };
 
-function addRow(where, label) {
-  const input = taskBox({ ariaLabel: label, placeholder: "+ Add a task" });
+function addRow(where, label, placeholder = "+ Add a task") {
+  const input = taskBox({ ariaLabel: label, placeholder });
   if (where.day) input.dataset.day = where.day; else input.dataset.list = where.list;
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
@@ -315,7 +315,10 @@ function dayColumn(day, rows, anyEvents) {
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
   const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
-  const ul = el("ul", { className: "sheet-rows" }, ...list.map(taskRow), addRow({ day }, `Add a task to ${weekday} ${date}`));
+  // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
+  const blank = day === state.today && !list.length;
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...list.map(taskRow),
+    addRow({ day }, `Add a task to ${weekday} ${date}`, blank ? "Nothing planned. Press P to plan today" : undefined));
   ul.dataset.day = day;
   for (let i = list.length + 1; i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
   const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
@@ -334,7 +337,8 @@ function dayColumn(day, rows, anyEvents) {
 
 function listColumn(name) {
   const list = tasksIn(name);
-  const ul = el("ul", { className: "sheet-rows" }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
+  // An empty list always shows its "+ Add a task" hint.
+  const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
   return el("section", { className: "sheet-list" }, el("h3", { className: "sheet-head" }, el("span", { className: "sheet-wd", textContent: name })), ul);
 }
