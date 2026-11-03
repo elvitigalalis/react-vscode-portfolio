@@ -135,6 +135,12 @@ export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { met
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
 export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
+export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,status,note,picks`))[0] ?? null;
+// uids are quoted, so commas and parentheses in one stay inside it
+// (https://docs.postgrest.org/en/stable/references/api/url_grammar.html#reserved-characters).
+export const campusByUid = (uids) => (uids.length
+  ? rest(`campus_events?select=uid,title,starts_at,rsvp_count&uid=in.(${uids.map((u) => encodeURIComponent(`"${String(u).replace(/["\\]/g, "\\$&")}"`)).join(",")})`)
+  : Promise.resolve([]));
 
 // Feeds status (docs/sheet-sources.md): one feed_state row per feed, written by the brightspace
 // and campus functions after each fetch. Read-only here.

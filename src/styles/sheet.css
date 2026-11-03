@@ -424,3 +424,4 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-needs-acts { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; }
 .sheet-needs-item > .sheet-needs-acts { margin-top: 0.25rem; }
 .sheet-needs-acts .sheet-btn { display: inline-flex; align-items: center; gap: 0.25rem; }
+.sheet-plan-notes { list-style: none; padding: 0; margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted); }
