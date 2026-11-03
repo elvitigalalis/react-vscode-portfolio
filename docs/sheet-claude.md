@@ -37,7 +37,7 @@ You have two connectors:
 | `tasks` | `id`, `title`, `day`, `list`, `position`, `est_min`, `at_time`, `done`, `due` |
 | `blocks` | `id`, `task_id`, `starts_at`, `ends_at`, `proposed` |
 | `days` | `day`, `shutdown`, `shutdown_at` |
-| `campus_events` | `title`, `starts_at`, `ends_at`, `all_day`, `group_name`, `event_type`, `tags`, `url` |
+| `campus_events` | `title`, `starts_at`, `ends_at`, `all_day`, `group_name`, `event_type`, `tags`, `url`, `rsvp_count` |
 
 Read nothing else. Never read `days.reflection` or `campus_events.description` (free text from
 anyone, and nothing a campus pick needs). Never read or write `mail_accounts` (mail goes
@@ -174,10 +174,10 @@ After the inbox sweep, point out campus events on `D` worth going to. This step 
 select interests from settings;
 
 select title, starts_at at time zone '<TZ>' as starts, ends_at at time zone '<TZ>' as ends,
-       all_day, group_name, event_type, tags, url
+       all_day, group_name, event_type, tags, url, rsvp_count
 from campus_events
 where (starts_at at time zone '<TZ>')::date = '<D>'
-order by starts_at;
+order by rsvp_count desc nulls last, starts_at;
 ```
 
 `settings.interests` is his interest profile: a few lines on what he likes, what he wants from
@@ -186,6 +186,9 @@ step and say so in one line.
 
 Name **up to 5** campus picks: events that fit the interest profile, best first, with one line
 each on why it fits. Leave out anything the profile says he'd skip. Between two that fit, prefer:
+- **popularity**: more people registered (`rsvp_count`, read from the event's page). A big
+  turnout usually means a funded event with more going on. A null count is unknown, not
+  unpopular, and an interest match still beats a crowd;
 - **free food** (a `Free Food & Refreshments` tag, or food named in the title);
 - **timing**: it fits around his blocks and busy events, in a free gap or right before or after
   a block nearby. One that would clash with a block still counts as a pick: name the clash.
@@ -210,7 +213,7 @@ what didn't fit and why, or "Everything fit." Then the inbox sweep's headings (a
 campus picks, best first, each with its time, title, why, and its `url` as a link:
 
 > **Campus picks**
-> - 12:30–1:30 pm · IEEE soldering workshop: embedded hardware, free pizza, fits before your 2:00 block
+> - 12:30–1:30 pm · IEEE soldering workshop: embedded hardware, free pizza, 42 going, fits before your 2:00 block
 > - 6:00–7:00 pm · Robotics club demo night: matches robotics, after shutdown
 
 End by asking which inbox items and campus picks to add, and whether to write the proposal.
