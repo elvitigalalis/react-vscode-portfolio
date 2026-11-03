@@ -88,5 +88,5 @@ test("planner-mcp: submit_proposal writes only through apply_proposal, after che
   assert.doesNotMatch(code, /\.(insert|update|upsert|delete)\(/);
   const submit = code.split('registerTool("submit_proposal"')[1];
   assert.ok(submit.indexOf("checkProposal(") < submit.indexOf('rpc("apply_proposal"'));
-  assert.match(submit, /if \(!check\.ok\) return/);
+  assert.match(submit, /if \(!check\.ok \|\| !rows\) return/);
 });

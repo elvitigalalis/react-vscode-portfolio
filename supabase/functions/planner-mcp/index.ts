@@ -114,12 +114,13 @@ function plannerServer(db: Db) {
   }, async (input: Proposal) => {
     try {
       const check = checkProposal(input, await snapshot(db, new Date()));
-      if (!check.ok) return { content: [text({ ok: false, errors: check.errors })], isError: true };
+      const rows = check.rows;
+      if (!check.ok || !rows) return { content: [text({ ok: false, errors: check.errors })], isError: true };
       // apply_proposal (supabase/schema.sql) is security invoker and does it all in one
       // transaction; it refuses a day already approved or skipped.
-      const { error } = await db.rpc("apply_proposal", check.rows);
+      const { error } = await db.rpc("apply_proposal", rows);
       if (error) return failed(`apply_proposal: ${error.message}`);
-      return { content: [text({ ok: true, blocks: check.rows.blocks.length, needs_you: check.rows.needs.length })] };
+      return { content: [text({ ok: true, blocks: rows.blocks.length, needs_you: rows.needs.length })] };
     } catch (e) {
       return failed((e as Error).message);
     }
