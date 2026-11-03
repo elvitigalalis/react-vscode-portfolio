@@ -1,6 +1,7 @@
 // The telegram Edge Function (docs/sheet-nudges.md): The Sheet's only server code. pg_cron calls
 // it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
-// webhook for Done and Snooze taps. Which messages are due, their wording, what counts as a tap
+// webhook for Done and Snooze taps, and for Approve all and Skip on the morning plan
+// (docs/sheet-morning.md). Which messages are due, their wording, what counts as a tap
 // and what it changes are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
 // day, talks to the Telegram Bot API and writes what the module says.
 //
@@ -14,7 +15,7 @@
 // Secrets (function secrets, set by Lisul, never in the repo): TELEGRAM_BOT_TOKEN,
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../../../src/sheet/nudges.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 
@@ -35,7 +36,9 @@ Deno.serve(async (req) => {
 });
 
 // The snapshot whatToSend takes: settings, today's day row, today's tasks and every undone task
-// with a due date, the blocks of those tasks and of today, and today's log.
+// with a due date (which covers the check-in's "due tomorrow"), the blocks of those tasks and of
+// today, and today's log. Then the morning plan's part: today's proposal, the needs_you rows not
+// done, and the campus events the proposal picks.
 async function snapshot(now: Date) {
   const [settings] = await db("settings?select=*");
   const { day: today } = localNow(now, settings.time_zone);
@@ -48,7 +51,17 @@ async function snapshot(now: Date) {
   const blocks = await db(`blocks?select=*&or=(and(starts_at.gte.${from},starts_at.lt.${to})${ids ? `,task_id.in.(${ids})` : ""})`);
   const [day = null] = await db(`days?select=*&day=eq.${today}`);
   const log = await db(`nudges?select=*&day=eq.${today}`);
-  return { settings, day, tasks, blocks, log };
+  const [proposal = null] = await db(`proposals?select=*&day=eq.${today}`);
+  const needsOpen = await db("needs_you?select=*&done=is.false");
+  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal) };
+}
+
+// The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
+// PostgREST's in.() list and URL-encoded (docs.postgrest.org/en/stable/references/api/
+// url_grammar.html#reserved-characters).
+async function picked(proposal: { picks?: { uid: string }[] } | null) {
+  const uids = (proposal?.picks ?? []).map((p) => `"${String(p.uid).replace(/["\\]/g, "\\$&")}"`);
+  return uids.length ? db(`campus_events?select=*&uid=in.(${encodeURIComponent(uids.join(","))})`) : [];
 }
 
 // --- Sending ------------------------------------------------------------------------------
@@ -64,10 +77,12 @@ async function send(now: Date) {
     const c = await claim(m);
     if (!c) continue;
     try {
-      // The buttons sit in one row: Done and Snooze 10 min under a nudge, Open /plan otherwise.
+      // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
+      // and Skip under a plan, Open /plan otherwise.
       await telegram("sendMessage", {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
+        ...PLAIN,
         reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
       });
     } catch (e) {
@@ -104,6 +119,12 @@ async function claim(m: Message) {
   return row && { giveBack: () => db(`nudges?id=eq.${row.id}`, { method: "DELETE" }), sent: () => setSentAt(row.id, new Date().toISOString()) };
 }
 
+// Every message is plain text: no parse_mode, so nothing in a title or a mail line is read as
+// markup, and link previews off, so no URL in one is fetched or shown as a card. sendMessage and
+// editMessageText both take link_preview_options, a LinkPreviewOptions with is_disabled: true
+// (core.telegram.org/bots/api#linkpreviewoptions, #sendmessage, #editmessagetext; Bot API 10.3).
+const PLAIN = { link_preview_options: { is_disabled: true } };
+
 // --- Taps ---------------------------------------------------------------------------------
 
 type Change = { table: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean };
@@ -116,12 +137,24 @@ const UPSERT: Record<string, string> = {
 };
 const RESOLVE: Record<string, string> = { nudges: "ignore-duplicates", gcal_pending: "merge-duplicates" };
 
-// Done or Snooze on a nudge; readTap decides what counts as one. The message's buttons go when
-// its text is edited.
+// A proposals row is keyed by its day.
+const KEY: Record<string, string> = { proposals: "day" };
+
+// Done or Snooze on a nudge, Approve all or Skip on a plan; readTap decides what counts as one.
+// The message's buttons go when its text is edited.
 async function tap(update: unknown, now: Date) {
   const snap = await snapshot(now);
   const t = readTap(update, snap.settings);
   if (!t) return;
+  // A plan tap acts on its own day's proposal and proposed blocks, which may not be today's
+  // (readTap lets only a plain date through).
+  if (planTap(t) && t.day !== snap.proposal?.day) {
+    [snap.proposal = null] = await db(`proposals?select=*&day=eq.${t.day}`);
+    const from = new Date(Date.parse(`${t.day}T00:00:00Z`) - 86_400_000).toISOString();
+    const to = new Date(Date.parse(`${t.day}T00:00:00Z`) + 2 * 86_400_000).toISOString();
+    snap.blocks.push(...(await db(`blocks?select=*&proposed=is.true&starts_at=gte.${from}&starts_at=lt.${to}`))
+      .filter((b: { id: string }) => !snap.blocks.some((x: { id: string }) => x.id === b.id)));
+  }
   if (needsTappedBlock(snap, t)) {
     const [b] = await db(`blocks?select=*&id=eq.${t.block_id}`);
     if (b) {
@@ -134,14 +167,14 @@ async function tap(update: unknown, now: Date) {
     if (c.insert) {
       await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
     } else if (c.update) {
-      await db(`${c.table}?id=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
+      await db(`${c.table}?${KEY[c.table] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
     } else if (c.delete) {
       await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
     }
   }
   await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
-  await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text }).catch(() => {});
+  await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN }).catch(() => {});
 }
 
 async function telegram(method: string, body: unknown) {
