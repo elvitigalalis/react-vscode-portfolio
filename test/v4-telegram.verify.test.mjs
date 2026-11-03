@@ -244,13 +244,13 @@ test("proposal message: outside the nudge budget, it goes out once the six are s
 
 const update = (data, chat = 42) => ({ callback_query: { id: "q1", data, message: { message_id: 7, chat: { id: chat } } } });
 
-test("reading a tap: pa: and ps: from Lisul's chat name the action and the day", todo, async () => {
+test("reading a tap: pa: and ps: from Lisul's chat name the action and the day", async () => {
   const { readTap } = await nudges();
   assert.deepEqual(readTap(update("pa:2026-11-04"), settings), { action: "pa", day: "2026-11-04", query_id: "q1", chat_id: 42, message_id: 7 });
   assert.deepEqual(readTap(update("ps:2026-11-04"), settings), { action: "ps", day: "2026-11-04", query_id: "q1", chat_id: 42, message_id: 7 });
 });
 
-test("reading a tap: pa:/ps: from another chat, or without a plain date, is ignored", todo, async () => {
+test("reading a tap: pa:/ps: from another chat, or without a plain date, is ignored", async () => {
   const { readTap } = await nudges();
   assert.equal(readTap(update("pa:2026-11-04", 99), settings), null);
   assert.equal(readTap(update("pa:"), settings), null);
@@ -266,7 +266,7 @@ const tapAt = at("2026-11-04T13:05:00Z");
 // Gym also has a real block from an earlier day's plan, which no tap touches.
 const tapSnap = (extra = {}) => withPlan({ log: [briefSent], blocks: [...planBlocks, block("a1", "t2", "2026-11-03T16:00:00Z", "2026-11-03T17:00:00Z", { gcal_id: "ev0" })], ...extra });
 
-test("Approve all: clears proposed on the day's proposed blocks and approves the proposal", todo, async () => {
+test("Approve all: clears proposed on the day's proposed blocks and approves the proposal", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(sorted(handleTap({ action: "pa", day }, tapSnap(), tapAt)), {
     changes: [
@@ -280,7 +280,7 @@ test("Approve all: clears proposed on the day's proposed blocks and approves the
   });
 });
 
-test("Approve all: approves only what's still proposed, on that day", todo, async () => {
+test("Approve all: approves only what's still proposed, on that day", async () => {
   const { handleTap } = await nudges();
   // In /plan since: p2 approved (it has its event), p3 turned down. Tomorrow has a proposed block too.
   const blocks = [
@@ -299,7 +299,7 @@ test("Approve all: approves only what's still proposed, on that day", todo, asyn
   });
 });
 
-test("Skip: deletes the day's proposed blocks and skips the proposal", todo, async () => {
+test("Skip: deletes the day's proposed blocks and skips the proposal", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(sorted(handleTap({ action: "ps", day }, tapSnap(), tapAt)), {
     changes: [
@@ -313,7 +313,7 @@ test("Skip: deletes the day's proposed blocks and skips the proposal", todo, asy
   });
 });
 
-test("Skip: blocks approved in /plan in the meantime stay", todo, async () => {
+test("Skip: blocks approved in /plan in the meantime stay", async () => {
   const { handleTap } = await nudges();
   const blocks = [planBlocks[0], { ...planBlocks[1], proposed: false, gcal_id: "ev2" }, planBlocks[2], planBlocks[3]];
   assert.deepEqual(sorted(handleTap({ action: "ps", day }, tapSnap({ blocks }), tapAt)), {
@@ -327,21 +327,21 @@ test("Skip: blocks approved in /plan in the meantime stay", todo, async () => {
   });
 });
 
-test("a tap on a proposal already approved changes nothing and says so", todo, async () => {
+test("a tap on a proposal already approved changes nothing and says so", async () => {
   const { handleTap } = await nudges();
   const snap = tapSnap({ proposal: pending({ status: "approved" }), blocks: planBlocks.map((b) => ({ ...b, proposed: false })) });
   assert.deepEqual(handleTap({ action: "pa", day }, snap, tapAt), { changes: [], text: "Already approved" });
   assert.deepEqual(handleTap({ action: "ps", day }, snap, tapAt), { changes: [], text: "Already approved" });
 });
 
-test("a tap on a proposal already skipped changes nothing and says so", todo, async () => {
+test("a tap on a proposal already skipped changes nothing and says so", async () => {
   const { handleTap } = await nudges();
   const snap = tapSnap({ proposal: pending({ status: "skipped" }), blocks: [] });
   assert.deepEqual(handleTap({ action: "pa", day }, snap, tapAt), { changes: [], text: "Already skipped" });
   assert.deepEqual(handleTap({ action: "ps", day }, snap, tapAt), { changes: [], text: "Already skipped" });
 });
 
-test("a tap on yesterday's lapsed proposal changes nothing and says so", todo, async () => {
+test("a tap on yesterday's lapsed proposal changes nothing and says so", async () => {
   const { handleTap } = await nudges();
   // Tuesday's brief, tapped on Wednesday after the nightly roll lapsed it.
   const snap = tapSnap({ proposal: { day: "2026-11-03", status: "lapsed", created_at: "2026-11-03T11:08:00Z", note: null, picks: [] } });
@@ -349,7 +349,7 @@ test("a tap on yesterday's lapsed proposal changes nothing and says so", todo, a
   assert.deepEqual(handleTap({ action: "ps", day: "2026-11-03" }, snap, tapAt), { changes: [], text: "That plan has lapsed" });
 });
 
-test("Done and Snooze taps still read as before", todo, async () => {
+test("Done and Snooze taps still read as before", async () => {
   const { readTap } = await nudges();
   const ID = "0b6c1f9e-3d1a-4c55-9a43-2f7d8e6b1c20";
   assert.deepEqual(readTap(update(`done:${ID}`), settings), { action: "done", block_id: ID, query_id: "q1", chat_id: 42, message_id: 7 });
