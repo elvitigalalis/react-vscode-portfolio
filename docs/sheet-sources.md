@@ -42,6 +42,9 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
 - `mail_accounts.vault_secret_id` points at a Vault secret holding that account's Google refresh
   token. The browser can read and delete `mail_accounts` rows, but never reads Vault. Removing an
   account deletes its Vault secret too, through a trigger.
+- `mail_refresh_token(account_email text) returns text` reads that account's refresh token from
+  Vault (null when there is none). It is `security definer` and revoked from `public`, `anon` and
+  `authenticated`, so only the service role (`mail-mcp`) can call it.
 - `campus_events` holds only today through 14 days ahead. Each sync deletes rows that have ended.
 
 ### Pure modules (`src/sheet/`, no network, `node --test` covers them)
