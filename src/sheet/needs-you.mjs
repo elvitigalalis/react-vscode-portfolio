@@ -25,7 +25,7 @@ function chip() {
   const n = rows.filter((r) => !r.done).length;
   const b = root.querySelector("[data-needs-chip]");
   b.hidden = !n;
-  b.querySelector("[data-needs-n]").textContent = ` ${n}`;
+  b.querySelector("[data-needs-n]").textContent = String(n);
   b.ariaLabel = `Needs you · ${n}`;
 }
 

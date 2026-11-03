@@ -415,6 +415,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 /* The morning plan in /plan (docs/sheet-morning.md, "/plan"): the Needs you dialog, grouped by
    kind, and the proposal's note and campus picks above Plan today's timeline. */
+/* On phones the top bar keeps one row with the Needs you chip in it: "Plan today" shows as
+   "Plan" (the words stay for screen readers) and the gaps tighten. */
+@media (max-width: 30rem) { .sheet-tools { gap: 0.2rem; } }
 .sheet-needs { width: min(40rem, calc(100vw - 2rem)); max-width: none; }
 .sheet-needs-group h3 { font-size: 0.875rem; margin: 1rem 0 0.25rem; color: var(--muted); }
 .sheet-needs-list { list-style: none; padding: 0; margin: 0; }

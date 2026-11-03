@@ -21,11 +21,11 @@ import "../../styles/sheet.css";
           <button type="button" class="sheet-btn" data-act="this-week"><span class="sheet-wide">Today</span><span class="sheet-narrow" data-focus-day></span></button>
           <button type="button" class="sheet-btn sheet-icon-btn" data-act="next" aria-label="Next week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
         </span>
-        <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
+        <button type="button" class="sheet-btn primary" data-act="plan">Plan<span class="sheet-chip-text"> today</span> <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
         <!-- Status chips: Needs you first, then Feed failed. -->
         <span class="sheet-chips" data-chips>
-          <button type="button" class="sheet-chip" data-act="needs" data-needs-chip aria-haspopup="dialog" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="sheet-chip-text">Needs you ·</span><span data-needs-n></span></button>
+          <button type="button" class="sheet-chip" data-act="needs" data-needs-chip aria-haspopup="dialog" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="sheet-chip-text">Needs you · </span><span data-needs-n></span></button>
           <button type="button" class="sheet-chip is-alert" data-act="settings" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
         </span>
         <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
