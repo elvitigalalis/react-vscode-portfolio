@@ -109,7 +109,9 @@ the base spec is [sheet.md](sheet.md).
    - **Telegram:** becomes a bell or bell-off toggle with the text "Nudges" and `aria-pressed`.
    - **Feed failed:** when `feedAlert` isn't empty, a circle-alert "Feed failed" chip opens
      Settings. In Settings, each feed row gets a check or an alert icon.
-   - **On phones**, the top bar fits on one row at 390 px.
+   - **On phones**, the top bar fits on one row at 390 px. Below 30rem, words that have an icon
+     go to screen readers only: Needs you shows its icon and count, Nudges its bell, and Plan
+     today reads "Plan".
    - *Why:* at 390 px the top bar wrapped to 3 rows.
 7. **Overdue vs at risk, and empty states.**
    - **Due levels** (`dueLevel`): overdue is red, with the word "overdue"; at risk is amber.
