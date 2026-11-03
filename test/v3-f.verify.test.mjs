@@ -30,7 +30,7 @@ const PAYLOAD = { owner: "lisul@example.com", nonce: "n-4f1c" };
 
 // --- signState / verifyState ----------------------------------------------------------------
 
-test("mailconnect: a fresh state verifies back to its payload", { todo: true }, async () => {
+test("mailconnect: a fresh state verifies back to its payload", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   assert.equal(typeof state, "string");
@@ -38,14 +38,14 @@ test("mailconnect: a fresh state verifies back to its payload", { todo: true }, 
   assert.deepEqual(await m.verifyState(state, SECRET, NOW + 9 * MIN + 59_000), PAYLOAD);
 });
 
-test("mailconnect: a state is URL-safe and doesn't contain the secret", { todo: true }, async () => {
+test("mailconnect: a state is URL-safe and doesn't contain the secret", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   assert.match(state, /^[A-Za-z0-9._~-]+$/);
   assert.ok(!state.includes(SECRET));
 });
 
-test("mailconnect: a state expires after 10 minutes", { todo: true }, async () => {
+test("mailconnect: a state expires after 10 minutes", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   assert.equal(await m.verifyState(state, SECRET, NOW + 10 * MIN + 1000), null);
@@ -55,13 +55,13 @@ test("mailconnect: a state expires after 10 minutes", { todo: true }, async () =
   assert.equal(await m.verifyState(old, SECRET, NOW), null);
 });
 
-test("mailconnect: a state signed with another secret is refused", { todo: true }, async () => {
+test("mailconnect: a state signed with another secret is refused", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, OTHER, NOW);
   assert.equal(await m.verifyState(state, SECRET, NOW), null);
 });
 
-test("mailconnect: a tampered state is refused", { todo: true }, async () => {
+test("mailconnect: a tampered state is refused", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   const swap = (c) => (c === "A" ? "B" : "A");
@@ -78,7 +78,7 @@ test("mailconnect: a tampered state is refused", { todo: true }, async () => {
   assert.notEqual(other, state);
 });
 
-test("mailconnect: junk is refused without throwing", { todo: true }, async () => {
+test("mailconnect: junk is refused without throwing", async () => {
   const m = await import(MOD);
   for (const junk of ["", ".", "abc", "abc.def", "...", "%%%", undefined, null]) {
     assert.equal(await m.verifyState(junk, SECRET, NOW), null, String(junk));
@@ -90,7 +90,7 @@ test("mailconnect: junk is refused without throwing", { todo: true }, async () =
 const REDIRECT = "https://abcd.supabase.co/functions/v1/mail-connect/callback";
 const CLIENT = "1234-test.apps.example";
 
-test("mailconnect: the Google URL asks for read-only Gmail, offline, with consent", { todo: true }, async () => {
+test("mailconnect: the Google URL asks for read-only Gmail, offline, with consent", async () => {
   const m = await import(MOD);
   const url = new URL(String(await m.googleAuthUrl({ clientId: CLIENT, redirectUri: REDIRECT, state: "s.t-1" })));
   assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
@@ -106,7 +106,7 @@ test("mailconnect: the Google URL asks for read-only Gmail, offline, with consen
   ]);
 });
 
-test("mailconnect: the Google URL carries login_hint only when given", { todo: true }, async () => {
+test("mailconnect: the Google URL carries login_hint only when given", async () => {
   const m = await import(MOD);
   const url = new URL(String(await m.googleAuthUrl({ clientId: CLIENT, redirectUri: REDIRECT, state: "s", loginHint: "me+sbu@stonybrook.edu" })));
   assert.equal(url.searchParams.get("login_hint"), "me+sbu@stonybrook.edu");
@@ -115,7 +115,7 @@ test("mailconnect: the Google URL carries login_hint only when given", { todo: t
   assert.ok(!/login_hint=me\+sbu/.test(url.href), url.href);
 });
 
-test("mailconnect: the module is pure and uses Web Crypto", { todo: true }, async () => {
+test("mailconnect: the module is pure and uses Web Crypto", async () => {
   await import(MOD);
   const src = read("src/sheet/mailconnect.mjs");
   assert.match(src, /crypto\.subtle/);
@@ -130,7 +130,7 @@ test("mailconnect: the module is pure and uses Web Crypto", { todo: true }, asyn
 
 const mailTable = () => schema.match(/create table if not exists mail_accounts \(([\s\S]*?)\n\);/)?.[1] ?? "";
 
-test("schema: mail_accounts has the contract's columns, email unique", { todo: true }, async () => {
+test("schema: mail_accounts has the contract's columns, email unique", async () => {
   await import(MOD);
   const body = mailTable();
   assert.ok(body, "no `create table if not exists mail_accounts (…);`");
@@ -146,7 +146,7 @@ test("schema: mail_accounts has the contract's columns, email unique", { todo: t
   col("last_error", "text");
 });
 
-test("schema: mail_accounts is owner-only and closed to anon", { todo: true }, async () => {
+test("schema: mail_accounts is owner-only and closed to anon", async () => {
   await import(MOD);
   assert.match(schema, /alter table mail_accounts enable row level security;/);
   assert.match(schema, /drop policy if exists owner_all on mail_accounts;/);
@@ -154,7 +154,7 @@ test("schema: mail_accounts is owner-only and closed to anon", { todo: true }, a
   assert.match(schema, /revoke all on [^;]*\bmail_accounts\b[^;]* from anon;/);
 });
 
-test("schema: deleting a mail account deletes its Vault secret, through a trigger", { todo: true }, async () => {
+test("schema: deleting a mail account deletes its Vault secret, through a trigger", async () => {
   await import(MOD);
   // The trigger function: security definer (the browser's role can't touch Vault), deleting the
   // row's secret by its id.
@@ -170,7 +170,7 @@ test("schema: deleting a mail account deletes its Vault secret, through a trigge
   assert.match(schema, new RegExp(`drop trigger if exists ${trig[1]} on mail_accounts;`));
 });
 
-test("schema: the browser's roles are never granted Vault", { todo: true }, async () => {
+test("schema: the browser's roles are never granted Vault", async () => {
   await import(MOD);
   for (const stmt of schema.split(";")) {
     if (!/\bgrant\b/i.test(stmt)) continue;
@@ -185,7 +185,7 @@ test("schema: the browser's roles are never granted Vault", { todo: true }, asyn
   }
 });
 
-test("schema: the mail_accounts parts are safe to re-run", { todo: true }, async () => {
+test("schema: the mail_accounts parts are safe to re-run", async () => {
   await import(MOD);
   assert.ok(mailTable(), "no `create table if not exists mail_accounts`");
   assert.doesNotMatch(schema, /create table mail_accounts/);
@@ -198,7 +198,7 @@ test("schema: the mail_accounts parts are safe to re-run", { todo: true }, async
   assert.doesNotMatch(schema, /create function /);
 });
 
-test("schema: mail accounts never reach the public views", { todo: true }, async () => {
+test("schema: mail accounts never reach the public views", async () => {
   await import(MOD);
   const views = [...schema.matchAll(/create or replace view (\w+) as([\s\S]*?);/g)];
   assert.ok(views.length >= 3);
@@ -207,7 +207,7 @@ test("schema: mail accounts never reach the public views", { todo: true }, async
 
 // --- The mail-connect function --------------------------------------------------------------
 
-test("mail-connect: deployed like telegram, secrets from the environment", { todo: true }, async () => {
+test("mail-connect: deployed like telegram, secrets from the environment", async () => {
   await import(MOD);
   assert.ok(fn, "no supabase/functions/mail-connect/index.ts");
   assert.match(fn, /--no-verify-jwt/);
@@ -217,7 +217,7 @@ test("mail-connect: deployed like telegram, secrets from the environment", { tod
   assert.match(fn, /from ["']\.\.\/\.\.\/\.\.\/src\/sheet\/mailconnect\.mjs["']/);
 });
 
-test("mail-connect: /start checks the owner's token before sending him to Google", { todo: true }, async () => {
+test("mail-connect: /start checks the owner's token before sending him to Google", async () => {
   await import(MOD);
   assert.match(fn, /["'`/]start\b/);
   assert.match(fn, /access_token/);
@@ -229,7 +229,7 @@ test("mail-connect: /start checks the owner's token before sending him to Google
   assert.match(fn, /\/functions\/v1\/mail-connect\/callback/);
 });
 
-test("mail-connect: /callback checks the state, swaps the code and reads the account's email", { todo: true }, async () => {
+test("mail-connect: /callback checks the state, swaps the code and reads the account's email", async () => {
   await import(MOD);
   assert.match(fn, /["'`/]callback\b/);
   assert.match(fn, /verifyState\(/);
@@ -239,7 +239,7 @@ test("mail-connect: /callback checks the state, swaps the code and reads the acc
   assert.match(fn, /emailAddress/);
 });
 
-test("mail-connect: the refresh token goes to Vault and the row is upserted by email", { todo: true }, async () => {
+test("mail-connect: the refresh token goes to Vault and the row is upserted by email", async () => {
   await import(MOD);
   const both = fn + "\n" + schema;
   assert.match(fn, /refresh_token/);
@@ -251,14 +251,14 @@ test("mail-connect: the refresh token goes to Vault and the row is upserted by e
   assert.match(both, /mail_accounts\?on_conflict=email|on conflict \(email\)/);
 });
 
-test("mail-connect: it redirects back to /plan with the outcome", { todo: true }, async () => {
+test("mail-connect: it redirects back to /plan with the outcome", async () => {
   await import(MOD);
   assert.match(fn, /\/plan\/\?mail=connected/);
   assert.match(fn, /\/plan\/\?mail=error&reason=/);
   assert.match(fn, /\b30[23]\b|Response\.redirect\(/);
 });
 
-test("mail-connect: tokens are never logged or sent back", { todo: true }, async () => {
+test("mail-connect: tokens are never logged or sent back", async () => {
   await import(MOD);
   assert.ok(fn, "no function file");
   for (const line of fn.split("\n")) {
@@ -268,7 +268,7 @@ test("mail-connect: tokens are never logged or sent back", { todo: true }, async
   }
 });
 
-test("mail-connect: no secret is written into the repo", { todo: true }, async () => {
+test("mail-connect: no secret is written into the repo", async () => {
   await import(MOD);
   const files = { fn, schema, page, sheetJs, mod: read("src/sheet/mailconnect.mjs") };
   for (const [name, text] of Object.entries(files)) {
@@ -283,7 +283,7 @@ test("mail-connect: no secret is written into the repo", { todo: true }, async (
 
 // --- /plan Settings -------------------------------------------------------------------------
 
-test("/plan: Settings lists the mail accounts with their last error", { todo: true }, async () => {
+test("/plan: Settings lists the mail accounts with their last error", async () => {
   await import(MOD);
   assert.match(page, /Settings/);
   assert.match(page, /Mail accounts/);
@@ -292,7 +292,7 @@ test("/plan: Settings lists the mail accounts with their last error", { todo: tr
   assert.match(sheetJs, /last_error/);
 });
 
-test("/plan: Connect an account opens mail-connect/start with the sign-in token", { todo: true }, async () => {
+test("/plan: Connect an account opens mail-connect/start with the sign-in token", async () => {
   await import(MOD);
   // A real button or link, so it is reachable from the keyboard.
   assert.match(page + sheetJs, /<(button|a)\b[^>]*>\s*Connect an account\s*</);
@@ -300,7 +300,7 @@ test("/plan: Connect an account opens mail-connect/start with the sign-in token"
   assert.match(sheetJs, /access_token/);
 });
 
-test("/plan: Remove asks first, then deletes the row", { todo: true }, async () => {
+test("/plan: Remove asks first, then deletes the row", async () => {
   await import(MOD);
   const ui = page + "\n" + sheetJs;
   assert.match(ui, /<button\b[^>]*>\s*Remove\s*</);
