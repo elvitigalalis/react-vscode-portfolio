@@ -309,7 +309,7 @@ const planSources = () => ["src/pages/plan/index.astro",
   ...readdirSync(new URL("../src/sheet/", import.meta.url)).filter((f) => f.endsWith(".mjs") && f !== "public.mjs").map((f) => `src/sheet/${f}`)]
   .map((f) => [f, read(f)]);
 
-test("/plan: Settings shows a Feeds status read from feed_state", { todo: true }, async () => {
+test("/plan: Settings shows a Feeds status read from feed_state", async () => {
   const all = planSources().map(([, s]) => s).join("\n");
   assert.match(read("src/sheet/api.mjs"), /["'`]feed_state\b/, "api.mjs reads feed_state");
   assert.match(all, /Feeds/, "a Feeds heading in Settings");
@@ -320,6 +320,6 @@ test("/plan: Settings shows a Feeds status read from feed_state", { todo: true }
   assert.match(all, /\.items\b/);
 });
 
-test("/now never reads the feed tables", { todo: true }, async () => {
+test("/now never reads the feed tables", async () => {
   for (const f of ["src/pages/now/index.astro", "src/sheet/public.mjs"]) assert.doesNotMatch(read(f), /feed_state|feed_seen|source_uid/, f);
 });
