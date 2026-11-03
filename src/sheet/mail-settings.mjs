@@ -12,7 +12,7 @@ const $ = (sel) => root.querySelector(sel);
 // What mail-connect's ?mail=error&reason=… words mean (supabase/functions/mail-connect).
 const REASONS = {
   "not-owner": "you weren't signed in as the owner. Sign in again and retry.",
-  expired: "the sign-in took longer than 10 minutes. Try again.",
+  expired: "the sign-in took longer than 10 minutes, or that link was already used. Try again.",
   denied: "Google access was declined.",
   "not-offline": "Google didn't grant lasting access. Try again.",
   "no-gmail": "the Gmail permission was unticked. Try again and leave it ticked.",
@@ -40,12 +40,26 @@ async function open() {
   try { await draw(); } catch (e) { failed(e); }
 }
 
-// The function checks the access_token is the owner's before sending him to Google; it leaves
-// this page, so the token goes in the query (it is not a header the browser can add here).
+// The function checks the sign-in token is the owner's, then answers with Google's consent
+// URL, which this page opens. The token goes in a header, never a URL.
 async function connect() {
   const token = await api.accessToken();
   if (!token) return location.reload();
-  location.assign(`${SHEET.supabaseUrl}/functions/v1/mail-connect/start?access_token=${encodeURIComponent(token)}`);
+  try {
+    const res = await fetch(`${SHEET.supabaseUrl}/functions/v1/mail-connect/start`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const out = await res.json().catch(() => ({}));
+    if (res.ok && out.url) return location.assign(out.url);
+    say(`The mail account wasn't connected: ${REASONS[out.error] ?? "something went wrong. Try again."}`);
+  } catch (e) { failed(e); }
+}
+
+function say(text) {
+  const notice = $("[data-mail-notice]");
+  notice.textContent = text;
+  notice.hidden = false;
 }
 
 async function remove(e) {
@@ -65,11 +79,9 @@ function outcome() {
   const q = new URLSearchParams(location.search);
   const mail = q.get("mail");
   if (!mail) return;
-  const notice = $("[data-mail-notice]");
-  notice.textContent = mail === "connected"
+  say(mail === "connected"
     ? "Mail account connected."
-    : `The mail account wasn't connected: ${REASONS[q.get("reason")] ?? "something went wrong. Try again."}`;
-  notice.hidden = false;
+    : `The mail account wasn't connected: ${REASONS[q.get("reason")] ?? "something went wrong. Try again."}`);
   history.replaceState(null, "", location.pathname);
 }
 

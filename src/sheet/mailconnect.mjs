@@ -2,6 +2,12 @@
 // signed OAuth `state` and Google's consent URL. Web Crypto only, so the same file runs in Node
 // (the tests) and in Deno (supabase/functions/mail-connect).
 
+import { ORIGIN } from "../site.mjs";
+
+// The one Google scope the mail connector asks for: read-only Gmail. mail-connect checks the
+// grant holds it.
+export const READONLY = "https://www.googleapis.com/auth/gmail.readonly";
+
 // A state lives 10 minutes: long enough to pick an account and click through Google's screens.
 const STATE_TTL = 10 * 60_000;
 
@@ -48,7 +54,7 @@ export function googleAuthUrl({ clientId, redirectUri, state, loginHint }) {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/gmail.readonly",
+    scope: READONLY,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "false",
@@ -56,4 +62,19 @@ export function googleAuthUrl({ clientId, redirectUri, state, loginHint }) {
   });
   if (loginHint) q.set("login_hint", loginHint);
   return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}
+
+// The CORS headers for a browser call to /start from `origin`: the site, or `astro dev` on its
+// default port; any other origin gets no Allow-Origin, so its page can't read the answer
+// (fetch.spec.whatwg.org, "CORS protocol"). Vary, since the answer depends on the origin.
+const CONNECT_ORIGINS = [ORIGIN, "http://localhost:4321"];
+export function corsFor(origin) {
+  if (!CONNECT_ORIGINS.includes(origin)) return { Vary: "Origin" };
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "POST",
+    "Access-Control-Allow-Headers": "authorization, content-type",
+    "Access-Control-Max-Age": "600",
+    Vary: "Origin",
+  };
 }
