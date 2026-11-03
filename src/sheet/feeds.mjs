@@ -2,6 +2,7 @@
 // write, worked out from parsed feed events (src/sheet/ical.mjs). Pure: no network, so /plan's
 // tests cover it and the functions only fetch and write what it says.
 import { cutTitle, localNow } from "./logic.mjs";
+import { routine } from "./campus.mjs";
 
 // --- Course tasks (Brightspace) -----------------------------------------------------------
 
@@ -87,6 +88,9 @@ const minutesAt = (t) => localNow(new Date(t), CAMPUS_TZ).minutes;
 // Only a link to SB Engaged itself goes to the page as the event's link.
 const ENGAGED = "https://sbengaged.stonybrook.edu/";
 const engagedUrl = (url) => (typeof url === "string" && url.startsWith(ENGAGED) ? url : null);
+// The event's link: the feed's URL (".../rsvp?id=N"), or else its CONTACT, which SB Engaged sets
+// to the same page under the group (".../<group>/rsvp_boot?id=N#event_host"), without the anchor.
+const eventUrl = (e) => engagedUrl(e.url) ?? engagedUrl(e.contact?.split("#")[0]);
 
 // Splits SB Engaged's categories into the club acronym, the event type and the tags. parseIcs
 // gives "club_acronym:X", "event_type:Y" and "event_tags: A,B" (or the tags split on commas);
@@ -134,7 +138,7 @@ export function campusRows(events, now) {
       event_type: type,
       tags,
       description: e.description || null,
-      url: engagedUrl(e.url),
+      url: eventUrl(e),
       location,
       updated_at,
     });
@@ -164,4 +168,36 @@ export function campusWindowIcs(text, from, to) {
   }
   kept.push("END:VCALENDAR", "");
   return kept.join("\r\n");
+}
+
+// --- RSVP counts (SB Engaged event pages) ---------------------------------------------------
+
+// How many people have registered for an event, read from its public page (the feed doesn't
+// carry it): `<span class="number">13</span> <div>Registered</div>` in the event's card. Null
+// when the page shows none (a sign-in or error page). A ticket's "Spots Left" is a badge, not
+// this.
+const REGISTERED = /<span class="number">\s*([\d,]+)\s*<\/span>\s*<div>\s*Registered\s*<\/div>/;
+export function rsvpCount(html) {
+  const m = REGISTERED.exec(String(html ?? ""));
+  return m ? Number(m[1].replaceAll(",", "")) : null;
+}
+
+// The campus_events rows whose count to fetch this run, at most `limit`: events not yet started,
+// with a page on SB Engaged, that the list shows by default (not routine). A count is fresh for 6 hours while
+// the event is within 3 days, for 24 hours before that. Never-checked events come first, then
+// stale ones; each group soonest first.
+const HOUR = 3_600_000;
+// Only SB Engaged's own pages are fetched, whatever URL a feed item carries.
+const sbEngaged = (u) => { try { const x = new URL(u); return x.protocol === "https:" && x.hostname === "sbengaged.stonybrook.edu"; } catch { return false; } };
+export function countsDue(rows, now, limit) {
+  const t = +new Date(now);
+  const stale = (r) => {
+    if (!r.rsvp_checked_at) return true;
+    const fresh = Date.parse(r.starts_at) - t <= 72 * HOUR ? 6 * HOUR : 24 * HOUR;
+    return t - Date.parse(r.rsvp_checked_at) > fresh;
+  };
+  return rows
+    .filter((r) => sbEngaged(r.url) && Date.parse(r.starts_at) > t && !routine(r) && stale(r))
+    .sort((a, b) => (!b.rsvp_checked_at - !a.rsvp_checked_at) || Date.parse(a.starts_at) - Date.parse(b.starts_at))
+    .slice(0, limit);
 }

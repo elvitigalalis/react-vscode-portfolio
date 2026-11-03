@@ -39,3 +39,12 @@ test("ical: organizer is the ORGANIZER line's CN, unquoted; absent when there is
   assert.equal(got["o@x"].organizer, "University & Medicine: Community Relations");
   assert.equal("organizer" in got["n@x"], false);
 });
+
+test("ical: contact is the CONTACT line's value; absent when there is none", () => {
+  const got = Object.fromEntries(parseIcs(cal(
+    "BEGIN:VEVENT", "UID:c@x", "DTSTART:20261104T180000Z",
+    "CONTACT:https://sbengaged.stonybrook.edu/toscaniniresidencehall/rsvp_boot?id=391210#event_host", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:n@x", "DTSTART:20261104T180000Z", "END:VEVENT"), wide).map((e) => [e.uid, e]));
+  assert.equal(got["c@x"].contact, "https://sbengaged.stonybrook.edu/toscaniniresidencehall/rsvp_boot?id=391210#event_host");
+  assert.equal("contact" in got["n@x"], false);
+});

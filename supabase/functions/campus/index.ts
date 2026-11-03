@@ -2,7 +2,8 @@
 // every hour (supabase/schema.sql, "sheet-campus") to keep campus_events at SB Engaged's public
 // events from now through 14 days ahead. Reading the feed and choosing the rows happen in
 // src/sheet/ical.mjs and src/sheet/feeds.mjs, the modules the tests cover; this file only
-// fetches, writes and records the fetch in feed_state (source 'campus'), 304 or not.
+// fetches, writes and records the fetch in feed_state (source 'campus'), 304 or not. Then it
+// refreshes a few dozen RSVP counts from the events' public pages (refreshCounts, below).
 //
 // Deploy from the repo root with server-side bundling, which follows the imports out of
 // supabase/functions:
@@ -15,12 +16,13 @@
 // 7,700 events. campusWindowIcs cuts it to the window's ~1,300 events before parseIcs reads them:
 // in Node, 18 ms for the cut and parse against 70 ms for parsing it all (2026-11-02 feed). The
 // body is read whole rather than streamed: the cut is cheaper than the stream bookkeeping, and
-// the text is a small share of the memory limit.
+// the text is a small share of the memory limit. The RSVP counts are mostly network wait: a
+// regex over each ~70 KB page.
 //
 // Secrets: SHEET_CRON_SECRET (already set for telegram). SUPABASE_URL and
 // SUPABASE_SERVICE_ROLE_KEY are provided by Supabase and read in ../_shared/server.ts.
 import { parseIcs } from "../../../src/sheet/ical.mjs";
-import { campusRows, campusWindowIcs } from "../../../src/sheet/feeds.mjs";
+import { campusRows, campusWindowIcs, countsDue, rsvpCount } from "../../../src/sheet/feeds.mjs";
 import { calendarText, db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -62,7 +64,47 @@ async function sync(now: Date) {
   const at = encodeURIComponent(now.toISOString());
   await db(`campus_events?ends_at=lte.${at}`, { method: "DELETE" });
   await saveFeedState(SOURCE, { fetched_at: now.toISOString(), ok: true, error: null, ...fresh });
-  return { ok: true, status: res.status, items: fresh?.items };
+  // The counts are extra: their failing never marks the feed as failed.
+  const counts = await refreshCounts(now).catch((e) => { console.error("campus counts:", e instanceof Error ? e.message : e); return null; });
+  return { ok: true, status: res.status, items: fresh?.items, counts };
+}
+
+// --- RSVP counts ------------------------------------------------------------------------------
+
+// The feed has no attendee count; each event's public page shows how many have registered
+// (robots.txt allows these pages; it disallows only /mobile_ws/ and a few upload paths). Each run
+// reads at most COUNTS pages, one at a time with PAUSE_MS between them, and stops once the run is
+// BUDGET_MS old, well inside pg_net's 2-minute timeout. countsDue picks the ones whose count is
+// missing or stale. A failed page still stamps rsvp_checked_at, keeping the last count, so it
+// waits its turn rather than being retried every hour. Returns how many counts were read.
+const COUNTS = 40;
+const PAUSE_MS = 1_000;
+const BUDGET_MS = 60_000;
+const AGENT = "lisul-elvi.com planner (one reader; a few dozen pages an hour)";
+
+async function refreshCounts(now: Date) {
+  // The window's upcoming rows, soonest first: PostgREST's row cap, if it bites, drops the far end.
+  const at = encodeURIComponent(now.toISOString());
+  const rows = await db(`campus_events?select=uid,title,event_type,url,starts_at,rsvp_checked_at&starts_at=gt.${at}&order=starts_at`);
+  let read = 0;
+  for (const [i, row] of countsDue(rows, now, COUNTS).entries()) {
+    if (Date.now() - now.getTime() > BUDGET_MS) break;
+    if (i > 0) await new Promise((r) => setTimeout(r, PAUSE_MS));
+    let count: number | null = null;
+    try {
+      const page = await fetch(row.url, { headers: { "User-Agent": AGENT } });
+      if (page.ok) count = rsvpCount(await page.text());
+      else await page.body?.cancel();
+    } catch { /* a network error: keep the last count */ }
+    const checked = { rsvp_checked_at: new Date().toISOString() };
+    await db(`campus_events?uid=eq.${encodeURIComponent(row.uid)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(count === null ? checked : { ...checked, rsvp_count: count }),
+    });
+    if (count !== null) read++;
+  }
+  return read;
 }
 
 // A changed feed: its window's rows upserted, and the rows it no longer lists deleted. Returns
