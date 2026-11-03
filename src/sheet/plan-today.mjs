@@ -33,9 +33,9 @@ const shutdownAt = (d) => clock((state.days[d]?.shutdown_at ?? SHEET.shutdownAt)
 // A day's load as a 4px bar on a track (docs/sheet-glance.md, change 4).
 function loadBar(d) {
   const { pct, level } = loadShare(load(tasksOn(d), dayCapacity(d).capacity).total, dayCapacity(d).capacity);
-  const fill = el("span", { className: `sheet-bar-fill is-${level}` });
+  const fill = el("span", { className: `sheet-meter-fill is-${level}` });
   fill.style.width = `${pct}%`;
-  return el("span", { className: "sheet-bar" }, fill);
+  return el("span", { className: "sheet-meter" }, fill);
 }
 
 function meter(d) {
@@ -49,11 +49,11 @@ function meter(d) {
 // only; the line above says it in words (docs/sheet-glance.md, change 4).
 function planBar(m) {
   const { pct, level } = loadShare(m.total, m.capacity);
-  const fill = el("span", { className: `sheet-bar-fill is-${level}` });
+  const fill = el("span", { className: `sheet-meter-fill is-${level}` });
   fill.style.width = `${pct}%`;
-  const mark = el("span", { className: "sheet-bar-mark" }, el("span", { textContent: `Done ≈ ${formatClock(m.finish)}` }));
+  const mark = el("span", { className: "sheet-meter-mark" }, el("span", { textContent: `Done ≈ ${formatClock(m.finish)}` }));
   mark.style.setProperty("--at", `${pct}%`);
-  return el("div", { className: "sheet-planbar", ariaHidden: "true" }, el("span", { className: "sheet-bar" }, fill), mark);
+  return el("div", { className: "sheet-planbar", ariaHidden: "true" }, el("span", { className: "sheet-meter" }, fill), mark);
 }
 
 // A small accent button with the check icon (docs/sheet-glance.md, change 5).

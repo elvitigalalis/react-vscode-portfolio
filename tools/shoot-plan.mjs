@@ -236,9 +236,23 @@ await shot("/plan/", "plan-needs-done", 1440, 900, false, async (pg) => {
   if (writes.events !== 1) failures.push(`off-page block: ${writes.events} Google events made, expected 1`);
 }
 await shot("/plan/", "plan-more", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await new Promise((r) => setTimeout(r, 300)); });
-await shot("/now/", "now-light", 1440, 900, false);
-await shot("/now/", "now-dark", 1440, 900, true);
-await shot("/now/", "now-phone", 390, 844, false);
+// /now draws a private task as a solid bar in --fg, at least 0.6em tall.
+async function checkPrivateBars(pg, name) {
+  const r = await pg.evaluate(() => {
+    const probe = document.body.appendChild(Object.assign(document.createElement("i"), { style: "background: var(--fg)" }));
+    const fg = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return [...document.querySelectorAll(".sheet-bar")].map((x) => {
+      const s = getComputedStyle(x);
+      return { tall: x.getBoundingClientRect().height >= 0.6 * parseFloat(s.fontSize), fg: s.backgroundColor === fg };
+    });
+  });
+  if (!r.length) return failures.push(`${name}: no private bars drawn`);
+  if (r.some((x) => !x.tall || !x.fg)) failures.push(`${name}: a private bar is under 0.6em or not --fg`);
+}
+for (const [name, w, dark] of [["now-light", 1440, false], ["now-dark", 1440, true], ["now-phone", 390, false]]) {
+  await shot("/now/", name, w, w > 400 ? 900 : 844, dark, (pg) => checkPrivateBars(pg, `/now ${name}`));
+}
 await b.close();
 for (const f of failures) console.error("FAIL", f);
 console.log(failures.length ? `${failures.length} check(s) failed` : "All checks passed");
