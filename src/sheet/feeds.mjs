@@ -1,7 +1,7 @@
 // Feed sync (docs/sheet-sources.md, "Contracts"): what the brightspace and campus Edge Functions
 // write, worked out from parsed feed events (src/sheet/ical.mjs). Pure: no network, so /plan's
 // tests cover it and the functions only fetch and write what it says.
-import { localNow } from "./logic.mjs";
+import { cutTitle, localNow } from "./logic.mjs";
 
 // --- Course tasks (Brightspace) -----------------------------------------------------------
 
@@ -9,8 +9,30 @@ import { localNow } from "./logic.mjs";
 // on the local date of its start (Brightspace due items start and end at the due time).
 const dueDay = (e, timeZone) => (e.allDay ? String(e.start).slice(0, 10) : localNow(new Date(e.start), timeZone).day);
 
+// D2L names each calendar item after its activity and the date's role: "Quiz 6 - Due",
+// "Quiz 6 - Availability Starts", "Quiz 6 - Availability Ends", and "- Start Date" / "- End Date"
+// for discussions. The roles are the Calendar API's event types (DueDate, AvailabilityStarts,
+// AvailabilityEnds: https://docs.valence.desire2learn.com/res/calendar.html, EVENTTYPE_T), and
+// availability dates show as separate events when the instructor ticks "Add availability dates to
+// Calendar" (Vanderbilt's Brightspace notes, December 2023). Items with no suffix are class
+// meetings, holidays and the instructor's own events.
+const ROLE = /^(.*\S)\s+-\s+(Due|Availability Ends|End Date|Availability Starts|Start Date)$/;
+
+// The feed's due dates: each item's base title and whether it is one. A "- Due" item is; an end
+// date stands in only when no "- Due" item has the same base title; start dates and items with no
+// role are not.
+function dueItems(events) {
+  const read = events.map((e) => {
+    const m = ROLE.exec(String(e?.summary ?? "").trim());
+    return { e, base: m?.[1], role: m?.[2] };
+  });
+  const hasDue = new Set(read.filter((r) => r.role === "Due").map((r) => r.base));
+  return read.filter((r) => r.role === "Due" || ((r.role === "Availability Ends" || r.role === "End Date") && !hasDue.has(r.base)));
+}
+
 // The changes one Brightspace fetch makes to the planner. `seen` is the feed_seen UIDs for
 // 'brightspace'. Returns { insert, update, seen }:
+// - only due dates count (dueItems above), titled without D2L's suffix ("Quiz 6 - Due" -> "Quiz 6");
 // - a UID never seen becomes a private task with that due date in the "Brightspace" Someday list,
 //   and its UID goes into feed_seen (`seen` out lists exactly those);
 // - a seen UID whose task is still undone gets its title and due date updated;
@@ -22,20 +44,20 @@ export function courseTaskChanges(events, { tasks, seen, timeZone }) {
   const known = new Set([...seen.map((s) => (typeof s === "string" ? s : s.uid)), ...mine.keys()]);
   const insert = [], update = [], added = [];
   const done = new Set();
-  for (const e of events) {
-    const uid = e?.uid, title = String(e?.summary ?? "").trim();
+  for (const { e, base } of dueItems(events)) {
+    const uid = e.uid, title = cutTitle(base);
     if (!uid || !title || done.has(uid)) continue;
     let due;
     try { due = dueDay(e, timeZone); } catch { continue; } // a bad date or zone
     if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) continue;
     done.add(uid);
     if (!known.has(uid)) {
-      insert.push({ title: title.slice(0, 500), day: null, list: "Brightspace", due, public: false, source: "brightspace", source_uid: uid });
+      insert.push({ title, day: null, list: "Brightspace", due, public: false, source: "brightspace", source_uid: uid });
       added.push({ source: "brightspace", uid });
       continue;
     }
     const t = mine.get(uid);
-    if (t && !t.done && (t.title !== title || t.due !== due)) update.push({ id: t.id, title: title.slice(0, 500), due });
+    if (t && !t.done && (t.title !== title || t.due !== due)) update.push({ id: t.id, title, due });
   }
   return { insert, update, seen: added };
 }
