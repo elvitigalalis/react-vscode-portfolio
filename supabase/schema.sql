@@ -223,6 +223,19 @@ select cron.schedule('sheet-telegram', '* * * * *', $job$
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_telegram_url')
 $job$);
 
+-- Mail connector (docs/sheet-sources.md, ADR 0002): the refresh token of one mail account, read
+-- from Vault by the mail-mcp Edge Function with the service role. Nobody else may call it: the
+-- browser can read and delete mail_accounts rows, but never Vault. plpgsql, so it is created even
+-- before mail_accounts exists; null when the account or its secret is missing.
+create or replace function mail_refresh_token(account_email text) returns text
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return (select s.decrypted_secret from mail_accounts a
+          join vault.decrypted_secrets s on s.id = a.vault_secret_id
+          where a.email = account_email);
+end $$;
+revoke execute on function mail_refresh_token(text) from public, anon, authenticated;
+
 -- Set the owner: the Google account that signs in to /plan.
 insert into settings (owner_email) values ('you@example.com')
 on conflict (id) do nothing;
