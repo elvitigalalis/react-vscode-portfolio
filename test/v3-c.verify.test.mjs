@@ -277,7 +277,10 @@ test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", asyn
 
 // --- The campus Edge Function (supabase/functions/campus/index.ts) ----------------------------
 
-const fn = () => read("supabase/functions/campus/index.ts");
+// The function's source followed by the supabase/functions/_shared helpers it imports, since
+// those hold its env reads, secret check and database calls (the shared-helpers fix).
+const withShared = (src) => [src, ...[...src.matchAll(/from ["']\.\.\/_shared\/([\w.-]+)["']/g)].map((m) => read(`supabase/functions/_shared/${m[1]}`))].join("\n");
+const fn = () => withShared(read("supabase/functions/campus/index.ts"));
 
 test("v3-c function: refuses calls without the cron secret", async () => {
   const src = fn();
