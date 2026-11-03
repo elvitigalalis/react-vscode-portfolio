@@ -1,10 +1,10 @@
 // Settings, Feeds status (docs/sheet-sources.md, "/plan"): each feed_state row, so Lisul sees
-// whether the hourly Brightspace and campus syncs worked, without opening Supabase. Text goes in
+// whether the hourly Brightspace and campus feed reads worked, without opening Supabase. Text goes in
 // through textContent only.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { plural } from "./logic.mjs";
-import { actHooks, el, failed } from "./planner.mjs";
+import { el, settingsHooks } from "./planner.mjs";
 
 const NAMES = { brightspace: "Brightspace", campus: "Campus events" };
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -24,12 +24,7 @@ async function draw(root) {
   if (!rows.length) list.append(el("li", { className: "small", textContent: "No feed has been read yet." }));
 }
 
-// Settings opens through the mail-settings hook; this runs after it (the plugin order in
-// src/pages/plan/index.astro) and adds the Feeds list to the same opening.
+// The Feeds section of Settings, filled each time Settings opens (planner.mjs, settingsHooks).
 export function setupFeedStatus(root) {
-  const open = actHooks.settings;
-  actHooks.settings = async (e) => {
-    await open?.(e);
-    try { await draw(root); } catch (err) { failed(err); }
-  };
+  settingsHooks.push(() => draw(root));
 }
