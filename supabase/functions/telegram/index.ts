@@ -1,6 +1,6 @@
 // The telegram Edge Function (docs/sheet-nudges.md), the one that talks to Telegram. pg_cron calls
 // it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
-// webhook for Done and Snooze taps, and for Approve all and Skip on the morning plan
+// webhook for Done and Snooze taps, the Finished? answers (docs/sheet-v5.md), and for Approve all and Skip on the morning plan
 // (docs/sheet-morning.md). Which messages are due, their wording, what counts as a tap
 // and what it changes are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
 // day, talks to the Telegram Bot API and writes what the module says.
@@ -53,7 +53,9 @@ async function snapshot(now: Date) {
   const log = await db(`nudges?select=*&day=eq.${today}`);
   const [proposal = null] = await db(`proposals?select=*&day=eq.${today}`);
   const needsOpen = await db("needs_you?select=*&done=is.false");
-  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal) };
+  // v5 P1: the busy times around today, which More time must not run into.
+  const busy = await db(`busy?select=starts_at,ends_at&starts_at=lt.${to}&ends_at=gt.${from}`);
+  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal), busy };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -78,7 +80,7 @@ async function send(now: Date) {
     if (!c) continue;
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
-      // and Skip under a plan, Open /plan otherwise.
+      // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
       await telegram("sendMessage", {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
@@ -127,7 +129,7 @@ const PLAIN = { link_preview_options: { is_disabled: true } };
 
 // --- Taps ---------------------------------------------------------------------------------
 
-type Change = { table: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean };
+type Change = { table?: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean; rpc?: string; args?: unknown };
 
 // A second tap on the same button meets the row the first one wrote: a snooze stays as logged,
 // and a pending Google edit takes the latest end.
@@ -164,10 +166,17 @@ async function tap(update: unknown, now: Date) {
   }
   const { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
   for (const c of changes) {
-    if (c.insert) {
-      await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
+    // A PostgREST rpc call: POST /rpc/<name> with the named arguments as the body
+    // (docs.postgrest.org/en/stable/references/api/functions.html).
+    if (c.rpc) {
+      await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
+    } else if (c.insert && !UPSERT[c.table!]) {
+      // A plain insert (v5: actuals, from Finished).
+      await db(`${c.table}`, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(c.insert) });
+    } else if (c.insert) {
+      await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
     } else if (c.update) {
-      await db(`${c.table}?${KEY[c.table] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
+      await db(`${c.table}?${KEY[c.table!] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
     } else if (c.delete) {
       await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
     }
