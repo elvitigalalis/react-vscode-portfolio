@@ -1,6 +1,6 @@
 // Read-only sources for the planner (docs/sheet-v5.md, "sources.mjs"): what the sync functions
 // turn each outside feed into. Pure, so node --test covers it; the Edge Functions import it.
-import { formatSpan, minutesOn } from "./logic.mjs";
+import { formatSpan, minutesOn, cutTitle } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
@@ -38,3 +38,40 @@ const periodsOn = (periods, day, timeZone, from, to) => periods.filter((p) => {
 // read_planner's weather: the day's hours from 07:00 to before 23:00.
 export const weatherHours = (periods, day, timeZone) => periodsOn(periods, day, timeZone, 7 * 60, 23 * 60)
   .map((p) => ({ at: p.start, temp_f: p.temp_f, pop: p.pop, short: p.short }));
+
+// The brief's line counts the day from 08:00 to before 23:00, and a chance of 40% or more as wet.
+const LINE_FROM = 8 * 60;
+const LINE_TO = 23 * 60;
+const WET = 40;
+const MAX_SPANS = 3;
+const MAX_ALERTS = 2;
+
+const kindOf = (span) => (span.some((p) => /snow/i.test(p.short)) ? "Snow"
+  : span.some((p) => /thunder/i.test(p.short)) ? "Storms" : "Rain");
+
+// "Weather: Rain 2–5 pm (70%), 41–54°F. Alert: Wind Advisory.", or null with no forecast for `day`.
+export function weatherLine(periods, alerts, day, timeZone) {
+  const on = periodsOn(periods, day, timeZone, LINE_FROM, LINE_TO);
+  if (!on.length) return null;
+  // Wet hours, joined while each starts when the last ends.
+  const spans = [];
+  for (const p of on.filter((x) => x.pop >= WET)) {
+    const last = spans.at(-1);
+    if (last && Date.parse(last.at(-1).end) === Date.parse(p.start)) last.push(p);
+    else spans.push([p]);
+  }
+  const words = spans.slice(0, MAX_SPANS).map((s) => {
+    const when = formatSpan(minutesOn(s[0].start, day, timeZone), minutesOn(s.at(-1).end, day, timeZone));
+    return `${kindOf(s)} ${when} (${Math.max(...s.map((p) => p.pop))}%)`;
+  });
+  const temps = on.map((p) => p.temp_f);
+  const [lo, hi] = [Math.min(...temps), Math.max(...temps)];
+  const temp = lo === hi ? `${lo}°F` : `${lo}–${hi}°F`;
+  let line = `Weather: ${words.length ? words.join(", ") : "dry"}, ${temp}.`;
+  // Alerts whose time overlaps the day, each event once.
+  const events = [...new Set((alerts ?? [])
+    .filter((a) => minutesOn(a.ends, day, timeZone) > 0 && minutesOn(a.starts, day, timeZone) < 1440)
+    .map((a) => cutTitle(String(a.event ?? "").replace(/\s+/g, " "))))].filter((e) => e && !linkish(e)).slice(0, MAX_ALERTS);
+  if (events.length) line += ` Alert: ${events.join(", ")}.`;
+  return line;
+}

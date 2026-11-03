@@ -89,26 +89,26 @@ test("weatherAlerts: event, start (onset, else effective) and end (ends, else ex
 // weatherLine
 // =============================================================================================
 
-test("weatherLine: wet spans from 8 am to 11 pm, each with its highest chance, then the day's range", todo, async () => {
+test("weatherLine: wet spans from 8 am to 11 pm, each with its highest chance, then the day's range", async () => {
   const { weatherPeriods, weatherLine } = await load();
   // 7 am (45 %) is before 8 am, 5 pm (39 %) is under 40 %, and Thursday's midnight rain is another day.
   assert.equal(weatherLine(weatherPeriods(forecast), [], DAY, TZ), "Weather: Rain 2–5 pm (70%), Rain 8–9 pm (40%), 41–54°F.");
 });
 
-test("weatherLine: a dry day says so", todo, async () => {
+test("weatherLine: a dry day says so", async () => {
   const { weatherPeriods, weatherLine } = await load();
   const dry = weatherPeriods(forecast).map((p) => ({ ...p, pop: 10 }));
   assert.equal(weatherLine(dry, [], DAY, TZ), "Weather: dry, 41–54°F.");
 });
 
-test("weatherLine: snow, then storms, win over rain in a span's word", todo, async () => {
+test("weatherLine: snow, then storms, win over rain in a span's word", async () => {
   const { weatherPeriods, weatherLine } = await load();
   const shorts = { "2026-11-04T19:00:00.000Z": "Rain And Snow Likely", "2026-11-05T01:00:00.000Z": "Chance Showers And Thunderstorms" };
   const mixed = weatherPeriods(forecast).map((p) => ({ ...p, short: shorts[p.start] ?? p.short }));
   assert.equal(weatherLine(mixed, [], DAY, TZ), "Weather: Snow 2–5 pm (70%), Storms 8–9 pm (40%), 41–54°F.");
 });
 
-test("weatherLine: a span runs to 11 pm at the latest", todo, async () => {
+test("weatherLine: a span runs to 11 pm at the latest", async () => {
   const { weatherLine } = await load();
   // Wet from 8 pm on, 11 pm included: only 8-11 pm counts.
   const periods = [hour(19, 0), hour(20, 40), hour(21, 80), hour(22, 60), hour(23, 90)];
@@ -116,14 +116,14 @@ test("weatherLine: a span runs to 11 pm at the latest", todo, async () => {
   assert.equal(weatherLine(periods, [], DAY, TZ), "Weather: Rain 8–11 pm (80%), 50°F.");
 });
 
-test("weatherLine: at most 3 spans, the earliest", todo, async () => {
+test("weatherLine: at most 3 spans, the earliest", async () => {
   const { weatherLine } = await load();
   const periods = [8, 9, 10, 11, 12, 13, 14].map((h, i) => hour(h, i % 2 ? 0 : 50, "Light Rain", 40 + i));
   // Wet at 8, 10, 12 and 2 pm, each one hour; 40-46 °F.
   assert.equal(weatherLine(periods, [], DAY, TZ), "Weather: Rain 8–9 am (50%), Rain 10–11 am (50%), Rain 12–1 pm (50%), 40–46°F.");
 });
 
-test("weatherLine: no forecast for the day gives no line", todo, async () => {
+test("weatherLine: no forecast for the day gives no line", async () => {
   const { weatherPeriods, weatherLine } = await load();
   assert.equal(weatherLine(weatherPeriods(forecast), [], "2026-11-06", TZ), null);
   assert.equal(weatherLine([], [], DAY, TZ), null);
@@ -131,7 +131,7 @@ test("weatherLine: no forecast for the day gives no line", todo, async () => {
   assert.equal(weatherLine([hour(6, 90), hour(7, 90)], [], DAY, TZ), null);
 });
 
-test("weatherLine: alerts on the day are named once each, at most 2", todo, async () => {
+test("weatherLine: alerts on the day are named once each, at most 2", async () => {
   const { weatherPeriods, weatherLine } = await load();
   const alerts = [
     { event: "Wind Advisory", starts: "2026-11-04T17:00:00.000Z", ends: "2026-11-05T02:00:00.000Z" },
@@ -144,7 +144,7 @@ test("weatherLine: alerts on the day are named once each, at most 2", todo, asyn
     "Weather: Rain 2–5 pm (70%), Rain 8–9 pm (40%), 41–54°F. Alert: Wind Advisory, Coastal Flood Statement.");
 });
 
-test("weatherLine: an alert name that could become a link is left out", todo, async () => {
+test("weatherLine: an alert name that could become a link is left out", async () => {
   const { weatherPeriods, weatherLine } = await load();
   const alerts = [{ event: "See weather.gov now", starts: "2026-11-04T17:00:00.000Z", ends: "2026-11-04T20:00:00.000Z" }];
   assert.equal(weatherLine(weatherPeriods(forecast), alerts, DAY, TZ), "Weather: Rain 2–5 pm (70%), Rain 8–9 pm (40%), 41–54°F.");
