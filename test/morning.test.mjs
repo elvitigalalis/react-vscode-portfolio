@@ -115,6 +115,12 @@ test("planNotes: the note, then every pick in the brief's words", () => {
   ]);
 });
 
+test("planNotes: the couldn't-fit titles follow the note (v5 D2)", () => {
+  const p = { day: "2026-11-03", status: "pending", note: "Gym got squeezed.", picks: [], couldnt_fit: ["t2"] };
+  const tasks = [{ id: "t1", title: "OS homework" }, { id: "t2", title: "Lab 4" }];
+  assert.deepEqual(planNotes(p, campus, TZ, tasks), ["Didn't fit: Gym got squeezed.", "Couldn't fit: Lab 4."]);
+});
+
 test("planNotes: no proposal, a skipped one, or one with nothing to say is no lines; a pick not found is skipped", () => {
   assert.deepEqual(planNotes(null, campus, TZ), []);
   assert.deepEqual(planNotes({ day: "2026-11-03", status: "skipped", note: "x", picks: [{ uid: "c1" }] }, campus, TZ), []);
