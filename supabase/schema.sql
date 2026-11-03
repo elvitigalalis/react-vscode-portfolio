@@ -226,3 +226,8 @@ $job$);
 -- Set the owner: the Google account that signs in to /plan.
 insert into settings (owner_email) values ('you@example.com')
 on conflict (id) do nothing;
+
+-- Interest profile (docs/sheet-sources.md): a few plain lines on what Lisul likes, which Claude
+-- matches campus events against. Null until he writes one in /plan. Owner-only, like the rest
+-- of settings, and no view names it.
+alter table settings add column if not exists interests text;
