@@ -279,21 +279,21 @@ test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", asyn
 
 const fn = () => read("supabase/functions/campus/index.ts");
 
-test("v3-c function: refuses calls without the cron secret", { todo: true }, async () => {
+test("v3-c function: refuses calls without the cron secret", async () => {
   const src = fn();
   assert.match(src, /Deno\.env\.get\(\s*["'`]?SHEET_CRON_SECRET|env\(\s*["'`]SHEET_CRON_SECRET["'`]\s*\)/);
   assert.match(src, /["'`]x-sheet-cron["'`]/);
   assert.match(src, /status:\s*(401|403)/);
 });
 
-test("v3-c function: uses parseIcs and campusRows from the shared modules", { todo: true }, async () => {
+test("v3-c function: uses parseIcs and campusRows from the shared modules", async () => {
   const src = fn();
   assert.match(src, /import \{[^}]*\bcampusRows\b[^}]*\} from ["'][./]+\/src\/sheet\/feeds\.mjs["']/);
   assert.match(src, /import \{[^}]*\bparseIcs\b[^}]*\} from ["'][./]+\/src\/sheet\/ical\.mjs["']/);
   assert.match(src, /https:\/\/sbengaged\.stonybrook\.edu\/ical\/stonybrook\/ical_stonybrook\.ics/);
 });
 
-test("v3-c function: sends conditional requests from feed_state and stops on 304", { todo: true }, async () => {
+test("v3-c function: sends conditional requests from feed_state and stops on 304", async () => {
   const src = fn();
   assert.match(src, /feed_state/);
   assert.match(src, /["'`]campus["'`]/, "its feed_state source is 'campus'");
@@ -306,7 +306,7 @@ test("v3-c function: sends conditional requests from feed_state and stops on 304
   assert.match(src, /status\s*===?\s*304/);
 });
 
-test("v3-c function: upserts and deletes ended rows in batches, then writes feed_state", { todo: true }, async () => {
+test("v3-c function: upserts and deletes ended rows in batches, then writes feed_state", async () => {
   const src = fn();
   assert.match(src, /campus_events/);
   assert.match(src, /on_conflict=uid|resolution=merge-duplicates|onConflict:\s*["'`]uid["'`]/);
@@ -317,7 +317,7 @@ test("v3-c function: upserts and deletes ended rows in batches, then writes feed
   assert.match(src, /ok:\s*false/, "a failed fetch is recorded");
 });
 
-test("v3-c function: holds no secret literals", { todo: true }, async () => {
+test("v3-c function: holds no secret literals", async () => {
   const src = fn();
   assert.doesNotMatch(src, /eyJ[A-Za-z0-9_-]{10,}/, "a JWT");
   assert.doesNotMatch(src, /["'`][A-Za-z0-9_+/=-]{32,}["'`]/, "a long token");
