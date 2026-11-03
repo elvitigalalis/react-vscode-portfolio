@@ -239,13 +239,14 @@ export function taskRow(t) {
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
-    t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
+    t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
-    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, textContent: `${risk ? "⚠ " : ""}${dueText(t.due)}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) }) : null,
-    t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
-    el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),
-    el("button", { type: "button", className: "sheet-more", textContent: "⋯", ariaLabel: `More for ${t.title}` }),
+    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) },
+      risk ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}`) : null,
+    t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
+    el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
   return li;
 }
@@ -672,7 +673,7 @@ function wire() {
       try { await completeTask(id, !state.tasks.get(id).done); } catch (err) { failed(err); }
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
-    } else if (e.target.closest(".sheet-more")) openMenu(id, e.target);
+    } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
     else if (e.target.closest(".sheet-title")) startEdit(li);
   });
 
