@@ -79,6 +79,18 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
     HTML stripped to text, at most 20,000 characters, ending in "… (truncated)" when cut.
   - `searchPlan(query, accounts, max)` splits a search across the accounts: at most 25 results
     in total, merged newest first.
+- **`mailconnect.mjs`:** the pure parts of `mail-connect`. It uses Web Crypto, so it runs in Node
+  and Deno, and its functions may be async.
+  - `signState(payload, secret, now)` returns a URL-safe `state` string: the payload, signed with
+    HMAC-SHA256 under `MAIL_STATE_SECRET`. `now` is in milliseconds.
+  - `verifyState(state, secret, now)` returns the payload, or `null` when the state was tampered
+    with, signed with another secret, older than 10 minutes, or not a state at all. It never
+    throws.
+  - `googleAuthUrl({ clientId, redirectUri, state, loginHint })` returns the Google consent URL
+    (`https://accounts.google.com/o/oauth2/v2/auth`) with `client_id`, `redirect_uri`,
+    `response_type=code`, `scope=https://www.googleapis.com/auth/gmail.readonly`,
+    `access_type=offline`, `prompt=consent`, `include_granted_scopes=false`, `state`, and
+    `login_hint` only when `loginHint` is given.
 
 ### Edge Functions
 
