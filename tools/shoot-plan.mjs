@@ -48,7 +48,7 @@ function route(r) {
   if (u.includes("googleapis.com")) return json(r, gEvents);
   if (!u.includes("supabase.co")) return r.continue();
   const p = new URL(u).pathname.replace("/rest/v1/", "");
-  const map = { tasks: tasks, blocks, days, settings, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", heads_down: false }] };
+  const map = { tasks: tasks, blocks, days, settings, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", tag: "workit", public: true, updated_on: "2026-11-03" }] };
   if (new URL(u).search.includes("parked_on")) return json(r, [{ id: 99 }]);
   return json(r, map[p] ?? []);
 }
@@ -111,6 +111,7 @@ for (const dark of [false, true]) {
 }
 await shot("/plan/", "plan-more", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await new Promise((r) => setTimeout(r, 300)); });
 await shot("/now/", "now-light", 1440, 900, false);
+await shot("/now/", "now-dark", 1440, 900, true);
 await shot("/now/", "now-phone", 390, 844, false);
 await b.close();
 for (const f of failures) console.error("FAIL", f);

@@ -8,6 +8,22 @@ const el = (tag, props = {}, ...kids) => {
   return node;
 };
 
+// A public task's project icon, from the sprite in now/index.astro (docs/sheet-glance.md,
+// change 8). Only the tag a public task already shows picks it, so nothing new is revealed.
+const PROJECT_ICONS = { workit: "briefcase", micromouse: "rat" };
+const SVG = "http://www.w3.org/2000/svg";
+function projectIcon(tag) {
+  const name = PROJECT_ICONS[tag];
+  if (!name) return null;
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "sheet-icon");
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
 function taskRow(t, writeups) {
   if (!t.public) {
     const bar = el("span", { className: "sheet-bar" });
@@ -18,7 +34,7 @@ function taskRow(t, writeups) {
   const text = t.done && writeups.has(t.tag)
     ? el("a", { href: `/projects/${t.tag}/`, textContent: t.title })
     : el("span", { textContent: t.title, title: t.title });
-  const li = el("li", { className: `sheet-row${t.done ? " is-done" : ""}` }, text);
+  const li = el("li", { className: `sheet-row${t.done ? " is-done" : ""}` }, projectIcon(t.tag), text);
   if (t.done) li.append(el("span", { className: "visually-hidden", textContent: " (done)" }));
   return li;
 }
