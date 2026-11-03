@@ -10,6 +10,7 @@ import {
   blockMinutes, weekdayName, plural,
 } from "./logic.mjs";
 import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity } from "./planner.mjs";
+import { loadShare, stripSegments } from "./glance.mjs";
 
 const START = 7 * 60;
 const END = 23 * 60;
@@ -26,6 +27,14 @@ let picked = null; // a task tapped in the list, waiting for a tap on the timeli
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
 const blocksOn = (d) => state.blocks.filter((b) => minutesOn(b.starts_at, d, SHEET.timeZone) >= 0 && minutesOn(b.starts_at, d, SHEET.timeZone) < 1440);
 const shutdownAt = (d) => clock((state.days[d]?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5));
+
+// A day's load as a 4px bar on a track (docs/sheet-glance.md, change 4).
+function loadBar(d) {
+  const { pct, level } = loadShare(load(tasksOn(d), dayCapacity(d).capacity).total, dayCapacity(d).capacity);
+  const fill = el("span", { className: `sheet-bar-fill is-${level}` });
+  fill.style.width = `${pct}%`;
+  return el("span", { className: "sheet-bar" }, fill);
+}
 
 function meter(d) {
   const m = load(tasksOn(d), dayCapacity(d).capacity);
@@ -367,6 +376,26 @@ export function setupPlanToday(root) {
         textContent: short ? `${formatMinutes(m.total)} / ${formatMinutes(capacity)}` : formatMinutes(m.total),
         title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(clock(SHEET.dayStartAt))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(SHEET.capacityMin)}.`,
       }));
+    }
+  });
+  // Load and free time, drawn (docs/sheet-glance.md, change 4): under each day's header, a 4px
+  // load bar and a 6px strip of the day from 7 am to 11 pm, with a now tick on today. Both are
+  // decoration: the chip's text carries the load.
+  renderHooks.push(() => {
+    const local = localNow(new Date(), SHEET.timeZone);
+    for (const col of root.querySelectorAll(".sheet-day")) {
+      const d = col.dataset.day;
+      const strip = el("span", { className: "sheet-strip" }, ...stripSegments(state.events, state.blocks, d, SHEET.timeZone).map((s) => {
+        const seg = el("span", { className: `sheet-seg is-${s.kind}` });
+        Object.assign(seg.style, { left: `${s.from}%`, width: `${s.to - s.from}%` });
+        return seg;
+      }));
+      if (d === local.day && local.minutes > START && local.minutes < END) {
+        const tick = el("span", { className: "sheet-strip-now" });
+        tick.style.left = `${(100 * (local.minutes - START)) / (END - START)}%`;
+        strip.append(tick);
+      }
+      col.querySelector(".sheet-stamps").prepend(el("span", { className: "sheet-glance", ariaHidden: "true" }, loadBar(d), strip));
     }
   });
 }

@@ -304,3 +304,19 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
 }
+
+/* Load and free time, drawn (docs/sheet-glance.md, change 4). Under each day's header, a 4px
+   load bar on a --line track and a 6px strip of 7 am to 11 pm: busy grey, blocks sage, proposals
+   dashed, and a now tick on today. The load's text stays beside them. */
+.sheet-glance { display: grid; gap: 3px; margin: 0.2rem 0 0.25rem; }
+.sheet-bar, .sheet-strip { position: relative; display: block; background: var(--line); border-radius: 2px; overflow: hidden; }
+.sheet-bar { height: 4px; }
+.sheet-strip { height: 6px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: visible; }
+.sheet-bar-fill { display: block; height: 100%; background: var(--accent); }
+.sheet-bar-fill.is-near { background: var(--warn); }
+.sheet-bar-fill.is-over { background: var(--danger); }
+.sheet-seg { position: absolute; top: 0; bottom: 0; border-radius: 1px; }
+.sheet-seg.is-busy { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.sheet-seg.is-block { background: var(--accent); }
+.sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
+.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--danger); }
