@@ -30,3 +30,12 @@ test("ical: an all-day start with no end lasts one day", () => {
   const [ev] = parseIcs(cal("BEGIN:VEVENT", "UID:d@x", "DTSTART;VALUE=DATE:20261231", "END:VEVENT"), wide);
   assert.deepEqual([ev.start, ev.end, ev.allDay], ["2026-12-31", "2027-01-01", true]);
 });
+
+test("ical: organizer is the ORGANIZER line's CN, unquoted; absent when there is none", () => {
+  const got = Object.fromEntries(parseIcs(cal(
+    "BEGIN:VEVENT", "UID:o@x", "DTSTART:20261104T180000Z",
+    "ORGANIZER;CN=\"University & Medicine: Community Relations\":mailto:noreply@sbengaged.stonybrook.edu", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:n@x", "DTSTART:20261104T180000Z", "END:VEVENT"), wide).map((e) => [e.uid, e]));
+  assert.equal(got["o@x"].organizer, "University & Medicine: Community Relations");
+  assert.equal("organizer" in got["n@x"], false);
+});
