@@ -58,7 +58,8 @@ tasks jumping days across time zones.
 
 - **Seven equal day columns,** Monday to Sunday. Weekends are full size (a top Tweek complaint).
   Rows sit on 1px ruled lines and **line up across the week:** every column has as many rows as
-  the busiest day plus one empty row.
+  the busiest day plus one empty row. A long title wraps onto more lines, never cut off; on wide
+  screens its row grows in every column, so the lines stay level (also on /now).
 - **Day header:** weekday in bold uppercase with slight letter-spacing, date beside it in muted
   text. **Today is marked by the accent colour only** (header text and its 2px rule).
 - **His calendar sits above each day's tasks** (Things 3, Todoist): small and gray, each event
@@ -85,7 +86,10 @@ tasks jumping days across time zones.
 ## Adding and editing (Tweek, Ellie, TeuxDeux)
 
 - **Click an empty row, type, press Enter.** The task goes to the bottom of that day and the next
-  row is ready. There is never a form.
+  row is ready. There is never a form. The box grows as a long title wraps, while adding and
+  editing. Enter (with or without Shift) saves and Escape cancels an edit. A title is one line
+  of text: line breaks in pasted text become spaces, and it is cut at 500 characters, so Google
+  events, Telegram nudges and /now's bars never see a break.
 - **Typed details,** shown as a chip while typing and stripped from the title on save:
   - `~45m` or `~1h30` → estimate
   - `@3pm` / `@15:00` → fixed time (the task stays on its day and never rolls)

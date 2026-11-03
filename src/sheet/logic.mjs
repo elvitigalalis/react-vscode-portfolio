@@ -104,7 +104,7 @@ function dueDate(word, day) {
 
 // "Ship auth ~45m #workit ^fri" → { title: "Ship auth", est_min: 45, tag: "workit", due: "2026-10-30", ... }.
 // Tasks are public unless marked "!p" (or "!private"). A due date counts from `day`, the task's
-// day. A detail that does not parse stays in the title.
+// day. A detail that does not parse stays in the title. Text typed over several lines is one title.
 export function parseEntry(text, day) {
   let title = ` ${text.trim()} `;
   const out = { est_min: null, at_time: null, tag: null, public: true, due: null };
@@ -133,7 +133,9 @@ export function parseEntry(text, day) {
   const date = due && dueDate(due[1], day);
   if (date) { out.due = date; title = title.replace(due[0], " "); }
 
-  out.title = title.replace(/\s+/g, " ").trim();
+  // Line breaks become spaces (titles are one line in Google, Telegram and /now), and the
+  // title is cut to fit the database's 500 characters.
+  out.title = cutTitle(title.replace(/\s+/g, " "));
   return out;
 }
 
