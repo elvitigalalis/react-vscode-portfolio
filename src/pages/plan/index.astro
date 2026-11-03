@@ -11,7 +11,8 @@ import "../../styles/sheet.css";
   <section class="sheet-page sheet-planner">
     <!-- The top bar (docs/sheet-glance.md, change 6): ‹ Today › (‹ Tue Nov 3 › on phones, where
          the arrows step a day), Plan today, Shut down in its window, chips, Nudges and a ⋯ menu.
-         src/sheet/topbar.mjs keeps its labels and the menu; feed-status.mjs the Feed failed chip. -->
+         src/sheet/topbar.mjs keeps its labels and the menu; feed-status.mjs the Feed failed chip;
+         needs-you.mjs the Needs you chip (docs/sheet-morning.md, "/plan"). -->
     <div class="sheet-bar-top">
       <h1 data-week-title>Plan</h1>
       <div class="sheet-tools" data-tools hidden>
@@ -22,8 +23,9 @@ import "../../styles/sheet.css";
         </span>
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
-        <!-- Status chips. M4's "Needs you" chip goes first in here, before Feed failed. -->
+        <!-- Status chips: Needs you first, then Feed failed. -->
         <span class="sheet-chips" data-chips>
+          <button type="button" class="sheet-chip" data-act="needs" data-needs-chip aria-haspopup="dialog" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="sheet-chip-text">Needs you ·</span><span data-needs-n></span></button>
           <button type="button" class="sheet-chip is-alert" data-act="settings" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
         </span>
         <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
@@ -78,6 +80,7 @@ import "../../styles/sheet.css";
         <dt>⌘Z</dt><dd>Undo</dd>
         <dt>S</dt><dd>Settings: mail accounts, interest profile, feeds</dd>
         <dt>C</dt><dd>Campus events for the focused day (or the campus chip under its calendar)</dd>
+        <dt>M</dt><dd>Needs you: mail waiting on you (or the Needs you chip)</dd>
       </dl>
       <!-- What each icon means (docs/sheet-glance.md, "The icon set"). One line per icon in use. -->
       <h3 class="sheet-legend-title">Icons</h3>
@@ -94,6 +97,7 @@ import "../../styles/sheet.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span class="visually-hidden">Sparkles</span></dt><dd>Proposed by Claude, until you approve it</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell"></use></svg><span class="visually-hidden">Bell</span></dt><dd>Nudges: Telegram reminds you of blocks (crossed out when off)</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="visually-hidden">Alert</span></dt><dd>A feed failed: open Settings to see which</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="visually-hidden">Mail</span></dt><dd>Needs you: mail waiting on you</dd>
       </dl>
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
@@ -147,6 +151,7 @@ import "../../styles/sheet.css";
     <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
     <dialog class="sheet-dialog sheet-shut" data-shut aria-labelledby="sheet-shut-title"></dialog>
     <dialog class="sheet-dialog sheet-campus" data-campus aria-labelledby="sheet-campus-title"></dialog>
+    <dialog class="sheet-dialog sheet-needs" data-needs aria-labelledby="sheet-needs-title"></dialog>
 
     <!-- Icons (docs/sheet-glance.md, "The icon set"): Lucide v1.67.0 (lucide-static, icons/*.svg),
          used through icon() in planner.mjs. alert-triangle is Lucide's triangle-alert and
@@ -208,5 +213,6 @@ import "../../styles/sheet.css";
   import { setupCampus } from "../../sheet/campus-list.mjs";
   import { setupTopBar } from "../../sheet/topbar.mjs";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy]);
+  import { setupNeedsYou } from "../../sheet/needs-you.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou]);
 </script>
