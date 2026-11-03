@@ -74,7 +74,10 @@ const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const HEX_ID = /^[0-9a-f]{6,32}$/;
 // A link in any form Telegram or a browser would make clickable: a scheme, "www." or a
 // "word.word/" path.
-const URLISH = /https?:\/\/|www\.|[a-z0-9-]+\.[a-z0-9-]+\//i;
+// Anything Telegram or a browser could turn into a link or a command: a scheme ("https://",
+// "tg://"), "www.", a bare domain ("evil.com", "t.me"), an @mention or email, or a /command.
+const URLISH = /[a-z][a-z0-9+.-]*:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b|@\w|(?:^|\s)\/[a-z]/i;
+export const linkish = (s) => URLISH.test(String(s ?? ""));
 // Line breaks and other control characters.
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
@@ -229,7 +232,9 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
   const events = (picks ?? proposal.picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
-  for (const e of events.slice(0, SHOWN_PICKS)) {
+  // Event titles come from the campus feed, not through checkProposal; one that could become a
+  // link stays off Telegram (it still shows in /plan, as text).
+  for (const e of events.filter((x) => !linkish(x.title)).slice(0, SHOWN_PICKS)) {
     const going = Number.isInteger(e.rsvp_count) ? `, ${e.rsvp_count} going` : "";
     lines.push(`Campus pick: ${e.title} (${formatClock(localNow(new Date(e.starts_at), tz).minutes)}${going})`);
   }
