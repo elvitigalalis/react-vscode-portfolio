@@ -78,6 +78,13 @@ mail_connect_states  nonce text pk, created_at timestamptz   -- service role onl
     `url` is the feed's `URL`, or else its `CONTACT` (the same page under the group, without
     `#event_host`), kept only when it starts with `https://sbengaged.stonybrook.edu/`, otherwise
     null.
+  - `rsvpCount(html)` returns the number registered for an event, read from its public page
+    (`<span class="number">13</span> <div>Registered</div>`), or null when the page shows none.
+    The feed carries no count.
+  - `countsDue(rows, now, limit)` returns at most `limit` `campus_events` rows whose count to
+    fetch: not started yet, with a `url`, not routine, and never checked or stale. A count stays
+    fresh 6 hours while the event is within 3 days, 24 hours before that. Never-checked rows come
+    first, then stale ones, each soonest first.
 - **`campus.mjs`:**
   - `campusDay(events, day, timeZone, { tags, showRoutine })` returns the day's events, sorted:
     free food first, then by start time.
