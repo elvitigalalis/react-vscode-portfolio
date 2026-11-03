@@ -29,3 +29,32 @@ test("mail body: entities in a link's address are decoded, comments and line bre
   assert.equal(messageBody(html('<!-- tracking --><a href="https://x.edu/?a=1&amp;b=2">Form</a><br>Due Fri&nbsp;5&nbsp;pm')),
     "Form (https://x.edu/?a=1&b=2)\nDue Fri 5 pm");
 });
+
+// --- What an account's row records after a use (mail-mcp) ------------------------------------
+
+test("accountPatch: a good use records last_used_at and clears last_error", async () => {
+  const { accountPatch } = await import("../src/sheet/mail.mjs");
+  assert.deepEqual(accountPatch({ ok: true }, new Date("2026-11-03T14:00:00Z")), { last_used_at: "2026-11-03T14:00:00.000Z", last_error: null });
+});
+
+test("accountPatch: a refused refresh or a Gmail error after a good refresh is recorded", async () => {
+  const { accountPatch } = await import("../src/sheet/mail.mjs");
+  const now = new Date("2026-11-03T14:00:00Z");
+  assert.deepEqual(accountPatch({ ok: false, error: "Google token refresh failed: invalid_grant" }, now), { last_error: "Google token refresh failed: invalid_grant" });
+  assert.deepEqual(accountPatch({ ok: false, status: 403, error: "Gmail 403: Gmail API has not been used" }, now), { last_error: "Gmail 403: Gmail API has not been used" });
+  assert.deepEqual(accountPatch({ ok: false, status: 429, error: "Gmail 429: Too many requests" }, now), { last_error: "Gmail 429: Too many requests" });
+  assert.equal(accountPatch({ ok: false, error: "x".repeat(900) }, now).last_error.length, 300);
+});
+
+test("accountPatch: a bad search or a missing message says nothing about the account", async () => {
+  const { accountPatch } = await import("../src/sheet/mail.mjs");
+  const now = new Date("2026-11-03T14:00:00Z");
+  assert.equal(accountPatch({ ok: false, status: 400, error: "Gmail 400: Invalid query" }, now), null);
+  assert.equal(accountPatch({ ok: false, status: 404, error: "Gmail 404: Not Found" }, now), null);
+});
+
+test("gmailError: Gmail's own message, never the raw body", async () => {
+  const { gmailError } = await import("../src/sheet/mail.mjs");
+  assert.equal(gmailError(403, '{"error":{"code":403,"message":"Request had insufficient authentication scopes.","status":"PERMISSION_DENIED"}}'), "Gmail 403: Request had insufficient authentication scopes.");
+  assert.equal(gmailError(502, "<html>Bad Gateway</html>"), "Gmail 502");
+});

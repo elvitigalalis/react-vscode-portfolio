@@ -207,9 +207,12 @@ test("mail: searchPlan with no accounts plans nothing", async () => {
 // ---------------------------------------------------------------- mail-mcp (source checks)
 
 const MCP = "supabase/functions/mail-mcp/index.ts";
+// The function's source followed by the supabase/functions/_shared helpers it imports (the
+// shared-helpers fix moved the Google token call there).
+const withShared = (src) => [src, ...[...src.matchAll(/from ["']\.\.\/_shared\/([\w.-]+)["']/g)].map((m) => read(`supabase/functions/_shared/${m[1]}`))].join("\n");
 const mcpSource = () => {
   assert.ok(existsSync(join(root, MCP)), `${MCP} is missing`);
-  return read(MCP);
+  return withShared(read(MCP));
 };
 
 test("mail-mcp: exactly three tools, all read-only by name", async () => {

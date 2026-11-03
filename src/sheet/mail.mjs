@@ -115,3 +115,24 @@ export function searchPlan(query, accounts, max) {
     .map((x) => x.summary);
   return { limit, requests, merge };
 }
+
+// --- Account health (mail-mcp) ---------------------------------------------------------------
+
+// A failed Gmail API call as one line: the status and Gmail's own error message
+// (developers.google.com/workspace/gmail/api/guides/handle-errors: `{ error: { code, message } }`),
+// never the raw body.
+export function gmailError(status, body) {
+  let message = "";
+  try { message = String(JSON.parse(body)?.error?.message ?? ""); } catch { /* not JSON */ }
+  return message ? `Gmail ${status}: ${message.slice(0, 200)}` : `Gmail ${status}`;
+}
+
+// What an account's mail_accounts row records after mail-mcp used it, or null for no change.
+// `outcome` is { ok } or { ok: false, status?, error }: a refused token refresh has no status,
+// a Gmail API error has Gmail's. A good use clears last_error. A 400 (a bad search) or 404 (a
+// message that isn't there) is the request's fault, not the account's, so it records nothing.
+export function accountPatch(outcome, now) {
+  if (outcome.ok) return { last_used_at: new Date(now).toISOString(), last_error: null };
+  if (outcome.status === 400 || outcome.status === 404) return null;
+  return { last_error: String(outcome.error ?? "failed").slice(0, 300) };
+}
