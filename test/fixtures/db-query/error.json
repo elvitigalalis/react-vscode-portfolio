@@ -1,0 +1,1 @@
+{"target":{"kind":"db-url","host":"127.0.0.1","port":54399},"_tag":"Error","error":{"code":"DbQueryExecError","message":"failed to execute query: error: column \"nonsense\" does not exist"}}
