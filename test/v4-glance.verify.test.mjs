@@ -124,38 +124,38 @@ test("dueLevel: a done task is always null, overdue or at risk", async () => {
 
 // ---------------------------------------------------------------- loadShare
 
-test("loadShare: pct rounds to a whole percent", todo, async () => {
+test("loadShare: pct rounds to a whole percent", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(0, 240), { pct: 0, level: "ok" });
   assert.deepEqual(loadShare(100, 240), { pct: 42, level: "ok" }); // 41.67 %
   assert.deepEqual(loadShare(130, 480), { pct: 27, level: "ok" }); // 27.08 %
 });
 
-test("loadShare: exactly 85 % is near", todo, async () => {
+test("loadShare: exactly 85 % is near", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(204, 240), { pct: 85, level: "near" });
   assert.deepEqual(loadShare(408, 480), { pct: 85, level: "near" });
 });
 
-test("loadShare: just under 85 % is ok even when pct rounds to 85", todo, async () => {
+test("loadShare: just under 85 % is ok even when pct rounds to 85", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   // 84.58 %: the level follows load's rule on the minutes, not the rounded pct.
   assert.deepEqual(loadShare(203, 240), { pct: 85, level: "ok" });
 });
 
-test("loadShare: exactly full is near, not over", todo, async () => {
+test("loadShare: exactly full is near, not over", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(240, 240), { pct: 100, level: "near" });
 });
 
-test("loadShare: over capacity is over, with pct capped at 100", todo, async () => {
+test("loadShare: over capacity is over, with pct capped at 100", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(241, 240), { pct: 100, level: "over" });
   assert.deepEqual(loadShare(300, 240), { pct: 100, level: "over" }); // 125 %
   assert.deepEqual(loadShare(720, 240), { pct: 100, level: "over" }); // 300 %
 });
 
-test("loadShare: a capacity of 0 is over with any minutes, ok with none", todo, async () => {
+test("loadShare: a capacity of 0 is over with any minutes, ok with none", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(30, 0), { pct: 100, level: "over" });
   assert.deepEqual(loadShare(0, 0), { pct: 0, level: "ok" });
@@ -166,19 +166,19 @@ test("loadShare: a capacity of 0 is over with any minutes, ok with none", todo, 
 
 const DAY = "2026-11-10";
 
-test("stripSegments: nothing on the day gives no segments", todo, async () => {
+test("stripSegments: nothing on the day gives no segments", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(stripSegments([], [], DAY, TZ), []);
 });
 
-test("stripSegments: a busy event becomes window percentages rounded to 0.1", todo, async () => {
+test("stripSegments: a busy event becomes window percentages rounded to 0.1", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   // 9:00 am is 12.5 %; 10:15 am is 20.3125 %.
   assert.deepEqual(stripSegments([ev("2026-11-10T09:00:00-05:00", "2026-11-10T10:15:00-05:00")], [], DAY, TZ),
     [{ from: 12.5, to: 20.3, kind: "busy" }]);
 });
 
-test("stripSegments: approved blocks are 'block' and proposed ones 'proposed'", todo, async () => {
+test("stripSegments: approved blocks are 'block' and proposed ones 'proposed'", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   const blocks = [
     block("2026-11-10T19:30:00Z", "2026-11-10T20:00:00Z"), // 2:30–3 pm: 46.875–50 %
@@ -190,7 +190,7 @@ test("stripSegments: approved blocks are 'block' and proposed ones 'proposed'", 
   ]);
 });
 
-test("stripSegments: events and blocks are sorted together by from", todo, async () => {
+test("stripSegments: events and blocks are sorted together by from", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   const events = [
     ev("2026-11-10T17:30:00-05:00", "2026-11-10T18:45:00-05:00"), // 65.6–73.4
@@ -208,27 +208,27 @@ test("stripSegments: events and blocks are sorted together by from", todo, async
   ]);
 });
 
-test("stripSegments: a part before 7 am is clipped to the window's start", todo, async () => {
+test("stripSegments: a part before 7 am is clipped to the window's start", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(stripSegments([ev("2026-11-10T06:00:00-05:00", "2026-11-10T08:20:00-05:00")], [], DAY, TZ),
     [{ from: 0, to: 8.3, kind: "busy" }]);
 });
 
-test("stripSegments: a part after 11 pm is clipped to the window's end", todo, async () => {
+test("stripSegments: a part after 11 pm is clipped to the window's end", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   // A block 10:10–11:45 pm EST: 94.79 % to past the end.
   assert.deepEqual(stripSegments([], [block("2026-11-11T03:10:00Z", "2026-11-11T04:45:00Z")], DAY, TZ),
     [{ from: 94.8, to: 100, kind: "block" }]);
 });
 
-test("stripSegments: an event from the night before is clipped to this morning", todo, async () => {
+test("stripSegments: an event from the night before is clipped to this morning", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   // 10 pm Mon to 8:20 am Tue.
   assert.deepEqual(stripSegments([ev("2026-11-09T22:00:00-05:00", "2026-11-10T08:20:00-05:00")], [], DAY, TZ),
     [{ from: 0, to: 8.3, kind: "busy" }]);
 });
 
-test("stripSegments: anything entirely outside the window is dropped", todo, async () => {
+test("stripSegments: anything entirely outside the window is dropped", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   const events = [
     ev("2026-11-10T05:00:00-05:00", "2026-11-10T06:30:00-05:00"), // before 7 am
@@ -241,7 +241,7 @@ test("stripSegments: anything entirely outside the window is dropped", todo, asy
   assert.deepEqual(stripSegments(events, blocks, DAY, TZ), []);
 });
 
-test("stripSegments: all-day events and free events are left out", todo, async () => {
+test("stripSegments: all-day events and free events are left out", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   const events = [
     { title: "No classes", allDay: true, busy: true, starts_at: "2026-11-10", ends_at: "2026-11-11", link: null },
@@ -251,7 +251,7 @@ test("stripSegments: all-day events and free events are left out", todo, async (
   assert.deepEqual(stripSegments(events, [], DAY, TZ), [{ from: 37.5, to: 50, kind: "busy" }]);
 });
 
-test("stripSegments: overlapping parts stay separate segments", todo, async () => {
+test("stripSegments: overlapping parts stay separate segments", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   // A 1–3 pm class and an approved block 2:30–3 pm inside it.
   const events = [ev("2026-11-10T13:00:00-05:00", "2026-11-10T15:00:00-05:00")];
@@ -262,7 +262,7 @@ test("stripSegments: overlapping parts stay separate segments", todo, async () =
   ]);
 });
 
-test("stripSegments: a custom window changes the percentages", todo, async () => {
+test("stripSegments: a custom window changes the percentages", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   // 8 am–8 pm is 720 minutes: 9 am is 8.33 %, 10:30 am 20.83 %; 7:30–8:30 am clips to 0–4.2.
   const events = [
@@ -275,7 +275,7 @@ test("stripSegments: a custom window changes the percentages", todo, async () =>
   ]);
 });
 
-test("stripSegments: times are read in the given zone (EDT in October)", todo, async () => {
+test("stripSegments: times are read in the given zone (EDT in October)", async () => {
   const { stripSegments } = await import("../src/sheet/glance.mjs");
   // Tue 2026-10-20 is EDT (UTC-4): 13:00Z is 9 am, 14:15Z is 10:15 am.
   assert.deepEqual(stripSegments([], [block("2026-10-20T13:00:00Z", "2026-10-20T14:15:00Z")], "2026-10-20", TZ),
