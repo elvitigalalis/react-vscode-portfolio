@@ -283,7 +283,7 @@ test("the answers on a done task, or a block no longer there, change nothing", t
 // Pace
 // =============================================================================================
 
-test("paceKind: course, campus, GitHub, Jira, or other", todo, async () => {
+test("paceKind: course, campus, GitHub, Jira, or other", async () => {
   const { paceKind } = await pace();
   assert.equal(paceKind({ source: "brightspace", tag: null }), "course");
   assert.equal(paceKind({ source: "brightspace", tag: "campus" }), "course");
@@ -302,27 +302,27 @@ const row = (kind, est_min, minutes) => {
 };
 const none = { pace: null, n: 0 };
 
-test("paceByKind: fewer than 5 finished tasks of a kind give no pace", todo, async () => {
+test("paceByKind: fewer than 5 finished tasks of a kind give no pace", async () => {
   const { paceByKind } = await pace();
   const rows = [row("course", 30, 60), row("course", 30, 60), row("course", 30, 60), row("course", 30, 60)];
   assert.deepEqual(paceByKind(rows), { course: { pace: null, n: 4 }, campus: none, github: none, jira: none, other: none });
 });
 
-test("paceByKind: 5 samples give the median of actual over estimate", todo, async () => {
+test("paceByKind: 5 samples give the median of actual over estimate", async () => {
   const { paceByKind } = await pace();
   // 1, 1.5, 2, 1.2 and 0.8: the median is 1.2.
   const rows = [row("course", 30, 30), row("course", 40, 60), row("course", 30, 60), row("course", 50, 60), row("course", 50, 40)];
   assert.deepEqual(paceByKind(rows).course, { pace: 1.2, n: 5 });
 });
 
-test("paceByKind: an even count takes the mean of the middle two", todo, async () => {
+test("paceByKind: an even count takes the mean of the middle two", async () => {
   const { paceByKind } = await pace();
   // 1, 2, 1.5, 0.5, 1 and 3, sorted 0.5 1 1 1.5 2 3: (1 + 1.5) / 2.
   const rows = [row("other", 60, 60), row("other", 30, 60), row("other", 40, 60), row("other", 60, 30), row("other", 45, 45), row("other", 20, 60)];
   assert.deepEqual(paceByKind(rows).other, { pace: 1.25, n: 6 });
 });
 
-test("paceByKind: pace is held between 0.5 and 3", todo, async () => {
+test("paceByKind: pace is held between 0.5 and 3", async () => {
   const { paceByKind } = await pace();
   const slow = Array.from({ length: 5 }, () => row("jira", 15, 60));   // 4 each
   const fast = Array.from({ length: 5 }, () => row("github", 60, 15)); // 0.25 each
@@ -331,20 +331,20 @@ test("paceByKind: pace is held between 0.5 and 3", todo, async () => {
   assert.deepEqual(out.github, { pace: 0.5, n: 5 });
 });
 
-test("paceByKind: rounded to 2 decimals", todo, async () => {
+test("paceByKind: rounded to 2 decimals", async () => {
   const { paceByKind } = await pace();
   // 1, 1, 40/30, 1.4 and 1.5: the median is 1.333…
   const rows = [row("campus", 30, 30), row("campus", 60, 60), row("campus", 30, 40), row("campus", 50, 70), row("campus", 40, 60)];
   assert.deepEqual(paceByKind(rows).campus, { pace: 1.33, n: 5 });
 });
 
-test("paceByKind: rows with no estimate don't count", todo, async () => {
+test("paceByKind: rows with no estimate don't count", async () => {
   const { paceByKind } = await pace();
   const rows = [row("course", null, 90), row("course", 0, 90), ...Array.from({ length: 4 }, () => row("course", 30, 45))];
   assert.deepEqual(paceByKind(rows).course, { pace: null, n: 4 });
 });
 
-test("paceByKind: only the newest 20 of a kind count", todo, async () => {
+test("paceByKind: only the newest 20 of a kind count", async () => {
   const { paceByKind } = await pace();
   const older = Array.from({ length: 20 }, () => row("course", 30, 60)); // 2 each
   const newer = Array.from({ length: 20 }, () => row("course", 30, 30)); // 1 each
@@ -356,7 +356,7 @@ const paces = (course = null, other = null) => ({
   course: { pace: course, n: course == null ? 0 : 8 }, campus: none, github: none, jira: none, other: { pace: other, n: other == null ? 0 : 8 },
 });
 
-test("pacedMinutes: the estimate rounded to 15 when the kind has no pace yet, or 30 with no estimate", todo, async () => {
+test("pacedMinutes: the estimate rounded to 15 when the kind has no pace yet, or 30 with no estimate", async () => {
   const { pacedMinutes } = await pace();
   assert.equal(pacedMinutes({ est_min: 45, source: null }, paces()), 45);
   assert.equal(pacedMinutes({ est_min: 20, source: null }, paces()), 15);
@@ -364,7 +364,7 @@ test("pacedMinutes: the estimate rounded to 15 when the kind has no pace yet, or
   assert.equal(pacedMinutes({ est_min: null, source: null }, paces()), 30);
 });
 
-test("pacedMinutes: estimate times the kind's pace, rounded to the nearest 15, held to 15-240", todo, async () => {
+test("pacedMinutes: estimate times the kind's pace, rounded to the nearest 15, held to 15-240", async () => {
   const { pacedMinutes } = await pace();
   assert.equal(pacedMinutes({ est_min: 45, source: null }, paces(null, 1.3)), 60);   // 58.5
   assert.equal(pacedMinutes({ est_min: 30, source: null }, paces(null, 1.25)), 45);  // 37.5, half up
@@ -375,7 +375,7 @@ test("pacedMinutes: estimate times the kind's pace, rounded to the nearest 15, h
   assert.equal(pacedMinutes({ est_min: 30, source: "brightspace" }, paces(2, 1)), 60);
 });
 
-test("plannedVsDone: approved block minutes and the done share, for the 14 days before", todo, async () => {
+test("plannedVsDone: approved block minutes and the done share, for the 14 days before", async () => {
   const { plannedVsDone } = await pace();
   const tasks = [{ id: "d1", done: true }, { id: "u1", done: false }];
   const blocks = [
