@@ -230,8 +230,13 @@ export function taskRow(t) {
   return li;
 }
 
+// Typing a task: a one-row textarea that grows as the title wraps, so a long title stays
+// readable. Enter saves; line breaks never go in (a title is one line, wrapped).
+const taskBox = (props) => el("textarea", { className: "sheet-add", rows: 1, autocomplete: "off", spellcheck: true, ...props });
+const fitBox = (box) => { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; };
+
 function addRow(where, label) {
-  const input = el("input", { className: "sheet-add", type: "text", autocomplete: "off", spellcheck: true, ariaLabel: label, placeholder: "+ Add a task" });
+  const input = taskBox({ ariaLabel: label, placeholder: "+ Add a task" });
   if (where.day) input.dataset.day = where.day; else input.dataset.list = where.list;
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
@@ -449,8 +454,9 @@ async function showWeek(monday) {
 
 function startEdit(li) {
   const t = state.tasks.get(li.dataset.id);
-  const input = el("input", { className: "sheet-add sheet-edit", type: "text", value: t.title, ariaLabel: `Edit ${t.title}` });
+  const input = taskBox({ className: "sheet-add sheet-edit", value: t.title, ariaLabel: `Edit ${t.title}` });
   li.replaceChildren(input);
+  fitBox(input);
   input.focus();
   input.select();
   let done = false;
@@ -533,7 +539,7 @@ const HOLD_MS = 300;
 
 function onPointerDown(e) {
   const li = e.target.closest(".sheet-task");
-  if (!li || e.button !== 0 || e.target.closest("button:not(.sheet-title), input")) return;
+  if (!li || e.button !== 0 || e.target.closest("button:not(.sheet-title), input, textarea")) return;
   drag = { id: li.dataset.id, li, x: e.clientX, y: e.clientY, on: false, touch: e.pointerType !== "mouse", held: false };
   if (drag.touch) {
     const d = drag;
@@ -655,7 +661,9 @@ function wire() {
   });
 
   root.addEventListener("input", (e) => {
-    if (e.target.matches(".sheet-add:not(.sheet-newlist)")) typedChip(e.target);
+    if (!e.target.matches(".sheet-add:not(.sheet-newlist)")) return;
+    typedChip(e.target);
+    fitBox(e.target);
   });
 
   root.addEventListener("keydown", async (e) => {
@@ -672,6 +680,7 @@ function wire() {
       return;
     }
     input.value = "";
+    fitBox(input);
     try { await addTask(text, input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list }); } catch (err) { failed(err); input.value = text; }
     render();
   });

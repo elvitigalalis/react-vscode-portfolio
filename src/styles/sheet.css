@@ -114,6 +114,12 @@
   width: 100%; font: inherit; font-size: 0.9375rem; color: var(--fg); background: transparent;
   border: 0; padding: 0; outline-offset: 2px;
 }
+/* The task box is a textarea that grows with its text (fitBox in planner.mjs), so a long title
+   wraps while it is typed or edited instead of scrolling out of sight on one line. */
+textarea.sheet-add {
+  display: block; flex: 1; min-width: 0; line-height: inherit; resize: none; overflow: hidden;
+  field-sizing: content;
+}
 .sheet-row.is-empty { cursor: text; }
 /* The add row's hint shows on hover and focus, and always on touch screens. */
 .sheet-add::placeholder { color: transparent; }
