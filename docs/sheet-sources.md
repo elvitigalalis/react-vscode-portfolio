@@ -79,6 +79,25 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
     HTML stripped to text, at most 20,000 characters, ending in "… (truncated)" when cut.
   - `searchPlan(query, accounts, max)` splits a search across the accounts: at most 25 results
     in total, merged newest first.
+  - **Details the verification tests pin** (`test/v3-g.verify.test.mjs`):
+    - `account` is the account's email address, a string; the summary's `account` is that string.
+    - `from`, `to` and `subject` are the header values as Gmail gives them (header names matched
+      in any case), or `""` when missing. `date` is `internalDate` as an ISO instant. `snippet`
+      has its HTML entities decoded. `labels` is `labelIds` (`[]` when missing).
+    - `link` is `https://mail.google.com/mail/?authuser=<encodeURIComponent(email)>#all/<thread_id>`.
+    - `messageBody` takes the first `text/plain` part, depth first, that is not an attachment
+      (no `filename`); otherwise the first such `text/html` part; otherwise `""`. Bodies are
+      base64url (padded or not), decoded as UTF-8. The text has CRLF turned into LF and is
+      trimmed. HTML loses its tags and the content of `script`, `style` and `head`. Block ends
+      (`p`, `div`, `br`, `li`, `tr`, `td`, headings) become line breaks, entities are decoded, and
+      a link becomes `text (href)`. The 20,000-character cap counts the marker: a cut body is
+      exactly 20,000 characters, the first 19,987 of the text plus "… (truncated)".
+    - `searchPlan(query, accounts, max)` returns `{ limit, requests, merge }`. `limit` is `max`
+      clamped to 1–25 (25 when `max` is missing). `requests` has one
+      `{ account, q: query, maxResults: limit }` per account, in the given order. `merge(lists)`
+      takes the summary lists in the order of `requests` and returns them as one list, newest
+      `date` first, cut to `limit`. Ties keep account order, then each list's own order.
+    - `mail-mcp` registers its tools with `server.registerTool("<name>", …)`.
 - **`mailconnect.mjs`:** the pure parts of `mail-connect`. It uses Web Crypto, so it runs in Node
   and Deno, and its functions may be async.
   - `signState(payload, secret, now)` returns a URL-safe `state` string: the payload, signed with
