@@ -39,13 +39,17 @@ const SCOPES = {
 export const scopeLines = (scope) => (scope ?? "").split(/\s+/).filter(Boolean).map((s) => (Object.hasOwn(SCOPES, s) ? SCOPES[s] : s));
 
 // Whether an authorization's redirect_uri goes back to Claude: https, on claude.ai or claude.com
-// or a subdomain of either. Anyone can register a client with Supabase's OAuth server (dynamic
+// or a subdomain of either, or Claude Code's sign-in on this computer (http on a loopback address,
+// RFC 8252 section 7.3): a grant sent to the machine it was asked from can't be caught remotely. Anyone can register a client with Supabase's OAuth server (dynamic
 // registration) under any name, so the name proves nothing; where the grant would be sent does.
 // Only such a request may be approved here (docs/adr/0002).
 const CLAUDE_HOSTS = ["claude.ai", "claude.com"];
+const LOOPBACK = ["localhost", "127.0.0.1", "[::1]"];
 export function trustedRedirect(uri) {
   let url;
   try { url = new URL(uri); } catch { return false; }
-  if (url.protocol !== "https:" || url.username || url.password) return false;
+  if (url.username || url.password) return false;
+  if (url.protocol === "http:") return LOOPBACK.includes(url.hostname) && url.port !== "";
+  if (url.protocol !== "https:") return false;
   return CLAUDE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`));
 }

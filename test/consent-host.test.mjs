@@ -23,10 +23,22 @@ test("trustedRedirect: lookalikes, other schemes and junk are not Claude", () =>
     "http://claude.ai/cb",
     "javascript:alert(1)//claude.ai",
     "https://evil.example/?r=https://claude.ai/",
-    "http://localhost:6274/oauth/callback",
+    "http://localhost/oauth/callback",
+    "http://localhost.evil.example:6274/cb",
+    "http://127.0.0.1.evil.example:6274/cb",
+    "http://192.168.1.5:6274/cb",
+    "ftp://localhost:6274/cb",
     "",
     undefined,
     null,
     "not a url",
   ]) assert.equal(trustedRedirect(uri), false, String(uri));
+});
+
+test("trustedRedirect: Claude Code's sign-in on this computer (http on a loopback address with a port)", () => {
+  for (const uri of [
+    "http://localhost:6274/oauth/callback",
+    "http://127.0.0.1:54321/callback",
+    "http://[::1]:8080/callback",
+  ]) assert.equal(trustedRedirect(uri), true, uri);
 });
