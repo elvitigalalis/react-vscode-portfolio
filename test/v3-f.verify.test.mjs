@@ -207,7 +207,7 @@ test("schema: mail accounts never reach the public views", async () => {
 
 // --- The mail-connect function --------------------------------------------------------------
 
-test("mail-connect: deployed like telegram, secrets from the environment", { todo: true }, async () => {
+test("mail-connect: deployed like telegram, secrets from the environment", async () => {
   await import(MOD);
   assert.ok(fn, "no supabase/functions/mail-connect/index.ts");
   assert.match(fn, /--no-verify-jwt/);
@@ -217,7 +217,7 @@ test("mail-connect: deployed like telegram, secrets from the environment", { tod
   assert.match(fn, /from ["']\.\.\/\.\.\/\.\.\/src\/sheet\/mailconnect\.mjs["']/);
 });
 
-test("mail-connect: /start checks the owner's token before sending him to Google", { todo: true }, async () => {
+test("mail-connect: /start checks the owner's token before sending him to Google", async () => {
   await import(MOD);
   assert.match(fn, /["'`/]start\b/);
   assert.match(fn, /access_token/);
@@ -229,7 +229,7 @@ test("mail-connect: /start checks the owner's token before sending him to Google
   assert.match(fn, /\/functions\/v1\/mail-connect\/callback/);
 });
 
-test("mail-connect: /callback checks the state, swaps the code and reads the account's email", { todo: true }, async () => {
+test("mail-connect: /callback checks the state, swaps the code and reads the account's email", async () => {
   await import(MOD);
   assert.match(fn, /["'`/]callback\b/);
   assert.match(fn, /verifyState\(/);
@@ -239,7 +239,7 @@ test("mail-connect: /callback checks the state, swaps the code and reads the acc
   assert.match(fn, /emailAddress/);
 });
 
-test("mail-connect: the refresh token goes to Vault and the row is upserted by email", { todo: true }, async () => {
+test("mail-connect: the refresh token goes to Vault and the row is upserted by email", async () => {
   await import(MOD);
   const both = fn + "\n" + schema;
   assert.match(fn, /refresh_token/);
@@ -251,14 +251,14 @@ test("mail-connect: the refresh token goes to Vault and the row is upserted by e
   assert.match(both, /mail_accounts\?on_conflict=email|on conflict \(email\)/);
 });
 
-test("mail-connect: it redirects back to /plan with the outcome", { todo: true }, async () => {
+test("mail-connect: it redirects back to /plan with the outcome", async () => {
   await import(MOD);
   assert.match(fn, /\/plan\/\?mail=connected/);
   assert.match(fn, /\/plan\/\?mail=error&reason=/);
   assert.match(fn, /\b30[23]\b|Response\.redirect\(/);
 });
 
-test("mail-connect: tokens are never logged or sent back", { todo: true }, async () => {
+test("mail-connect: tokens are never logged or sent back", async () => {
   await import(MOD);
   assert.ok(fn, "no function file");
   for (const line of fn.split("\n")) {
@@ -268,7 +268,7 @@ test("mail-connect: tokens are never logged or sent back", { todo: true }, async
   }
 });
 
-test("mail-connect: no secret is written into the repo", { todo: true }, async () => {
+test("mail-connect: no secret is written into the repo", async () => {
   await import(MOD);
   const files = { fn, schema, page, sheetJs, mod: read("src/sheet/mailconnect.mjs") };
   for (const [name, text] of Object.entries(files)) {

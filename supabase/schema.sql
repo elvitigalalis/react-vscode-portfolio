@@ -259,3 +259,28 @@ end $$;
 drop trigger if exists mail_accounts_forget on mail_accounts;
 create trigger mail_accounts_forget after delete on mail_accounts for each row execute function mail_account_forget();
 revoke execute on function mail_account_forget() from public, anon, authenticated;
+
+-- Store a connected account's refresh token: the mail-connect Edge Function calls this through
+-- PostgREST rpc with the service key, the only caller allowed. A new account gets a new Vault
+-- secret; reconnecting replaces the old token in place, so the row keeps its secret id
+-- (vault.create_secret(secret, name, description) and vault.update_secret(id, secret), as in
+-- supabase.com/docs/guides/database/vault). A row whose secret is gone gets a fresh one.
+create or replace function mail_account_save(account text, refresh text) returns void
+language plpgsql security definer set search_path = public as $$
+declare secret_id uuid;
+begin
+  select s.id into secret_id from vault.secrets s
+  where s.id = (select vault_secret_id from mail_accounts where email = account)
+     or s.name = 'mail_refresh:' || account
+  limit 1;
+  if secret_id is null then
+    secret_id := vault.create_secret(refresh, 'mail_refresh:' || account, 'Google refresh token, gmail.readonly');
+  else
+    perform vault.update_secret(secret_id, refresh);
+  end if;
+  insert into mail_accounts (email, vault_secret_id, connected_at, last_error)
+  values (account, secret_id, now(), null)
+  on conflict (email) do update
+  set vault_secret_id = excluded.vault_secret_id, connected_at = now(), last_error = null;
+end $$;
+revoke execute on function mail_account_save(text, text) from public, anon, authenticated;
