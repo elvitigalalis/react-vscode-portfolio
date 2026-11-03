@@ -1,0 +1,43 @@
+{
+  "id": "19a50b7d8e9fa0b1",
+  "threadId": "19a50b7d8e9fa0b1",
+  "labelIds": [
+    "CATEGORY_UPDATES",
+    "INBOX"
+  ],
+  "snippet": "Hi Lisul, Tom &amp; Jerry&#39;s café night is on Thursday at 7 pm — free food. Please RSVP here by Wednesday.",
+  "historyId": "1290431",
+  "internalDate": "1793667900000",
+  "payload": {
+    "partId": "",
+    "mimeType": "text/html",
+    "filename": "",
+    "headers": [
+      {
+        "name": "Subject",
+        "value": "Café night — RSVP 🎉"
+      },
+      {
+        "name": "From",
+        "value": "\"CS Club\" <csclub@stonybrook.edu>"
+      },
+      {
+        "name": "To",
+        "value": "elvitigalalis@gmail.com"
+      },
+      {
+        "name": "Date",
+        "value": "Mon, 2 Nov 2026 20:05:00 -0500"
+      },
+      {
+        "name": "Content-Type",
+        "value": "text/html; charset=UTF-8"
+      }
+    ],
+    "body": {
+      "size": 611,
+      "data": "PCFET0NUWVBFIGh0bWw-PGh0bWw-PGhlYWQ-PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT5DYWYmIzIzMzsgbmlnaHQ8L3RpdGxlPjxzdHlsZT5wIHsgY29sb3I6ICNjMDA7IH0gLmhpZGV7ZGlzcGxheTpub25lfTwvc3R5bGU-PHNjcmlwdD53aW5kb3cudHJhY2soIm9wZW4iKTs8L3NjcmlwdD48L2hlYWQ-PGJvZHk-PGRpdiBjbGFzcz0id3JhcCI-PHA-SGkgTGlzdWwsPC9wPjxwPlRvbSAmYW1wOyBKZXJyeSYjMzk7cyBjYWYmIzIzMzsgbmlnaHQgaXMgb24gVGh1cnNkYXkgYXQgNyZuYnNwO3BtICYjODIxMjsgZnJlZSBmb29kLjwvcD48cD5QbGVhc2UgPGEgaHJlZj0iaHR0cHM6Ly9zYmVuZ2FnZWQuc3Rvbnlicm9vay5lZHUvcnN2cC8xMjM_cmVmPW1haWwiPlJTVlAgaGVyZTwvYT4gYnkgV2VkbmVzZGF5LjwvcD48c2NyaXB0IHR5cGU9InRleHQvamF2YXNjcmlwdCI-ZG9jdW1lbnQud3JpdGUoIngiKTwvc2NyaXB0Pjx0YWJsZT48dHI-PHRkPlJvb208L3RkPjx0ZD5TQUMgMzAyPC90ZD48L3RyPjwvdGFibGU-PHA-JnF1b3Q7QnJpbmcgYSBmcmllbmQmcXVvdDsgJmx0OzMgdGhlIENTIGNsdWIgJiN4MjAxNDsgc2VlIHlvdSE8L3A-PC9kaXY-PC9ib2R5PjwvaHRtbD4"
+    }
+  },
+  "sizeEstimate": 3120
+}
