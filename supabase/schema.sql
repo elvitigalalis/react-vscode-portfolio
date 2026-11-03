@@ -289,3 +289,56 @@ begin
   set vault_secret_id = excluded.vault_secret_id, connected_at = now(), last_error = null;
 end $$;
 revoke execute on function mail_account_save(text, text) from public, anon, authenticated;
+
+-- --- Course tasks from Brightspace (docs/sheet-sources.md, v3) -------------------------------
+-- A course task is an ordinary private task that came from a feed: source names the feed
+-- ('brightspace'), source_uid the feed item's UID. Both stay null for hand-made tasks, and the
+-- public views list their columns by name, so neither ever reaches /now. Unique together, so a
+-- feed item is one task at most (nulls are distinct, so hand-made tasks never clash).
+alter table tasks add column if not exists source text;
+alter table tasks add column if not exists source_uid text;
+create unique index if not exists tasks_source_uid on tasks (source, source_uid);
+
+-- Every feed item UID ever inserted as a task. A seen UID is never inserted again, so a course
+-- task Lisul deletes never comes back.
+create table if not exists feed_seen (
+  source text not null,
+  uid text not null,
+  seen_at timestamptz not null default now(),
+  primary key (source, uid)
+);
+
+-- One row per feed: the last fetch, whether it worked and how many items it read, for the Feeds
+-- status in /plan Settings. etag and last_modified let a feed be fetched conditionally (campus).
+-- error never holds the feed's URL: that URL is a secret.
+create table if not exists feed_state (
+  source text primary key,
+  etag text,
+  last_modified text,
+  fetched_at timestamptz,
+  ok boolean,
+  error text,
+  items int
+);
+
+alter table feed_seen enable row level security;
+alter table feed_state enable row level security;
+drop policy if exists owner_all on feed_seen;
+drop policy if exists owner_all on feed_state;
+create policy owner_all on feed_seen for all using (is_owner()) with check (is_owner());
+create policy owner_all on feed_state for all using (is_owner()) with check (is_owner());
+revoke all on feed_seen, feed_state from anon;
+
+-- At :20 every hour, call the brightspace Edge Function to sync course tasks. Like
+-- sheet-telegram, its URL and the shared secret come from Vault, so until both exist the job
+-- does nothing.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-brightspace';
+select cron.schedule('sheet-brightspace', '20 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_brightspace_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "sync"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_brightspace_url')
+$job$);
