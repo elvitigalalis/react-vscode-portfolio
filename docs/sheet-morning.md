@@ -244,3 +244,28 @@ Once `planner-mcp` and the schema are deployed, Lisul does this once:
 4. **Check it:** `bash tools/verify-sheet-v4.sh`, then `RemoteTrigger get` on the task to see
    it enabled with only those two connectors. After the first 6:07 am run, the script should
    show today's proposal.
+5. **Give the server its fire token** (v5, ticket 50), so replans can start the task. The
+   token can only be made in the claude.ai web UI, not from the CLI
+   ([routines, "Add an API trigger"](https://code.claude.com/docs/en/routines#add-an-api-trigger)):
+   1. Open [claude.ai/code/routines](https://claude.ai/code/routines), click the morning task,
+      open the menu next to its name and choose **Edit**.
+   2. In the **Trigger** row, click **+** and choose **API**. A panel shows the task's
+      **Fire URL** and **Token**.
+   3. Click **Generate token** and copy it from the **Token generated** dialog straight away. It
+      starts `sk-ant-oat01-`, it is shown only once, and it takes effect at once, so close the
+      dialog without **Save changes**.
+   4. In the Supabase dashboard, Edge Functions → Secrets, add `SHEET_ROUTINE_TOKEN` with the
+      token, and `SHEET_ROUTINE_ID` with the `trig_…` part of the Fire URL. The token lives
+      only there: never in the database, Vault or a pg_net header.
+   5. Deploy `routine-fire` (`npx supabase functions deploy routine-fire --use-api
+      --no-verify-jwt`).
+   6. Fire once with `SHEET_ROUTINE_TOKEN=… node tools/routine-probe.mjs`, or through the
+      function with `SHEET_CRON_SECRET=… node tools/routine-probe.mjs --function`. It prints
+      the session URL; `RemoteTrigger list_runs` should show exactly one new run. The run is a
+      full morning run, so it submits a proposal for today.
+
+   **Regenerate** in the same panel replaces the token, and the trash icon next to it turns API
+   firing off. Each fire is a new session with no idempotency key; a 429 carries Retry-After,
+   and the server fires no sooner than that. The endpoint is a research preview
+   ([reference](https://platform.claude.com/docs/en/api/claude-code/routines-fire)): 30 fires
+   an hour per routine, shared with **Run now**.
