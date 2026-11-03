@@ -77,8 +77,9 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
       - A block overlaps no busy time, no approved block, and no other block in the proposal.
     - **needs_you:** at most 15.
       - `account` is a connected account and `message_id` matches `^[0-9a-f]{6,32}$`.
-      - `link` is exactly what `search_mail` returns for that message
-        (`https://mail.google.com/mail/?authuser=<account, URI-encoded>#all/<hex id>`).
+      - `link` is exactly the link `search_mail` returns for that message's thread
+        (`https://mail.google.com/mail/?authuser=<account, URI-encoded>#all/<hex thread id>`).
+        The thread id may differ from `message_id`.
       - `kind` is one of the four.
       - `sender` is at most 80 characters, and `subject` and `why` at most 140.
       - `due` is a date or absent.
@@ -162,9 +163,9 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
     all-day events and events marked free are left out.
   - Only start and end are saved, never titles.
 - **Off-page approvals:** blocks approved from Telegram have no Google event. When /plan opens
-  with Google connected, it creates events for approved blocks without `gcal_id` that haven't
-  ended, the same way it does when Lisul approves a block in /plan. `googleStep` returns
-  `"create"` for such a block.
+  with Google connected, it creates events for every approved block without `gcal_id` that
+  hasn't ended, whatever left it without one, the same way it does when Lisul approves a block
+  in /plan. `googleStep` returns `"create"` for such a block.
 - **Needs you:** a top-bar chip, a mail icon with "Needs you · 3", shown when any `needs_you`
   row isn't done. It opens a dialog (also `M`), grouped as Reply owed, Deadlines, Meetings and
   School & admin. Each row shows:
