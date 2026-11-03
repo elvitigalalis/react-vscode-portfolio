@@ -547,6 +547,11 @@ test("/privacy/ is The Sheet's privacy policy: read-only Gmail, Google's Limited
   assert.match(html, /can't send, change,\s+label or delete mail/, "says it can't change mail");
   assert.match(html, /will adhere to the <a href="https:\/\/developers\.google\.com\/terms\/api-services-user-data-policy">Google API Services User Data Policy<\/a>, including the\s+Limited Use requirements/, "carries Google's Limited Use disclosure");
   assert.match(html, /href="https:\/\/myaccount\.google\.com\/connections"/, "says how to revoke access");
+  assert.match(html, /Needs you/, "names the Needs you list");
+  assert.match(html, /up to 14 days/, "says how long Needs you rows are kept");
+  assert.match(html, /scheduled Claude task/, "says the morning plan runs as a scheduled task");
+  assert.match(html, /start and end/, "says busy times keep only start and end");
+  assert.match(html, /bodies aren't stored/, "says message bodies aren't stored");
   for (const page of ["index.html", "privacy/index.html"])
     assert.match(readFileSync(join(dist, page), "utf8").match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/privacy\/">Privacy<\/a>/, page);
 });
