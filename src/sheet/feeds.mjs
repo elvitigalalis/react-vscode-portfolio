@@ -82,3 +82,27 @@ export function campusRows(events, now) {
   }
   return rows;
 }
+
+// The SB Engaged feed cut to the VEVENTs that may overlap [from, to), so parseIcs only reads
+// those: the feed holds about 7,700 events across the school year, the window about 1,100. Each
+// event's DTSTART and DTEND dates are compared as text with a day's slack on each side (a TZID
+// time can sit a day off its UTC date); an event whose dates can't be read this way is kept for
+// parseIcs to judge. The cut is only a shortcut: parseIcs and campusRows still apply the window.
+const DTSTART_DATE = /\nDTSTART[;:][^\n]*?(\d{8})/, DTEND_DATE = /\nDTEND[;:][^\n]*?(\d{8})/;
+export function campusWindowIcs(text, from, to) {
+  const ymd = (t) => new Date(t).toISOString().slice(0, 10).replaceAll("-", "");
+  const lo = ymd(+new Date(from) - DAY), hi = ymd(+new Date(to) + DAY);
+  const kept = ["BEGIN:VCALENDAR"];
+  // Events are found by their BEGIN and END lines, so a description quoting them can't split one.
+  let i = text.indexOf("\nBEGIN:VEVENT");
+  while (i >= 0) {
+    const j = text.indexOf("\nEND:VEVENT", i);
+    if (j < 0) break;
+    const chunk = text.slice(i + 1, j + 11);
+    const start = DTSTART_DATE.exec(chunk)?.[1], end = DTEND_DATE.exec(chunk)?.[1] ?? start;
+    if (!start || (start <= hi && end >= lo)) kept.push(chunk);
+    i = text.indexOf("\nBEGIN:VEVENT", j);
+  }
+  kept.push("END:VCALENDAR", "");
+  return kept.join("\r\n");
+}
