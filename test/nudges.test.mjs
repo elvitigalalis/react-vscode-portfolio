@@ -101,6 +101,19 @@ test("morning brief: an empty day says so and nothing else", () => {
   }]);
 });
 
+test("morning brief: an empty day still says the morning plan didn't come in", () => {
+  const snap = snapshot({ settings: { ...settings, morning_on: true }, proposal: null });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text, 'Nothing on today.\nNo morning plan came in today: say "plan my day" to Claude.');
+});
+
+test("check-in: two open needs_you rows read \"still need you\"", () => {
+  const n = (id) => ({ id, done: false });
+  const snap = snapshot({ tasks: [task("t1", "Gym")], needsOpen: [n("a"), n("b"), { id: "c", done: true }] });
+  const [m] = whatToSend(snap, at("2026-10-26T21:00:00Z")).filter((x) => x.kind === "checkin");
+  assert.equal(m.text, "Shutdown time. 0 done, 1 left.\nMail: 2 still need you.");
+});
+
 test("quiet hours: a brief still unsent at 11 pm waits for tomorrow", () => {
   const snap = snapshot({ tasks: [task("t1", "Gym")] });
   assert.deepEqual(whatToSend(snap, at("2026-10-27T02:59:00Z")).map((m) => m.kind), ["brief", "checkin"]); // 10:59 pm
