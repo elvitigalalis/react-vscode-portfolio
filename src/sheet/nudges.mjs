@@ -8,6 +8,7 @@
 import { ORIGIN, SHEET } from "../site.mjs";
 import { proposalLines } from "./proposal.mjs";
 import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
+import { paceKind } from "./pace.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -21,6 +22,10 @@ export const REPEAT_AFTER = 10 * 60_000;
 // A Snooze tap logs the nudge again for this long after the tap, unsent: { block_id,
 // kind: "snooze", day, send_at, sent_at: null }. That row is all whatToSend needs to send it.
 export const SNOOZE_FOR = 10 * 60_000;
+// v5: a late run still sends a Finished? check this long after its block's end (docs/sheet-v5.md).
+export const FINISHED_LATE = 30 * 60_000;
+// More time adds this much to a block.
+export const MORE_TIME = 30 * 60_000;
 
 const PLAN_URL = `${ORIGIN}/plan/`;
 
@@ -43,7 +48,7 @@ export function whatToSend(snapshot, now) {
   const day = dayOf(snapshot, now);
   if (day.minutes < BRIEF_AT || day.minutes >= QUIET_FROM) return [];
   // Each kind of message is one rule over the same day.
-  const due = [brief(day), ...planMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...checkin(day)]
+  const due = [brief(day), ...planMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -72,7 +77,7 @@ function dayOf(snapshot, now) {
   return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, plan, today, minutes, tz, now: now.getTime() };
 }
 
-const BUDGETED = ["start", "repeat", "snooze"];
+const BUDGETED = ["start", "repeat", "snooze", "finished"];
 
 // The budget, kept predictable: the nudges at the start of the day's first six blocks that can
 // be nudged are kept for them, and repeats, snoozes and later blocks' nudges get only the slots
@@ -173,6 +178,30 @@ function snoozes(day) {
     .map((n) => ({ kind: "snooze", block_id: b.id, day: day.today, send_at: new Date(n.send_at).toISOString(), text: nudgeText(b, task, day), buttons: tapButtons(b.id) })));
 }
 
+// --- Finished? (v5, docs/sheet-v5.md "The Finished? check") ----------------------------------
+
+const finishedButtons = (id) => [
+  { text: "Finished", callback_data: `finished:${id}` },
+  { text: "More time", callback_data: `more:${id}` },
+  { text: "Didn't start", callback_data: `nostart:${id}` },
+  { text: "Tomorrow", callback_data: `tomorrow:${id}` },
+];
+
+// At the end of each of today's blocks that was nudged, asking how it went: while its task is
+// open, the day isn't shut down and the end is before quiet hours. Up to FINISHED_LATE late, once
+// per end (More time moves the end, so it asks again). It takes a budget slot, like a repeat.
+function finishedChecks(day) {
+  if (day.day?.shutdown) return [];
+  return day.blocks.flatMap((b) => {
+    const start = minutesOn(b.starts_at, day.today, day.tz);
+    const end = Date.parse(b.ends_at);
+    const task = day.tasks.find((t) => t.id === b.task_id);
+    if (start < 0 || start >= 1440 || !task || task.done || !startSent(day.log, b)) return [];
+    if (minutesOn(b.ends_at, day.today, day.tz) >= QUIET_FROM || day.now >= end + FINISHED_LATE) return [];
+    return [{ kind: "finished", block_id: b.id, day: day.today, send_at: new Date(end).toISOString(), text: `Finished? · ${task.title}`, buttons: finishedButtons(b.id) }];
+  });
+}
+
 // The check-in: at the day's shutdown line (the default unless he moved it), asking for the
 // shutdown. Once the day is shut down, or on a day with no tasks, there's nothing to ask.
 // It also says what's due tomorrow and whether mail still needs him (docs/sheet-morning.md).
@@ -198,6 +227,8 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // A Telegram update, read as a tap on a nudge's Done or Snooze:
 //   { action: "done" | "snooze", block_id, query_id, chat_id, message_id }
+// or on a Finished? check's four buttons, the same with action "finished" | "more" | "nostart" |
+// "tomorrow" (v5)
 // or on a plan's Approve all or Skip:
 //   { action: "pa" | "ps", day, query_id, chat_id, message_id }
 // or null for anything else, which the webhook ignores without a word: any other update, a chat
@@ -209,7 +240,7 @@ export function readTap(update, settings) {
   const from = { query_id: q.id, chat_id: q.message.chat.id, message_id: q.message.message_id };
   const [, plan, day] = /^(pa|ps):(.+)$/.exec(q.data ?? "") ?? [];
   if (plan) return DATE.test(day) ? { action: plan, day, ...from } : null;
-  const [, action, block_id] = /^(done|snooze):(.+)$/.exec(q.data ?? "") ?? [];
+  const [, action, block_id] = /^(done|snooze|finished|more|nostart|tomorrow):(.+)$/.exec(q.data ?? "") ?? [];
   if (!action || !UUID.test(block_id)) return null;
   return { action, block_id, ...from };
 }
@@ -240,6 +271,7 @@ export function handleTap(tap, snapshot, now) {
   // A block deleted or moved off the plan since its nudge went out: nothing left to act on.
   if (!task) return { changes: [], text: GONE };
   if (task.done) return { changes: [], text: DONE };
+  if (FINISHED_ANSWERS[tap.action]) return FINISHED_ANSWERS[tap.action](b, task, snapshot, now);
   return tap.action === "snooze" ? snooze(b, task, snapshot, now) : done(task, snapshot, now);
 }
 
@@ -282,3 +314,54 @@ function planDecision(tap, { proposal, blocks, settings }) {
   changes.push({ table: "proposals", id: tap.day, update: { status: approve ? "approved" : "skipped" } });
   return { changes, text: approve ? `✓ Approved ${plural(left.length, "block")}` : "Skipped. Plan in /plan when you're ready." };
 }
+
+// --- The Finished? answers (v5, docs/sheet-v5.md "The Finished? answers") ------------------
+// Only Finished writes actuals, which is what pace learns from (src/sheet/pace.mjs).
+
+const FINISHED_ANSWERS = {
+  // Done, plus the minutes it took: every approved block of the task that started before now,
+  // up to the earlier of its end and now.
+  finished(b, task, snapshot, now) {
+    const t = now.getTime();
+    const ms = snapshot.blocks.filter((x) => x.task_id === task.id && !x.proposed && Date.parse(x.starts_at) < t)
+      .reduce((sum, x) => sum + Math.min(Date.parse(x.ends_at), t) - Date.parse(x.starts_at), 0);
+    // actuals holds 1–960 minutes; a tap before any time passed records none.
+    const minutes = Math.min(Math.round(ms / 60_000), 960);
+    const { changes } = done(task, snapshot, now);
+    if (minutes < 1) return { changes, text: DONE };
+    const row = { day: localNow(now, snapshot.settings.time_zone).day, task_id: task.id, block_id: b.id, kind: paceKind(task), est_min: task.est_min ?? null, minutes };
+    return { changes: [...changes, { table: "actuals", insert: row }], text: `✓ Done in ${minutes} min · ${task.title}` };
+  },
+  // Thirty minutes more, when nothing approved or busy takes them and they end by quiet hours.
+  // Proposed blocks don't count as taken. The next Finished? follows at the new end.
+  more(b, task, snapshot) {
+    const tz = snapshot.settings.time_zone;
+    const from = Date.parse(b.ends_at);
+    const to = from + MORE_TIME;
+    const ends_at = new Date(to).toISOString();
+    const on = localNow(new Date(b.starts_at), tz).day;
+    if (minutesOn(ends_at, on, tz) > QUIET_FROM) return { changes: [], text: `Too close to quiet hours · ${task.title}` };
+    const taken = [...(snapshot.busy ?? []), ...snapshot.blocks.filter((x) => x.id !== b.id && !x.proposed)]
+      .some((x) => Date.parse(x.starts_at) < to && Date.parse(x.ends_at) > from);
+    if (taken) return { changes: [], text: `The next 30 min aren't free · ${task.title}` };
+    const pending = b.gcal_id ? [{ table: "gcal_pending", insert: { gcal_id: b.gcal_id, ends_at } }] : [];
+    return { changes: [{ table: "blocks", id: b.id, update: { ends_at } }, ...pending], text: `More time: until ${formatClock(minutesOn(ends_at, on, tz))} · ${task.title}` };
+  },
+  nostart: (b, task) => ({ changes: [], text: `Left open · ${task.title}` }),
+  // The task's blocks today that haven't started go (proposed ones too). A task on a day with no
+  // set time rolls, as the nightly roll would; any other task moves onto tomorrow.
+  tomorrow(b, task, snapshot, now) {
+    const tz = snapshot.settings.time_zone;
+    const { day: today } = localNow(now, tz);
+    const tomorrow = addDays(today, 1);
+    const changes = snapshot.blocks.filter((x) => x.task_id === task.id && Date.parse(x.starts_at) > now.getTime()
+      && localNow(new Date(x.starts_at), tz).day === today).flatMap((x) => [
+      { table: "blocks", id: x.id, delete: true },
+      ...(x.gcal_id ? [{ table: "gcal_pending", insert: { gcal_id: x.gcal_id, ends_at: null } }] : []),
+    ]);
+    changes.push(task.day && !task.at_time
+      ? { rpc: "roll_tasks", args: { ids: [task.id], target: tomorrow } }
+      : { table: "tasks", id: task.id, update: { day: tomorrow, list: null } });
+    return { changes, text: `Moved to tomorrow · ${task.title}` };
+  },
+};
