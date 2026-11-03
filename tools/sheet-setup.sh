@@ -245,12 +245,24 @@ ENV_FILE=.env
 [[ -f src/site.mjs && -f supabase/schema.sql ]] || { warn "Run this from the lisul-elvi-site repo root (the sheet branch)."; exit 1; }
 
 if [[ "$MODE" == telegram ]]; then
-  TOTAL_STAGES=8
+  TOTAL_STAGES=6
   banner "The Sheet: update the tables, connect Telegram and Claude"
 else
   TOTAL_STAGES=14
   banner "The Sheet: connect Supabase, Google Calendar, Telegram and Claude"
 fi
+
+if [[ "$MODE" == telegram ]]; then
+# The site is already connected: use the project src/site.mjs points at, never a new one.
+SHEET_SUPABASE_URL=$(sed -nE 's/^ *supabaseUrl: "([^"]*)".*/\1/p' src/site.mjs)
+SHEET_ANON_KEY=$(sed -nE 's/^ *anonKey: "([^"]*)".*/\1/p' src/site.mjs)
+[[ "$SHEET_SUPABASE_URL" =~ ^https://[a-z0-9]+\.supabase\.co$ ]] || { warn "src/site.mjs has no Supabase project yet. Run 'bash tools/sheet-setup.sh' first."; exit 1; }
+write_env SHEET_SUPABASE_URL "$SHEET_SUPABASE_URL"
+write_env SHEET_ANON_KEY "$SHEET_ANON_KEY"
+SHEET_REF="${SHEET_SUPABASE_URL#https://}"; SHEET_REF="${SHEET_REF%%.*}"
+say "Using the site's Supabase project: $SHEET_REF"
+note "Sign in to Supabase with the account that owns it."
+else
 
 # ── 1 ────────────────────────────────────────────────────────────────────
 stage "Supabase: create the project"
@@ -286,6 +298,7 @@ while :; do
 done
 write_env SHEET_ANON_KEY "$SHEET_ANON_KEY"
 pause
+fi
 
 # ── 3 ────────────────────────────────────────────────────────────────────
 stage "Supabase: create or update the tables"
@@ -457,6 +470,7 @@ pause "Press Enter once it's saved"
 printf '' | pbcopy 2>/dev/null || true
 say "Now deploy the function. The Supabase CLI signs in through your browser first."
 step "npx supabase login"
+note "Log in as the account that owns $SHEET_REF. If deploy says 403, run npx supabase logout first."
 step "npx supabase functions deploy telegram --use-api --no-verify-jwt --project-ref $SHEET_REF"
 note "--use-api bundles on Supabase's side, which follows the import of src/sheet/nudges.mjs."
 if confirm "Run these two commands now?"; then
