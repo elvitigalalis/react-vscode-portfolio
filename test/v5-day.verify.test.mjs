@@ -106,20 +106,20 @@ function refused(result, ...patterns) {
 // The workload cap
 // =============================================================================================
 
-test("cap: planned minutes exactly at the cap are allowed, and the pending revision's blocks don't count", todo, async () => {
+test("cap: planned minutes exactly at the cap are allowed, and the pending revision's blocks don't count", async () => {
   const { checkProposal } = await proposal();
   // 240 planned; with revision 1's 45-minute proposed block it would be 285.
   const tight = snap({ day_rules: { ...snap().day_rules, workload_cap_min: 240 } });
   assert.equal(checkProposal(good(), tight).ok, true);
 });
 
-test("cap: planned minutes over the cap are refused, naming blocks and the cap", todo, async () => {
+test("cap: planned minutes over the cap are refused, naming blocks and the cap", async () => {
   const { checkProposal } = await proposal();
   const tight = snap({ day_rules: { ...snap().day_rules, workload_cap_min: 225 } });
   refused(checkProposal(good(), tight), /^blocks/, /cap/i);
 });
 
-test("cap: approved blocks earlier in the day count toward it", todo, async () => {
+test("cap: approved blocks earlier in the day count toward it", async () => {
   const { checkProposal } = await proposal();
   // Without the 8:30 am Reading block the day holds 180 minutes, under a 200-minute cap; with it, 240.
   const cap = { ...snap().day_rules, workload_cap_min: 200 };
@@ -131,25 +131,25 @@ test("cap: approved blocks earlier in the day count toward it", todo, async () =
 // The break rule: 10 minutes after every 90 minutes of blocks in a row
 // =============================================================================================
 
-test("breaks: a block that runs into an approved block, making 105 minutes in a row, is refused", todo, async () => {
+test("breaks: a block that runs into an approved block, making 105 minutes in a row, is refused", async () => {
   const { checkProposal } = await proposal();
   // OS homework 10:45-11:30 am, then Gym 11:30 am-12:30 pm: 10:45 to 12:30 with no gap.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "10:45" }) }), snap()), /blocks\[0\]/, /90/);
 });
 
-test("breaks: a gap under 10 minutes still joins the run", todo, async () => {
+test("breaks: a gap under 10 minutes still joins the run", async () => {
   const { checkProposal } = await proposal();
   // OS homework 10:40-11:25 am: a 5-minute gap before Gym, so 10:40 to 12:30 is one 110-minute run.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "10:40" }) }), snap()), /blocks\[0\]/, /90/);
 });
 
-test("breaks: a 10-minute gap is a break", todo, async () => {
+test("breaks: a 10-minute gap is a break", async () => {
   const { checkProposal } = await proposal();
   // OS homework 10:35-11:20 am, then 10 minutes before Gym at 11:30.
   assert.equal(checkProposal(good({ blocks: withBlock(0, { start: "10:35" }) }), snap()).ok, true);
 });
 
-test("breaks: exactly 90 minutes in a row is allowed", todo, async () => {
+test("breaks: exactly 90 minutes in a row is allowed", async () => {
   const { checkProposal } = await proposal();
   // HW3 3:30-4:15 pm, then OS homework 4:15-5:00 pm.
   const blocks = [
@@ -160,7 +160,7 @@ test("breaks: exactly 90 minutes in a row is allowed", todo, async () => {
   assert.equal(checkProposal(good({ blocks }), snap()).ok, true);
 });
 
-test("breaks: the error names the proposed block that carries the run past 90 minutes", todo, async () => {
+test("breaks: the error names the proposed block that carries the run past 90 minutes", async () => {
   const { checkProposal } = await proposal();
   // With shutdown at 6:00 pm: HW3 3:30-4:15, OS homework 4:15-5:00 (90 so far), Lab 4 5:00-6:00 pm (150).
   const late = snap({ shutdown: "18:00", window: { from: "10:15", to: "18:00" } });
