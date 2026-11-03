@@ -369,7 +369,7 @@ const checkinText = async (extra) => {
   return m.text;
 };
 
-test("check-in: it says what's due tomorrow, undone tasks only", todo, async () => {
+test("check-in: it says what's due tomorrow, undone tasks only", async () => {
   const text = await checkinText({ tasks: [...sixTasks,
     task("h", "HW3", { day: null, list: "Brightspace", due: "2026-11-05" }),
     task("l", "Lab 4", { day: "2026-11-05", due: "2026-11-05" }),
@@ -379,14 +379,14 @@ test("check-in: it says what's due tomorrow, undone tasks only", todo, async () 
   assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 2 due (HW3, Lab 4).");
 });
 
-test("check-in: a title is cut to 30 characters", todo, async () => {
+test("check-in: a title is cut to 30 characters", async () => {
   const text = await checkinText({ tasks: [...sixTasks,
     task("r", "Read chapters 4 through 9 of Operating Systems", { day: null, list: "Inbox", due: "2026-11-05" }),
   ] });
   assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 1 due (Read chapters 4 through 9 of O).");
 });
 
-test("check-in: at most 3 titles, with the full count", todo, async () => {
+test("check-in: at most 3 titles, with the full count", async () => {
   const text = await checkinText({ tasks: [...sixTasks,
     task("h", "HW3", { day: null, list: "Brightspace", due: "2026-11-05" }),
     task("l", "Lab 4", { day: "2026-11-05", due: "2026-11-05" }),
@@ -396,12 +396,12 @@ test("check-in: at most 3 titles, with the full count", todo, async () => {
   assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 4 due (HW3, Lab 4, Essay draft).");
 });
 
-test("check-in: \"Mail: 1 still needs you.\" while a needs_you row isn't done", todo, async () => {
+test("check-in: \"Mail: 1 still needs you.\" while a needs_you row isn't done", async () => {
   const text = await checkinText({ tasks: sixTasks, needsOpen: [openNeed("19a4f2c3b5d6e701")] });
   assert.equal(text, "Shutdown time. 4 done, 2 left.\nMail: 1 still needs you.");
 });
 
-test("check-in: both lines, tomorrow first", todo, async () => {
+test("check-in: both lines, tomorrow first", async () => {
   const text = await checkinText({
     tasks: [...sixTasks, task("h", "HW3", { day: null, list: "Brightspace", due: "2026-11-05" }), task("l", "Lab 4", { day: "2026-11-05", due: "2026-11-05" })],
     needsOpen: [openNeed("19a4f2c3b5d6e701")],
@@ -409,7 +409,7 @@ test("check-in: both lines, tomorrow first", todo, async () => {
   assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 2 due (HW3, Lab 4).\nMail: 1 still needs you.");
 });
 
-test("check-in: nothing due tomorrow and no open mail leaves it as it was", todo, async () => {
+test("check-in: nothing due tomorrow and no open mail leaves it as it was", async () => {
   const text = await checkinText({ tasks: [...sixTasks, task("x", "Essay", { day: null, list: "Inbox", due: "2026-11-06" })] });
   assert.equal(text, "Shutdown time. 4 done, 2 left.");
 });
