@@ -74,7 +74,7 @@ const rows = (extra = {}) => ({
 });
 const sixOhSeven = new Date("2026-11-04T11:07:00Z"); // 6:07 am EST
 
-test("planSnapshot: the whole shape read_planner returns", todo, async () => {
+test("planSnapshot: the whole shape read_planner returns", async () => {
   const { planSnapshot } = await load();
   const r = rows({
     tasks: [
@@ -126,7 +126,7 @@ test("planSnapshot: the whole shape read_planner returns", todo, async () => {
   });
 });
 
-test("planSnapshot: the 3 pm rule: before it today, from it tomorrow, each with its shutdown line", todo, async () => {
+test("planSnapshot: the 3 pm rule: before it today, from it tomorrow, each with its shutdown line", async () => {
   const { planSnapshot } = await load();
   const days = [
     { day: DAY, planned: false, shutdown: false, shutdown_at: "18:30:00", reflection: null },
@@ -147,14 +147,14 @@ test("planSnapshot: the 3 pm rule: before it today, from it tomorrow, each with 
   assert.deepEqual(t.blocks, [{ task_id: T1, starts_at: "2026-11-05T14:30:00Z", ends_at: "2026-11-05T15:15:00Z", proposed: false }]);
 });
 
-test("planSnapshot: with no days row, or one without a line, shutdown is 17:00", todo, async () => {
+test("planSnapshot: with no days row, or one without a line, shutdown is 17:00", async () => {
   const { planSnapshot } = await load();
   assert.equal(planSnapshot(rows(), sixOhSeven).shutdown, "17:00");
   const days = [{ day: DAY, planned: false, shutdown: false, shutdown_at: null, reflection: null }];
   assert.equal(planSnapshot(rows({ days }), sixOhSeven).shutdown, "17:00");
 });
 
-test("planSnapshot: the task list is plan_day's undone tasks, then at-risk ones, then course tasks due within 7 days, none twice", todo, async () => {
+test("planSnapshot: the task list is plan_day's undone tasks, then at-risk ones, then course tasks due within 7 days, none twice", async () => {
   const { planSnapshot } = await load();
   const tasks = [
     taskRow("a", "OS homework", { due: "2026-11-05", position: 1 }),                       // today, and at risk
@@ -175,7 +175,7 @@ test("planSnapshot: the task list is plan_day's undone tasks, then at-risk ones,
   assert.deepEqual(s.tasks.map((t) => t.at_risk), [true, false, true, true, true, false]);
 });
 
-test("planSnapshot: after 3 pm, at risk counts from tomorrow", todo, async () => {
+test("planSnapshot: after 3 pm, at risk counts from tomorrow", async () => {
   const { planSnapshot } = await load();
   const tasks = [
     taskRow("x", "Tomorrow's task", { day: "2026-11-05" }),
@@ -187,7 +187,7 @@ test("planSnapshot: after 3 pm, at risk counts from tomorrow", todo, async () =>
   assert.deepEqual(s.tasks.map((t) => [t.id, t.at_risk]), [["x", false], ["y", true], ["z", false]]);
 });
 
-test("planSnapshot: campus events go out without description or url", todo, async () => {
+test("planSnapshot: campus events go out without description or url", async () => {
   const { planSnapshot } = await load();
   const campus = [{
     uid: "evt-2", title: "Robotics Society GBM", starts_at: "2026-11-04T22:30:00Z", ends_at: "2026-11-04T23:30:00Z",
@@ -204,7 +204,7 @@ test("planSnapshot: campus events go out without description or url", todo, asyn
   assert.equal("url" in e, false);
 });
 
-test("planSnapshot: no proposal yet, no open mail, no accounts", todo, async () => {
+test("planSnapshot: no proposal yet, no open mail, no accounts", async () => {
   const { planSnapshot } = await load();
   const s = planSnapshot(rows({ accounts: [] }), sixOhSeven);
   assert.equal(s.proposal, null);
