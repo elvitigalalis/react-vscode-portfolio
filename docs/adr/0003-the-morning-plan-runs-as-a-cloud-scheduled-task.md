@@ -42,5 +42,13 @@ Approve.
   AI. The Google events for blocks approved this way are created the next time /plan opens.
 - The task's "Succeeded" status can be wrong: a run can fail quietly, for example when a
   connector is missing. The morning brief therefore says when no plan came in.
+- **The task's own sandbox is a third way out.** A cloud task could also have a shell, web fetch
+  or web search, and any of them would carry data out. So the task is created with network
+  access off and those tools disallowed, and its prompt names the only tools it may call.
+- **Accepted risks** (security review, 2026-11-03):
+  - An Approve all tap approves the day's current proposal. If the run submits twice, the tap
+    can approve the newer one, which passed the same checks and was sent as its own message.
+  - planner-mcp accepts any owner token, not only the connector's own OAuth client. Every such
+    token is Lisul's, and row-level security already lets it do more than the connector can.
 - Cloud scheduled tasks are a research preview. If they change or go away, "plan my day" in chat
   still works as before.
