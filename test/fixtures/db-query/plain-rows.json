@@ -1,0 +1,8 @@
+Target: custom Postgres (127.0.0.1:54399)
+[
+  {
+    "name": "mail_accounts",
+    "status": "info",
+    "detail": "2 connected"
+  }
+]
