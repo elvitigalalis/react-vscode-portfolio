@@ -72,8 +72,6 @@ export const NEEDS_KINDS = ["reply", "deadline", "meeting", "admin"];
 const EARLIEST = 7 * 60;
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const HEX_ID = /^[0-9a-f]{6,32}$/;
-// A link in any form Telegram or a browser would make clickable: a scheme, "www." or a
-// "word.word/" path.
 // Anything Telegram or a browser could turn into a link or a command: a scheme ("https://",
 // "tg://"), "www.", a bare domain ("evil.com", "t.me"), an @mention or email, or a /command.
 const URLISH = /[a-z][a-z0-9+.-]*:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b|@\w|(?:^|\s)\/[a-z]/i;
