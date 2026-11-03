@@ -234,3 +234,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   }
   .sheet-day { scroll-snap-align: start; }
 }
+
+/* Settings: mail accounts (src/sheet/mail-settings.mjs) */
+.sheet-settings-part h3 { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
+.sheet-mail { list-style: none; padding: 0; margin: 0.5rem 0; }
+.sheet-mail li { padding: 0.25rem 0; }

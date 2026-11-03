@@ -283,7 +283,7 @@ test("mail-connect: no secret is written into the repo", async () => {
 
 // --- /plan Settings -------------------------------------------------------------------------
 
-test("/plan: Settings lists the mail accounts with their last error", { todo: true }, async () => {
+test("/plan: Settings lists the mail accounts with their last error", async () => {
   await import(MOD);
   assert.match(page, /Settings/);
   assert.match(page, /Mail accounts/);
@@ -292,7 +292,7 @@ test("/plan: Settings lists the mail accounts with their last error", { todo: tr
   assert.match(sheetJs, /last_error/);
 });
 
-test("/plan: Connect an account opens mail-connect/start with the sign-in token", { todo: true }, async () => {
+test("/plan: Connect an account opens mail-connect/start with the sign-in token", async () => {
   await import(MOD);
   // A real button or link, so it is reachable from the keyboard.
   assert.match(page + sheetJs, /<(button|a)\b[^>]*>\s*Connect an account\s*</);
@@ -300,7 +300,7 @@ test("/plan: Connect an account opens mail-connect/start with the sign-in token"
   assert.match(sheetJs, /access_token/);
 });
 
-test("/plan: Remove asks first, then deletes the row", { todo: true }, async () => {
+test("/plan: Remove asks first, then deletes the row", async () => {
   await import(MOD);
   const ui = page + "\n" + sheetJs;
   assert.match(ui, /<button\b[^>]*>\s*Remove\s*</);
