@@ -171,6 +171,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; font-size: 0.875rem; margin: 0 0 1rem; }
 .sheet-keys dt { font-weight: 600; }
 .sheet-keys dd { margin: 0; color: var(--muted); }
+/* The icon legend under the keys. */
+.sheet-legend-title { font-size: 0.875rem; margin: 0 0 0.35rem; }
 
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
@@ -277,4 +279,28 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 @media (max-width: 40rem) {
   .sheet-campus-item { grid-template-columns: 1fr; }
   .sheet-campus-item > .sheet-btn { grid-column: 1; grid-row: auto; justify-self: start; }
+}
+
+/* Icons (docs/sheet-glance.md, "The icon set"): Lucide symbols from the sprite in
+   plan/index.astro, drawn in the text's colour at its size. The sprite itself takes no space. */
+.sheet-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.sheet-icon {
+  display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: -0.125em;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Rows never collapse (docs/sheet-glance.md, change 1). A title keeps at least 8 characters.
+   In a day or list column, the details wrap under the title as one 0.75rem line whenever the
+   title wouldn't fit beside them on one line (its flex basis becomes its one-line width). A
+   proposal already takes a line of its own (.sheet-proposal). The query container is the task
+   row, which spans its day column: size containment on .sheet-day itself would end its
+   subgrid, and the week's rows would stop lining up. */
+.sheet-task { container: sheet-row / inline-size; flex-wrap: wrap; align-content: flex-start; }
+.sheet-title { min-width: min(8ch, 100%); }
+/* A roll mark stays on the title's line: the title's basis leaves room for it. */
+.sheet-roll { flex: none; }
+.sheet-roll + .sheet-title { max-width: calc(100% - 1.25rem); }
+.sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
+@container sheet-row (width < 40rem) {
+  .sheet-title { flex: 1 1 auto; }
 }
