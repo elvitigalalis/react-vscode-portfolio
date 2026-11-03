@@ -15,6 +15,26 @@ export const el = (tag, props = {}, ...kids) => {
   return node;
 };
 
+// --- Icons (docs/sheet-glance.md, "The icon set") ----------------------------------------
+
+// One symbol from the Lucide sprite in plan/index.astro, hidden from screen readers: the
+// row's aria-label carries the words. A label shows as hover text.
+const SVG = "http://www.w3.org/2000/svg";
+export function icon(name, label) {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "sheet-icon");
+  if (label) {
+    const title = document.createElementNS(SVG, "title");
+    title.textContent = label;
+    svg.append(title);
+  }
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
 // --- State -------------------------------------------------------------------------------
 
 export const state = {

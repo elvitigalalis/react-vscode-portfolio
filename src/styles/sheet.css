@@ -278,3 +278,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   .sheet-campus-item { grid-template-columns: 1fr; }
   .sheet-campus-item > .sheet-btn { grid-column: 1; grid-row: auto; justify-self: start; }
 }
+
+/* Icons (docs/sheet-glance.md, "The icon set"): Lucide symbols from the sprite in
+   plan/index.astro, drawn in the text's colour at its size. The sprite itself takes no space. */
+.sheet-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.sheet-icon {
+  display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: -0.125em;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
