@@ -54,6 +54,16 @@ test("typed details: tasks are public by default and odd text stays in the title
   assert.equal(parseEntry("C# notes").title, "C# notes");
 });
 
+test("typed details: a title typed over several lines is saved as one line", () => {
+  assert.equal(parseEntry("Email the recruiter\nwith the transcript\r\n  ~30m").title, "Email the recruiter with the transcript");
+});
+
+test("typed details: a title longer than the database allows is cut at 500 characters", () => {
+  const e = parseEntry(`${"a".repeat(498)} bcd ~45m`);
+  assert.equal(e.title, `${"a".repeat(498)} b`);
+  assert.equal(e.est_min, 45);
+});
+
 test("due dates: ^tomorrow is the day after the task's day", () => {
   const e = parseEntry("Essay ^tomorrow", "2026-10-31");
   assert.equal(e.due, "2026-11-01");
