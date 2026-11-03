@@ -61,7 +61,7 @@ mail_connect_states  nonce text pk, created_at timestamptz   -- service role onl
     `VALUE=DATE` values, a missing `DTEND` (`DURATION`, or zero length), and CRLF or LF line ends.
   - It ignores `RRULE`, keeping the first occurrence; neither feed repeats events.
   - Events whose `ORGANIZER` line has a `CN` also carry `organizer`, that name unquoted (SB
-    Engaged's clubs); without one the field is absent.
+    Engaged's clubs); without one the field is absent. Likewise `contact`, the `CONTACT` value.
   - Malformed events are skipped, never thrown on.
 - **`feeds.mjs`:**
   - `courseTaskChanges(events, { tasks, seen, timeZone })` returns `{ insert, update, seen }`:
@@ -75,7 +75,9 @@ mail_connect_states  nonce text pk, created_at timestamptz   -- service role onl
     - an already-seen UID that still has an undone task updates that task's title and due date;
     - done tasks, deleted tasks and items that drop out of the feed are left alone.
   - `campusRows(events, now)` returns rows for `campus_events`, from now to 14 days ahead.
-    `url` is kept only when it starts with `https://sbengaged.stonybrook.edu/`, otherwise null.
+    `url` is the feed's `URL`, or else its `CONTACT` (the same page under the group, without
+    `#event_host`), kept only when it starts with `https://sbengaged.stonybrook.edu/`, otherwise
+    null.
 - **`campus.mjs`:**
   - `campusDay(events, day, timeZone, { tags, showRoutine })` returns the day's events, sorted:
     free food first, then by start time.
@@ -164,7 +166,8 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
 - **The "Campus" row:** under each day's calendar events, a collapsed "Campus · 79" row, counted
   after the routine filter. Opening it shows that day's list from `campusDay`. Each event shows its
   time, title, group, its tags as chips, a "Free food" badge, a link to the event page, and
-  **Add to my day**.
+  **Add to my day**. The title is always the link: an event with no `url` links to
+  `https://sbengaged.stonybrook.edu/events`, SB Engaged's public list.
   - The filters are tag chips, the counts from `campusTags`, and a "Show practices and meetings"
     switch. They are remembered in localStorage.
   - It is keyboard-reachable (`C` opens the focused day's list), and the `?` help list names it.

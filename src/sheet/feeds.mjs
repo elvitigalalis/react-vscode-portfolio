@@ -87,6 +87,9 @@ const minutesAt = (t) => localNow(new Date(t), CAMPUS_TZ).minutes;
 // Only a link to SB Engaged itself goes to the page as the event's link.
 const ENGAGED = "https://sbengaged.stonybrook.edu/";
 const engagedUrl = (url) => (typeof url === "string" && url.startsWith(ENGAGED) ? url : null);
+// The event's link: the feed's URL (".../rsvp?id=N"), or else its CONTACT, which SB Engaged sets
+// to the same page under the group (".../<group>/rsvp_boot?id=N#event_host"), without the anchor.
+const eventUrl = (e) => engagedUrl(e.url) ?? engagedUrl(e.contact?.split("#")[0]);
 
 // Splits SB Engaged's categories into the club acronym, the event type and the tags. parseIcs
 // gives "club_acronym:X", "event_type:Y" and "event_tags: A,B" (or the tags split on commas);
@@ -134,7 +137,7 @@ export function campusRows(events, now) {
       event_type: type,
       tags,
       description: e.description || null,
-      url: engagedUrl(e.url),
+      url: eventUrl(e),
       location,
       updated_at,
     });
@@ -165,3 +168,4 @@ export function campusWindowIcs(text, from, to) {
   kept.push("END:VCALENDAR", "");
   return kept.join("\r\n");
 }
+

@@ -99,6 +99,18 @@ test("campusRows: only an SB Engaged https link is kept as the event's url", () 
   assert.deepEqual(rows.map((r) => r.url), ["https://sbengaged.stonybrook.edu/rsvp?id=391210", null, null, null, null]);
 });
 
+test("campusRows: with no usable URL, the event's own page from CONTACT is the link, without its #event_host", () => {
+  const at = ["2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"];
+  const page = "https://sbengaged.stonybrook.edu/toscaniniresidencehall/rsvp_boot?id=391210";
+  const rows = campusRows([
+    { ...ev("both", ...at), url: "https://sbengaged.stonybrook.edu/rsvp?id=391210", contact: `${page}#event_host` },
+    { ...ev("contact", ...at), url: "", contact: `${page}#event_host` },
+    { ...ev("elsewhere", ...at), url: "", contact: "https://example.com/rsvp_boot?id=1" },
+    { ...ev("none", ...at), url: "" },
+  ], NOW);
+  assert.deepEqual(rows.map((r) => r.url), ["https://sbengaged.stonybrook.edu/rsvp?id=391210", page, null, null]);
+});
+
 test("campusRows: a long title is cut to 500 characters", () => {
   const [row] = campusRows([{ ...ev("long", "2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"), summary: ` ${"y".repeat(700)}` }], NOW);
   assert.equal(row.title, "y".repeat(500));
