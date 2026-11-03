@@ -36,7 +36,7 @@ const settings = (extra = {}) => ({
 // freeBusyRequest
 // =============================================================================================
 
-test("freeBusyRequest: his main calendar and the ones he shows, from now to 7 days ahead", todo, async () => {
+test("freeBusyRequest: his main calendar and the ones he shows, from now to 7 days ahead", async () => {
   const { freeBusyRequest } = await load();
   assert.deepEqual(freeBusyRequest(settings({ calendars: [CLASSES, HOLIDAYS] }), now), {
     timeMin: "2026-11-04T15:02:00.000Z",
@@ -45,13 +45,13 @@ test("freeBusyRequest: his main calendar and the ones he shows, from now to 7 da
   });
 });
 
-test("freeBusyRequest: Time blocks is never asked for, and each calendar is asked once", todo, async () => {
+test("freeBusyRequest: Time blocks is never asked for, and each calendar is asked once", async () => {
   const { freeBusyRequest } = await load();
   const s = settings({ calendars: [CLASSES, BLOCKS, OWNER, HOLIDAYS, CLASSES] });
   assert.deepEqual(freeBusyRequest(s, now).items, [{ id: OWNER }, { id: CLASSES }, { id: HOLIDAYS }]);
 });
 
-test("freeBusyRequest: with no extra calendars, only his main one", todo, async () => {
+test("freeBusyRequest: with no extra calendars, only his main one", async () => {
   const { freeBusyRequest } = await load();
   assert.deepEqual(freeBusyRequest(settings(), now).items, [{ id: OWNER }]);
   // Before "Time blocks" exists there is nothing to leave out.
