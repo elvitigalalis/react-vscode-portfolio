@@ -413,3 +413,14 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.4em;
   border-radius: 50%; background: var(--accent); vertical-align: 0.1em;
 }
+/* The morning plan in /plan (docs/sheet-morning.md, "/plan"): the Needs you dialog, grouped by
+   kind, and the proposal's note and campus picks above Plan today's timeline. */
+.sheet-needs { width: min(40rem, calc(100vw - 2rem)); max-width: none; }
+.sheet-needs-group h3 { font-size: 0.875rem; margin: 1rem 0 0.25rem; color: var(--muted); }
+.sheet-needs-list { list-style: none; padding: 0; margin: 0; }
+.sheet-needs-item { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+.sheet-needs-item > p { margin: 0; overflow-wrap: anywhere; }
+.sheet-needs-why { font-size: 0.875rem; }
+.sheet-needs-acts { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; }
+.sheet-needs-item > .sheet-needs-acts { margin-top: 0.25rem; }
+.sheet-needs-acts .sheet-btn { display: inline-flex; align-items: center; gap: 0.25rem; }

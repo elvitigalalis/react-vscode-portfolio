@@ -131,6 +131,11 @@ export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${enco
 export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
 export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
+// The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
+// and a day's proposal with the campus events it picked.
+export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
+export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
+
 // Feeds status (docs/sheet-sources.md): one feed_state row per feed, written by the brightspace
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
