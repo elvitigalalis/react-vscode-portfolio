@@ -212,7 +212,7 @@ const mcpSource = () => {
   return read(MCP);
 };
 
-test("mail-mcp: exactly three tools, all read-only by name", { todo: true }, async () => {
+test("mail-mcp: exactly three tools, all read-only by name", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   const names = [...src.matchAll(/\.registerTool\(\s*["'`]([\w-]+)["'`]/g)].map((x) => x[1]).sort();
@@ -220,7 +220,7 @@ test("mail-mcp: exactly three tools, all read-only by name", { todo: true }, asy
   for (const n of names) assert.doesNotMatch(n, /send|draft|delete|trash|modify|label/i);
 });
 
-test("mail-mcp: every tool's description carries the untrusted-content warning", { todo: true }, async () => {
+test("mail-mcp: every tool's description carries the untrusted-content warning", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   // The sentence may sit in a constant that each tool uses.
@@ -233,7 +233,7 @@ test("mail-mcp: every tool's description carries the untrusted-content warning",
   }
 });
 
-test("mail-mcp: no route, Gmail call or method that sends, drafts, labels or deletes", { todo: true }, async () => {
+test("mail-mcp: no route, Gmail call or method that sends, drafts, labels or deletes", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   assert.doesNotMatch(src, /\/messages\/send|\/drafts\b|\/(?:trash|untrash|modify)\b|batchModify|batchDelete|\/labels\b/);
@@ -244,7 +244,7 @@ test("mail-mcp: no route, Gmail call or method that sends, drafts, labels or del
   }
 });
 
-test("mail-mcp: OAuth protected-resource metadata, owner-only, Streamable HTTP", { todo: true }, async () => {
+test("mail-mcp: OAuth protected-resource metadata, owner-only, Streamable HTTP", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   assert.match(src, /withOAuthProtectedResource|oauth-protected-resource/);
@@ -252,7 +252,7 @@ test("mail-mcp: OAuth protected-resource metadata, owner-only, Streamable HTTP",
   assert.match(src, /createMcpHandler|StreamableHTTP/i);
 });
 
-test("mail-mcp: refreshes Google tokens from Vault and records last_used_at and last_error", { todo: true }, async () => {
+test("mail-mcp: refreshes Google tokens from Vault and records last_used_at and last_error", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   assert.match(src, /vault/i);
@@ -263,7 +263,7 @@ test("mail-mcp: refreshes Google tokens from Vault and records last_used_at and 
   assert.match(src, /last_error/);
 });
 
-test("mail-mcp: secrets come from the environment, never the source", { todo: true }, async () => {
+test("mail-mcp: secrets come from the environment, never the source", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   assert.match(src, /GOOGLE_CLIENT_ID/);
@@ -271,7 +271,7 @@ test("mail-mcp: secrets come from the environment, never the source", { todo: tr
   assert.doesNotMatch(src, /GOCSPX-|ya29\.|1\/\/0[\w-]{20,}|eyJ[\w-]{10,}\.eyJ|sb_secret_|AIza[\w-]{30,}|\d{6,}-\w{20,}\.apps\.googleusercontent\.com/);
 });
 
-test("mail-mcp: cites the Supabase and MCP authorization docs", { todo: true }, async () => {
+test("mail-mcp: cites the Supabase and MCP authorization docs", async () => {
   await import("../src/sheet/mail.mjs");
   const src = mcpSource();
   assert.match(src, /supabase\.com\/docs/);
