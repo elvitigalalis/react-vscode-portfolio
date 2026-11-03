@@ -1,4 +1,4 @@
-// The telegram Edge Function (docs/sheet-nudges.md): The Sheet's only server code. pg_cron calls
+// The telegram Edge Function (docs/sheet-nudges.md), the one that talks to Telegram. pg_cron calls
 // it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
 // webhook for Done and Snooze taps, and for Approve all and Skip on the morning plan
 // (docs/sheet-morning.md). Which messages are due, their wording, what counts as a tap
