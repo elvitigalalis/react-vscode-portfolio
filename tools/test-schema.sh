@@ -292,5 +292,137 @@ do $$ begin
     then raise exception 'nightly_roll: needs_you done or old rows kept'; end if;
   raise notice '✓ nightly_roll lapses, clears busy and needs_you';
 end $$;
+
+-- --- v5 V1, revisions (docs/sheet-v5.md, "Schema → Revisions") -------------------------------
+-- Each block skips itself until the function it checks exists, so these pass before V1 lands.
+-- They run as postgres (RLS doesn't apply) on days of their own, five and six days out, so the v4
+-- rows above stay as they are.
+do $$
+declare
+  tz text := (select time_zone from settings);
+  d date := sheet_today() + 5;
+  t1 uuid := '00000000-0000-4000-8000-0000000000a1';
+  r int;
+begin
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[])') is null then
+    raise notice '- v5 revisions: skipped, apply_proposal(d, replaces, ...) is not there yet';
+    return;
+  end if;
+  insert into tasks (id, title, day) values (t1, 'V5 task', d);
+  -- An approved block at 9:00, which no revision may touch.
+  insert into blocks (task_id, starts_at, ends_at) values (t1, (d + time '09:00') at time zone tz, (d + time '10:00') at time zone tz);
+
+  -- The first revision: replaces is null, and it is revision 1, pending, from the morning.
+  r := apply_proposal(d => d, replaces => null, blocks => jsonb_build_array(jsonb_build_object(
+    'task_id', t1, 'starts_at', (d + time '11:00') at time zone tz, 'ends_at', (d + time '11:45') at time zone tz)));
+  if r <> 1 then raise exception 'the first revision is %, not 1', r; end if;
+  if (select status from proposals where day = d and rev = 1) <> 'pending'
+    or (select run_trigger from proposals where day = d and rev = 1) <> 'morning'
+    then raise exception 'revision 1 is not a pending morning revision'; end if;
+
+  -- replaces must name the newest revision.
+  begin
+    perform apply_proposal(d => d, replaces => null, blocks => '[]');
+    raise exception 'apply_proposal took replaces null with revision 1 there';
+  exception when raise_exception then
+    if sqlerrm not like '%newest revision%' then raise; end if;
+  end;
+
+  -- Revision 2 supersedes revision 1 and replaces its proposed blocks, never the approved one.
+  r := apply_proposal(d => d, replaces => 1, blocks => jsonb_build_array(jsonb_build_object(
+    'task_id', t1, 'starts_at', (d + time '13:00') at time zone tz, 'ends_at', (d + time '13:45') at time zone tz)),
+    run_trigger => 'replan', reasons => array['busy_overlap']);
+  if r <> 2 then raise exception 'the second revision is %, not 2', r; end if;
+  if (select status from proposals where day = d and rev = 1) <> 'superseded'
+    then raise exception 'revision 1 was not superseded'; end if;
+  if (select status from proposals where day = d and rev = 2) <> 'pending'
+    or (select run_trigger from proposals where day = d and rev = 2) <> 'replan'
+    or (select reasons from proposals where day = d and rev = 2) <> array['busy_overlap']
+    or jsonb_array_length((select blocks from proposals where day = d and rev = 2)) <> 1
+    then raise exception 'revision 2 is not the pending replan it was written as'; end if;
+  if (select count(*) from blocks where task_id = t1 and proposed) <> 1
+    or not exists (select 1 from blocks where task_id = t1 and proposed and starts_at = (d + time '13:00') at time zone tz)
+    then raise exception 'revision 2 did not replace the proposed blocks'; end if;
+  if (select count(*) from blocks where task_id = t1 and not proposed) <> 1
+    or not exists (select 1 from blocks where task_id = t1 and not proposed
+                   and starts_at = (d + time '09:00') at time zone tz and ends_at = (d + time '10:00') at time zone tz)
+    then raise exception 'a revision touched the approved block'; end if;
+
+  -- An older revision can't be replaced again.
+  begin
+    perform apply_proposal(d => d, replaces => 1, blocks => '[]');
+    raise exception 'apply_proposal replaced a superseded revision';
+  exception when raise_exception then
+    if sqlerrm not like '%newest revision%' then raise; end if;
+  end;
+  raise notice '✓ v5: apply_proposal writes revisions, supersedes the pending one, leaves approved blocks';
+
+  if to_regprocedure('approve_proposal(date, integer)') is null or to_regprocedure('skip_proposal(date, integer)') is null then
+    raise notice '- v5 approve and skip by revision: skipped, not there yet';
+    return;
+  end if;
+  -- Only the newest pending revision can be approved.
+  begin
+    perform approve_proposal(d, 1);
+    raise exception 'approve_proposal approved a superseded revision';
+  exception when raise_exception then
+    if sqlerrm not like '%not the pending one%' then raise; end if;
+  end;
+  if approve_proposal(d, 2) <> 1 then raise exception 'approve_proposal did not count its one block'; end if;
+  if (select status from proposals where day = d and rev = 2) <> 'approved'
+    or exists (select 1 from blocks where task_id = t1 and proposed)
+    or (select count(*) from blocks where task_id = t1 and not proposed) <> 2
+    then raise exception 'approve_proposal did not approve revision 2'; end if;
+
+  -- A replan after approval: revision 3, with revision 2 still approved and its blocks locked.
+  r := apply_proposal(d => d, replaces => 2, blocks => jsonb_build_array(jsonb_build_object(
+    'task_id', t1, 'starts_at', (d + time '15:00') at time zone tz, 'ends_at', (d + time '15:45') at time zone tz)),
+    run_trigger => 'replan', reasons => array['mail_new']);
+  if r <> 3 or (select status from proposals where day = d and rev = 2) <> 'approved'
+    or (select count(*) from blocks where task_id = t1 and not proposed) <> 2
+    or (select count(*) from blocks where task_id = t1 and proposed) <> 1
+    then raise exception 'a replan after approval moved approved blocks or rewrote revision 2'; end if;
+
+  -- Skip deletes the proposed blocks; a skipped day takes no new revision.
+  perform skip_proposal(d, 3);
+  if (select status from proposals where day = d and rev = 3) <> 'skipped'
+    or exists (select 1 from blocks where task_id = t1 and proposed)
+    or (select count(*) from blocks where task_id = t1 and not proposed) <> 2
+    then raise exception 'skip_proposal did not skip revision 3'; end if;
+  begin
+    perform apply_proposal(d => d, replaces => 3, blocks => '[]');
+    raise exception 'apply_proposal reopened a skipped day';
+  exception when raise_exception then
+    if sqlerrm not like '%already skipped%' then raise; end if;
+  end;
+  begin
+    perform skip_proposal(d, 3);
+    raise exception 'skip_proposal skipped a revision twice';
+  exception when raise_exception then
+    if sqlerrm not like '%not the pending one%' then raise; end if;
+  end;
+  raise notice '✓ v5: approve_proposal and skip_proposal act only on the newest pending revision';
+end $$;
+
+do $$
+declare
+  d date := sheet_today() + 6;
+begin
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[])') is null then
+    return;
+  end if;
+  -- Shutting a day down lapses its pending revision, and the day takes no new one.
+  perform apply_proposal(d => d, replaces => null, blocks => '[]');
+  insert into days (day, shutdown) values (d, true);
+  perform lapse_proposals_on(d);
+  if (select status from proposals where day = d and rev = 1) <> 'lapsed' then raise exception 'shutting down left revision 1 pending'; end if;
+  begin
+    perform apply_proposal(d => d, replaces => 1, blocks => '[]');
+    raise exception 'apply_proposal reopened a shut-down day';
+  exception when raise_exception then
+    if sqlerrm not like '%already lapsed%' then raise; end if;
+  end;
+  raise notice '✓ v5: a shut-down day lapses its revision and stays closed';
+end $$;
 SQL
 echo "✓ all schema checks passed"
