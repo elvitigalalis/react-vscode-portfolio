@@ -58,7 +58,8 @@ tasks jumping days across time zones.
 
 - **Seven equal day columns,** Monday to Sunday. Weekends are full size (a top Tweek complaint).
   Rows sit on 1px ruled lines and **line up across the week:** every column has as many rows as
-  the busiest day plus one empty row.
+  the busiest day plus one empty row. A long title wraps onto more lines, never cut off; on wide
+  screens its row grows in every column, so the lines stay level (also on /now).
 - **Day header:** weekday in bold uppercase with slight letter-spacing, date beside it in muted
   text. **Today is marked by the accent colour only** (header text and its 2px rule).
 - **His calendar sits above each day's tasks** (Things 3, Todoist): small and gray, each event

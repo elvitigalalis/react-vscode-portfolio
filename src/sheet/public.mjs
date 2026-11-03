@@ -33,6 +33,7 @@ export function renderPublicWeek(root, { days, today, tasks, stamps, writeups })
   const byDay = Object.fromEntries(days.map((d) => [d, tasks.filter((t) => t.day === d).sort(byPosition)]));
   const rows = rowCount(byDay);
   const stampOf = Object.fromEntries(stamps.map((s) => [s.day, s]));
+  root.style.setProperty("--rows", String(rows));
   root.replaceChildren(...days.map((day) => {
     const { weekday, date } = dayLabel(day);
     const list = byDay[day];
