@@ -71,6 +71,16 @@ import "../../styles/sheet.css";
         <dt>S</dt><dd>Settings: mail accounts, interest profile, feeds</dd>
         <dt>C</dt><dd>Campus events for the focused day (or the "Campus · N" row under its calendar)</dd>
       </dl>
+      <!-- What each icon means (docs/sheet-glance.md, "The icon set"). One line per icon in use. -->
+      <h3 class="sheet-legend-title">Icons</h3>
+      <dl class="sheet-keys sheet-legend">
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-lock"></use></svg><span class="visually-hidden">Lock</span></dt><dd>Private: only you see it</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-flag"></use></svg><span class="visually-hidden">Flag</span></dt><dd>Due date</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-clock"></use></svg><span class="visually-hidden">Clock</span></dt><dd>Fixed time</dd>
+        <dt>⚠</dt><dd>At risk, or clashes with an event</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-check"></use></svg><span class="visually-hidden">Check</span></dt><dd>Complete the task</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg><span class="visually-hidden">More</span></dt><dd>Menu for the task</dd>
+      </dl>
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
