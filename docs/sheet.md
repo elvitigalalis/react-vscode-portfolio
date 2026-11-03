@@ -20,7 +20,8 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
 ## Architecture
 
 - **Storage: Supabase** (Postgres + Auth, free tier). The site stays static on GitHub Pages; the
-  browser talks to Supabase's REST API directly. No server of our own.
+  browser talks to Supabase's REST API directly. No server of our own (version 2 adds one Edge
+  Function for Telegram; see [sheet-nudges.md](sheet-nudges.md)).
 - **Owner sign-in: Supabase Auth with Google.** Row-level security lets only Lisul's account
   (one email, set in config) read or write tasks.
 - **Public data: two Postgres views** (`public_week`, `public_now`) readable by anyone. They
@@ -44,8 +45,8 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
 ```
 tasks   id, title, day (date, null = Someday), list (Someday list name), position,
         est_min (null = no estimate), at_time (time, null = untimed), tag, public (bool),
-        done (bool), rolls (int), created_at
-blocks  id, task_id → tasks, starts_at, ends_at, gcal_id
+        done (bool), rolls (int), due (date, null = none), created_at
+blocks  id, task_id → tasks, starts_at, ends_at, gcal_id, proposed (bool: Claude's, not yet approved)
 days    day (date pk), planned (bool), shutdown (bool), reflection (text, never public)
 settings  owner_email, gcal_calendar_id ("Time blocks"), calendars (extra calendar IDs to read)
 ```
@@ -74,7 +75,7 @@ tasks jumping days across time zones.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
-- **No notifications, badges or sounds.** Google Calendar does any reminding.
+- **No badges or sounds.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)).
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
@@ -90,9 +91,14 @@ tasks jumping days across time zones.
   - `@3pm` / `@15:00` → fixed time (the task stays on its day and never rolls)
   - `#workit` → tag
   - `!p` (or `!private`) → private; `!public` makes it public again when editing
+  - `^fri`, `^10/30` or `^tomorrow` → due date, counted from the task's day (today for Someday):
+    a weekday or month/day is its next occurrence on or after that day. It shows as "due Fri"
+    (⚠ when at risk; a proposed block doesn't clear that until approved), typing a new one changes it, and the menu's "Clear due date" removes it.
+    /now never shows it ([sheet-nudges.md](sheet-nudges.md)).
 - **Tasks are public by default.** Private ones carry a small "private" label in the planner.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To
-  tomorrow, To next week, Day before, Day after, To Someday, Public/Private, Delete. This menu is also the keyboard and
+  tomorrow, To next week, Day before, Day after, To Someday, Public/Private, Clear due date (when
+  it has one), Delete. This menu is also the keyboard and
   screen-reader way to do everything drag does.
 - **Drag** a task within a day, between days, or to and from Someday (Pointer Events). On touch,
   hold a task for 0.3 s to pick it up, so a swipe still scrolls. The dragged task leaves a 25 % ghost.
@@ -107,6 +113,7 @@ tasks jumping days across time zones.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.
+- Proposed blocks of earlier days are deleted: a proposal lapses at the end of its day.
 
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
@@ -122,12 +129,21 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
   is created as an event on the "Time blocks" Google calendar: its title is the task's title if
   public, **"Busy" if private** (Ellie's privacy mode). One task may have several blocks.
 - **Resizing a block writes the new length back to the estimate** and the meter updates at once.
-- `D` sends the focused task to tomorrow, `Z` to Someday.
+  Dragging a block's body moves it and keeps its length (mouse only: on touch it scrolls).
+- **Proposed blocks** ([sheet-nudges.md](sheet-nudges.md)) show as dashed outlines with an
+  **Approve** button, and the header reads "Claude proposed 3 blocks, shown dashed. Approve
+  all". Approving creates the block's Google event, exactly as dragging a task does; moving or
+  resizing a proposed block approves it too, and × turns it down. In the week, each one shows
+  dashed under its task with its time and Approve. A proposal has no Google event and never
+  reaches /now; one never approved lapses at shutdown or the nightly rollover.
+- `D` sends the focused task to tomorrow, `Z` to Someday. A block can be focused: `↑` `↓` move
+  it 15 minutes, `A` approves a proposed one, and `Shift+A` approves all.
 - Opening it after 3 pm plans tomorrow instead.
 - "Done" closes it and marks the day planned.
 
 **Block rules** (Sunsama): The Sheet only ever edits events it created. Completing a task during
 its block shrinks the block to end now; completing it before the block starts deletes the block.
+Completing a task turns down its proposed blocks.
 Deleting a task deletes its blocks. Moving a task to another day deletes its blocks. Removing a
 block never deletes the task. Changing one block never moves another.
 
@@ -139,7 +155,8 @@ any time).
 1. Two columns, **Done** and **Missed**. Clicking a task moves it to the other column.
 2. One box: *What went well, what got in the way?* (private, always).
 3. **Finish:** nothing is saved before this. Missed tasks move to tomorrow (counted as a roll),
-   the day is marked shut down and gets a "Shutdown complete" stamp.
+   the day's unapproved proposed blocks are deleted, and the day is marked shut down and gets a
+   "Shutdown complete" stamp.
 
 A skipped shutdown costs nothing: the nightly rollover does the same move.
 
@@ -148,19 +165,23 @@ A skipped shutdown costs nothing: the nightly rollover does the same move.
 - The same week, read-only. **Public tasks show their title** (struck through when done).
   **Private tasks show as a black bar the length of their title** (capped at the column width).
 - **"Right now"** above the week: during a block of a public task, that task's title; during a
-  private task's block, "Heads down"; otherwise nothing. It refreshes every minute.
+  private task's block, "Heads down"; otherwise nothing. Proposed blocks never count. It
+  refreshes every minute.
 - Each day can carry **"Planned ✓"** and **"Shut down ✓"** stamps. No times.
 - A done public task whose tag matches a write-up (`#workit`, `#micromouse`) links to it.
 - A handwritten-style margin note in the site's own type: *P.S. the redacted bars are life stuff.*
-- **Never shown:** times, estimates, Someday lists, rollover counts, reflections, Google events,
+- **Never shown:** times, estimates, due dates, Someday lists, rollover counts, reflections, Google events,
   streaks, totals. "Last updated" shows the date only.
 - One small reward when every task today is done: the day's header gets a check mark (no
   animation).
 
 ## Out of scope for v1
 
+AI proposals and notifications came in version 2: [sheet-nudges.md](sheet-nudges.md).
+
+
 Recurring tasks, notes, subtasks, priorities, more than one tag per task, weekly review, focus
-mode, AI, auto-scheduling, notifications, sharing links, reading Google changes back, month view,
+mode, auto-scheduling, sharing links, reading Google changes back, month view,
 a native app.
 
 ## Quality bar

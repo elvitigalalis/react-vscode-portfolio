@@ -18,6 +18,7 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
         <button type="button" class="sheet-btn" data-act="calendars">Calendars</button>
+        <button type="button" class="sheet-btn" data-act="telegram" title="While Telegram is off, blocks get Google's default alert">Telegram off</button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
       </div>
@@ -41,6 +42,7 @@ import "../../styles/sheet.css";
       <button type="button" data-move="day-after">Day after</button>
       <button type="button" data-move="someday">To Someday</button>
       <button type="button" data-move="visibility">Make private</button>
+      <button type="button" data-move="clear-due" hidden>Clear due date</button>
       <button type="button" data-move="delete">Delete</button>
     </div>
 
@@ -53,10 +55,13 @@ import "../../styles/sheet.css";
       <dl class="sheet-keys">
         <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>~45m · @3pm · #tag</dt><dd>Estimate, fixed time, tag</dd>
+        <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (⚠) within two days with no block</dd>
         <dt>!p</dt><dd>Private: /now shows a bar, Google says Busy</dd>
         <dt>P</dt><dd>Plan today</dd>
         <dt>O</dt><dd>Shut down</dd>
         <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
+        <dt>↑ ↓</dt><dd>While planning: move the focused block 15 min</dd>
+        <dt>A · Shift+A</dt><dd>While planning: approve the focused block, approve all</dd>
         <dt>← →</dt><dd>Previous or next week</dd>
         <dt>T</dt><dd>This week</dd>
         <dt>.</dt><dd>Menu for the focused task</dd>
