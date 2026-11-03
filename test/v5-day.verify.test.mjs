@@ -179,7 +179,7 @@ test("breaks: the error names the proposed block that carries the run past 90 mi
 // The travel gap: 10 minutes before and after each busy time
 // =============================================================================================
 
-test("travel: a block starting 5 minutes after a busy time ends is refused, naming the travel gap", todo, async () => {
+test("travel: a block starting 5 minutes after a busy time ends is refused, naming the travel gap", async () => {
   const { checkProposal } = await proposal();
   // HW3 at 3:25 pm; the 2:00-3:20 pm busy time needs 10 minutes after it.
   const r = checkProposal(good({ blocks: withBlock(2, { start: "15:25" }) }), snap());
@@ -188,7 +188,7 @@ test("travel: a block starting 5 minutes after a busy time ends is refused, nami
   assert.equal(r.errors.includes("blocks[2]: overlaps a busy time 2:00–3:20 pm"), false);
 });
 
-test("travel: a block ending 5 minutes before a busy time starts is refused; 10 minutes before is allowed", todo, async () => {
+test("travel: a block ending 5 minutes before a busy time starts is refused; 10 minutes before is allowed", async () => {
   const { checkProposal } = await proposal();
   // Office hours left out. OS homework 1:10-1:55 pm runs into the gap before 2:00; 1:05-1:50 pm doesn't.
   const blocks = (start) => [{ task_id: T1, start, minutes: 45 }, { task_id: T4, start: "15:30", minutes: 45 }];
@@ -196,14 +196,14 @@ test("travel: a block ending 5 minutes before a busy time starts is refused; 10 
   assert.equal(checkProposal(good({ blocks: blocks("13:05") }), snap()).ok, true);
 });
 
-test("travel: a block over the busy time itself keeps v4's error", todo, async () => {
+test("travel: a block over the busy time itself keeps v4's error", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good({ blocks: [{ task_id: T1, start: "14:30", minutes: 45 }] }), snap());
   assert.equal(r.ok, false);
   assert.ok(r.errors.includes("blocks[0]: overlaps a busy time 2:00–3:20 pm"), JSON.stringify(r.errors));
 });
 
-test("travel: no gap is needed next to an approved block", todo, async () => {
+test("travel: no gap is needed next to an approved block", async () => {
   const { checkProposal } = await proposal();
   // Office hours fixed at 12:30 pm instead, right as Gym's approved block ends: 90 minutes in a row.
   const s = snap({ tasks: snap().tasks.map((t) => (t.id === T3 ? { ...t, at_time: "12:30:00" } : t)) });

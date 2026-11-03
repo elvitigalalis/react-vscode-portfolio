@@ -106,12 +106,25 @@ function text(value, name, max, errors) {
 const hoursLabel = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
 
 // The day rules on a proposal's spans ({ name, start, end }, minutes on the day), pushing an
-// error for each: the break rule and the workload cap. The day's approved blocks count; the
+// error for each: the travel gap, the break rule and the workload cap. The day's approved blocks count; the
 // pending revision's proposed blocks don't, since the new revision replaces them.
 function dayRuleErrors(spans, snapshot, errors) {
   const rules = snapshot.day_rules;
   const approved = snapshot.blocks.filter((b) => !b.proposed);
   const at = (iso) => minutesOn(iso, snapshot.plan_day, snapshot.time_zone);
+
+  // The travel gap around busy times (not approved blocks). A span over the busy time itself
+  // already has v4's overlap error.
+  const gap = rules.travel_min;
+  for (const s of spans) {
+    for (const b of snapshot.busy) {
+      const [from, to] = [at(b.starts_at), at(b.ends_at)];
+      if (s.start < to && from < s.end) continue;
+      if (s.start < to + gap && from - gap < s.end) {
+        errors.push(`${s.name}: needs ${gap} minutes of travel time around the busy time ${clockSpan(from, to)}`);
+      }
+    }
+  }
 
   // The break rule: blocks less than break_min apart are one run, and a run holding a proposed
   // block spans at most break_after_min. A single long block is fine; one error per run.
