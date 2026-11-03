@@ -154,15 +154,26 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
     switch. They are remembered in localStorage.
   - It is keyboard-reachable (`C` opens the focused day's list), and the `?` help list names it.
   - On narrow screens it sits under the day, like the calendar.
-- **Settings:**
+  - The list opens in a modal dialog, not inline under the day: a day can carry 79 events, which
+    would push the week's tasks off screen, and a dialog keeps focus and Escape in one place.
+    The toast sits behind the modal, so the dialog repeats its Undo.
+  - `campus.mjs` holds its decisions (`isAdded`, `activeTags`, `tagsOf`); all day is the row's
+    `all_day`, set by the feed read, so the client has no rule of its own.
+- **Settings:** one dialog (the Settings button, or `S`), with three sections:
   - **Mail accounts** lists the connected accounts, each with its last error, plus
     "Connect an account" (it opens `mail-connect/start`) and Remove.
-  - **Interests** is a textarea saved to `settings.interests`.
+  - **Interest profile** is a textarea saved to `settings.interests`, with its own Save.
   - **Feeds status** shows each feed's last fetch, whether it worked, and its item count.
+  - Each section's module pushes a fill function onto `settingsHooks` (planner.mjs); opening
+    Settings runs them together, so no section depends on load order.
 
 ### Claude (`docs/sheet-claude.md`)
 
-"Plan my day" gains two steps, both read-only until Lisul approves:
+"Plan my day" gains two steps, both read-only until Lisul approves. It runs in two phases: phase
+1 reads (the day, then the inbox sweep, then the campus picks) and replies; phase 2, in a later
+turn and only after Lisul answers, writes the proposed blocks from values he picked. No write
+runs in a turn with mail or event text in view, no SQL comes from that text, and Claude reads
+`campus_events` without its `description`.
 
 1. **Inbox sweep:** search the last 3 days across every mail account, plus anything still unread
    from the last 14. List what may need Lisul: deadlines, meetings and invitations, requests and
