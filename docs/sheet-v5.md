@@ -41,7 +41,7 @@ and appears in no public view. Tables only a server function writes also
 proposals  + rev int not null default 1 check (rev between 1 and 999)
              primary key (day, rev)                      -- was (day): drop proposals_pkey, add it back
            + run_trigger text not null default 'morning' check (run_trigger in ('morning','replan'))
-           + reasons text[] not null default '{}'        -- REASONS names only (see replan.mjs)
+           + reasons text[] not null default '{}'        -- REASON_WORDS names only (replan.mjs)
            + couldnt_fit uuid[] not null default '{}'    -- task ids
            + suggested jsonb not null default '[]'       -- [{ account, message_id, title, due, kind }]
            + blocks jsonb not null default '[]'          -- the revision's proposed blocks, as written:
@@ -71,7 +71,7 @@ calendar_account   id boolean pk default true check (id), email text not null,
                    last_error text                       -- browser: select, delete only
 changes    id uuid pk default gen_random_uuid(), at timestamptz not null default now(),
            kind text not null check (kind in ('mail','busy','course','campus','github','jira','slack','handshake')),
-           reason text not null,                         -- one of REASONS
+           reason text not null,                         -- one of REASON_WORDS (replan.mjs)
            weight int not null check (weight between 1 and 10),
            ref text check (char_length(ref) <= 200),     -- an id in the source; never a title
            replan_id uuid references replans on delete set null,   -- the replan it started (create replans first)
@@ -216,7 +216,8 @@ weather_cache id boolean pk default true check (id), point text not null,
 
 #### `replan.mjs`, new (R1)
 
-- `REASONS`, the fixed reason names, and their words for Telegram:
+- `REASON_WORDS`, the fixed reason names a `changes` row carries, and their words for Telegram.
+  They are finer than the change kinds that routine-fire.mjs's `REASONS` lists (R0, landed):
 
   | reason | kind | weight | words |
   |---|---|---|---|
@@ -255,10 +256,10 @@ weather_cache id boolean pk default true check (id), point text not null,
     is `nothing`; with changes and no rule met, `waiting`.
   - On fire: `reasons` are the distinct reasons, highest weight first, then by name; `counts` is
     `{ kind: n }` for the kinds present; `ids` are the changes' ids.
-- `fireText({ reasons, counts })` returns the routine's fire `text`:
-  `"replan reasons=busy_overlap,mail_new counts=busy:1,mail:3"`, kinds in table order. Nothing
-  else ever goes in it.
-- `reasonWords(reasons)` returns the words joined with ", ", for the replan message.
+- The fire text is routine-fire.mjs's `fireText("replan", counts)` (R0, landed), built from
+  `counts` alone: `"trigger: replan\nreasons: mail 3, busy 1"`. The reason names stay on the
+  server, in `replans.reasons` and the revision.
+- `reasonWords(reasons)` returns their words joined with ", ", for the replan message.
 
 #### `pace.mjs`, new (P1)
 
@@ -536,12 +537,10 @@ weather_cache id boolean pk default true check (id), point text not null,
   List-Id, List-Unsubscribe, Auto-Submitted and Precedence, never `full` or `raw`. It skips
   `CATEGORY_PROMOTIONS`, `CATEGORY_UPDATES`, `CATEGORY_SOCIAL` and `CATEGORY_FORUMS`.
 - **The replan tick** in `telegram`'s send job: it reads the state, runs `shouldReplan`, and on
-  fire inserts the `replans` row first (result null), sets `replan_id` on `ids`, then posts
-  `fireText` to `POST https://api.anthropic.com/v1/claude_code/routines/<SHEET_ROUTINE_ID>/fire`
-  with `Authorization: Bearer <SHEET_ROUTINE_TOKEN>`, `anthropic-version: 2023-06-01` and
-  `anthropic-beta: experimental-cc-routine-2026-04-01` (R0 confirms these). It records `started`
-  and the session id, `failed` and the error, or `rate_limited` with `retry_after` from
-  Retry-After. No replan fires before `retry_after`, and a request is never retried without a
+  fire inserts the `replans` row first (result null), sets `replan_id` on `ids`, then calls
+  routine-fire.mjs's `fireRoutine(fetch, { routineId: SHEET_ROUTINE_ID, token:
+  SHEET_ROUTINE_TOKEN, trigger: "replan", counts }, now)`. It records `started` and the session
+  id, `failed` and the error type, or `rate_limited` with `retry_after` set to `retry_at`. No replan fires before `retry_after`, and a request is never retried without a
   new `replans` row. The token lives only in the function's env.
 - **`read_planner()`** returns `planSnapshot` as above.
 - **`submit_proposal({ day, replaces, blocks, habits, needs_you, picks, note, couldnt_fit,
@@ -607,9 +606,9 @@ Lisul does this once, after each part is deployed:
 1. **Calendar:** /plan → Settings → Calendar → Connect, signed in as his own Google account;
    approve "See the availability on Google Calendars". Then add `sheet_busy_url` to Vault.
 2. **Replans:** in claude.ai, open the morning task, add an API trigger, generate its token and
-   copy it (it is shown once). Set the function secrets `SHEET_ROUTINE_ID` and
-   `SHEET_ROUTINE_TOKEN` (`npx supabase secrets set …`). After R0's manual check, turn replans on
-   in Settings.
+   copy it (it is shown once), as [sheet-morning.md](sheet-morning.md)'s Setup step 5 says
+   (`SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN`). After its probe starts one session, turn replans
+   on in Settings.
 3. **Mail sync:** set `SHEET_SENDER_SALT` to a long random string, and add `sheet_mail_url`.
 4. **Sources** (each optional; a missing one shows "not connected"):
    - GitHub: a fine-grained token with read-only Pull requests, Issues and Metadata on his orgs,
