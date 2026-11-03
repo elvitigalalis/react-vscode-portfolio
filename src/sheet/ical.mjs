@@ -30,6 +30,14 @@ const unescape = (s) => s.replace(/\\([\\;,nN])/g, (_, c) => (c === "n" || c ===
 // A CATEGORIES value split on unescaped commas, each part unescaped and trimmed.
 const splitList = (s) => (s.match(/(?:\\.|[^\\,])+/g) ?? []).map((p) => unescape(p).trim()).filter(Boolean);
 
+// SB Engaged (CampusGroups) writes "CATEGORIES;X-CG-CATEGORY=event_type:Meeting" with the colon
+// unquoted, so the strict split takes "event_type" as a parameter. Put it back on the value, so
+// the categories read as the feed shows them ("event_type:Meeting").
+const categories = (p) => {
+  const cg = p.params["X-CG-CATEGORY"];
+  return splitList(cg === undefined ? p.value : `${cg}:${p.value}`);
+};
+
 // --- Times -------------------------------------------------------------------------------
 
 const zones = new Map();
@@ -124,7 +132,7 @@ function toEvent(props) {
     description: text("DESCRIPTION"),
     location: text("LOCATION"),
     url: get("URL")?.value.trim() ?? "",
-    categories: props.filter((p) => p.name === "CATEGORIES").flatMap((p) => splitList(p.value)),
+    categories: props.filter((p) => p.name === "CATEGORIES").flatMap(categories),
     start: allDay ? start.date : new Date(start.t).toISOString(),
     end: allDay ? end.date : new Date(end.t).toISOString(),
     allDay,

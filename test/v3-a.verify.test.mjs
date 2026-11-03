@@ -171,7 +171,7 @@ test("times: RRULE is ignored, only the first occurrence is kept", async () => {
 
 // --- Text --------------------------------------------------------------------------------------
 
-test("text: escapes \\n \\, \\; \\\\ are undone", { todo: true }, async () => {
+test("text: escapes \\n \\, \\; \\\\ are undone", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("esc@x",
     "DTSTART:20261104T180000Z",
@@ -183,14 +183,14 @@ test("text: escapes \\n \\, \\; \\\\ are undone", { todo: true }, async () => {
   assert.equal(ev.location, "Javits Lecture Center, Room 100");
 });
 
-test("text: an escaped backslash before n stays a backslash and an n, not a newline", { todo: true }, async () => {
+test("text: an escaped backslash before n stays a backslash and an n, not a newline", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("bs@x", "DTSTART:20261104T180000Z", "SUMMARY:Paths",
     String.raw`DESCRIPTION:Save to C:\\new\\notes.txt`)), wide);
   assert.equal(ev.description, "Save to C:\\new\\notes.txt");
 });
 
-test("text: unescaped commas in text (as SB Engaged sends them) are kept", { todo: true }, async () => {
+test("text: unescaped commas in text (as SB Engaged sends them) are kept", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("comma@x", "DTSTART:20261102T160000Z", "DTEND:20261102T190000Z",
     "SUMMARY;ENCODING=QUOTED-PRINTABLE:Sleep Well, Southampton!",
@@ -199,7 +199,7 @@ test("text: unescaped commas in text (as SB Engaged sends them) are kept", { tod
   assert.equal(ev.location, "Bauman Center, United States");
 });
 
-test("text: folded lines (CRLF + space or tab) are joined, including mid-escape and inside parameters", { todo: true }, async () => {
+test("text: folded lines (CRLF + space or tab) are joined, including mid-escape and inside parameters", async () => {
   const { parseIcs } = await mod();
   const text = [
     "BEGIN:VCALENDAR", "VERSION:2.0",
@@ -224,14 +224,14 @@ test("text: folded lines (CRLF + space or tab) are joined, including mid-escape 
   assert.equal(ev.url, "https://mycourses.stonybrook.edu/d2l/le/calendar/1530087/event/61734/detailsview");
 });
 
-test("text: CATEGORIES split on commas, an escaped comma does not split", { todo: true }, async () => {
+test("text: CATEGORIES split on commas, an escaped comma does not split", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("cat@x", "DTSTART:20261104T180000Z",
     String.raw`CATEGORIES:Labs\, recitations,Exam,Due Date`)), wide);
   assert.deepEqual(trimmed(ev.categories), ["Labs, recitations", "Exam", "Due Date"]);
 });
 
-test("text: several CATEGORIES lines are read in order into one list", { todo: true }, async () => {
+test("text: several CATEGORIES lines are read in order into one list", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("cats@x", "DTSTART:20261104T180000Z",
     "CATEGORIES:Talks",
@@ -239,13 +239,13 @@ test("text: several CATEGORIES lines are read in order into one list", { todo: t
   assert.deepEqual(trimmed(ev.categories), ["Talks", "Free Food", "Career"]);
 });
 
-test("text: an event without CATEGORIES has an empty list", { todo: true }, async () => {
+test("text: an event without CATEGORIES has an empty list", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("nocat@x", "DTSTART:20261104T180000Z", "SUMMARY:Plain")), wide);
   assert.deepEqual(ev.categories, []);
 });
 
-test("text: the URL property is returned as written", { todo: true }, async () => {
+test("text: the URL property is returned as written", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("url@x", "DTSTART:20261104T180000Z",
     "URL:https://sbengaged.stonybrook.edu/rsvp?id=390781")), wide);
@@ -254,7 +254,7 @@ test("text: the URL property is returned as written", { todo: true }, async () =
 
 // --- Line ends ---------------------------------------------------------------------------------
 
-test("line ends: the same feed with LF instead of CRLF reads the same", { todo: true }, async () => {
+test("line ends: the same feed with LF instead of CRLF reads the same", async () => {
   const { parseIcs } = await mod();
   const crlf = fixture("brightspace-sample.ics");
   assert.ok(crlf.includes("\r\n"));
@@ -270,7 +270,7 @@ test("line ends: the same feed with LF instead of CRLF reads the same", { todo: 
 
 // --- The [from, to) window ---------------------------------------------------------------------
 
-test("window: overlap with [from, to) at the edges", { todo: true }, async () => {
+test("window: overlap with [from, to) at the edges", async () => {
   const { parseIcs } = await mod();
   // One hour, 18:00Z to 19:00Z on Nov 4.
   const text = cal(...vevent("hour@x", "DTSTART:20261104T180000Z", "DTEND:20261104T190000Z", "SUMMARY:Hour"));
@@ -284,14 +284,14 @@ test("window: overlap with [from, to) at the edges", { todo: true }, async () =>
   assert.equal(hits("2026-11-05T00:00:00Z", "2026-11-06T00:00:00Z"), 0, "the next day");
 });
 
-test("window: a zero-length event inside the window is kept, one at `to` is not", { todo: true }, async () => {
+test("window: a zero-length event inside the window is kept, one at `to` is not", async () => {
   const { parseIcs } = await mod();
   const text = cal(...vevent("due@x", "DTSTART:20261106T045900Z", "SUMMARY:Homework 4 - Due"));
   assert.equal(parseIcs(text, range("2026-11-06T00:00:00Z", "2026-11-07T00:00:00Z")).length, 1);
   assert.equal(parseIcs(text, range("2026-11-05T00:00:00Z", "2026-11-06T04:59:00Z")).length, 0);
 });
 
-test("window: an all-day event is kept when the window falls inside its days, dropped when far outside", { todo: true }, async () => {
+test("window: an all-day event is kept when the window falls inside its days, dropped when far outside", async () => {
   const { parseIcs } = await mod();
   const text = cal(...vevent("break@x", "DTSTART;VALUE=DATE:20261125", "DTEND;VALUE=DATE:20261130", "SUMMARY:Break"));
   assert.equal(parseIcs(text, range("2026-11-27T12:00:00Z", "2026-11-27T13:00:00Z")).length, 1);
@@ -301,7 +301,7 @@ test("window: an all-day event is kept when the window falls inside its days, dr
 
 // --- Malformed input ---------------------------------------------------------------------------
 
-test("malformed: bad events are skipped, the good ones around them kept, nothing thrown", { todo: true }, async () => {
+test("malformed: bad events are skipped, the good ones around them kept, nothing thrown", async () => {
   const { parseIcs } = await mod();
   const text = cal(
     ...vevent("good1@x", "DTSTART:20261104T180000Z", "DTEND:20261104T190000Z", "SUMMARY:Good one"),
@@ -313,7 +313,7 @@ test("malformed: bad events are skipped, the good ones around them kept, nothing
   assert.deepEqual(uids(parseIcs(text, wide)), ["good1@x", "good2@x"]);
 });
 
-test("malformed: an unterminated VEVENT at the end of the text is skipped", { todo: true }, async () => {
+test("malformed: an unterminated VEVENT at the end of the text is skipped", async () => {
   const { parseIcs } = await mod();
   const text = [
     "BEGIN:VCALENDAR",
@@ -323,7 +323,7 @@ test("malformed: an unterminated VEVENT at the end of the text is skipped", { to
   assert.deepEqual(uids(parseIcs(text, wide)), ["ok@x"]);
 });
 
-test("malformed: empty text or not a calendar at all gives no events, no throw", { todo: true }, async () => {
+test("malformed: empty text or not a calendar at all gives no events, no throw", async () => {
   const { parseIcs } = await mod();
   assert.deepEqual(parseIcs("", wide), []);
   assert.deepEqual(parseIcs("<html><head><title>302 Found</title></head></html>", wide), []);
@@ -331,7 +331,7 @@ test("malformed: empty text or not a calendar at all gives no events, no throw",
 
 // --- Brightspace-shaped fixture ----------------------------------------------------------------
 
-test("brightspace: the sample feed reads into its six good events", { todo: true }, async () => {
+test("brightspace: the sample feed reads into its six good events", async () => {
   const { parseIcs } = await mod();
   const got = byUid(parseIcs(fixture("brightspace-sample.ics"), range("2026-10-26T04:00:00Z", "2026-12-01T05:00:00Z")));
   assert.deepEqual(Object.keys(got).sort(), [
@@ -363,7 +363,7 @@ test("brightspace: the sample feed reads into its six good events", { todo: true
   assert.equal(got["62555-6606@mycourses.stonybrook.edu"].summary, "Thanksgiving Break - No Classes");
 });
 
-test("brightspace: a one-week window keeps only that week's items", { todo: true }, async () => {
+test("brightspace: a one-week window keeps only that week's items", async () => {
   const { parseIcs } = await mod();
   // Mon Nov 2 to Mon Nov 9, New York (EST, UTC-5).
   const got = parseIcs(fixture("brightspace-sample.ics"), range("2026-11-02T05:00:00Z", "2026-11-09T05:00:00Z"));
@@ -393,14 +393,14 @@ const SB = {
   lyrical: "41659f313023149b1cbed6f3d8dfe6a610162026_1:22:03_AM@campusgroups.com",
 };
 
-test("sb engaged: all 22 sample events read in their week", { todo: true }, async () => {
+test("sb engaged: all 22 sample events read in their week", async () => {
   const { parseIcs } = await mod();
   const got = parseIcs(fixture("sbengaged-sample.ics"), range("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z"));
   assert.equal(got.length, 22);
   assert.ok(got.every((e) => e.allDay === false), "SB Engaged sends only UTC date-times");
 });
 
-test("sb engaged: Fall Fest, a free-food event with three tags, reads field by field", { todo: true }, async () => {
+test("sb engaged: Fall Fest, a free-food event with three tags, reads field by field", async () => {
   const { parseIcs } = await mod();
   const ev = byUid(parseIcs(fixture("sbengaged-sample.ics"), range("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")))[SB.fallFest];
   assert.equal(ev.summary, "Fall Fest"); // SUMMARY;ENCODING=QUOTED-PRINTABLE:Fall Fest
@@ -422,7 +422,7 @@ test("sb engaged: Fall Fest, a free-food event with three tags, reads field by f
   ]);
 });
 
-test("sb engaged: an event with no event_tags line has just its club and type", { todo: true }, async () => {
+test("sb engaged: an event with no event_tags line has just its club and type", async () => {
   const { parseIcs } = await mod();
   const ev = byUid(parseIcs(fixture("sbengaged-sample.ics"), range("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")))[SB.scioly];
   assert.equal(ev.summary, "Science Olympiad Weekly GBM");
@@ -431,7 +431,7 @@ test("sb engaged: an event with no event_tags line has just its club and type", 
   assert.deepEqual(times(ev), { start: "2026-11-04T00:00:00.000Z", end: "2026-11-04T01:00:00.000Z", allDay: false });
 });
 
-test("sb engaged: text with commas and non-ASCII letters comes through untouched", { todo: true }, async () => {
+test("sb engaged: text with commas and non-ASCII letters comes through untouched", async () => {
   const { parseIcs } = await mod();
   const got = byUid(parseIcs(fixture("sbengaged-sample.ics"), range("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")));
   assert.equal(got[SB.sleepWell].summary, "Sleep Well, Southampton!");
@@ -440,7 +440,7 @@ test("sb engaged: text with commas and non-ASCII letters comes through untouched
   assert.equal(got[SB.archery].summary.trim(), "Indoor Archery Practice"); // the feed has a trailing space
 });
 
-test("sb engaged: a midnight-to-23:55 event across the DST change keeps its UTC times", { todo: true }, async () => {
+test("sb engaged: a midnight-to-23:55 event across the DST change keeps its UTC times", async () => {
   const { parseIcs } = await mod();
   const ev = byUid(parseIcs(fixture("sbengaged-sample.ics"), range("2026-11-01T00:00:00Z", "2026-11-08T00:00:00Z")))[SB.artWalk];
   assert.equal(ev.summary, "Explore Port Jefferson - Art Walk");
@@ -448,7 +448,7 @@ test("sb engaged: a midnight-to-23:55 event across the DST change keeps its UTC 
   assert.deepEqual(times(ev), { start: "2026-11-01T04:00:00.000Z", end: "2026-11-02T04:55:00.000Z", allDay: false });
 });
 
-test("sb engaged: Wednesday Nov 4 in New York holds six events", { todo: true }, async () => {
+test("sb engaged: Wednesday Nov 4 in New York holds six events", async () => {
   const { parseIcs } = await mod();
   // 00:00 to 24:00 EST on Nov 4. The Tue-evening events ending before 05:00Z are out, and
   // "Dirt and Destress" (Nov 5 00:00Z, 7 PM Wed local) is in.
@@ -456,7 +456,7 @@ test("sb engaged: Wednesday Nov 4 in New York holds six events", { todo: true },
   assert.deepEqual(uids(got), [SB.meetRubo, SB.chocolate, SB.ivgcf, SB.tasteOfWorld, SB.suturing, SB.dirt].sort());
 });
 
-test("sb engaged: a zero-length event and the multi-day ones around it", { todo: true }, async () => {
+test("sb engaged: a zero-length event and the multi-day ones around it", async () => {
   const { parseIcs } = await mod();
   const got = parseIcs(fixture("sbengaged-sample.ics"), range("2026-11-06T17:00:00Z", "2026-11-06T19:00:00Z"));
   assert.deepEqual(uids(got), [SB.meetRubo, SB.thetaTau, SB.lyrical].sort());
@@ -466,7 +466,7 @@ test("sb engaged: a zero-length event and the multi-day ones around it", { todo:
 
 // --- The full feed's speed (recorded, not a gate) -----------------------------------------------
 
-test("speed: the full SB Engaged feed's parse time is recorded", { todo: true }, async (t) => {
+test("speed: the full SB Engaged feed's parse time is recorded", async (t) => {
   const { parseIcs } = await mod();
   // The 8.4 MB feed is not committed. Save it and point SHEET_FULL_ICS at it to measure:
   //   curl -sL -o /tmp/sbengaged.ics https://sbengaged.stonybrook.edu/ical/stonybrook/ical_stonybrook.ics
