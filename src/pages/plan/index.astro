@@ -111,6 +111,13 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
       </section>
 
+      <!-- Feeds status (docs/sheet-sources.md, "/plan"): src/sheet/feed-status.mjs fills the list. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-feeds-title">
+        <h3 id="sheet-feeds-title">Feeds</h3>
+        <p class="small">The calendars the server reads every hour, and how the last read went.</p>
+        <ul class="sheet-mail" data-feeds></ul>
+      </section>
+
       <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
@@ -125,5 +132,6 @@ import "../../styles/sheet.css";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
   import { setupMailSettings } from "../../sheet/mail-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings]);
+  import { setupFeedStatus } from "../../sheet/feed-status.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus]);
 </script>
