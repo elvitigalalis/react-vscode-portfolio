@@ -396,15 +396,15 @@ while :; do
 done
 
 # ── v3 · 5 ───────────────────────────────────────────────────────────────
-stage "Supabase: deploy the four functions"
+stage "Supabase: deploy the five functions"
 say "Each is deployed like telegram: bundled on Supabase's side, with its own auth check."
 note "The CLI signs in through your browser first; --yes confirms a change to the live project."
-for f in brightspace campus mail-connect mail-mcp; do
+for f in brightspace campus mail-connect mail-mcp planner-mcp; do
   note "${SB[*]} functions deploy $f --use-api --no-verify-jwt --remote=$SHEET_REF --yes"
 done
 if confirm "Run them now?"; then
   "${SB[@]}" projects list >/dev/null 2>&1 || "${SB[@]}" login
-  for f in brightspace campus mail-connect mail-mcp; do
+  for f in brightspace campus mail-connect mail-mcp planner-mcp; do
     if "${SB[@]}" functions deploy "$f" --use-api --no-verify-jwt --remote="$SHEET_REF" --yes; then
       printf '  %s✓ deployed %s%s\n' "$GREEN" "$f" "$RESET"
     else
@@ -413,7 +413,7 @@ if confirm "Run them now?"; then
     fi
   done
 else
-  SKIPPED+=("deploy the four functions (the commands above)")
+  SKIPPED+=("deploy the five functions (the commands above)")
 fi
 pause
 
