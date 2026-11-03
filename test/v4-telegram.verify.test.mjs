@@ -418,7 +418,7 @@ test("check-in: nothing due tomorrow and no open mail leaves it as it was", todo
 // Off-page approvals: googleStep
 // =============================================================================================
 
-test("googleStep: an approved block with no Google event that hasn't ended is created", todo, async () => {
+test("googleStep: an approved block with no Google event that hasn't ended is created", async () => {
   const { googleStep } = await logic();
   // Approved from Telegram: 9:30-10:15 am, no gcal_id.
   const b = { proposed: false, gcal_id: null, starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z" };
@@ -426,14 +426,14 @@ test("googleStep: an approved block with no Google event that hasn't ended is cr
   assert.equal(googleStep(b, at("2026-11-04T15:00:00Z")), "create"); // while it runs
 });
 
-test("googleStep: once it has ended, it gets no event", todo, async () => {
+test("googleStep: once it has ended, it gets no event", async () => {
   const { googleStep } = await logic();
   const b = { proposed: false, gcal_id: null, starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z" };
   assert.equal(googleStep(b, at("2026-11-04T15:15:00Z")), null);
   assert.equal(googleStep(b, at("2026-11-04T20:00:00Z")), null);
 });
 
-test("googleStep: a block with an event is patched, and a proposed one is created, as before", todo, async () => {
+test("googleStep: a block with an event is patched, and a proposed one is created, as before", async () => {
   const { googleStep } = await logic();
   const now = at("2026-11-04T13:05:00Z");
   assert.equal(googleStep({ proposed: false, gcal_id: "ev1", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z" }, now), "patch");
