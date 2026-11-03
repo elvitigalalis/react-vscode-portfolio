@@ -47,12 +47,12 @@ test("sourceOf: any other task has no source, and Brightspace comes before the t
 
 // ---------------------------------------------------------------- campusSummary
 
-test("campusSummary: no events is zero of each", todo, async () => {
+test("campusSummary: no events is zero of each", async () => {
   const { campusSummary } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(campusSummary([]), { n: 0, food: 0 });
 });
 
-test("campusSummary: counts events and those with free food, as SB Engaged tags it", todo, async () => {
+test("campusSummary: counts events and those with free food, as SB Engaged tags it", async () => {
   const { campusSummary } = await import("../src/sheet/glance.mjs");
   const events = [
     { title: "Diwali Night", starts_at: "2026-11-10T23:00:00Z", tags: [" Free Food & Refreshments", "Cultural"] },
@@ -62,7 +62,7 @@ test("campusSummary: counts events and those with free food, as SB Engaged tags 
   assert.deepEqual(campusSummary(events), { n: 3, food: 2 });
 });
 
-test("campusSummary: an event without tags still counts, with no food", todo, async () => {
+test("campusSummary: an event without tags still counts, with no food", async () => {
   const { campusSummary } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(campusSummary([{ title: "Open Mic", starts_at: "2026-11-11T00:00:00Z" }, { title: "Chess Club", tags: [] }]), { n: 2, food: 0 });
 });
