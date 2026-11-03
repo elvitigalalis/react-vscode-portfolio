@@ -28,11 +28,12 @@ export const authorizationDetails = (id) => call(id);
 // Approve or deny; either way the answer is { redirect_url } back to the client.
 export const decide = (id, action) => call(id, "/consent", { method: "POST", body: JSON.stringify({ action }) });
 
-// What each scope lets the client see, in plain words. Anything else shows as its name.
+// What each scope lets the client see, in plain words. Anything else shows as its name, own keys
+// only, so a scope named "constructor" doesn't read Object's.
 const SCOPES = {
   openid: "Confirm that it is you",
   email: "See your email address",
   profile: "See your name and profile picture",
   phone: "See your phone number",
 };
-export const scopeLines = (scope) => (scope ?? "").split(/\s+/).filter(Boolean).map((s) => SCOPES[s] ?? s);
+export const scopeLines = (scope) => (scope ?? "").split(/\s+/).filter(Boolean).map((s) => (Object.hasOwn(SCOPES, s) ? SCOPES[s] : s));
