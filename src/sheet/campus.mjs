@@ -30,3 +30,23 @@ export function campusTags(events) {
   for (const e of events) for (const t of new Set(tagsOf(e))) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
+
+const pad = (n) => String(n).padStart(2, "0");
+
+// The task "Add to my day" makes: private, tagged #campus, on the day the event starts, at its
+// local start time, with its length as the estimate (at most 4 hours). An all-day event gets
+// neither. The title fits the tasks table's 1 to 500 characters.
+export function eventToTask(e, timeZone) {
+  const { day, minutes } = startOf(e, timeZone);
+  const length = Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60_000);
+  const title = e.title?.trim() || "Campus event";
+  return {
+    title: title.length > 500 ? `${title.slice(0, 499)}…` : title,
+    day,
+    list: null,
+    at_time: e.all_day ? null : `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
+    est_min: e.all_day ? null : Math.min(240, Math.max(1, length)),
+    tag: "campus",
+    public: false,
+  };
+}
