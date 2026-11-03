@@ -31,6 +31,11 @@ export function campusTags(events) {
   return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
+// SB Engaged sends all-day events as 12 am to 11:55 pm with all_day false; those read as all day
+// in the list, and Add to my day treats them so (no time, no estimate).
+const minutesLong = (e) => Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60_000);
+export const allDay = (e, timeZone) => Boolean(e.all_day) || (startOf(e, timeZone).minutes === 0 && minutesLong(e) >= 1435);
+
 const pad = (n) => String(n).padStart(2, "0");
 
 // The task "Add to my day" makes: private, tagged #campus, on the day the event starts, at its
@@ -38,14 +43,13 @@ const pad = (n) => String(n).padStart(2, "0");
 // neither. The title fits the tasks table's 1 to 500 characters.
 export function eventToTask(e, timeZone) {
   const { day, minutes } = startOf(e, timeZone);
-  const length = Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60_000);
   const title = e.title?.trim() || "Campus event";
   return {
     title: title.length > 500 ? `${title.slice(0, 499)}…` : title,
     day,
     list: null,
     at_time: e.all_day ? null : `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
-    est_min: e.all_day ? null : Math.min(240, Math.max(1, length)),
+    est_min: e.all_day ? null : Math.min(240, Math.max(1, minutesLong(e))),
     tag: "campus",
     public: false,
   };
