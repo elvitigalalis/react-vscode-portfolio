@@ -25,15 +25,32 @@ const blocks = [
   { id: 1, task_id: 3, starts_at: "2026-11-03T15:00:00Z", ends_at: "2026-11-03T15:45:00Z", gcal_id: "g1", proposed: false },
   { id: 2, task_id: 1, starts_at: "2026-11-03T19:00:00Z", ends_at: "2026-11-03T20:30:00Z", gcal_id: null, proposed: true },
   { id: 3, task_id: 4, starts_at: "2026-11-03T16:00:00Z", ends_at: "2026-11-03T16:15:00Z", gcal_id: null, proposed: true },
+  // Approved from Telegram, so no Google event yet: /plan makes one on opening.
+  { id: 4, task_id: 2, starts_at: "2026-11-03T22:30:00Z", ends_at: "2026-11-03T23:30:00Z", gcal_id: null, proposed: false },
 ];
 const days = [{ day: "2026-11-02", planned: true, shutdown: true }, { day: "2026-11-03", planned: false, shutdown: false }];
 const settings = [{ id: true, owner_email: "x@y", nudges_on: true, calendars: [], gcal_calendar_id: "c", interests: "robotics, free food" }];
 const campus = [
-  { uid: "c1", title: "Pizza & Pitch Night", starts_at: "2026-11-03T22:00:00Z", ends_at: "2026-11-04T00:00:00Z", all_day: false, group_name: "Entrepreneurship Club", event_type: "Social", tags: ["Free Food", "Career"], url: "https://sbengaged.stonybrook.edu/x" },
+  { uid: "c1", title: "Pizza & Pitch Night", starts_at: "2026-11-03T22:00:00Z", ends_at: "2026-11-04T00:00:00Z", all_day: false, group_name: "Entrepreneurship Club", event_type: "Social", tags: ["Free Food", "Career"], url: "https://sbengaged.stonybrook.edu/x", rsvp_count: 22 },
   { uid: "c2", title: "Google Info Session", starts_at: "2026-11-03T21:00:00Z", ends_at: "2026-11-03T22:00:00Z", all_day: false, group_name: "Career Center", event_type: "Info Session", tags: ["Career"], url: null },
   { uid: "c3", title: "IEEE Workshop: Soldering", starts_at: "2026-11-04T22:00:00Z", ends_at: "2026-11-04T23:30:00Z", all_day: false, group_name: "IEEE", event_type: "Workshop", tags: ["Free Food", "Engineering"], url: null },
 ];
 const feeds = [{ source: "brightspace", fetched_at: "2026-11-03T13:20:00Z", ok: true, error: null, items: 12 }, { source: "campus", fetched_at: "2026-11-03T13:35:00Z", ok: false, error: "304 parse", items: 0 }];
+// The morning plan (docs/sheet-morning.md): today's proposal and the mail that needs Lisul. One
+// row's link isn't Gmail's, so it must show no link.
+const SBU = "lisul.elvitigala@stonybrook.edu";
+const gmail = (id) => `https://mail.google.com/mail/?authuser=${encodeURIComponent(SBU)}#all/${id}`;
+const proposals = [{ day: "2026-11-03", status: "pending", note: "Lab 5 (2h) didn't fit before shutdown.", picks: [{ uid: "c1", why: "Career and free food" }] }];
+const N = (id, kind, sender, subject, why, extra = {}) => ({ id: `n${id}`, day: "2026-11-03", account: SBU, message_id: `19a4f2c3b5d6e7f${id}`, link: gmail(`19a4f2c3b5d6e7f${id}`), sender, subject, why, kind, due: null, done: false, created_at: "2026-11-03T11:07:00Z", ...extra });
+const needs = [
+  N(1, "reply", "Ana Ruiz", "Micromouse demo moved to Friday", "She asked if 3 pm works for you; reply by Thursday.", { due: "2026-11-05" }),
+  N(2, "deadline", "CSE 320 Staff", "Project 3 extension request form", "Form closes before Project 3 is due.", { due: "2026-11-07" }),
+  N(3, "meeting", "Prof. Stark", "Office hours: research position follow-up", "Wants 20 minutes this week to talk about the spring position."),
+  N(4, "admin", "Registrar", "Spring 2027 enrollment appointment", "Your enrollment window opens Monday.", { link: "https://evil.example/phish", account: "elvitigalalis@gmail.com" }),
+  N(5, "reply", "Done row", "Already handled", "Hidden.", { done: true }),
+];
+// What the page wrote, for the checks below.
+const writes = { busy: [], events: 0 };
 const pubWeek = tasks.filter((t) => t.day).map((t) => ({ day: t.day, position: t.position, public: t.public, title: t.public ? t.title : null, bar: t.title.length, done: t.done, tag: t.tag }));
 const gEvents = { items: [
   { iCalUID: "e1", summary: "CSE 320 Lecture", start: { dateTime: "2026-11-03T14:00:00Z" }, end: { dateTime: "2026-11-03T15:20:00Z" } },
@@ -45,10 +62,21 @@ const json = (r, body) => r.respond({ status: 200, contentType: "application/jso
 function route(r) {
   const u = r.url();
   if (r.method() === "OPTIONS") return r.respond({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
-  if (u.includes("googleapis.com")) return json(r, gEvents);
+  if (u.includes("googleapis.com")) {
+    if (r.method() === "POST" && /\/events$/.test(new URL(u).pathname)) { writes.events++; return json(r, { id: `gnew${writes.events}` }); }
+    return json(r, gEvents);
+  }
   if (!u.includes("supabase.co")) return r.continue();
   const p = new URL(u).pathname.replace("/rest/v1/", "");
-  const map = { tasks: tasks, blocks, days, settings, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", tag: "workit", public: true, updated_on: "2026-11-03" }] };
+  const q = new URL(u).search;
+  if (p === "busy" && r.method() === "POST") writes.busy.push(JSON.parse(r.postData()));
+  // Approved blocks without an event, with their task (api.eventlessBlocks).
+  if (p === "blocks" && q.includes("gcal_id=is.null") && r.method() === "GET") {
+    return json(r, blocks.filter((x) => !x.proposed && !x.gcal_id).map((x) => ({ ...x, tasks: { title: tasks.find((t) => t.id === x.task_id).title, public: true } })));
+  }
+  if (p === "blocks" && q.includes("gcal_id=is.null") && r.method() === "PATCH") return json(r, [{ ...blocks[3], ...JSON.parse(r.postData()) }]);
+  if (p === "needs_you" && r.method() === "GET") return json(r, needs.filter((n) => !n.done));
+  const map = { tasks: tasks, blocks, days, settings, proposals, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", tag: "workit", public: true, updated_on: "2026-11-03" }] };
   if (new URL(u).search.includes("parked_on")) return json(r, [{ id: 99 }]);
   return json(r, map[p] ?? []);
 }
@@ -151,8 +179,61 @@ for (const w of [1440, 1280]) for (const dark of [false, true]) {
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
 await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click("[data-feed-alert]"); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await pg.click('[data-more] [data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
+// The Needs you chip (docs/sheet-morning.md, "/plan") shows on phones too, as the mail icon and
+// the count, without breaking the top bar's one row.
+async function checkNeedsChip(pg, name) {
+  const r = await pg.evaluate(() => {
+    const c = document.querySelector("[data-needs-chip]");
+    return c && { shown: Boolean(c.getClientRects().length), text: c.innerText.replace(/\s+/g, " ").trim(), label: c.ariaLabel, icon: Boolean(c.querySelector('use[href="#i-mail"]')) };
+  });
+  if (!r?.shown) return failures.push(`${name}: no Needs you chip`);
+  if (!r.icon || !/\b4$/.test(r.text) || r.label !== "Needs you · 4") failures.push(`${name}: Needs you chip reads "${r.text}" (${r.label})`);
+}
 for (const dark of [false, true]) {
-  await shot("/plan/", `plan-phone-${dark ? "dark" : "light"}`, 390, 844, dark, (pg) => checkTopBar(pg, `/plan 390px ${dark ? "dark" : "light"}`));
+  await shot("/plan/", `plan-phone-${dark ? "dark" : "light"}`, 390, 844, dark, async (pg) => { await checkTopBar(pg, `/plan 390px ${dark ? "dark" : "light"}`); await checkNeedsChip(pg, `/plan 390px ${dark ? "dark" : "light"}`); });
+}
+// The dialog: four groups in order, only Gmail links, opened with noopener noreferrer, and Done
+// takes a row away.
+async function checkNeeds(pg, name) {
+  const r = await pg.evaluate(() => {
+    const d = document.querySelector("[data-needs]");
+    return {
+      open: d.open,
+      groups: [...d.querySelectorAll(".sheet-needs-group h3")].map((h) => h.textContent),
+      rows: d.querySelectorAll(".sheet-needs-item").length,
+      links: [...d.querySelectorAll("a")].map((a) => [a.href.startsWith("https://mail.google.com/"), a.rel]),
+    };
+  });
+  if (!r.open) return failures.push(`${name}: the Needs you dialog did not open`);
+  if (r.groups.join("|") !== "Reply owed|Deadlines|Meetings|School & admin") failures.push(`${name}: groups ${r.groups.join(", ")}`);
+  if (r.rows !== 4) failures.push(`${name}: ${r.rows} rows, expected 4`);
+  if (r.links.length !== 3 || r.links.some(([gmail, rel]) => !gmail || rel !== "noopener noreferrer")) failures.push(`${name}: links ${JSON.stringify(r.links)}`);
+}
+for (const w of [1440, 390]) for (const dark of [false, true]) {
+  const name = `Needs you ${w}px ${dark ? "dark" : "light"}`;
+  await shot("/plan/", `plan-needs-${w}-${dark ? "dark" : "light"}`, w, w > 400 ? 900 : 844, dark, async (pg) => {
+    await pg.keyboard.press("m");
+    await new Promise((r) => setTimeout(r, 500));
+    await checkNeeds(pg, name);
+  });
+}
+await shot("/plan/", "plan-needs-done", 1440, 900, false, async (pg) => {
+  await pg.click("[data-needs-chip]");
+  await new Promise((r) => setTimeout(r, 500));
+  await pg.click("[data-need-done]");
+  await new Promise((r) => setTimeout(r, 500));
+  const n = await pg.evaluate(() => [document.querySelectorAll(".sheet-needs-item").length, document.querySelector("[data-needs-n]").textContent.trim()]);
+  if (n[0] !== 3 || n[1] !== "3") failures.push(`Needs you Done: ${n[0]} rows and chip ${n[1]}, expected 3 and 3`);
+});
+// Each page load saves busy times (start and end only) and makes the off-page block's event once.
+{
+  writes.busy = []; writes.events = 0;
+  await shot("/plan/", "plan-sync", 1440, 900, false);
+  const rows = writes.busy.flat();
+  if (!rows.length) failures.push("busy: nothing saved");
+  if (rows.some((x) => Object.keys(x).join() !== "starts_at,ends_at")) failures.push(`busy: rows hold more than start and end: ${JSON.stringify(rows[0])}`);
+  if (rows.some((x) => x.starts_at.length === 10)) failures.push("busy: an all-day event was saved");
+  if (writes.events !== 1) failures.push(`off-page block: ${writes.events} Google events made, expected 1`);
 }
 await shot("/plan/", "plan-more", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await new Promise((r) => setTimeout(r, 300)); });
 await shot("/now/", "now-light", 1440, 900, false);
