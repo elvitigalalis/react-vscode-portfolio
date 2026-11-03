@@ -5,7 +5,7 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, weekDays, zonedIso, minutesOn, formatSpan, dayLabel, positionBetween, byPosition } from "./logic.mjs";
-import { campusDay, campusTags, eventToTask, freeFood, allDay } from "./campus.mjs";
+import { campusDay, campusTags, eventToTask, freeFood, isAdded, activeTags, tagsOf } from "./campus.mjs";
 import { el, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
 
 const tz = SHEET.timeZone;
@@ -59,17 +59,14 @@ function drawRows() {
   if (dialog.open) draw();
 }
 
-const isAdded = (t) => [...state.tasks.values()].some((x) => x.tag === "campus" && x.day === t.day && x.title === t.title);
-const taskFor = (e) => eventToTask({ ...e, all_day: allDay(e, tz) }, tz);
-
 function item(e) {
-  const t = taskFor(e);
-  const added = isAdded(t);
-  const tags = (e.tags ?? []).map((g) => g.trim()).filter(Boolean);
+  const t = eventToTask(e, tz);
+  const added = isAdded(state.tasks.values(), t);
+  const tags = tagsOf(e);
   const label = added ? "Added ✓" : "Add to my day";
   const add = el("button", { type: "button", className: "sheet-btn", textContent: label, disabled: added, ariaLabel: `${label}: ${t.title}` });
   add.dataset.add = e.uid;
-  const when = allDay(e, tz) ? "All day" : formatSpan(minutesOn(e.starts_at, day, tz), minutesOn(e.ends_at, day, tz));
+  const when = e.all_day ? "All day" : formatSpan(minutesOn(e.starts_at, day, tz), minutesOn(e.ends_at, day, tz));
   return el("li", { className: "sheet-campus-item" },
     el("p", { className: "sheet-meta" }, when, freeFood(e) ? " " : null, freeFood(e) ? el("span", { className: "sheet-campus-food", textContent: "Free food" }) : null),
     e.url
@@ -93,8 +90,7 @@ function draw() {
   const keep = a && dialog.contains(a) ? (a.dataset.add ? `[data-add="${a.dataset.add}"]` : a.dataset.tag ? `[data-tag="${CSS.escape(a.dataset.tag)}"]` : a.id ? `#${a.id}` : null) : null;
   const all = routineShown(day);
   const tags = campusTags(all);
-  // Only chips on screen filter, so a tag picked on another day never empties this one.
-  const on = filters.tags.filter((g) => tags.some((x) => x.tag === g));
+  const on = activeTags(filters.tags, tags);
   const shown = campusDay(all, day, tz, { tags: on, showRoutine: true });
   const { weekday, date } = dayLabel(day);
   const routine = el("input", { type: "checkbox", id: "sheet-campus-routine", checked: filters.showRoutine });
@@ -124,7 +120,7 @@ function open(d) {
 // Through the planner's own insert, at the end of the event's day, with undo (toast and ⌘Z).
 let noteTimer;
 async function add(uid) {
-  const t = taskFor(events.find((e) => e.uid === uid));
+  const t = eventToTask(events.find((e) => e.uid === uid), tz);
   const last = [...state.tasks.values()].filter((x) => x.day === t.day).sort(byPosition).at(-1);
   try {
     const task = await api.insertTask({ ...t, position: positionBetween(last?.position ?? null, null) });
