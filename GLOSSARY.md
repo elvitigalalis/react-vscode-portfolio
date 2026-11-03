@@ -37,6 +37,18 @@ _Avoid_: Morning plan, daily planning
 A set of blocks Claude suggests for today. It is not part of the plan until approved, and it lapses at the end of its day.
 _Avoid_: Suggestion, AI plan, draft
 
+**Revision**:
+One numbered proposal for a day. A day can have several; the newest pending one is current, and a newer one supersedes it.
+_Avoid_: Version, draft, new plan
+
+**Replan**:
+A revision made during the day because something changed. It plans only from now until shutdown.
+_Avoid_: Re-run, refresh, update
+
+**Locked block**:
+An approved block. A replan never moves it or removes it.
+_Avoid_: Pinned block, fixed block, confirmed block
+
 **Approve**:
 To accept a proposed block (or a whole proposal), turning it into a real block.
 _Avoid_: Accept, confirm, commit
@@ -53,6 +65,18 @@ _Avoid_: Carry over, postpone
 The end-of-day step that moves missed tasks to tomorrow and closes the day.
 _Avoid_: Review, wrap-up
 
+**Pace**:
+For one kind of task, the median of actual time over estimate, which shows how far off Lisul's guesses run.
+_Avoid_: Speed, velocity, accuracy
+
+**Workload cap**:
+The most planned work a day may hold.
+_Avoid_: Daily limit, capacity, budget
+
+**Habit**:
+A recurring time Lisul protects, such as gym or lunch, with set days, an ideal time, a flex window and a defence level (flexible or firm).
+_Avoid_: Routine, recurring task, ritual
+
 **Morning plan**:
 The proposal Claude makes on its own at 6:07 each morning, delivered with the morning brief for Lisul to approve or skip.
 _Avoid_: Auto-plan, daily run, routine
@@ -62,18 +86,34 @@ A stretch of Lisul's calendar that is taken, known only by its start and end, wh
 _Avoid_: Event, free/busy, slot
 
 **Needs you**:
-The list of emails that need something from Lisul (a reply owed, a deadline, a meeting, school or admin), each with a one-line reason. He clears an item by marking it done.
+The list of emails and Slack mentions that need something from Lisul (a reply owed, a deadline, a meeting, school or admin), each with a one-line reason. He clears an item by marking it done or not needed.
 _Avoid_: Inbox, triage list, action items
 
 **Reply owed**:
-A mail thread where someone wrote to Lisul two or more days ago and he has not answered.
+A mail thread whose newest message is someone else's and is two or more business days old, so Lisul has not answered. It clears itself when the thread moves.
 _Avoid_: Follow-up, unanswered
+
+**Awaiting reply**:
+A mail thread where Lisul wrote last and nobody has answered for three or more business days. It clears itself when the thread moves.
+_Avoid_: Waiting on, follow-up, no response
+
+**Triage rule**:
+Lisul's standing instruction to always show or never show mail from a sender address or a domain in Needs you.
+_Avoid_: Filter, block list, allow list
+
+**Known sender**:
+Someone Lisul has emailed before. Mail from a known sender is never filtered out.
+_Avoid_: Contact, trusted sender
 
 ## Sources
 
 **Feed**:
-A calendar subscription link (iCal) The Sheet reads on a schedule. There are two: Brightspace and SB Engaged.
+A calendar subscription link (iCal) The Sheet reads on a schedule: Brightspace, SB Engaged, Handshake and the SBU academic calendar.
 _Avoid_: Integration, sync, calendar link
+
+**Change**:
+One difference a sync found since the last plan, such as new mail, a moved busy time or a new course task, with a kind and a weight for how much it matters.
+_Avoid_: Event, update, diff
 
 **Course task**:
 A task created from a Brightspace feed item. It carries the item's due date and lives in the "Brightspace" Someday list.
@@ -124,6 +164,10 @@ _Avoid_: Digest, daily summary
 **Check-in**:
 The message at shutdown time that asks Lisul to do the shutdown; skipped if the day is already shut down.
 _Avoid_: End-of-day reminder, review prompt
+
+**Finished? check**:
+The message when a nudged block ends, asking whether its task is done: Finished, More time, Didn't start or Tomorrow. It is not the check-in.
+_Avoid_: Check-in, follow-up, time log
 
 **Nudge budget**:
 The most nudges Lisul gets in one day: six, counting repeats and snoozes but not the morning brief or the check-in. The first six blocks' nudges are kept for them; repeats and snoozes get only the slots left.
