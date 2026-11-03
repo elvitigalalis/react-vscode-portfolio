@@ -160,7 +160,7 @@ const B = [
 ];
 const ids = (list) => list.map((s) => s.id);
 
-test("mail: searchPlan asks every account for the whole limit, in the given order", { todo: true }, async () => {
+test("mail: searchPlan asks every account for the whole limit, in the given order", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const plan = m.searchPlan("is:unread newer_than:14d", [PERSONAL, SBU], 10);
   assert.equal(plan.limit, 10);
@@ -170,7 +170,7 @@ test("mail: searchPlan asks every account for the whole limit, in the given orde
   ]);
 });
 
-test("mail: searchPlan's limit is 25 by default and stays within 1 to 25", { todo: true }, async () => {
+test("mail: searchPlan's limit is 25 by default and stays within 1 to 25", async () => {
   const m = await import("../src/sheet/mail.mjs");
   assert.equal(m.searchPlan("newer_than:3d", [PERSONAL]).limit, 25);
   assert.equal(m.searchPlan("newer_than:3d", [PERSONAL], 100).limit, 25);
@@ -178,7 +178,7 @@ test("mail: searchPlan's limit is 25 by default and stays within 1 to 25", { tod
   assert.deepEqual(m.searchPlan("newer_than:3d", [PERSONAL], 100).requests, [{ account: PERSONAL, q: "newer_than:3d", maxResults: 25 }]);
 });
 
-test("mail: merge puts every account's results newest first, cut to the limit, ties in account order", { todo: true }, async () => {
+test("mail: merge puts every account's results newest first, cut to the limit, ties in account order", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const before = JSON.stringify([A, B]);
   assert.deepEqual(ids(m.searchPlan("q", [PERSONAL, SBU], 4).merge([A, B])), ["a1", "b1", "a2", "b2"]);
@@ -188,7 +188,7 @@ test("mail: merge puts every account's results newest first, cut to the limit, t
   assert.equal(JSON.stringify([A, B]), before, "inputs untouched");
 });
 
-test("mail: merge never returns more than 25", { todo: true }, async () => {
+test("mail: merge never returns more than 25", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const many = (account, day) => Array.from({ length: 25 }, (_, i) =>
     ({ account, id: `${account}-${i}`, date: new Date(Date.UTC(2026, 10, day, 23 - i)).toISOString() }));
@@ -197,7 +197,7 @@ test("mail: merge never returns more than 25", { todo: true }, async () => {
   assert.ok(out.every((s) => s.account === PERSONAL), "the 3rd's 25 are all newer than the 2nd's");
 });
 
-test("mail: searchPlan with no accounts plans nothing", { todo: true }, async () => {
+test("mail: searchPlan with no accounts plans nothing", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const plan = m.searchPlan("q", [], 25);
   assert.deepEqual(plan.requests, []);

@@ -95,3 +95,23 @@ function htmlToText(html) {
     .split("\n").map((line) => line.replace(/[ \t\f\v\u00a0]+/g, " ").trim()).join("\n")
     .replace(/\n{3,}/g, "\n\n");
 }
+
+// --- Searching several accounts --------------------------------------------------------------
+
+// The most results one search returns, across every account.
+export const SEARCH_MAX = 25;
+
+// One search over several accounts (email addresses, in the order to break ties by). Each
+// account is asked for the whole limit, since any one of them may hold the newest results.
+// merge(lists) takes each account's summaries, in the order of `requests`, and returns one list,
+// newest first, cut to the limit.
+export function searchPlan(query, accounts, max) {
+  const limit = max == null ? SEARCH_MAX : Math.min(SEARCH_MAX, Math.max(1, Math.floor(Number(max)) || 1));
+  const requests = accounts.map((account) => ({ account, q: query, maxResults: limit }));
+  const merge = (lists) => lists
+    .flatMap((list, a) => list.map((summary, i) => ({ summary, a, i, t: Date.parse(summary.date) })))
+    .sort((x, y) => y.t - x.t || x.a - y.a || x.i - y.i)
+    .slice(0, limit)
+    .map((x) => x.summary);
+  return { limit, requests, merge };
+}
