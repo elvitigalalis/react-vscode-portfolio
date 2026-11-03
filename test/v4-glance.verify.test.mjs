@@ -124,38 +124,38 @@ test("dueLevel: a done task is always null, overdue or at risk", todo, async () 
 
 // ---------------------------------------------------------------- loadShare
 
-test("loadShare: pct rounds to a whole percent", todo, async () => {
+test("loadShare: pct rounds to a whole percent", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(0, 240), { pct: 0, level: "ok" });
   assert.deepEqual(loadShare(100, 240), { pct: 42, level: "ok" }); // 41.67 %
   assert.deepEqual(loadShare(130, 480), { pct: 27, level: "ok" }); // 27.08 %
 });
 
-test("loadShare: exactly 85 % is near", todo, async () => {
+test("loadShare: exactly 85 % is near", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(204, 240), { pct: 85, level: "near" });
   assert.deepEqual(loadShare(408, 480), { pct: 85, level: "near" });
 });
 
-test("loadShare: just under 85 % is ok even when pct rounds to 85", todo, async () => {
+test("loadShare: just under 85 % is ok even when pct rounds to 85", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   // 84.58 %: the level follows load's rule on the minutes, not the rounded pct.
   assert.deepEqual(loadShare(203, 240), { pct: 85, level: "ok" });
 });
 
-test("loadShare: exactly full is near, not over", todo, async () => {
+test("loadShare: exactly full is near, not over", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(240, 240), { pct: 100, level: "near" });
 });
 
-test("loadShare: over capacity is over, with pct capped at 100", todo, async () => {
+test("loadShare: over capacity is over, with pct capped at 100", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(241, 240), { pct: 100, level: "over" });
   assert.deepEqual(loadShare(300, 240), { pct: 100, level: "over" }); // 125 %
   assert.deepEqual(loadShare(720, 240), { pct: 100, level: "over" }); // 300 %
 });
 
-test("loadShare: a capacity of 0 is over with any minutes, ok with none", todo, async () => {
+test("loadShare: a capacity of 0 is over with any minutes, ok with none", async () => {
   const { loadShare } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(loadShare(30, 0), { pct: 100, level: "over" });
   assert.deepEqual(loadShare(0, 0), { pct: 0, level: "ok" });
