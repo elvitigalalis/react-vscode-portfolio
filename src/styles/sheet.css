@@ -257,6 +257,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 /* The Campus list (docs/sheet-sources.md): a row under each day's calendar, the list in a dialog. */
 .sheet-campus-row { font-size: 0.75rem; }
+.sheet-campus-row.sheet-chip { display: inline-flex; align-items: center; gap: 0.2rem; min-height: 1.5rem; padding: 0 0.5rem; color: var(--muted); }
+.sheet-campus-n { display: inline-flex; align-items: center; gap: 0.2rem; margin-left: 0.3rem; }
 .sheet-campus { width: min(40rem, calc(100vw - 2rem)); max-width: none; }
 .sheet-campus-filters { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .sheet-chip {
@@ -304,3 +306,17 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
 }
+
+/* Sources look like sources (docs/sheet-glance.md, change 3): a course task has a 3px --stem
+   left edge and the graduation cap, a campus task the ticket. Its blocks take the same edge on
+   the Plan today timeline and in the week. The tint always comes with its icon (WCAG 1.4.1). */
+.sheet-task[data-source="course"] { border-left: 3px solid var(--stem); padding-left: 0.35rem; }
+.sheet-block[data-source="course"] { background: color-mix(in srgb, var(--stem) 18%, var(--bg)); border-left: 3px solid var(--stem); }
+.sheet-block.is-proposed[data-source="course"] { background: var(--bg); }
+.sheet-task[data-source="course"] .sheet-proposal { border-left: 3px solid var(--stem); }
+.sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
+/* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
+.sheet-overdue { color: var(--danger); cursor: help; }
+/* Amber on --chip is 4.0:1 in light mode, so on a held, picked or drop-target row (all --chip)
+   amber text keeps a page-coloured ground. */
+:is(.is-held, .is-picked, .is-drop) :is(.sheet-risk, .sheet-clash) { background: var(--bg); border-radius: 0.2rem; padding: 0 0.2rem; }
