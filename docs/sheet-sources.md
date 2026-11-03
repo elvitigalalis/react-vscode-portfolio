@@ -92,7 +92,8 @@ mail_connect_states  nonce text pk, created_at timestamptz   -- service role onl
     first, then stale ones, each soonest first.
 - **`campus.mjs`:**
   - `campusDay(events, day, timeZone, { tags, showRoutine })` returns the day's events, sorted:
-    free food first, then by start time.
+    most RSVPs first (`rsvp_count`, unknown counts after every known one, 0 included), then free
+    food first, then by start time. Well-attended events are usually the funded ones.
     - "Routine" events (practices, meetings and general body meetings, matched on `event_type`
       and the title) are hidden unless `showRoutine` is set.
     - With `tags` set, only events carrying one of those tags are kept.
@@ -177,8 +178,8 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
 
 - **The "Campus" row:** under each day's calendar events, a collapsed "Campus · 79" row, counted
   after the routine filter. Opening it shows that day's list from `campusDay`. Each event shows its
-  time, title, group, its tags as chips, a "Free food" badge, a link to the event page, and
-  **Add to my day**. The title is always the link: an event with no `url` links to
+  time, "42 going" when its `rsvp_count` is above 0, title, group, its tags as chips, a "Free
+  food" badge, a link to the event page, and **Add to my day**. The title is always the link: an event with no `url` links to
   `https://sbengaged.stonybrook.edu/events`, SB Engaged's public list.
   - The filters are tag chips, the counts from `campusTags`, and a "Show practices and meetings"
     switch. They are remembered in localStorage.

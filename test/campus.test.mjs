@@ -54,3 +54,19 @@ test("activeTags: only picked tags that are on screen filter, so another day's p
   assert.deepEqual(activeTags([], onScreen), []);
   assert.deepEqual(activeTags(["Games"], []), []);
 });
+
+test("campusDay: most RSVPs first, unknown counts last; free food, then start time, break ties", () => {
+  const at = (h) => [`2026-11-04T${h}:00:00Z`, `2026-11-04T${h}:30:00Z`];
+  const food = [" Free Food & Refreshments"];
+  const events = [
+    ev(...at(14), { uid: "unknown-early" }),
+    ev(...at(15), { uid: "zero-food", rsvp_count: 0, tags: food }),
+    ev(...at(16), { uid: "thirteen", rsvp_count: 13 }),
+    ev(...at(17), { uid: "unknown-food", tags: food }),
+    ev(...at(18), { uid: "nine-food", rsvp_count: 9, tags: food }),
+    ev(...at(19), { uid: "nine", rsvp_count: 9 }),
+    ev(...at(13), { uid: "zero-early", rsvp_count: 0 }),
+  ];
+  assert.deepEqual(campusDay(events, "2026-11-04", tz).map((e) => e.uid),
+    ["thirteen", "nine-food", "nine", "zero-food", "zero-early", "unknown-food", "unknown-early"]);
+});

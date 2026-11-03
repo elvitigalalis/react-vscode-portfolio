@@ -220,7 +220,7 @@ export const eventReminders = (settings) => ({ reminders: blockReminders(setting
 // https://docs.postgrest.org/en/stable/references/errors.html), which reads as no events.
 export async function listCampus(fromIso, toIso) {
   try {
-    return await rest(`campus_events?select=uid,title,starts_at,ends_at,all_day,group_name,event_type,tags,url&starts_at=gte.${fromIso}&starts_at=lt.${toIso}&order=starts_at`);
+    return await rest(`campus_events?select=uid,title,starts_at,ends_at,all_day,group_name,event_type,tags,url,rsvp_count&starts_at=gte.${fromIso}&starts_at=lt.${toIso}&order=starts_at`);
   } catch (e) {
     if (/: 404$/.test(e.message)) return [];
     throw e;
