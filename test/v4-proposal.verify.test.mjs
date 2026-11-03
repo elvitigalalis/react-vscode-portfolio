@@ -23,8 +23,8 @@
 // - rows timestamps are `toISOString()` UTC ("...T14:30:00.000Z"). A block may end exactly when
 //   the next starts, and may sit over the pending proposal's own blocks (a resubmission replaces
 //   them); "approved block" means a block with proposed = false.
-// - A link's hex id is the message_id given (search_mail's link ends in the thread id, which is the
-//   message_id for a thread's first message; every fixture here uses such ids).
+// - A link's hex id is the thread id search_mail gives (mail.mjs builds it from threadId), so it
+//   need not equal message_id: a later message in a thread has its own id. Both must be hex.
 // - An error names the field: "blocks[2]", "needs_you[0]" with the subfield, "picks[0]" with the
 //   subfield, "day", "note". Tests match the name, not the wording, except the contract's own
 //   example ("blocks[2]: overlaps a busy time 2:00–3:20 pm").
@@ -549,6 +549,12 @@ test("hostile: a link for the wrong account, or anywhere but Gmail, is refused",
   // Anywhere but Gmail.
   refused(checkProposal(good({ needs_you: withNeed({ link: "https://evil.com/mail/?authuser=lisul.elvitigala%40stonybrook.edu#all/19a4f2c3b5d6e7f8" }) }), snap()), /needs_you\[0\]/, /link/);
   refused(checkProposal(good({ needs_you: withNeed({ link: "javascript:alert(1)//19a4f2c3b5d6e7f8" }) }), snap()), /needs_you\[0\]/, /link/);
+});
+
+test("checkProposal: a link to the message's thread passes even when its id differs from message_id", todo, async () => {
+  const { checkProposal } = await load();
+  const r = checkProposal(good({ needs_you: withNeed({ message_id: "19a51c0d1e2f3a4b", link: `${SBU_LINK}19a4f2c3b5d6e7f8` }) }), snap());
+  assert.equal(r.ok, true, r.errors?.join("; "));
 });
 
 test("hostile: a non-hex message id, in the item or its link, is refused", todo, async () => {
