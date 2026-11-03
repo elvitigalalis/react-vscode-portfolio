@@ -304,3 +304,27 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
 }
+
+/* A calmer top bar (docs/sheet-glance.md, change 6): ‹ Today › on the left, then Plan today,
+   chips, Nudges and ⋯. On phones it is one row: the week title and the button words that have
+   an icon go to screen readers only, and ‹ Today › names the day on screen. */
+.sheet-tools { flex: 1; align-items: center; }
+.sheet-nav { display: flex; gap: 0.2rem; margin-right: auto; }
+.sheet-tools .sheet-btn:has(.sheet-icon) { display: inline-flex; align-items: center; gap: 0.35rem; }
+.sheet-icon-btn { justify-content: center; min-width: 2rem; padding-inline: 0.4rem; }
+.sheet-narrow { display: none; }
+.sheet-chips { display: contents; }
+.sheet-chips .sheet-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8125rem; min-height: 2rem; }
+.sheet-chip.is-alert { color: var(--danger); border-color: var(--danger); }
+.sheet-nudges[aria-pressed="false"] .sheet-icon { color: var(--muted); }
+.sheet-menu kbd { font: inherit; font-size: 0.75rem; color: var(--muted); margin-left: 0.25rem; }
+@media (max-width: 48rem) {
+  .sheet-planner .sheet-bar-top h1, .sheet-wide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sheet-narrow { display: inline; }
+  .sheet-tools { gap: 0.3rem; }
+  .sheet-tools kbd { display: none; }
+}
+@media (max-width: 30rem) {
+  .sheet-tools .sheet-chip-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sheet-tools .sheet-btn, .sheet-chips .sheet-chip { padding-inline: 0.45rem; }
+}
