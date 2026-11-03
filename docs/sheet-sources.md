@@ -154,6 +154,7 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
 | `campus` | `pg_cron` at :35 every hour | same | Fetches the SB Engaged feed with `If-None-Match` and `If-Modified-Since`, applies `campusRows`, writes `feed_state`, then refreshes due RSVP counts from event pages (`countsDue`, `rsvpCount`) |
 | `mail-connect` | Lisul's browser (/plan) | `POST /start` with `Authorization: Bearer <owner's Supabase JWT>` (CORS: the site's origin and `http://localhost:4321` only; `GET` is 405), checked against `is_owner`; it answers `{ url }`, Google's consent URL. Then a signed, single-use `state`: its nonce sits in `mail_connect_states` until `/callback` consumes it | Google OAuth (`gmail.readonly`, `access_type=offline`, `prompt=consent`). The callback stores the refresh token in Vault and upserts `mail_accounts`, then redirects to `/plan/?mail=connected` |
 | `mail-mcp` | Claude (custom connector) | Supabase Auth OAuth 2.1 access token for the owner | MCP over Streamable HTTP. Tools: `list_mail_accounts`, `search_mail`, `read_message` |
+| `planner-mcp` | Claude (custom connector; the morning task and chat) | same as `mail-mcp` | MCP over Streamable HTTP. Tools: `read_planner`, `submit_proposal` ([sheet-morning.md](sheet-morning.md), "Edge Functions") |
 
 - **Cron:** each job reads its URL from Vault (`sheet_brightspace_url`, `sheet_campus_url`) and
   reuses `sheet_cron_secret`. Until those Vault entries exist, the jobs do nothing.
