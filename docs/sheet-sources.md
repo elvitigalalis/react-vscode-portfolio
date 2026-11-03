@@ -53,6 +53,8 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
   - It handles line folding, text escapes (`\n \, \; \\`), `TZID=` local times, UTC `Z` times,
     `VALUE=DATE` values, a missing `DTEND` (`DURATION`, or zero length), and CRLF or LF line ends.
   - It ignores `RRULE`, keeping the first occurrence; neither feed repeats events.
+  - Events whose `ORGANIZER` line has a `CN` also carry `organizer`, that name unquoted (SB
+    Engaged's clubs); without one the field is absent.
   - Malformed events are skipped, never thrown on.
 - **`feeds.mjs`:**
   - `courseTaskChanges(events, { tasks, seen, timeZone })` returns `{ insert, update, seen }`:
