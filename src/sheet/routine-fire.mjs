@@ -49,3 +49,51 @@ export function fireText(trigger, counts) {
   const reasons = REASONS.filter((name) => counts[name] > 0).map((name) => `${name} ${counts[name]}`);
   return `trigger: ${trigger}\nreasons: ${reasons.join(", ") || "none"}`;
 }
+
+// How long a 429 says to wait before the next fire, in milliseconds from now. Retry-After is
+// either whole seconds or an HTTP date (RFC 9110, section 10.2.3). The fire limits are hourly
+// ("each routine accepts up to 30 fires per hour ... each account can make up to 100"), so a
+// missing or garbled header waits an hour.
+const HOUR_MS = 60 * 60 * 1000;
+export function retryAfterMs(header, now) {
+  const value = (header ?? "").trim();
+  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  const at = /[a-z]/i.test(value) ? Date.parse(value) : NaN;
+  return Number.isNaN(at) ? HOUR_MS : Math.max(0, at - now.getTime());
+}
+
+// One fire, with `fetchFn` as fetch: { ok, session_id, session_url } on success, otherwise
+// { ok: false, status, error } with the error envelope's type ({ type: "error", error: { type,
+// message } }), never its message. A 429 adds retry_at: no fire goes before then, and the
+// next one needs a new replans row. Nothing is retried here (no idempotency key).
+// `log` gets one line per fire, without the token.
+export async function fireRoutine(fetchFn, { routineId, token, trigger, counts }, now, log = console.log) {
+  const { url, init } = fireRequest(routineId, token, fireText(trigger, counts));
+  let res;
+  try {
+    res = await fetchFn(url, init);
+  } catch {
+    log("fire: network error");
+    return { ok: false, status: 0, error: "network" };
+  }
+  let body = null;
+  try { body = await res.json(); } catch { /* not JSON */ }
+  if (res.ok) {
+    const id = body?.claude_code_session_id, link = body?.claude_code_session_url;
+    if (typeof id !== "string" || typeof link !== "string") {
+      log(`fire: ${res.status} without a session`);
+      return { ok: false, status: res.status, error: "no session" };
+    }
+    log(`fire: started ${id}`);
+    return { ok: true, session_id: id, session_url: link };
+  }
+  const type = body?.error?.type;
+  const error = typeof type === "string" && /^[a-z_]{1,40}$/.test(type) ? type : "unknown";
+  if (res.status === 429) {
+    const retry_at = new Date(now.getTime() + retryAfterMs(res.headers.get("retry-after"), now)).toISOString();
+    log(`fire: 429 ${error}, retry after ${retry_at}`);
+    return { ok: false, status: 429, error, retry_at };
+  }
+  log(`fire: ${res.status} ${error}`);
+  return { ok: false, status: res.status, error };
+}
