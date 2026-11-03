@@ -6,7 +6,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural } from "./logic.mjs";
+import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -164,21 +164,32 @@ function checkin({ tasks, day: row, today, tz, needsOpen }) {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 // A Telegram update, read as a tap on a nudge's Done or Snooze:
 //   { action: "done" | "snooze", block_id, query_id, chat_id, message_id }
+// or on a plan's Approve all or Skip:
+//   { action: "pa" | "ps", day, query_id, chat_id, message_id }
 // or null for anything else, which the webhook ignores without a word: any other update, a chat
-// that isn't Lisul's, or callback data that isn't "done:" or "snooze:" and a block's UUID.
+// that isn't Lisul's, or callback data that isn't "done:" or "snooze:" and a block's UUID, or
+// "pa:" or "ps:" and a plain date.
 export function readTap(update, settings) {
   const q = update.callback_query;
   if (!q?.message || String(q.message.chat.id) !== String(settings.telegram_chat_id)) return null;
+  const from = { query_id: q.id, chat_id: q.message.chat.id, message_id: q.message.message_id };
+  const [, plan, day] = /^(pa|ps):(.+)$/.exec(q.data ?? "") ?? [];
+  if (plan) return DATE.test(day) ? { action: plan, day, ...from } : null;
   const [, action, block_id] = /^(done|snooze):(.+)$/.exec(q.data ?? "") ?? [];
   if (!action || !UUID.test(block_id)) return null;
-  return { action, block_id, query_id: q.id, chat_id: q.message.chat.id, message_id: q.message.message_id };
+  return { action, block_id, ...from };
 }
+
+// A plan tap names its day, not a block.
+export const planTap = (tap) => tap.action === "pa" || tap.action === "ps";
 
 // A nudge from an earlier day can name a block outside today's snapshot. The webhook then adds
 // that block, its task's other blocks and its task before handleTap runs.
-export const needsTappedBlock = (snapshot, tap) => !snapshot.blocks.some((b) => b.id === tap.block_id);
+export const needsTappedBlock = (snapshot, tap) => !planTap(tap) && !snapshot.blocks.some((b) => b.id === tap.block_id);
 
 const DONE = "✓ Done";
 const GONE = "That block is no longer on the plan.";
@@ -189,7 +200,11 @@ const GONE = "That block is no longer on the plan.";
 //   { table, insert: row } | { table, id, update: fields } | { table, id, delete: true }
 // Telegram can't edit Google Calendar, so a block whose event changes leaves a gcal_pending row
 // ({ gcal_id, ends_at }, ends_at null for a deleted event) for /plan to apply when it opens.
+//
+// Approve all and Skip ({ action: "pa" | "ps", day }) act on that day's proposal, which the
+// snapshot's `proposal` is for a plan tap (see planDecision).
 export function handleTap(tap, snapshot, now) {
+  if (planTap(tap)) return planDecision(tap, snapshot);
   const b = snapshot.blocks.find((x) => x.id === tap.block_id);
   const task = b && snapshot.tasks.find((t) => t.id === b.task_id);
   // A block deleted or moved off the plan since its nudge went out: nothing left to act on.
@@ -222,4 +237,18 @@ function done(task, { blocks }, now) {
     return [r.action === "shrink" ? { table: "blocks", id: b.id, update: { ends_at } } : { table: "blocks", id: b.id, delete: true }, ...pending];
   });
   return { changes: [...changes, { table: "tasks", id: task.id, update: { done: true } }], text: DONE };
+}
+
+// Approve all clears `proposed` on the day's blocks still proposed, and Skip deletes them; either
+// way the proposal is decided. Blocks approved or turned down in /plan since are left as they
+// are. Approved blocks get their Google events when /plan next opens (googleStep). A proposal
+// already decided, lapsed or gone changes nothing.
+function planDecision(tap, { proposal, blocks, settings }) {
+  if (proposal?.day !== tap.day || proposal.status === "lapsed") return { changes: [], text: "That plan has lapsed" };
+  if (proposal.status !== "pending") return { changes: [], text: `Already ${proposal.status}` };
+  const left = proposedOn(blocks, tap.day, settings.time_zone);
+  const approve = tap.action === "pa";
+  const changes = left.map((b) => (approve ? { table: "blocks", id: b.id, update: { proposed: false } } : { table: "blocks", id: b.id, delete: true }));
+  changes.push({ table: "proposals", id: tap.day, update: { status: approve ? "approved" : "skipped" } });
+  return { changes, text: approve ? `✓ Approved ${plural(left.length, "block")}` : "Skipped. Plan in /plan when you're ready." };
 }
