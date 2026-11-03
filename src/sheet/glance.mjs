@@ -46,3 +46,8 @@ export function stripSegments(events, blocks, day, timeZone, from = 7 * 60, to =
     return b > a ? [{ from: pct(a), to: pct(b), kind }] : [];
   }).sort((x, y) => x.from - y.from);
 }
+
+// --- feedAlert (G4: the top bar's Feed failed chip) ------------------------------------------
+
+// The sources whose last read failed, in row order. ok null means not read yet, not failed.
+export const feedAlert = (feedRows) => feedRows.filter((f) => f.ok === false).map((f) => f.source);

@@ -48,7 +48,7 @@ function route(r) {
   if (u.includes("googleapis.com")) return json(r, gEvents);
   if (!u.includes("supabase.co")) return r.continue();
   const p = new URL(u).pathname.replace("/rest/v1/", "");
-  const map = { tasks: tasks, blocks, days, settings, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", heads_down: false }] };
+  const map = { tasks: tasks, blocks, days, settings, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", tag: "workit", public: true, updated_on: "2026-11-03" }] };
   if (new URL(u).search.includes("parked_on")) return json(r, [{ id: 99 }]);
   return json(r, map[p] ?? []);
 }
@@ -132,15 +132,31 @@ for (const w of [1440, 390]) for (const dark of [false, true]) {
 }
 // 10:05 am: the line runs through "WorkIt: batch apply PR review"'s title row.
 await shot("/plan/", "plan-today-on-title", 1440, 900, false, planToday("Plan today at 10:05 am", true), "2026-11-03T15:05:00Z");
+
+// The top bar is one row: every control it shows starts on the same line, inside the page.
+async function checkTopBar(pg, name) {
+  const r = await pg.evaluate(() => {
+    const items = [...document.querySelectorAll(".sheet-tools button")].filter((x) => x.getClientRects().length && !x.closest(".visually-hidden"));
+    const rects = items.map((x) => x.getBoundingClientRect());
+    const tops = rects.map((x) => x.top);
+    return { n: items.length, spread: Math.max(...tops) - Math.min(...tops), right: Math.max(...rects.map((x) => x.right)), width: document.documentElement.clientWidth };
+  });
+  if (!r.n) failures.push(`${name}: no top bar drawn`);
+  if (r.spread > 8) failures.push(`${name}: top bar wraps (${Math.round(r.spread)}px between rows)`);
+  if (r.right > r.width) failures.push(`${name}: top bar runs ${Math.round(r.right - r.width)}px off the page`);
+}
 for (const w of [1440, 1280]) for (const dark of [false, true]) {
-  await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, (pg) => checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`));
+  await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, async (pg) => { await checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`); await checkTopBar(pg, `/plan ${w}px ${dark ? "dark" : "light"}`); });
 }
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
-await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click('[data-act="settings"]'); await new Promise((r) => setTimeout(r, 800)); });
-await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
-await shot("/plan/", "plan-phone", 390, 844, false);
-await shot("/plan/", "plan-phone-dark", 390, 844, true);
+await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click("[data-feed-alert]"); await new Promise((r) => setTimeout(r, 800)); });
+await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await pg.click('[data-more] [data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
+for (const dark of [false, true]) {
+  await shot("/plan/", `plan-phone-${dark ? "dark" : "light"}`, 390, 844, dark, (pg) => checkTopBar(pg, `/plan 390px ${dark ? "dark" : "light"}`));
+}
+await shot("/plan/", "plan-more", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await new Promise((r) => setTimeout(r, 300)); });
 await shot("/now/", "now-light", 1440, 900, false);
+await shot("/now/", "now-dark", 1440, 900, true);
 await shot("/now/", "now-phone", 390, 844, false);
 await b.close();
 for (const f of failures) console.error("FAIL", f);
