@@ -74,22 +74,15 @@ const CAMPUS_TZ = "America/New_York";
 // optional leading space or ", United States": the location is hidden behind sign-in.
 const HIDDEN_LOCATION = /^\s*(Sign in to download the location|Register to receive location details!.*?)(, United States)?\s*$/;
 
-const wall = new Intl.DateTimeFormat("en-US", { timeZone: CAMPUS_TZ, year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", hourCycle: "h23" });
-// The New York wall clock at instant t, as { day: "YYYY-MM-DD", hm: "HH:MM" }.
-function local(t) {
-  const p = Object.fromEntries(wall.formatToParts(t).map((x) => [x.type, x.value]));
-  const pad = (s) => s.padStart(2, "0");
-  return { day: `${p.year}-${pad(p.month)}-${pad(p.day)}`, hm: `${pad(p.hour)}:${pad(p.minute)}` };
-}
-
 // The instant of midnight in New York on "YYYY-MM-DD". Midnight is never in a DST gap there
 // (the clocks change at 2:00), so one correction from the UTC guess lands on it.
 function localMidnight(day) {
   const utc = Date.parse(`${day}T00:00:00Z`);
-  const { day: d, hm } = local(utc);
-  const shown = Date.parse(`${d}T${hm}:00Z`);
+  const { day: d, minutes } = localNow(new Date(utc), CAMPUS_TZ);
+  const shown = Date.parse(`${d}T00:00:00Z`) + minutes * 60_000;
   return utc + (utc - shown);
 }
+const minutesAt = (t) => localNow(new Date(t), CAMPUS_TZ).minutes;
 
 // Splits SB Engaged's categories into the club acronym, the event type and the tags. parseIcs
 // gives "club_acronym:X", "event_type:Y" and "event_tags: A,B" (or the tags split on commas);
@@ -129,10 +122,10 @@ export function campusRows(events, now) {
     const location = e.location && !HIDDEN_LOCATION.test(e.location) && e.location.trim() ? e.location : null;
     rows.push({
       uid: e.uid,
-      title: (e.summary ?? "").trim(),
+      title: cutTitle(e.summary),
       starts_at: new Date(s).toISOString(),
       ends_at: new Date(t).toISOString(),
-      all_day: !!e.allDay || (local(s).hm === "00:00" && local(t).hm === "23:55"),
+      all_day: !!e.allDay || (minutesAt(s) === 0 && minutesAt(t) === 23 * 60 + 55),
       group_name: e.organizer || acronym,
       event_type: type,
       tags,
