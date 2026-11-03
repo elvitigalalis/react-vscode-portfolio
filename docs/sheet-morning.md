@@ -216,3 +216,25 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
   - `busy_as_of` is recent;
   - the morning task exists and is enabled (`RemoteTrigger get`);
   - after its first run, today's `proposals` row.
+
+## Setup
+
+Once `planner-mcp` and the schema are deployed, Lisul does this once:
+
+1. **Add the planner connector** in claude.ai: Settings → Connectors → Add custom connector,
+   named "The Sheet planner", with the URL
+   `https://bmbsvvprpfdbvalnkowp.supabase.co/functions/v1/planner-mcp`. Connect it, sign in as
+   the owner and approve it on the site's `/oauth/consent/` page.
+2. **Create the task** with the remote-trigger API (`/schedule` in Claude Code): daily at
+   6:07 am America/New_York, with the prompt block from
+   [sheet-morning-task.md](sheet-morning-task.md) pasted as-is. Limit its connectors to The
+   Sheet mail and The Sheet planner, and remove every other one.
+3. **Turn it on in the planner:** set `settings.morning_on` to true, so the brief says when no
+   plan came in:
+
+   ```sql
+   update settings set morning_on = true;
+   ```
+4. **Check it:** `bash tools/verify-sheet-v4.sh`, then `RemoteTrigger get` on the task to see
+   it enabled with only those two connectors. After the first 6:07 am run, the script should
+   show today's proposal.
