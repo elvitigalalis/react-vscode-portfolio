@@ -50,7 +50,7 @@ const seenUids = (seen) => seen.map((s) => (typeof s === "string" ? s : s.uid)).
 
 // --- courseTaskChanges (src/sheet/feeds.mjs) -------------------------------------------------
 
-test("course tasks: a new UID becomes a private task in the Brightspace list, due that local day", { todo: true }, async () => {
+test("course tasks: a new UID becomes a private task in the Brightspace list, due that local day", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   // 18:00 UTC on Nov 9 is 1 pm EST on Nov 9.
   const out = courseTaskChanges([timed("6606-1@d2l", "Lab 5 - Due", "2026-11-09T18:00:00.000Z")], { tasks: [], seen: [], timeZone: TZ });
@@ -61,7 +61,7 @@ test("course tasks: a new UID becomes a private task in the Brightspace list, du
   if (out.seen[0] && typeof out.seen[0] === "object") assert.equal(out.seen[0].source, "brightspace");
 });
 
-test("course tasks: a timed item just before midnight New York time is due on its local date, not the UTC one", { todo: true }, async () => {
+test("course tasks: a timed item just before midnight New York time is due on its local date, not the UTC one", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const events = [
     timed("a", "Homework 6 - Due", "2026-11-06T04:59:00.000Z"), // 11:59 pm EST, Nov 5
@@ -74,14 +74,14 @@ test("course tasks: a timed item just before midnight New York time is due on it
   assert.deepEqual(due, { a: "2026-11-05", b: "2026-10-29", c: "2026-11-06", d: "2026-11-01" });
 });
 
-test("course tasks: the due date follows the time zone passed in", { todo: true }, async () => {
+test("course tasks: the due date follows the time zone passed in", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const events = [timed("a", "Homework 6 - Due", "2026-11-06T04:59:00.000Z")];
   assert.equal(courseTaskChanges(events, { tasks: [], seen: [], timeZone: "UTC" }).insert[0].due, "2026-11-06");
   assert.equal(courseTaskChanges(events, { tasks: [], seen: [], timeZone: "America/Los_Angeles" }).insert[0].due, "2026-11-05");
 });
 
-test("course tasks: an all-day item is due on its date", { todo: true }, async () => {
+test("course tasks: an all-day item is due on its date", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const out = courseTaskChanges([allDay("m2", "Project milestone 2 - Due", "2026-11-13", "2026-11-14")], { tasks: [], seen: [], timeZone: TZ });
   assertInsertRow(out.insert[0], { uid: "m2", title: "Project milestone 2 - Due", due: "2026-11-13" });
@@ -89,7 +89,7 @@ test("course tasks: an all-day item is due on its date", { todo: true }, async (
   assert.equal(courseTaskChanges([allDay("m2", "x", "2026-11-13", "2026-11-14")], { tasks: [], seen: [], timeZone: "Pacific/Auckland" }).insert[0].due, "2026-11-13");
 });
 
-test("course tasks: a seen UID with an undone task updates its title and due date", { todo: true }, async () => {
+test("course tasks: a seen UID with an undone task updates its title and due date", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const tasks = [task("t1", "hw6", "Homework 6 - Due", "2026-11-05")];
   // Moved two days later and renamed.
@@ -99,20 +99,20 @@ test("course tasks: a seen UID with an undone task updates its title and due dat
   assert.deepEqual(out.seen, []);
 });
 
-test("course tasks: a seen UID whose task was deleted never comes back", { todo: true }, async () => {
+test("course tasks: a seen UID whose task was deleted never comes back", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const out = courseTaskChanges([timed("gone", "Discussion 3 - Due", "2026-11-07T04:59:00.000Z")], { tasks: [], seen: ["gone"], timeZone: TZ });
   assert.deepEqual(out, { insert: [], update: [], seen: [] });
 });
 
-test("course tasks: a done task is left alone, even when Brightspace moves it", { todo: true }, async () => {
+test("course tasks: a done task is left alone, even when Brightspace moves it", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const tasks = [task("t2", "q4", "Quiz 4", "2026-11-10", true)];
   const out = courseTaskChanges([timed("q4", "Quiz 4 - retake", "2026-11-12T04:59:00.000Z")], { tasks, seen: ["q4"], timeZone: TZ });
   assert.deepEqual(out, { insert: [], update: [], seen: [] });
 });
 
-test("course tasks: an item that drops out of the feed is left alone", { todo: true }, async () => {
+test("course tasks: an item that drops out of the feed is left alone", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const tasks = [task("t3", "old", "Homework 5 - Due", "2026-10-29")];
   const out = courseTaskChanges([], { tasks, seen: ["old"], timeZone: TZ });
@@ -120,7 +120,7 @@ test("course tasks: an item that drops out of the feed is left alone", { todo: t
   assert.equal(Object.keys(out).length, 3, "no delete list: sync never deletes");
 });
 
-test("course tasks: a UID listed twice in one feed is inserted once", { todo: true }, async () => {
+test("course tasks: a UID listed twice in one feed is inserted once", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const e = timed("dup", "Lab 7 - Due", "2026-11-14T04:59:00.000Z");
   const out = courseTaskChanges([e, { ...e }], { tasks: [], seen: [], timeZone: TZ });
@@ -129,7 +129,7 @@ test("course tasks: a UID listed twice in one feed is inserted once", { todo: tr
   assert.deepEqual(seenUids(out.seen), ["dup"]);
 });
 
-test("course tasks: hand-made tasks are never touched", { todo: true }, async () => {
+test("course tasks: hand-made tasks are never touched", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const mine = { id: "h1", title: "Homework 6 - Due", day: "2026-11-04", list: null, position: 1, due: "2026-11-05", done: false, public: true, source: null, source_uid: null };
   const out = courseTaskChanges([timed("hw6", "Homework 6 - Due", "2026-11-06T04:59:00.000Z")], { tasks: [mine], seen: [], timeZone: TZ });
@@ -137,7 +137,7 @@ test("course tasks: hand-made tasks are never touched", { todo: true }, async ()
   assert.equal(out.insert.length, 1, "the feed item is new; a matching title doesn't make it seen");
 });
 
-test("course tasks: one run mixes every case", { todo: true }, async () => {
+test("course tasks: one run mixes every case", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const tasks = [
     task("t1", "moved", "Homework 6 - Due", "2026-11-05"),
@@ -157,7 +157,7 @@ test("course tasks: one run mixes every case", { todo: true }, async () => {
   assert.deepEqual(seenUids(out.seen), ["new"]);
 });
 
-test("course tasks: the Brightspace fixture, parsed, gives three tasks with the right due dates", { todo: true }, async () => {
+test("course tasks: the Brightspace fixture, parsed, gives three tasks with the right due dates", async () => {
   const { parseIcs } = await import("../src/sheet/ical.mjs");
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const events = parseIcs(read("test/fixtures/brightspace-b.ics"), { from: "2026-11-01T00:00:00.000Z", to: "2027-01-01T00:00:00.000Z" });
@@ -170,7 +170,7 @@ test("course tasks: the Brightspace fixture, parsed, gives three tasks with the 
   });
 });
 
-test("course tasks: a new course task gets the due chip and the at-risk mark like any task", { todo: true }, async () => {
+test("course tasks: a new course task gets the due chip and the at-risk mark like any task", async () => {
   const { courseTaskChanges } = await import("../src/sheet/feeds.mjs");
   const { atRisk, dueLabel } = await import("../src/sheet/logic.mjs");
   const [row] = courseTaskChanges([timed("hw", "Homework 6 - Due", "2026-11-06T04:59:00.000Z")], { tasks: [], seen: [], timeZone: TZ }).insert;
