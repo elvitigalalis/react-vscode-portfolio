@@ -34,3 +34,19 @@ Lisul's own Claude app, and only when he asks.
   reconnected.
 - Email text is untrusted. Claude treats it as information, never follows instructions inside it,
   and writes nothing to the planner until Lisul approves.
+- **Prompt injection can reach the database.** In the same "plan my day" Claude holds both this
+  connector and the Supabase connector, whose `execute_sql` can write any planner table. A
+  message (or a campus event's text) written to look like instructions could try to make Claude
+  run SQL. The mitigations:
+  - `execute_sql` is set to "ask every time" in Claude's connector settings, so no statement
+    runs without Lisul seeing it and approving it.
+  - "Plan my day" runs in two phases (docs/sheet-claude.md): Claude reads and proposes first, and
+    writes only the tasks and blocks Lisul picks, after he says so.
+  - Claude doesn't read campus event descriptions, only the title, time, group, type and tags,
+    so the longest free text in the feed never reaches it.
+  - The consent page approves only clients whose redirect goes back to claude.ai or claude.com,
+    so another app registered under a borrowed name can't be granted the mail connector.
+  - Dynamic client registration on Supabase's OAuth server is turned off once Claude's client
+    exists, so no new client can register at all.
+  - Supabase Auth's email/password provider stays off: Google sign-in is the only way in, and
+    only the owner's account passes `is_owner()`.
