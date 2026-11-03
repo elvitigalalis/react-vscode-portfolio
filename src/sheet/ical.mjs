@@ -137,6 +137,9 @@ function toEvent(props) {
     end: allDay ? end.date : new Date(end.t).toISOString(),
     allDay,
   };
+  // The organizer's name (CN, 3.2.2), only when the feed names one: SB Engaged's clubs.
+  const cn = get("ORGANIZER")?.params.CN?.trim();
+  if (cn) event.organizer = cn;
   return { event, s: start.t, e: end.t };
 }
 
