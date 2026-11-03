@@ -55,6 +55,8 @@ async function session() {
 }
 
 export const signedIn = async () => Boolean(await session());
+// The live Supabase access token, for a page the browser opens itself (mail-connect/start).
+export const accessToken = async () => (await session())?.access_token ?? null;
 export const googleReady = () => { const s = read(); return Boolean(s?.provider_token && Date.now() < s.provider_expires_at); };
 
 // --- Supabase REST -----------------------------------------------------------------------
@@ -112,6 +114,11 @@ export const shutDown = (d, reflection) => rest("rpc/shut_down", { method: "POST
 // Google edits a Telegram tap left for the browser (supabase/schema.sql, gcal_pending).
 export const listGcalPending = () => rest("gcal_pending");
 export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${encodeURIComponent(gcalId)}`, { method: "DELETE" });
+
+// Mail accounts (docs/sheet-sources.md): the browser lists and removes them; connecting goes
+// through the mail-connect Edge Function. Deleting a row deletes its Vault secret (a trigger).
+export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
+export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
 // --- Google Calendar ---------------------------------------------------------------------
 
