@@ -335,9 +335,10 @@ function dayColumn(day, rows, anyEvents) {
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
   const blank = day === state.today && !list.length;
   const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...list.map(taskRow),
-    addRow({ day }, `Add a task to ${weekday} ${date}`, blank ? "Nothing planned. Press P to plan today" : undefined));
+    blank ? el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" }) : null,
+    addRow({ day }, `Add a task to ${weekday} ${date}`));
   ul.dataset.day = day;
-  for (let i = list.length + 1; i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
+  for (let i = list.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
   const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
   const section = el("section", { className: `sheet-day${day === state.today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
     el("h2", { className: "sheet-head" },

@@ -397,7 +397,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 /* Settings, Feeds: a check for a read that worked, an alert for one that failed. */
 [data-feeds] .sheet-icon { color: var(--accent); }
 [data-feeds] .sheet-mail-error, [data-feeds] .sheet-mail-error .sheet-icon { color: var(--danger); }
-/* Empty states (change 7): an empty today's hint and an empty list's "+ Add a task" always show. */
+/* Empty states (change 7): an empty today's muted line, and its "+ Add a task", always show. */
+.sheet-blank { color: var(--muted); }
 .sheet-rows.is-blank .sheet-add::placeholder { color: var(--muted); }
 /* Phones hide empty rows, but not these. */
 @media (max-width: 48rem) { .sheet-rows.is-blank > .sheet-row.is-add { display: flex; } }
