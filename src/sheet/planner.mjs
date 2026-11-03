@@ -15,6 +15,26 @@ export const el = (tag, props = {}, ...kids) => {
   return node;
 };
 
+// --- Icons (docs/sheet-glance.md, "The icon set") ----------------------------------------
+
+// One symbol from the Lucide sprite in plan/index.astro, hidden from screen readers: the
+// row's aria-label carries the words. A label shows as hover text.
+const SVG = "http://www.w3.org/2000/svg";
+export function icon(name, label) {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "sheet-icon");
+  if (label) {
+    const title = document.createElementNS(SVG, "title");
+    title.textContent = label;
+    svg.append(title);
+  }
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
 // --- State -------------------------------------------------------------------------------
 
 export const state = {
@@ -208,6 +228,19 @@ function typedChip(input) {
   chip.hidden = !text;
 }
 
+// A task's details beside its title: time, clash, estimate, due date and private.
+function detailsOf(t, clash, risk) {
+  const kids = [
+    t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
+    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
+    t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
+    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) },
+      risk ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}`) : null,
+    t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+  ].filter(Boolean);
+  return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
+}
+
 export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
@@ -219,13 +252,10 @@ export function taskRow(t) {
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
-    t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
-    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
-    t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
-    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, textContent: `${risk ? "⚠ " : ""}${dueText(t.due)}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) }) : null,
-    t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
-    el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),
-    el("button", { type: "button", className: "sheet-more", textContent: "⋯", ariaLabel: `More for ${t.title}` }),
+    // The details, kept together so they move under the title as one line when they don't fit.
+    detailsOf(t, clash, risk),
+    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
+    el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
   return li;
 }
@@ -652,7 +682,7 @@ function wire() {
       try { await completeTask(id, !state.tasks.get(id).done); } catch (err) { failed(err); }
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
-    } else if (e.target.closest(".sheet-more")) openMenu(id, e.target);
+    } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
     else if (e.target.closest(".sheet-title")) startEdit(li);
   });
 
