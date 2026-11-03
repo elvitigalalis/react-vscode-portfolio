@@ -18,6 +18,7 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
         <button type="button" class="sheet-btn" data-act="calendars">Calendars</button>
+        <button type="button" class="sheet-btn" data-act="interests">Interests</button>
         <button type="button" class="sheet-btn" data-act="telegram" title="While Telegram is off, blocks get Google's default alert">Telegram off</button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
@@ -80,6 +81,18 @@ import "../../styles/sheet.css";
       <div class="sheet-dialog-end">
         <button type="button" class="sheet-btn" data-act="close-calendars">Cancel</button>
         <button type="button" class="sheet-btn primary" data-act="save-calendars">Save</button>
+      </div>
+    </dialog>
+
+    <dialog class="sheet-dialog" data-interests aria-labelledby="sheet-int-title">
+      <h2 id="sheet-int-title">Interests</h2>
+      <p class="small">A few plain lines on what you like: topics, clubs, career goals, and what you'd skip. Claude picks campus events against them when it plans your day.</p>
+      <label class="visually-hidden" for="sheet-interests">Your interests, a few lines</label>
+      <textarea id="sheet-interests" class="sheet-reflect" rows="6" placeholder="Robotics, embedded systems, free food"></textarea>
+      <p class="small">Only you and Claude read this. It never shows on /now.</p>
+      <div class="sheet-dialog-end">
+        <button type="button" class="sheet-btn" data-act="close-interests">Cancel</button>
+        <button type="button" class="sheet-btn primary" data-act="save-interests">Save</button>
       </div>
     </dialog>
 
