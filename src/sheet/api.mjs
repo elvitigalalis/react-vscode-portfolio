@@ -124,6 +124,10 @@ export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${enco
 export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
 export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
+// Feeds status (docs/sheet-sources.md): one feed_state row per feed, written by the brightspace
+// and campus functions after each fetch. Read-only here.
+export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
+
 // --- Google Calendar ---------------------------------------------------------------------
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
