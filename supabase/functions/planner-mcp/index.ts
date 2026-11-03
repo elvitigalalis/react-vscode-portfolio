@@ -36,7 +36,7 @@ import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@^2
 import { pipeline } from "npm:@supabase/middleware@1";
 import { withOAuthProtectedResource, withSupabase } from "npm:@supabase/server@^1.9.2";
 import { z } from "npm:zod@^4.3.6";
-import { checkProposal, planSnapshot } from "../../../src/sheet/proposal.mjs";
+import { checkProposal, NEEDS_KINDS, planSnapshot } from "../../../src/sheet/proposal.mjs";
 import { snapshotQueries } from "../../../src/sheet/proposal-io.mjs";
 
 // Both tools' descriptions end with this (docs/sheet-morning.md, "Edge Functions").
@@ -78,7 +78,7 @@ const ProposalInput = z.object({
     sender: line,
     subject: line,
     why: line,
-    kind: z.enum(["reply", "deadline", "meeting", "admin"]),
+    kind: z.enum(NEEDS_KINDS),
     due: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   })).max(50).default([]),
   picks: z.array(z.object({ uid: z.string().max(500), why: line })).max(50).default([]),

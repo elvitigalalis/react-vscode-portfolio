@@ -218,6 +218,9 @@ export function pickLine(e, tz) {
   return `Campus pick: ${e.title} (${formatClock(localNow(new Date(e.starts_at), tz).minutes)}${going})`;
 }
 
+// The campus events a proposal's picks name, in pick order; a pick whose event is gone drops.
+export const pickedEvents = (picks, campus) => (picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
+
 // The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
 // up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
 // may hold any blocks; only the proposal day's proposed ones count. `picks` is [{ uid, why }],
@@ -235,7 +238,7 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   }
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
-  const events = (picks ?? proposal.picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
+  const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).
   for (const e of events.filter((x) => !linkish(x.title)).slice(0, SHOWN_PICKS)) lines.push(pickLine(e, tz));
