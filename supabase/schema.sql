@@ -246,3 +246,16 @@ drop policy if exists owner_all on mail_accounts;
 create policy owner_all on mail_accounts for all using (is_owner()) with check (is_owner());
 revoke all on mail_accounts from anon;
 revoke insert, update on mail_accounts from authenticated;
+
+-- Removing an account deletes its refresh token too. Security definer because only the
+-- database owner may touch vault.secrets (supabase.com/docs/guides/database/vault: deleting
+-- from vault.secrets removes the secret).
+create or replace function mail_account_forget() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from vault.secrets where id = old.vault_secret_id;
+  return old;
+end $$;
+drop trigger if exists mail_accounts_forget on mail_accounts;
+create trigger mail_accounts_forget after delete on mail_accounts for each row execute function mail_account_forget();
+revoke execute on function mail_account_forget() from public, anon, authenticated;

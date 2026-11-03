@@ -154,7 +154,7 @@ test("schema: mail_accounts is owner-only and closed to anon", async () => {
   assert.match(schema, /revoke all on [^;]*\bmail_accounts\b[^;]* from anon;/);
 });
 
-test("schema: deleting a mail account deletes its Vault secret, through a trigger", { todo: true }, async () => {
+test("schema: deleting a mail account deletes its Vault secret, through a trigger", async () => {
   await import(MOD);
   // The trigger function: security definer (the browser's role can't touch Vault), deleting the
   // row's secret by its id.
@@ -170,7 +170,7 @@ test("schema: deleting a mail account deletes its Vault secret, through a trigge
   assert.match(schema, new RegExp(`drop trigger if exists ${trig[1]} on mail_accounts;`));
 });
 
-test("schema: the browser's roles are never granted Vault", { todo: true }, async () => {
+test("schema: the browser's roles are never granted Vault", async () => {
   await import(MOD);
   for (const stmt of schema.split(";")) {
     if (!/\bgrant\b/i.test(stmt)) continue;
@@ -198,7 +198,7 @@ test("schema: the mail_accounts parts are safe to re-run", async () => {
   assert.doesNotMatch(schema, /create function /);
 });
 
-test("schema: mail accounts never reach the public views", { todo: true }, async () => {
+test("schema: mail accounts never reach the public views", async () => {
   await import(MOD);
   const views = [...schema.matchAll(/create or replace view (\w+) as([\s\S]*?);/g)];
   assert.ok(views.length >= 3);
