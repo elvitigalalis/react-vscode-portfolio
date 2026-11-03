@@ -142,7 +142,7 @@ test("v3-e /plan: saving writes settings.interests and says so", async () => {
 
 // ---- docs/sheet-claude.md -------------------------------------------------------------------
 
-test("v3-e sheet-claude: may read settings.interests and campus_events, all real columns", { todo: true }, async () => {
+test("v3-e sheet-claude: may read settings.interests and campus_events, all real columns", async () => {
   const { assert, read } = await load();
   const doc = read("docs/sheet-claude.md");
   const tables = columns(read("supabase/schema.sql"));
@@ -161,7 +161,7 @@ test("v3-e sheet-claude: may read settings.interests and campus_events, all real
   }
 });
 
-test("v3-e sheet-claude: the campus-picks query reads only real columns for day D", { todo: true }, async () => {
+test("v3-e sheet-claude: the campus-picks query reads only real columns for day D", async () => {
   const { assert, read } = await load();
   const section = campusSection(read("docs/sheet-claude.md"));
   assert.ok(section, "a Campus picks step heading");
