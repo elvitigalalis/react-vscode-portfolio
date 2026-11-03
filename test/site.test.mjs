@@ -539,3 +539,14 @@ test("/plant/ explains the hero's plant, shows plants grown from earlier commits
   for (const page of ["index.html", "plant/index.html"])
     assert.match(readFileSync(join(dist, page), "utf8").match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/plant\/">How the plant grows<\/a>/, page);
 });
+
+test("/privacy/ is The Sheet's privacy policy: read-only Gmail, Google's Limited Use statement, how to remove access, and the footer links it", () => {
+  const html = readFileSync(join(dist, "privacy/index.html"), "utf8");
+  assert.match(html, /<h1>Privacy<\/h1>/);
+  assert.match(html, /read-only/i, "says Gmail access is read-only");
+  assert.match(html, /can't send, change,\s+label or delete mail/, "says it can't change mail");
+  assert.match(html, /will adhere to the <a href="https:\/\/developers\.google\.com\/terms\/api-services-user-data-policy">Google API Services User Data Policy<\/a>, including the\s+Limited Use requirements/, "carries Google's Limited Use disclosure");
+  assert.match(html, /href="https:\/\/myaccount\.google\.com\/connections"/, "says how to revoke access");
+  for (const page of ["index.html", "privacy/index.html"])
+    assert.match(readFileSync(join(dist, page), "utf8").match(/<footer class="footer"[\s\S]*?<\/footer>/)[0], /<a href="\/privacy\/">Privacy<\/a>/, page);
+});
