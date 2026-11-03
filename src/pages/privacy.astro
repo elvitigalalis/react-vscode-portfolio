@@ -1,0 +1,65 @@
+---
+// The privacy policy for The Sheet (docs/sheet.md, docs/sheet-sources.md), the page Google's
+// consent screen links to. Keep it in step with what the planner actually reads and stores.
+import Base from "../layouts/Base.astro";
+import { siteConfig } from "../config";
+
+const policy = "https://developers.google.com/terms/api-services-user-data-policy";
+---
+
+<Base
+  title={`Privacy · ${siteConfig.title}`}
+  description="Privacy policy for The Sheet, Lisul Elvitigala's personal planner on lisul-elvi.com: what it reads from Google, where it's kept, and how to remove access."
+  path="/privacy/"
+>
+  <article class="writeup">
+    <header class="writeup-head">
+      <a class="back" href="/">← Home</a>
+      <h1>Privacy</h1>
+    </header>
+    <p class="tldr">
+      The Sheet is the personal planner at lisul-elvi.com/plan. Only I use it: it signs in one
+      Google account, mine, and refuses everyone else. Nothing it reads is sold, shared or used
+      for ads.
+    </p>
+    <div class="prose">
+      <h2>What it reads from Google</h2>
+      <ul>
+        <li>
+          <strong>Google Calendar:</strong> it creates and edits events on one calendar of its own
+          ("Time blocks") and reads my other events so it can plan around them. Those events are
+          read in my browser and not stored.
+        </li>
+        <li>
+          <strong>Gmail, read-only:</strong> for the mail accounts I connect, it can list, search
+          and read messages, and only when I ask Claude to plan my day. It can't send, change,
+          label or delete mail.
+        </li>
+      </ul>
+
+      <h2>Where it's kept</h2>
+      <p>
+        My tasks, plan and settings live in my own Supabase database, which only my account can
+        read. The keys that let it read a connected mailbox are kept encrypted there and used only
+        by its server. Mail itself isn't stored: it's fetched when Claude asks and passed to my
+        own Claude app.
+      </p>
+
+      <h2>Google's rules</h2>
+      <p>
+        The Sheet's use and transfer to any other app of information received from Google APIs
+        will adhere to the <a href={policy}>Google API Services User Data Policy</a>, including the
+        Limited Use requirements.
+      </p>
+
+      <h2>Removing access</h2>
+      <p>
+        Remove a mail account in the planner's Settings, which deletes its key, or revoke The Sheet
+        at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>.
+      </p>
+
+      <h2>Contact</h2>
+      <p>Questions: <a href="mailto:elvitigalalis@gmail.com">elvitigalalis@gmail.com</a>.</p>
+    </div>
+  </article>
+</Base>
