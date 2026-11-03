@@ -24,11 +24,9 @@ You have two connectors:
 | `tasks` | `id`, `title`, `day`, `list`, `position`, `est_min`, `at_time`, `done`, `due` |
 | `blocks` | `id`, `task_id`, `starts_at`, `ends_at`, `proposed` |
 | `days` | `day`, `shutdown`, `shutdown_at` |
+| `campus_events` | `title`, `starts_at`, `ends_at`, `all_day`, `group_name`, `event_type`, `tags`, `description`, `url` |
 
 Read nothing else. Never read `days.reflection`.
-
-For campus picks you may also read `campus_events` (`title`, `starts_at`, `ends_at`, `all_day`,
-`group_name`, `event_type`, `tags`, `description`, `url`), and nothing else from it.
 
 ## What you may write
 
