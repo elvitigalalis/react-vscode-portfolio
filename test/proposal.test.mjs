@@ -56,3 +56,30 @@ test("proposalLines: a morning-only plan names its half of the day once, and one
     ["Morning plan: 1 block, 9:30–10:15 am.", "9:30 am · OS homework (45 min)", "Mail: 1 needs you."]);
   assert.deepEqual(proposalLines(p, [], tasks, [], [], [], "America/New_York"), ["Morning plan: no blocks."]);
 });
+
+// Telegram links bare domains, @mentions and /commands even without parse_mode, so none may
+// reach a message (security review, 2026-11-03).
+test("checkProposal: bare domains, mentions, other schemes and /commands are refused in the note", () => {
+  for (const note of ["Confirm at sbu-housing.com?id=1", "see evil.com", "evil.com:443", "join t.me", "tg://resolve?domain=evilbot",
+    "ask @evilbot", "write x@evil.com", "tap /start now", "/start", "ftp://x"]) {
+    const r = checkProposal({ day: DAY, note }, snap());
+    assert.equal(r.ok, false, note);
+    assert.match(r.errors[0], /^note: /, note);
+  }
+});
+
+test("checkProposal: ordinary sentences with dots, times and slashes still pass", () => {
+  for (const note of ["Lab 4 didn't fit: 3.5 hours left, e.g. after 5 p.m.", "CSE 320 HW3 and AMS 310 overlap", "Ph.D. talk at 4:30 pm", "Reading 2/3 done"]) {
+    assert.equal(checkProposal({ day: DAY, note }, snap()).ok, true, note);
+  }
+});
+
+test("proposalLines: a campus pick whose title could become a link stays off Telegram", () => {
+  const campus = [
+    { uid: "a", title: "Free pizza at evil.com", starts_at: "2026-11-04T23:00:00Z", rsvp_count: 5 },
+    { uid: "b", title: "Robotics GBM", starts_at: "2026-11-05T00:00:00Z", rsvp_count: 9 },
+  ];
+  const lines = proposalLines({ day: DAY, status: "pending", note: null, picks: [{ uid: "a" }, { uid: "b" }] }, [], [], [], null, campus, "America/New_York");
+  assert.ok(!lines.some((l) => l.includes("evil")), lines.join("\n"));
+  assert.ok(lines.includes("Campus pick: Robotics GBM (7:00 pm, 9 going)"), lines.join("\n"));
+});
