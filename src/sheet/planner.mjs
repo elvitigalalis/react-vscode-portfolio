@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk, dueLabel, VIS, plural,
 } from "./logic.mjs";
 import { scrollToToday } from "./public.mjs";
 
@@ -27,6 +27,7 @@ export const state = {
   lists: new Set(["Inbox"]),
   parked: 0,
   calendars: [],    // extra Google calendar IDs, from settings
+  settings: null,   // the settings row
   events: [],       // the week's Google events, never saved
   eventsStale: false,
 };
@@ -100,7 +101,8 @@ async function dropBlocks(id) {
 }
 
 export async function addTask(text, where) {
-  const parsed = parseEntry(text);
+  // A due date counts from the task's day; a Someday task's counts from today.
+  const parsed = parseEntry(text, where.day ?? state.today);
   if (!parsed.title) return;
   const siblings = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const task = await api.insertTask({
@@ -157,13 +159,13 @@ async function removeTask(id) {
 
 async function editTask(id, text) {
   const t = state.tasks.get(id);
-  const parsed = parseEntry(text);
+  const parsed = parseEntry(text, t.day ?? state.today);
   if (!parsed.title) return removeTask(id);
   // Details typed while editing apply; ones not typed stay as they were.
   const change = { title: parsed.title };
-  for (const k of ["est_min", "at_time", "tag"]) if (parsed[k] !== null) change[k] = parsed[k];
-  if (/(^|\s)!(public|private|p)(\s|$)/i.test(text)) change.public = parsed.public;
-  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public };
+  for (const k of ["est_min", "at_time", "tag", "due"]) if (parsed[k] !== null) change[k] = parsed[k];
+  if (VIS.test(text)) change.public = parsed.public;
+  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public, due: t.due };
   await patch(id, change);
   if (change.public !== undefined && change.public !== before.public) await retitleBlocks(id);
   offerUndo("Edited.", () => patch(id, before));
@@ -183,7 +185,28 @@ async function toggleVisibility(id) {
   offerUndo(t.public ? "Now private." : "Now public.", async () => { await patch(id, { public: t.public }); await retitleBlocks(id); });
 }
 
+async function clearDue(id) {
+  const due = state.tasks.get(id).due;
+  await patch(id, { due: null });
+  offerUndo("Due date cleared.", () => patch(id, { due }));
+}
+
 // --- Rendering ---------------------------------------------------------------------------
+
+const dueText = (due) => dueLabel(due, state.today);
+
+// The details typed so far, shown beside the input as one chip ("45m · 3:00 pm · due Fri").
+function typedChip(input) {
+  const li = input.closest("li");
+  const day = input.dataset.day ?? state.tasks.get(li.dataset.id)?.day ?? state.today;
+  const p = parseEntry(input.value, day);
+  const text = [p.est_min && formatMinutes(p.est_min), p.at_time && formatClock(clock(p.at_time)), p.tag && `#${p.tag}`,
+    !p.public && "private", p.due && dueText(p.due)].filter(Boolean).join(" · ");
+  let chip = li.querySelector(".sheet-typed");
+  if (!chip) li.append(chip = el("span", { className: "sheet-meta sheet-typed" }));
+  chip.textContent = text;
+  chip.hidden = !text;
+}
 
 export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
@@ -191,13 +214,15 @@ export function taskRow(t) {
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
-  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  const risk = atRisk(t, state.blocks, state.today, SHEET.timeZone);
+  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${risk ? ", at risk" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
-    rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${t.rolls} time${t.rolls > 1 ? "s" : ""}` }) : null,
+    rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
     t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
+    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, textContent: `${risk ? "⚠ " : ""}${dueText(t.due)}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) }) : null,
     t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
     el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),
     el("button", { type: "button", className: "sheet-more", textContent: "⋯", ariaLabel: `More for ${t.title}` }),
@@ -293,12 +318,15 @@ export function render() {
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
 
+  const on = Boolean(state.settings?.nudges_on);
+  Object.assign($('[data-act="telegram"]'), { textContent: `Telegram ${on ? "on" : "off"}`, ariaLabel: `Telegram nudges are ${on ? "on" : "off"}. Switch them ${on ? "off" : "on"}` });
+
   const stale = $("[data-events-stale]");
   stale.hidden = !state.eventsStale;
 
   const notice = $("[data-notice]");
   notice.hidden = !state.parked;
-  notice.textContent = `${state.parked} task${state.parked === 1 ? "" : "s"} moved to Someday.`;
+  notice.textContent = `${plural(state.parked, "task")} moved to Someday.`;
   for (const hook of renderHooks) hook();
 
   if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
@@ -317,6 +345,7 @@ export async function load() {
     api.parkedOn(state.today),
     api.settings(),
   ]);
+  state.settings = settings;
   state.calendars = settings?.calendars ?? [];
   await loadEvents(days);
   state.tasks = new Map(tasks.map((t) => [t.id, t]));
@@ -345,6 +374,18 @@ async function loadEvents(days) {
   state.eventsStale = true;
 }
 
+// A Done tap in Telegram shortens or deletes a block while the browser may be closed, and only
+// the browser can edit Google: bring those events in line on opening. Without Google, they wait.
+async function syncGoogle() {
+  if (!api.googleReady()) return;
+  try {
+    for (const p of await api.listGcalPending()) {
+      await (p.ends_at ? api.patchEvent(p.gcal_id, api.eventTimes(null, p.ends_at)) : api.deleteEvent(p.gcal_id));
+      await api.clearGcalPending(p.gcal_id);
+    }
+  } catch (e) { console.error(e); }
+}
+
 async function saveCalendars() {
   const ids = [...new Set($("#sheet-cal-ids").value.split(/\s+/).filter(Boolean))];
   try {
@@ -353,6 +394,19 @@ async function saveCalendars() {
     $("[data-calendars]").close();
     await loadEvents(weekDays(state.week));
     render();
+  } catch (e) { failed(e); }
+}
+
+// Telegram on or off. The "Time blocks" events from today on follow it: no alerts while Telegram
+// nudges him, Google's default alert as the backup while it's off.
+async function toggleTelegram() {
+  const settings = { ...state.settings, nudges_on: !state.settings.nudges_on };
+  try {
+    await api.saveSettings({ nudges_on: settings.nudges_on });
+    state.settings = settings;
+    render();
+    if (!api.googleReady()) return setStatus("Saved. Connect Google Calendar and switch again to change the blocks' alerts.");
+    for (const b of await api.eventBlocksFrom(zonedIso(now().day, 0, SHEET.timeZone))) await api.patchEvent(b.gcal_id, api.eventReminders(settings));
   } catch (e) { failed(e); }
 }
 
@@ -396,6 +450,7 @@ function openMenu(id, anchor) {
   menuFor = id;
   const t = state.tasks.get(id);
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
+  menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
   const r = anchor.getBoundingClientRect();
   menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 330)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
@@ -418,6 +473,7 @@ async function menuAction(kind) {
     }
     if (kind === "someday") await moveTask(id, { list: "Inbox" });
     if (kind === "visibility") await toggleVisibility(id);
+    if (kind === "clear-due") await clearDue(id);
     if (kind === "delete") await removeTask(id);
   } catch (e) { failed(e); }
   render();
@@ -544,7 +600,8 @@ function wire() {
       }
       if (act === "close-calendars") return $("[data-calendars]").close();
       if (act === "save-calendars") return saveCalendars();
-      return actHooks[act]?.();
+      if (act === "telegram") return toggleTelegram();
+      return actHooks[act]?.(e);
     }
     const move = e.target.closest("[data-move]")?.dataset.move;
     if (move) return menuAction(move);
@@ -567,6 +624,10 @@ function wire() {
   root.addEventListener("contextmenu", (e) => {
     const li = e.target.closest(".sheet-task");
     if (li) { e.preventDefault(); if (!drag?.touch) openMenu(li.dataset.id, li); }
+  });
+
+  root.addEventListener("input", (e) => {
+    if (e.target.matches(".sheet-add:not(.sheet-newlist)")) typedChip(e.target);
   });
 
   root.addEventListener("keydown", async (e) => {
@@ -635,6 +696,7 @@ export async function start(node, plugins = []) {
     $("[data-tools]").hidden = false;
     $("[data-daynav]").hidden = false;
     setStatus(null);
+    await syncGoogle();
     await load();
   } catch (e) { failed(e); }
 }

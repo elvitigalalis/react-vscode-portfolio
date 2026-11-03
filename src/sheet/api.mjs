@@ -1,6 +1,7 @@
 // The Sheet's network side: Supabase Auth and REST through plain fetch (no client library), and
 // Google Calendar with the Google token Supabase hands back at sign-in (docs/sheet.md).
 import { SHEET } from "../site.mjs";
+import { blockReminders } from "./logic.mjs";
 
 export const configured = Boolean(SHEET.supabaseUrl && SHEET.anonKey);
 
@@ -88,6 +89,8 @@ export const publicNow = async () => (await rest("public_now", { anon: true }))[
 // Owner tables.
 export const listTasks = (from, to) => rest(`tasks?or=(day.is.null,and(day.gte.${from},day.lte.${to}))&order=position`);
 export const listBlocks = (from, to) => rest(`blocks?starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
+// The approved blocks with a Google event that start at or after `from`.
+export const eventBlocksFrom = (from) => rest(`blocks?starts_at=gte.${from}&proposed=is.false&gcal_id=not.is.null`);
 export const listDays = (from, to) => rest(`days?day=gte.${from}&day=lte.${to}`);
 export const parkedOn = (day) => rest(`tasks?select=id&parked_on=eq.${day}`);
 export const settings = async () => (await rest("settings"))[0] ?? null;
@@ -100,8 +103,15 @@ export const insertBlock = async (block) => one(await rest("blocks", { method: "
 export const updateBlock = async (id, patch) => one(await rest(`blocks?id=eq.${id}`, { method: "PATCH", body: patch, prefer: "return=representation" }));
 export const deleteBlock = (id) => rest(`blocks?id=eq.${id}`, { method: "DELETE" });
 export const upsertDay = (day, patch) => rest("days", { method: "POST", body: { day, ...patch }, prefer: "resolution=merge-duplicates" });
-export const saveSettings = (patch) => rest("settings?id=eq.true", { method: "PATCH", body: patch });
+// A save also updates the row the Google calls below read, so a switch takes effect at once.
+export async function saveSettings(patch) {
+  await rest("settings?id=eq.true", { method: "PATCH", body: patch });
+  if (settingsRow) Object.assign(settingsRow, patch);
+}
 export const shutDown = (d, reflection) => rest("rpc/shut_down", { method: "POST", body: { d, reflection } });
+// Google edits a Telegram tap left for the browser (supabase/schema.sql, gcal_pending).
+export const listGcalPending = () => rest("gcal_pending");
+export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${encodeURIComponent(gcalId)}`, { method: "DELETE" });
 
 // --- Google Calendar ---------------------------------------------------------------------
 
@@ -146,11 +156,14 @@ export async function calendarEvents(fromIso, toIso, extra = []) {
   }));
 }
 
+// The settings row, read once; saveSettings keeps it current.
+let settingsRow;
 // The "Time blocks" calendar, created on first use and remembered in settings.
 let calendarId = null;
+const settingsOnce = async () => (settingsRow ??= await settings());
 async function blocksCalendar() {
   if (calendarId) return calendarId;
-  calendarId = (await settings())?.gcal_calendar_id ?? null;
+  calendarId = (await settingsOnce())?.gcal_calendar_id ?? null;
   if (calendarId) return calendarId;
   const cal = await google("calendars", { method: "POST", body: { summary: "Time blocks", timeZone: SHEET.timeZone } });
   calendarId = cal.id;
@@ -158,14 +171,17 @@ async function blocksCalendar() {
   return calendarId;
 }
 
-// A private task's block is titled "Busy" in Google.
-const eventBody = (title, isPublic, starts_at, ends_at) => ({
+// A private task's block is titled "Busy" in Google. It has no alerts while Telegram nudges him.
+const eventBody = (title, isPublic, starts_at, ends_at, reminders) => ({
   summary: isPublic ? title : "Busy",
-  start: { dateTime: starts_at }, end: { dateTime: ends_at },
+  ...eventTimes(starts_at, ends_at),
+  reminders,
 });
 
 export async function createEvent(title, isPublic, starts_at, ends_at) {
-  const ev = await google(`calendars/${encodeURIComponent(await blocksCalendar())}/events`, { method: "POST", body: eventBody(title, isPublic, starts_at, ends_at) });
+  const cal = await blocksCalendar();
+  const body = eventBody(title, isPublic, starts_at, ends_at, blockReminders(await settingsOnce()));
+  const ev = await google(`calendars/${encodeURIComponent(cal)}/events`, { method: "POST", body });
   return ev.id;
 }
 
@@ -177,5 +193,7 @@ export async function deleteEvent(id) {
   await google(`calendars/${encodeURIComponent(await blocksCalendar())}/events/${id}`, { method: "DELETE" });
 }
 
-export const eventTimes = (starts_at, ends_at) => ({ start: { dateTime: starts_at }, end: { dateTime: ends_at } });
+// An event's times; a null start leaves the start as it is.
+export const eventTimes = (starts_at, ends_at) => ({ ...(starts_at && { start: { dateTime: starts_at } }), end: { dateTime: ends_at } });
 export const eventTitle = (title, isPublic) => ({ summary: isPublic ? title : "Busy" });
+export const eventReminders = (settings) => ({ reminders: blockReminders(settings) });
