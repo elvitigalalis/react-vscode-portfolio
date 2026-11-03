@@ -6,6 +6,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
+import { proposalLines } from "./proposal.mjs";
 import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
@@ -24,11 +25,16 @@ export const SNOOZE_FOR = 10 * 60_000;
 const PLAN_URL = `${ORIGIN}/plan/`;
 
 // A snapshot of the day, as the Edge Function reads it:
-//   settings  the settings row (time_zone, telegram_chat_id, nudges_on)
+//   settings  the settings row (time_zone, telegram_chat_id, nudges_on, morning_on)
 //   day       today's days row, or null
 //   tasks     today's tasks, plus every undone task with a due date
-//   blocks    today's blocks, plus every block of those tasks
+//   blocks    today's blocks (proposed ones too), plus every block of those tasks
 //   log       today's rows of the nudges log, including snoozes logged by taps and not yet sent
+//   proposal  today's proposals row, or null (for a plan tap, the tapped day's)
+//   needsOpen the needs_you rows not done
+//   campus    the campus_events rows today's proposal picks
+// The last three came with the morning plan (docs/sheet-morning.md); a snapshot without them
+// reads as none.
 // Returns the messages due at `now`: { kind, block_id, day, send_at, text, buttons }, where
 // send_at is the minute the message belongs to (it may be earlier than `now` if a run was late)
 // and a button has either a url or callback data ("done:<block id>", "snooze:<block id>").
@@ -37,7 +43,7 @@ export function whatToSend(snapshot, now) {
   const day = dayOf(snapshot, now);
   if (day.minutes < BRIEF_AT || day.minutes >= QUIET_FROM) return [];
   // Each kind of message is one rule over the same day.
-  const due = [brief(day), ...starts(day), ...repeats(day), ...snoozes(day), ...checkin(day)]
+  const due = [brief(day), ...planMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...checkin(day)]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -57,8 +63,13 @@ function dayOf(snapshot, now) {
   const tz = snapshot.settings.time_zone;
   const { day: today, minutes } = localNow(now, tz);
   // A snapshot from before the morning plan has none of its fields: no proposal, no open mail.
+  // They do count for the morning plan, while today's proposal is pending.
   const needsOpen = (snapshot.needsOpen ?? []).filter((n) => !n.done);
-  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, today, minutes, tz, now: now.getTime() };
+  const p = snapshot.proposal;
+  const plan = p?.day === today && p.status === "pending"
+    ? proposalLines(p, proposedOn(snapshot.blocks, today, tz), snapshot.tasks, needsOpen, p.picks ?? [], snapshot.campus ?? [], tz)
+    : null;
+  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, plan, today, minutes, tz, now: now.getTime() };
 }
 
 const BUDGETED = ["start", "repeat", "snooze"];
@@ -85,17 +96,36 @@ const logged = (log, m) => log.some((n) => !pending(n) && n.block_id === m.block
 // The morning brief: what today holds, at 8:00. Private tasks show their real titles: the
 // messages go only to Lisul.
 // "Nudging the first 6" counts only the blocks that can be nudged.
+// With today's proposal pending, the brief carries it and its buttons; with the morning task set
+// up and no proposal for today, it says the run didn't come in.
 function brief(day) {
-  const { tasks, blocks, today, tz } = day;
+  const { tasks, blocks, today, tz, plan } = day;
   const todays = tasks.filter((t) => t.day === today);
   const blocksToday = blocks.filter((b) => { const m = minutesOn(b.starts_at, today, tz); return m >= 0 && m < 1440; });
   const risky = tasks.filter((t) => atRisk(t, blocks, today, tz)).sort((a, b) => a.due.localeCompare(b.due));
   const n = blocksToday.length;
   const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
   if (risky.length) lines.push(`At risk: ${risky.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
-  if (!n) lines.push('Nothing planned yet: say "plan my day" to Claude.');
-  const text = todays.length || n || risky.length ? lines.join("\n") : "Nothing on today.";
-  return { kind: "brief", block_id: null, day: today, send_at: zonedIso(today, BRIEF_AT, tz), text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
+  const send_at = zonedIso(today, BRIEF_AT, tz);
+  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan].join("\n"), buttons: planButtons(today) };
+  const missed = day.settings.morning_on && day.proposal?.day !== today;
+  const empty = 'No morning plan came in today: say "plan my day" to Claude.';
+  if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
+  const text = todays.length || n || risky.length ? lines.join("\n") : missed ? `Nothing on today.\n${empty}` : "Nothing on today.";
+  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
+}
+
+// Approve all and Skip carry the plan's day; the webhook reads them back on a tap.
+const planButtons = (d) => [{ text: "Approve all", callback_data: `pa:${d}` }, { text: "Open /plan", url: PLAN_URL }, { text: "Skip", callback_data: `ps:${d}` }];
+
+// The plan on its own, when today's proposal is pending and the brief went out before it was
+// made: once per created_at (a resubmission is sent again). Outside the budget, like the brief.
+function planMessage({ plan, proposal, log, today }) {
+  if (!plan) return [];
+  const made = Date.parse(proposal.created_at);
+  const briefOut = log.some((n) => n.kind === "brief" && n.day === today && n.sent_at && Date.parse(n.sent_at) < made);
+  if (!briefOut) return [];
+  return [{ kind: "proposal", block_id: null, day: today, send_at: new Date(made).toISOString(), text: plan.join("\n"), buttons: planButtons(today) }];
 }
 
 // Done and Snooze carry the block they belong to; the webhook reads them back on a tap.
