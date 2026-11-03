@@ -20,3 +20,4 @@ for one, and every nudge, morning brief and check-in is a fixed template.
   events, only when Lisul approves them in /plan, because the Google token lives only in his
   browser.
 - If unattended planning is wanted later, the API-key option has to come back as a new decision.
+  Superseded for unattended planning by [ADR 0003](0003-the-morning-plan-runs-as-a-cloud-scheduled-task.md).

@@ -151,7 +151,9 @@ $$;
 revoke execute on function lapse_proposals_on(date), lapse_proposals_before(date) from public, anon, authenticated;
 
 -- Nightly (run hourly; a no-op once done): everything left behind rolls to today, and
--- earlier days' proposals lapse.
+-- earlier days' proposals lapse. v4 (docs/sheet-morning.md): earlier days' pending morning plans
+-- are marked lapsed, ended busy times go, and Needs you drops rows done or over 14 days old.
+-- The v4 tables are created further down; plpgsql resolves them only when this runs.
 create or replace function nightly_roll() returns void
 language plpgsql security definer set search_path = public as $$
 declare today date := sheet_today();
@@ -159,6 +161,9 @@ begin
   perform lapse_proposals_before(today);
   perform roll_tasks(array(select id from tasks
     where day < today and not done and at_time is null), today);
+  update proposals set status = 'lapsed' where status = 'pending' and day < today;
+  delete from busy where ends_at <= now();
+  delete from needs_you where done or coalesce(created_at, day::timestamptz) < now() - interval '14 days';
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -414,3 +419,106 @@ create table if not exists mail_connect_states (
 );
 alter table mail_connect_states enable row level security;
 revoke all on mail_connect_states from anon, authenticated;
+
+-- --- The morning plan (docs/sheet-morning.md, v4; ADR 0003) ---------------------------------
+-- The proposal the morning task submits through planner-mcp, one per day. Its blocks are the
+-- day's proposed blocks; this row carries what they can't: its status, the note on what didn't
+-- fit, and the campus picks ([{ uid, why }]).
+create table if not exists proposals (
+  day date primary key,
+  created_at timestamptz not null default now(),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'skipped', 'lapsed')),
+  note text check (char_length(note) <= 280),   -- one line: what didn't fit, and why
+  picks jsonb not null default '[]'
+);
+
+-- Mail that needs Lisul, found by the morning task. day is the proposal's day. One row per
+-- message, ever, while it is kept: a later run never brings back one he marked done.
+create table if not exists needs_you (
+  id uuid primary key default gen_random_uuid(),
+  day date not null,
+  account text not null,
+  message_id text not null,
+  link text not null,
+  sender text not null,
+  subject text not null,
+  why text not null,
+  kind text not null check (kind in ('reply', 'deadline', 'meeting', 'admin')),
+  due date,
+  done boolean not null default false,
+  created_at timestamptz default now(),
+  unique (account, message_id)
+);
+
+-- Busy times from his Google calendars, which /plan saves each time it loads them: start and end
+-- only, never a title. The server has no Google token, so this is all the morning task sees.
+create table if not exists busy (
+  starts_at timestamptz,
+  ends_at timestamptz,
+  primary key (starts_at, ends_at)
+);
+
+alter table proposals enable row level security;
+alter table needs_you enable row level security;
+alter table busy enable row level security;
+drop policy if exists owner_all on proposals;
+drop policy if exists owner_all on needs_you;
+drop policy if exists owner_all on busy;
+create policy owner_all on proposals for all using (is_owner()) with check (is_owner());
+create policy owner_all on needs_you for all using (is_owner()) with check (is_owner());
+create policy owner_all on busy for all using (is_owner()) with check (is_owner());
+revoke all on proposals, needs_you, busy from anon;
+
+-- When /plan last saved busy times, and whether the morning task is set up. Owner-only, like the
+-- rest of settings.
+alter table settings add column if not exists busy_as_of timestamptz;
+alter table settings add column if not exists morning_on boolean not null default false;
+
+-- The plan sent on its own when it lands after the brief. Dropped and added again by name (the
+-- one Postgres gave the inline check), so a re-run is safe.
+alter table nudges drop constraint if exists nudges_kind_check;
+alter table nudges add constraint nudges_kind_check
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal'));
+
+-- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
+-- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
+-- `needs` rows added, skipping any (account, message_id) already there, done or not. Security
+-- invoker, so RLS applies to the caller (planner-mcp's owner-scoped client). It refuses a day
+-- already approved or skipped, and checks nothing else: checkProposal (src/sheet/proposal.mjs)
+-- does, before it is called. Parameters are qualified, since blocks, picks and note are also
+-- table or column names.
+create or replace function apply_proposal(d date, blocks jsonb, needs jsonb, picks jsonb, note text) returns void
+language plpgsql security invoker set search_path = public as $$
+declare current text;
+begin
+  select status into current from proposals where day = d for update;
+  if current in ('approved', 'skipped', 'lapsed') then
+    raise exception 'the proposal for % is already %', d, current;
+  end if;
+  delete from public.blocks b
+  where b.proposed and (b.starts_at at time zone (select time_zone from settings))::date = d;
+  insert into public.blocks (task_id, starts_at, ends_at, proposed)
+  select x.task_id, x.starts_at, x.ends_at, true
+  from jsonb_to_recordset(coalesce(apply_proposal.blocks, '[]')) as x(task_id uuid, starts_at timestamptz, ends_at timestamptz);
+  insert into proposals (day, created_at, status, note, picks)
+  values (d, clock_timestamp(), 'pending', apply_proposal.note, coalesce(apply_proposal.picks, '[]'))
+  on conflict (day) do update
+  set created_at = excluded.created_at, status = 'pending', note = excluded.note, picks = excluded.picks;
+  -- A new submission replaces the day's open items, so repeated submits can't pile rows up.
+  delete from needs_you where day = d and not done;
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due)
+  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due
+  from jsonb_to_recordset(coalesce(apply_proposal.needs, '[]'))
+    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date)
+  on conflict (account, message_id) do nothing;
+end $$;
+revoke execute on function apply_proposal(date, jsonb, jsonb, jsonb, text) from public, anon;
+grant execute on function apply_proposal(date, jsonb, jsonb, jsonb, text) to authenticated;
+
+-- Shutting a day down lapses its proposal as well as deleting the proposed blocks (redefined here,
+-- after the proposals table exists), so a later morning run can't plan a day that is closed.
+create or replace function lapse_proposals_on(d date) returns void
+language sql security definer set search_path = public as $$
+  delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d;
+  update proposals set status = 'lapsed' where day = d and status = 'pending';
+$$;

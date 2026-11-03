@@ -5,8 +5,9 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk, dueLabel, VIS, plural,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural,
 } from "./logic.mjs";
+import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
@@ -14,6 +15,32 @@ export const el = (tag, props = {}, ...kids) => {
   node.append(...kids.filter((k) => k != null && k !== false));
   return node;
 };
+
+// --- Icons (docs/sheet-glance.md, "The icon set") ----------------------------------------
+
+// One symbol from the Lucide sprite in plan/index.astro, hidden from screen readers: the
+// row's aria-label carries the words. A label shows as hover text.
+const SVG = "http://www.w3.org/2000/svg";
+export function icon(name, label) {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "sheet-icon");
+  if (label) {
+    const title = document.createElementNS(SVG, "title");
+    title.textContent = label;
+    svg.append(title);
+  }
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+
+// A source's icon (docs/sheet-glance.md, change 3), paired with its edge colour in sheet.css.
+const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"] };
+export const sourceIcon = (src) => icon(...SOURCES[src]);
+// The words for the aria-label, since the icon is hidden.
+export const sourceWords = (src) => (src ? `, ${SOURCES[src][1].toLowerCase()}` : "");
 
 // --- State -------------------------------------------------------------------------------
 
@@ -35,6 +62,8 @@ export const state = {
 let root;
 const $ = (sel) => root.querySelector(sel);
 const now = () => localNow(new Date(), SHEET.timeZone);
+// Phones show one day at a time (sheet.css, max-width 48rem).
+export const NARROW = "(max-width: 48rem)";
 
 const tasksOn = (day) => [...state.tasks.values()].filter((t) => t.day === day).sort(byPosition);
 const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null && t.list === list).sort(byPosition);
@@ -208,24 +237,44 @@ function typedChip(input) {
   chip.hidden = !text;
 }
 
+// The due date's look by level: overdue in red with the word, at risk in amber; both carry ⚠.
+const DUE = {
+  overdue: { className: " sheet-overdue", title: "Overdue: its due date has passed", tail: " overdue" },
+  risk: { className: " sheet-risk", title: "At risk: no block before it is due", tail: "" },
+};
+
+// A task's details beside its title: source, time, clash, estimate, due date and private.
+function detailsOf(t, clash, level) {
+  const src = sourceOf(t);
+  const due = DUE[level];
+  const kids = [
+    src ? el("span", { className: "sheet-meta sheet-source" }, sourceIcon(src)) : null,
+    t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
+    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
+    t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
+    t.due ? el("span", { className: `sheet-meta${due?.className ?? ""}`, ...(due ? { title: due.title } : {}) },
+      due ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
+    t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+  ].filter(Boolean);
+  return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
+}
+
 export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
+  if (sourceOf(t)) li.dataset.source = sourceOf(t);
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
-  const risk = atRisk(t, state.blocks, state.today, SHEET.timeZone);
-  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${risk ? ", at risk" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  const level = dueLevel(t, state.blocks, state.today, SHEET.timeZone);
+  title.setAttribute("aria-label", `${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
-    t.at_time ? el("span", { className: "sheet-meta", textContent: t.at_time.slice(0, 5) }) : null,
-    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
-    t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
-    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, textContent: `${risk ? "⚠ " : ""}${dueText(t.due)}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) }) : null,
-    t.public ? null : el("span", { className: "sheet-priv", textContent: "private", title: "Only you see this; /now shows a bar" }),
-    el("button", { type: "button", className: "sheet-check", textContent: t.done ? "↺" : "✓", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }),
-    el("button", { type: "button", className: "sheet-more", textContent: "⋯", ariaLabel: `More for ${t.title}` }),
+    // The details, kept together so they move under the title as one line when they don't fit.
+    detailsOf(t, clash, level),
+    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
+    el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
   return li;
 }
@@ -235,8 +284,8 @@ export function taskRow(t) {
 const taskBox = (props) => el("textarea", { className: "sheet-add", rows: 1, autocomplete: "off", spellcheck: true, ...props });
 const fitBox = (box) => { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; };
 
-function addRow(where, label) {
-  const input = taskBox({ ariaLabel: label, placeholder: "+ Add a task" });
+function addRow(where, label, placeholder = "+ Add a task") {
+  const input = taskBox({ ariaLabel: label, placeholder });
   if (where.day) input.dataset.day = where.day; else input.dataset.list = where.list;
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
@@ -283,9 +332,13 @@ function dayColumn(day, rows, anyEvents) {
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
   const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
-  const ul = el("ul", { className: "sheet-rows" }, ...list.map(taskRow), addRow({ day }, `Add a task to ${weekday} ${date}`));
+  // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
+  const blank = day === state.today && !list.length;
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...list.map(taskRow),
+    blank ? el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" }) : null,
+    addRow({ day }, `Add a task to ${weekday} ${date}`));
   ul.dataset.day = day;
-  for (let i = list.length + 1; i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
+  for (let i = list.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
   const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
   const section = el("section", { className: `sheet-day${day === state.today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
     el("h2", { className: "sheet-head" },
@@ -302,7 +355,8 @@ function dayColumn(day, rows, anyEvents) {
 
 function listColumn(name) {
   const list = tasksIn(name);
-  const ul = el("ul", { className: "sheet-rows" }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
+  // An empty list always shows its "+ Add a task" hint.
+  const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
   return el("section", { className: "sheet-list" }, el("h3", { className: "sheet-head" }, el("span", { className: "sheet-wd", textContent: name })), ul);
 }
@@ -323,9 +377,6 @@ export function render() {
   const newList = el("input", { className: "sheet-add sheet-newlist", type: "text", autocomplete: "off", placeholder: "New list…", ariaLabel: "New Someday list" });
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
-
-  const on = Boolean(state.settings?.nudges_on);
-  Object.assign($('[data-act="telegram"]'), { textContent: `Telegram ${on ? "on" : "off"}`, ariaLabel: `Telegram nudges are ${on ? "on" : "off"}. Switch them ${on ? "off" : "on"}` });
 
   const stale = $("[data-events-stale]");
   stale.hidden = !state.eventsStale;
@@ -362,6 +413,8 @@ export async function load() {
   scrollToToday($("[data-week]"));
 }
 
+export const eventHooks = [];
+
 // Google's access lasts an hour. Until he reconnects, the week shows the last copy of its
 // events kept in this browser, and says so.
 const EVENTS_KEY = "sheet.events.";
@@ -373,6 +426,9 @@ async function loadEvents(days) {
       state.events = await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone), state.calendars);
       state.eventsStale = false;
       try { localStorage.setItem(key, JSON.stringify(state.events)); } catch {}
+      // Work that needs Google and runs after each load, in the background (busy times, events
+      // for blocks approved off the page). A hook that fails never stops the page.
+      for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error);
       return;
     } catch (e) { console.error(e); }
   }
@@ -609,15 +665,17 @@ function wire() {
     if (Date.now() - wasDrag.at < 300) return;
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act) {
-      if (act === "prev-week") return showWeek(addDays(state.week, -7));
-      if (act === "next-week") return showWeek(addDays(state.week, 7));
-      if (act === "this-week") return showWeek(weekStart(now().day));
-      if (act === "prev-day" || act === "next-day") {
-        const next = addDays(state.focus, act === "prev-day" ? -1 : 1);
+      // A pick from the top bar's ⋯ menu closes it first.
+      if (e.target.closest("[data-more]")) $("[data-more]").hidePopover();
+      // The top bar's arrows step a week, or a day on phones (one day shows at a time).
+      if (act === "prev" || act === "next") {
+        if (!matchMedia(NARROW).matches) return showWeek(addDays(state.week, act === "prev" ? -7 : 7));
+        const next = addDays(state.focus, act === "prev" ? -1 : 1);
         state.focus = next;
         if (weekStart(next) !== state.week) return showWeek(weekStart(next));
         return render();
       }
+      if (act === "this-week") { state.focus = now().day; return showWeek(weekStart(state.focus)); }
       if (act === "help") return $("[data-help]").showModal();
       if (act === "undo") return undo();
       if (act === "sign-out") { api.signOut(); forgetEvents(); location.reload(); return; }
@@ -652,7 +710,7 @@ function wire() {
       try { await completeTask(id, !state.tasks.get(id).done); } catch (err) { failed(err); }
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
-    } else if (e.target.closest(".sheet-more")) openMenu(id, e.target);
+    } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
     else if (e.target.closest(".sheet-title")) startEdit(li);
   });
 
@@ -733,7 +791,6 @@ export async function start(node, plugins = []) {
     state.today = now().day;
     state.week = weekStart(state.today);
     $("[data-tools]").hidden = false;
-    $("[data-daynav]").hidden = false;
     setStatus(null);
     await syncGoogle();
     await load();

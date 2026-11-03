@@ -89,7 +89,6 @@
 .sheet-btn kbd { font: inherit; font-size: 0.75rem; opacity: 0.75; margin-left: 0.25rem; }
 .sheet-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
-.sheet-daynav { display: none; }
 
 .sheet-task { position: relative; cursor: grab; }
 .sheet-task > :not(.sheet-check, .sheet-more, .visually-hidden) { opacity: var(--ink, 1); }
@@ -171,11 +170,12 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; font-size: 0.875rem; margin: 0 0 1rem; }
 .sheet-keys dt { font-weight: 600; }
 .sheet-keys dd { margin: 0; color: var(--muted); }
+/* The icon legend under the keys. */
+.sheet-legend-title { font-size: 0.875rem; margin: 0 0 0.35rem; }
 
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
   .sheet-planner .sheet-day:not(.is-focus) { display: none; }
-  .sheet-planner .sheet-daynav:not([hidden]) { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
   .sheet-planner .sheet-row.is-empty:not(.is-add) { display: none; }
   .sheet-events:empty { display: none; }
 }
@@ -205,15 +205,13 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block { cursor: grab; }
 /* Proposed blocks are Claude's until approved: a dashed outline, no fill. */
 .sheet-block.is-proposed { background: var(--bg); border: 1px dashed var(--accent); }
-.sheet-approve { font-size: inherit; align-self: flex-start; }
 .sheet-row:has(.sheet-proposal) { flex-wrap: wrap; }
 .sheet-proposal {
-  flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0 0.4rem; border: 1px dashed var(--accent); border-radius: 0.3rem;
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.4rem; border: 1px dashed var(--accent); border-radius: 0.3rem;
   padding: 0 0.3rem; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 .sheet-shutline { position: absolute; left: -3.25rem; right: 0; border-top: 2px dashed var(--accent); cursor: ns-resize; touch-action: none; height: 0.75rem; }
 .sheet-shutline span { position: absolute; right: 0.4rem; top: -1.1rem; font-size: 0.6875rem; color: var(--accent); }
-.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--danger); pointer-events: none; }
 .sheet-dialog-end { display: flex; justify-content: flex-end; margin-top: 1rem; }
 .sheet-plan .sheet-task { cursor: grab; }
 .sheet-plan .sheet-task.is-picked { background: var(--chip); border-bottom-color: var(--accent); }
@@ -255,6 +253,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 /* The Campus list (docs/sheet-sources.md): a row under each day's calendar, the list in a dialog. */
 .sheet-campus-row { font-size: 0.75rem; }
+.sheet-campus-row.sheet-chip { display: inline-flex; align-items: center; gap: 0.2rem; min-height: 1.5rem; padding: 0 0.5rem; color: var(--muted); }
+.sheet-campus-n { display: inline-flex; align-items: center; gap: 0.2rem; margin-left: 0.3rem; }
 .sheet-campus { width: min(40rem, calc(100vw - 2rem)); max-width: none; }
 .sheet-campus-filters { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .sheet-chip {
@@ -278,3 +278,149 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   .sheet-campus-item { grid-template-columns: 1fr; }
   .sheet-campus-item > .sheet-btn { grid-column: 1; grid-row: auto; justify-self: start; }
 }
+
+/* Icons (docs/sheet-glance.md, "The icon set"): Lucide symbols from the sprite in
+   plan/index.astro, drawn in the text's colour at its size. The sprite itself takes no space. */
+.sheet-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.sheet-icon {
+  display: inline-block; flex: none; width: 1em; height: 1em; vertical-align: -0.125em;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Rows never collapse (docs/sheet-glance.md, change 1). A title keeps at least 8 characters.
+   In a day or list column, the details wrap under the title as one 0.75rem line whenever the
+   title wouldn't fit beside them on one line (its flex basis becomes its one-line width). A
+   proposal already takes a line of its own (.sheet-proposal). The query container is the task
+   row, which spans its day column: size containment on .sheet-day itself would end its
+   subgrid, and the week's rows would stop lining up. */
+.sheet-task { container: sheet-row / inline-size; flex-wrap: wrap; align-content: flex-start; }
+.sheet-title { min-width: min(8ch, 100%); }
+/* A roll mark stays on the title's line: the title's basis leaves room for it. */
+.sheet-roll { flex: none; }
+.sheet-roll + .sheet-title { max-width: calc(100% - 1.25rem); }
+.sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
+@container sheet-row (width < 40rem) {
+  .sheet-title { flex: 1 1 auto; }
+}
+
+/* Sources look like sources (docs/sheet-glance.md, change 3): a course task has a 3px --stem
+   left edge and the graduation cap, a campus task the ticket. Its blocks take the same edge on
+   the Plan today timeline and in the week. The tint always comes with its icon (WCAG 1.4.1). */
+.sheet-task[data-source="course"] { border-left: 3px solid var(--stem); padding-left: 0.35rem; }
+.sheet-block[data-source="course"] { background: color-mix(in srgb, var(--stem) 18%, var(--bg)); border-left: 3px solid var(--stem); }
+.sheet-block.is-proposed[data-source="course"] { background: var(--bg); }
+.sheet-task[data-source="course"] .sheet-proposal { border-left: 3px solid var(--stem); }
+.sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
+/* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
+.sheet-overdue { color: var(--danger); cursor: help; }
+/* Amber on --chip is 4.0:1 in light mode, so on a held, picked or drop-target row (all --chip)
+   amber text keeps a page-coloured ground. */
+:is(.is-held, .is-picked, .is-drop) :is(.sheet-risk, .sheet-clash) { background: var(--bg); border-radius: 0.2rem; padding: 0 0.2rem; }
+
+/* Load and free time, drawn (docs/sheet-glance.md, change 4). Under each day's header, a 4px
+   load meter on a --line track and a 6px strip of 7 am to 11 pm: busy grey, blocks sage, proposals
+   dashed, and a now tick on today. The load's text stays beside them. */
+.sheet-glance { display: grid; gap: 3px; margin: 0.2rem 0 0.25rem; }
+.sheet-meter, .sheet-strip { position: relative; display: block; background: var(--line); border-radius: 2px; overflow: hidden; }
+.sheet-meter { height: 4px; }
+.sheet-strip { height: 6px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: visible; }
+.sheet-meter-fill { display: block; height: 100%; background: var(--accent); }
+.sheet-meter-fill.is-near { background: var(--warn); }
+.sheet-meter-fill.is-over { background: var(--danger); }
+.sheet-seg { position: absolute; top: 0; bottom: 0; border-radius: 1px; }
+.sheet-seg.is-busy { background: color-mix(in srgb, var(--muted) 55%, transparent); }
+.sheet-seg.is-block { background: var(--accent); }
+.sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
+.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--danger); }
+/* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
+.sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
+.sheet-planbar .sheet-meter { height: 6px; border-radius: 3px; }
+.sheet-meter-mark { position: absolute; top: -3px; left: var(--at); width: 2px; height: 12px; margin-left: -1px; background: var(--fg); }
+.sheet-meter-mark span {
+  position: absolute; top: 14px; left: 0; transform: translateX(calc(-1 * var(--at))); white-space: nowrap;
+  font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+
+/* Proposals and the timeline (docs/sheet-glance.md, change 5). */
+.sheet-btn-approve {
+  display: inline-flex; align-items: center; gap: 0.2rem; flex: none; align-self: flex-start;
+  font: inherit; font-size: 0.75rem; font-weight: 600; line-height: 1.2; cursor: pointer;
+  background: var(--accent); color: var(--on-btn); border: 0; border-radius: 0.25rem; padding: 0 0.35rem;
+}
+.sheet-btn-approve:hover { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+.sheet-block-title .sheet-icon { margin-right: 0.2rem; color: var(--accent); }
+/* Under 30 minutes a block is one line: the title ends in an ellipsis, in full on hover. */
+.sheet-block.is-short { align-items: center; padding-block: 0; }
+.sheet-block.is-short .sheet-block-title { white-space: nowrap; text-overflow: ellipsis; }
+.sheet-block.is-short .sheet-block-x { align-self: center; }
+.sheet-block.is-short .sheet-btn-approve { align-self: center; }
+/* The now line: 2px, a dot at the timeline's edge and its time in the hour gutter. It comes
+   before the blocks, which cover it, so it never runs through their text. */
+.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--danger); margin-top: -1px; pointer-events: none; }
+.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.sheet-nowline span {
+  position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
+  font-size: 0.6875rem; line-height: 1; color: var(--danger); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.sheet-banner {
+  display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.875rem;
+  border: 1px dashed var(--accent); border-radius: 0.4rem;
+}
+.sheet-banner > .sheet-icon { color: var(--accent); }
+.sheet-banner > .sheet-btn-approve { margin-left: auto; align-self: center; font-size: 0.8125rem; padding: 0.15rem 0.5rem; }
+.sheet-proposal > .sheet-icon { color: var(--accent); }
+.sheet-proposal > .sheet-btn-approve { margin-left: auto; align-self: center; }
+
+/* A calmer top bar (docs/sheet-glance.md, change 6): ‹ Today › on the left, then Plan today,
+   chips, Nudges and ⋯. On phones it is one row: the week title and the button words that have
+   an icon go to screen readers only, and ‹ Today › names the day on screen. */
+.sheet-tools { flex: 1; align-items: center; }
+.sheet-nav { display: flex; gap: 0.2rem; margin-right: auto; }
+.sheet-tools .sheet-btn:has(.sheet-icon) { display: inline-flex; align-items: center; gap: 0.35rem; }
+.sheet-icon-btn { justify-content: center; min-width: 2rem; padding-inline: 0.4rem; }
+.sheet-narrow { display: none; }
+.sheet-chips { display: contents; }
+.sheet-chips .sheet-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8125rem; min-height: 2rem; }
+.sheet-chip.is-alert { color: var(--danger); border-color: var(--danger); }
+.sheet-nudges[aria-pressed="false"] .sheet-icon { color: var(--muted); }
+.sheet-menu kbd { font: inherit; font-size: 0.75rem; color: var(--muted); margin-left: 0.25rem; }
+@media (max-width: 48rem) {
+  .sheet-planner .sheet-bar-top h1, .sheet-wide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sheet-narrow { display: inline; }
+  .sheet-tools { gap: 0.3rem; }
+  .sheet-tools kbd { display: none; }
+}
+@media (max-width: 30rem) {
+  .sheet-tools .sheet-chip-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sheet-tools .sheet-btn, .sheet-chips .sheet-chip { padding-inline: 0.45rem; }
+}
+/* Settings, Feeds: a check for a read that worked, an alert for one that failed. */
+[data-feeds] .sheet-icon { color: var(--accent); }
+[data-feeds] .sheet-mail-error, [data-feeds] .sheet-mail-error .sheet-icon { color: var(--danger); }
+/* Empty states (change 7): an empty today's muted line, and its "+ Add a task", always show. */
+.sheet-blank { color: var(--muted); }
+.sheet-rows.is-blank .sheet-add::placeholder { color: var(--muted); }
+/* Phones hide empty rows, but not these. */
+@media (max-width: 48rem) { .sheet-rows.is-blank > .sheet-row.is-add { display: flex; } }
+/* /now, safe polish (change 8): the row fix, a project icon, and an accent dot on Right now. */
+.sheet-week-public .sheet-row > :is(span, a):not(.sheet-bar, .visually-hidden) { min-width: min(8ch, 100%); }
+.sheet-week-public .sheet-row > .sheet-icon { color: var(--muted); margin-top: 0.125em; }
+.sheet-now .sheet-label::before {
+  content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.4em;
+  border-radius: 50%; background: var(--accent); vertical-align: 0.1em;
+}
+/* The morning plan in /plan (docs/sheet-morning.md, "/plan"): the Needs you dialog, grouped by
+   kind, and the proposal's note and campus picks above Plan today's timeline. */
+/* On phones the top bar keeps one row with the Needs you chip in it: "Plan today" shows as
+   "Plan" (the words stay for screen readers) and the gaps tighten. */
+@media (max-width: 30rem) { .sheet-tools { gap: 0.2rem; } }
+.sheet-needs { width: min(40rem, calc(100vw - 2rem)); max-width: none; }
+.sheet-needs-group h3 { font-size: 0.875rem; margin: 1rem 0 0.25rem; color: var(--muted); }
+.sheet-needs-list { list-style: none; padding: 0; margin: 0; }
+.sheet-needs-item { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+.sheet-needs-item > p { margin: 0; overflow-wrap: anywhere; }
+.sheet-needs-why { font-size: 0.875rem; }
+.sheet-needs-acts { display: flex; align-items: center; justify-content: flex-end; gap: 0.75rem; }
+.sheet-needs-item > .sheet-needs-acts { margin-top: 0.25rem; }
+.sheet-needs-acts .sheet-btn { display: inline-flex; align-items: center; gap: 0.25rem; }
+.sheet-plan-notes { list-style: none; padding: 0; margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted); }

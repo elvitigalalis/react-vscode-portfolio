@@ -97,6 +97,13 @@ export const listTasks = (from, to) => rest(`tasks?or=(day.is.null,and(day.gte.$
 export const listBlocks = (from, to) => rest(`blocks?starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
 // The approved blocks with a Google event that start at or after `from`.
 export const eventBlocksFrom = (from) => rest(`blocks?starts_at=gte.${from}&proposed=is.false&gcal_id=not.is.null`);
+// Approved blocks with no Google event that end after `from`, with their task's title and
+// visibility (an embedded many-to-one row,
+// https://docs.postgrest.org/en/stable/references/api/resource_embedding.html).
+export const eventlessBlocks = (from) => rest(`blocks?select=*,tasks(title,public)&proposed=is.false&gcal_id=is.null&ends_at=gt.${from}&order=starts_at`);
+// Sets a block's gcal_id only while it has none; the saved row, or undefined when another tab or
+// device got there first.
+export const claimEvent = async (id, gcal_id) => one(await rest(`blocks?id=eq.${id}&gcal_id=is.null`, { method: "PATCH", body: { gcal_id }, prefer: "return=representation" }));
 export const listDays = (from, to) => rest(`days?day=gte.${from}&day=lte.${to}`);
 export const parkedOn = (day) => rest(`tasks?select=id&parked_on=eq.${day}`);
 export const settings = async () => (await rest("settings"))[0] ?? null;
@@ -124,9 +131,28 @@ export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${enco
 export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
 export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
+// The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
+// and a day's proposal with the campus events it picked.
+export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
+export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
+export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,status,note,picks`))[0] ?? null;
+// uids are quoted, so commas and parentheses in one stay inside it
+// (https://docs.postgrest.org/en/stable/references/api/url_grammar.html#reserved-characters).
+export const campusByUid = (uids) => (uids.length
+  ? rest(`campus_events?select=uid,title,starts_at,rsvp_count&uid=in.(${uids.map((u) => encodeURIComponent(`"${String(u).replace(/["\\]/g, "\\$&")}"`)).join(",")})`)
+  : Promise.resolve([]));
+
 // Feeds status (docs/sheet-sources.md): one feed_state row per feed, written by the brightspace
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
+
+// Busy times (docs/sheet-morning.md, "/plan"): the rows overlapping [from, to) are replaced by
+// `rows`. The insert ignores rows already there, so two tabs saving at once don't fail on the
+// primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+export async function replaceBusy(fromIso, toIso, rows) {
+  await rest(`busy?starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
+  if (rows.length) await rest("busy", { method: "POST", body: rows, prefer: "resolution=ignore-duplicates" });
+}
 
 // --- Google Calendar ---------------------------------------------------------------------
 
@@ -146,12 +172,14 @@ async function google(path, { method = "GET", body } = {}) {
 }
 
 // His events between two instants, from his main calendar and any extra calendars he added.
-// Only his browser reads them; they are never saved. An extra calendar that fails is skipped.
+// Only his browser reads them; they are never saved, except as busy times (start and end only,
+// busy-sync.mjs). An extra calendar that fails is skipped.
 // "busy" is false for events Google marks as free; those don't take time from the day.
+// "calendar" is the ID it was read from ("primary" for his main one).
 export async function calendarEvents(fromIso, toIso, extra = []) {
   const q = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime" });
   const lists = await Promise.all(["primary", ...extra].map(async (id) => {
-    try { return (await google(`calendars/${encodeURIComponent(id)}/events?${q}`)).items ?? []; }
+    try { return ((await google(`calendars/${encodeURIComponent(id)}/events?${q}`)).items ?? []).map((e) => ({ ...e, calendar: id })); }
     catch (e) { if (id === "primary") throw e; console.error(e); return []; }
   }));
   // The same event can sit on two calendars he reads; show it once.
@@ -168,6 +196,7 @@ export async function calendarEvents(fromIso, toIso, extra = []) {
     starts_at: e.start.dateTime ?? e.start.date,
     ends_at: e.end.dateTime ?? e.end.date,
     link: e.htmlLink ?? null,
+    calendar: e.calendar,
   }));
 }
 

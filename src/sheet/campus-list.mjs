@@ -4,9 +4,10 @@
 // screen and kept in memory; the list is drawn only when opened. Never on /now.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { addDays, weekDays, zonedIso, minutesOn, formatSpan, dayLabel, positionBetween, byPosition } from "./logic.mjs";
+import { addDays, weekDays, zonedIso, minutesOn, formatSpan, dayLabel, positionBetween, byPosition, plural } from "./logic.mjs";
 import { campusDay, campusTags, eventToTask, freeFood, isAdded, activeTags, tagsOf } from "./campus.mjs";
-import { el, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
+import { el, icon, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
+import { campusSummary } from "./glance.mjs";
 
 const tz = SHEET.timeZone;
 const KEY = "sheet.campus";
@@ -42,8 +43,8 @@ const routineShown = (d) => campusDay(events, d, tz, { showRoutine: filters.show
 // slot is empty, so every day gets one to keep the columns' grid rows level.
 function drawRows() {
   if (state.week !== week) loadWeek();
-  const counts = Object.fromEntries(weekDays(state.week).map((d) => [d, routineShown(d).length]));
-  if (!Object.values(counts).some(Boolean)) return;
+  const counts = Object.fromEntries(weekDays(state.week).map((d) => [d, campusSummary(routineShown(d))]));
+  if (!Object.values(counts).some((c) => c.n)) return;
   for (const section of root.querySelectorAll(".sheet-day")) {
     let ul = section.querySelector(".sheet-events");
     if (!ul) {
@@ -51,9 +52,12 @@ function drawRows() {
       ul.setAttribute("aria-label", "Calendar");
       section.querySelector(".sheet-rows").before(ul);
     }
-    const n = counts[section.dataset.day];
+    const { n, food } = counts[section.dataset.day];
     if (!n) continue;
-    const b = el("button", { type: "button", className: "sheet-link sheet-campus-row", textContent: `Campus · ${n}` });
+    // A chip (docs/sheet-glance.md, change 3): the ticket and the count, and the utensils and
+    // how many have free food. The label keeps the words "Campus · N".
+    const b = el("button", { type: "button", className: "sheet-chip sheet-campus-row", ariaLabel: `Campus · ${plural(n, "event")}${food ? `, ${food} with free food` : ""}` },
+      icon("ticket"), ` ${n}`, food ? el("span", { className: "sheet-campus-n" }, icon("utensils"), ` ${food}`) : null);
     b.dataset.act = "campus";
     b.dataset.campus = section.dataset.day;
     b.setAttribute("aria-haspopup", "dialog");
