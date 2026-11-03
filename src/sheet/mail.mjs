@@ -38,3 +38,60 @@ export function decodeEntities(text) {
     return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
   });
 }
+
+// --- Bodies --------------------------------------------------------------------------------
+
+// The most of a body Claude gets, counting the marker a cut body ends in.
+export const BODY_MAX = 20_000;
+export const TRUNCATED = "… (truncated)";
+
+// A message's text: the first text/plain part (depth first) that is not an attachment, otherwise
+// the first such text/html part stripped to text, otherwise "". Trimmed, LF line ends, and cut
+// to BODY_MAX characters.
+export function messageBody(message) {
+  const plain = findPart(message.payload, "text/plain");
+  const html = plain ? null : findPart(message.payload, "text/html");
+  const part = plain ?? html;
+  if (!part) return "";
+  let text = decodeBase64Url(part.body.data).replace(/\r\n?/g, "\n");
+  if (html) text = htmlToText(text);
+  text = text.trim();
+  return text.length > BODY_MAX ? text.slice(0, BODY_MAX - TRUNCATED.length) + TRUNCATED : text;
+}
+
+// Attachments carry a filename (and usually an attachmentId instead of inline data).
+function findPart(part, mimeType) {
+  if (!part) return null;
+  if (part.mimeType === mimeType && !part.filename && part.body?.data != null) return part;
+  for (const child of part.parts ?? []) {
+    const found = findPart(child, mimeType);
+    if (found) return found;
+  }
+  return null;
+}
+
+// Gmail sends base64url, with or without padding; atob wants standard base64.
+function decodeBase64Url(data) {
+  const b64 = data.replace(/-/g, "+").replace(/_/g, "/").replace(/=+$/, "");
+  const bytes = Uint8Array.from(atob(b64 + "=".repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+// HTML to readable text: no head, scripts, styles or comments; block ends become line breaks;
+// a link keeps its address as "text (href)"; entities are decoded last, so "&lt;3" stays text.
+const BLOCK = "p|div|br|li|tr|td|th|h[1-6]|table|ul|ol|blockquote|section|article|header|footer";
+
+function htmlToText(html) {
+  const text = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(head|script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<a\b[^>]*?\shref\s*=\s*["']([^"']*)["'][^>]*>([\s\S]*?)<\/a\s*>/gi, (_, href, inner) => {
+      const label = inner.replace(/<[^>]*>/g, "").trim();
+      return /^(https?:|mailto:)/i.test(href) && decodeEntities(href) !== decodeEntities(label) ? `${label} (${href})` : label;
+    })
+    .replace(new RegExp(`<\\/?(?:${BLOCK})\\b[^>]*>`, "gi"), "\n")
+    .replace(/<[^>]*>/g, "");
+  return decodeEntities(text)
+    .split("\n").map((line) => line.replace(/[ \t\f\v\u00a0]+/g, " ").trim()).join("\n")
+    .replace(/\n{3,}/g, "\n\n");
+}

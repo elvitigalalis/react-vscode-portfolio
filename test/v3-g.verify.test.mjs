@@ -88,13 +88,13 @@ test("mail: header names match in any case, and missing headers or labels come o
 
 // ---------------------------------------------------------------- mail.mjs: messageBody
 
-test("mail: the body is the text/plain part of a multipart/alternative message", { todo: true }, async () => {
+test("mail: the body is the text/plain part of a multipart/alternative message", async () => {
   const m = await import("../src/sheet/mail.mjs");
   assert.equal(m.messageBody(fixture("alternative")),
     "Hi Lisul,\n\nThe CSE 416 project demo moved to Friday, Nov 6 at 2:30 pm in NCS 120.\nPlease reply by Thursday if your team can't make it.\n\nAna");
 });
 
-test("mail: text/plain wins even when the HTML part comes first", { todo: true }, async () => {
+test("mail: text/plain wins even when the HTML part comes first", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const msg = fixture("alternative");
   msg.payload.parts.reverse();
@@ -102,13 +102,13 @@ test("mail: text/plain wins even when the HTML part comes first", { todo: true }
     "Hi Lisul,\n\nThe CSE 416 project demo moved to Friday, Nov 6 at 2:30 pm in NCS 120.\nPlease reply by Thursday if your team can't make it.\n\nAna");
 });
 
-test("mail: the body of a multipart/mixed message is its nested text, never an attachment", { todo: true }, async () => {
+test("mail: the body of a multipart/mixed message is its nested text, never an attachment", async () => {
   const m = await import("../src/sheet/mail.mjs");
   assert.equal(m.messageBody(fixture("mixed")),
     "Hi Lisul,\n\nYour résumé review is attached — 2 pages, comments in red. Questions? Reply here.\n\nCareer Center");
 });
 
-test("mail: an HTML-only body is stripped to text", { todo: true }, async () => {
+test("mail: an HTML-only body is stripped to text", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const body = m.messageBody(fixture("html-only"));
   const flat = body.replace(/\s+/g, " ");
@@ -122,21 +122,21 @@ test("mail: an HTML-only body is stripped to text", { todo: true }, async () => 
   assert.equal(body, body.trim());
 });
 
-test("mail: a message with no text part has an empty body", { todo: true }, async () => {
+test("mail: a message with no text part has an empty body", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const msg = fixture("mixed");
   msg.payload.parts = msg.payload.parts.slice(1); // only the PDF and the notes.txt attachment
   assert.equal(m.messageBody(msg), "");
 });
 
-test("mail: padded base64 bodies decode too", { todo: true }, async () => {
+test("mail: padded base64 bodies decode too", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const msg = plainMessage("");
   msg.payload.body = { size: 8, data: "SGkgTGlzdWw=" };
   assert.equal(m.messageBody(msg), "Hi Lisul");
 });
 
-test("mail: a body is cut to exactly 20,000 characters, marker included", { todo: true }, async () => {
+test("mail: a body is cut to exactly 20,000 characters, marker included", async () => {
   const m = await import("../src/sheet/mail.mjs");
   const cut = m.messageBody(plainMessage("a".repeat(25000)));
   assert.equal(cut.length, 20000);
