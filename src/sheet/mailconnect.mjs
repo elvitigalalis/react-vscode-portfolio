@@ -38,3 +38,22 @@ export async function verifyState(state, secret, now) {
     return null;
   }
 }
+
+// Google's consent screen for one mail account, read-only. Per Google's web server flow
+// (developers.google.com/identity/protocols/oauth2/web-server): access_type=offline asks for a
+// refresh token, and prompt=consent makes Google send one again when an account reconnects.
+// include_granted_scopes=false keeps the grant to gmail.readonly alone.
+export function googleAuthUrl({ clientId, redirectUri, state, loginHint }) {
+  const q = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "https://www.googleapis.com/auth/gmail.readonly",
+    access_type: "offline",
+    prompt: "consent",
+    include_granted_scopes: "false",
+    state,
+  });
+  if (loginHint) q.set("login_hint", loginHint);
+  return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}

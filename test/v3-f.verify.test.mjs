@@ -90,7 +90,7 @@ test("mailconnect: junk is refused without throwing", async () => {
 const REDIRECT = "https://abcd.supabase.co/functions/v1/mail-connect/callback";
 const CLIENT = "1234-test.apps.example";
 
-test("mailconnect: the Google URL asks for read-only Gmail, offline, with consent", { todo: true }, async () => {
+test("mailconnect: the Google URL asks for read-only Gmail, offline, with consent", async () => {
   const m = await import(MOD);
   const url = new URL(String(await m.googleAuthUrl({ clientId: CLIENT, redirectUri: REDIRECT, state: "s.t-1" })));
   assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
@@ -106,7 +106,7 @@ test("mailconnect: the Google URL asks for read-only Gmail, offline, with consen
   ]);
 });
 
-test("mailconnect: the Google URL carries login_hint only when given", { todo: true }, async () => {
+test("mailconnect: the Google URL carries login_hint only when given", async () => {
   const m = await import(MOD);
   const url = new URL(String(await m.googleAuthUrl({ clientId: CLIENT, redirectUri: REDIRECT, state: "s", loginHint: "me+sbu@stonybrook.edu" })));
   assert.equal(url.searchParams.get("login_hint"), "me+sbu@stonybrook.edu");
@@ -115,7 +115,7 @@ test("mailconnect: the Google URL carries login_hint only when given", { todo: t
   assert.ok(!/login_hint=me\+sbu/.test(url.href), url.href);
 });
 
-test("mailconnect: the module is pure and uses Web Crypto", { todo: true }, async () => {
+test("mailconnect: the module is pure and uses Web Crypto", async () => {
   await import(MOD);
   const src = read("src/sheet/mailconnect.mjs");
   assert.match(src, /crypto\.subtle/);
