@@ -214,27 +214,27 @@ test("travel: no gap is needed next to an approved block", async () => {
 // Couldn't fit
 // =============================================================================================
 
-test("couldnt_fit: ids from the task list pass through to rows", todo, async () => {
+test("couldnt_fit: ids from the task list pass through to rows", async () => {
   const { checkProposal } = await proposal();
   assert.deepEqual(checkProposal(good(), snap()).rows.couldnt_fit, [T5]);
   const { couldnt_fit, ...none } = good();
   assert.deepEqual(checkProposal(none, snap()).rows.couldnt_fit, []);
 });
 
-test("couldnt_fit: an id that isn't one of the tasks is refused, naming it", todo, async () => {
+test("couldnt_fit: an id that isn't one of the tasks is refused, naming it", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good({ couldnt_fit: ["6f1c2a3b-0000-4000-8000-0000000000ff"] }), snap()), /couldnt_fit\[0\]/);
   // A turned-down task isn't in the task list either.
   refused(checkProposal(good({ couldnt_fit: [T5, T6] }), snap()), /couldnt_fit\[1\]/);
 });
 
-test("couldnt_fit: an id given twice, or also placed in blocks, is refused", todo, async () => {
+test("couldnt_fit: an id given twice, or also placed in blocks, is refused", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good({ couldnt_fit: [T5, T5] }), snap()), /couldnt_fit\[1\]/);
   refused(checkProposal(good({ couldnt_fit: [T1] }), snap()), /couldnt_fit\[0\]/);
 });
 
-test("couldnt_fit: more than 12 ids are refused", todo, async () => {
+test("couldnt_fit: more than 12 ids are refused", async () => {
   const { checkProposal } = await proposal();
   const many = Array.from({ length: 13 }, () => T5);
   refused(checkProposal(good({ couldnt_fit: many }), snap()), /couldnt_fit/);
