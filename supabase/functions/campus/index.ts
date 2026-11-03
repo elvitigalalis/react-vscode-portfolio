@@ -2,7 +2,7 @@
 // every hour (supabase/schema.sql, "sheet-campus") to keep campus_events at SB Engaged's public
 // events from now through 14 days ahead. Reading the feed and choosing the rows happen in
 // src/sheet/ical.mjs and src/sheet/feeds.mjs, the modules the tests cover; this file only
-// fetches, writes and records the fetch in feed_state (source 'campus').
+// fetches, writes and records the fetch in feed_state (source 'campus'), 304 or not.
 //
 // Deploy from the repo root with server-side bundling, which follows the imports out of
 // supabase/functions:
@@ -18,13 +18,11 @@
 // the text is a small share of the memory limit.
 //
 // Secrets: SHEET_CRON_SECRET (already set for telegram). SUPABASE_URL and
-// SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
+// SUPABASE_SERVICE_ROLE_KEY are provided by Supabase and read in ../_shared/server.ts.
 import { parseIcs } from "../../../src/sheet/ical.mjs";
 import { campusRows, campusWindowIcs } from "../../../src/sheet/feeds.mjs";
+import { calendarText, db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
-const env = (name: string) => Deno.env.get(name) ?? "";
-const SUPABASE_URL = env("SUPABASE_URL");
-const SERVICE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 
 // The school-wide public feed (all public events from all groups). It redirects to CampusGroups'
@@ -43,43 +41,14 @@ Deno.serve(async (req) => {
   try {
     return Response.json(await sync(now));
   } catch (e) {
-    const error = String((e as Error)?.message ?? e).slice(0, 500);
-    await saveState({ fetched_at: now.toISOString(), ok: false, error }).catch(() => {});
-    return Response.json({ ok: false, error }, { status: 502 });
+    return feedFailed(SOURCE, e, now.toISOString());
   }
 });
 
-// Whether a header holds the secret, compared without stopping at the first difference.
-function secretMatches(a: string, b: string) {
-  const x = new TextEncoder().encode(a);
-  const y = new TextEncoder().encode(b);
-  let diff = x.length ^ y.length;
-  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
-  return diff === 0;
-}
-
-// --- The database, through PostgREST with the service key (it bypasses row-level security) ---
-
-async function db(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...init,
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json", ...init.headers },
-  });
-  if (!res.ok) throw new Error(`${path.split("?")[0]}: ${res.status} ${await res.text()}`);
-  return res.status === 204 || res.status === 201 ? null : res.json();
-}
-
-// Upserts the feed's one feed_state row. Only the columns given change, so a failed run keeps
-// the last good ETag and Last-Modified and the next run still fetches the newer feed.
-const saveState = (state: Record<string, unknown>) =>
-  db("feed_state?on_conflict=source", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ source: SOURCE, ...state }),
-  });
-
 // --- The sync ---------------------------------------------------------------------------------
 
+// Every run, 304 or not, deletes the rows that have ended and records the fetch in feed_state.
+// A changed feed also upserts the window's rows and stores the new ETag and Last-Modified.
 async function sync(now: Date) {
   const [state] = await db(`feed_state?select=etag,last_modified&source=eq.${SOURCE}`);
 
@@ -88,15 +57,22 @@ async function sync(now: Date) {
   if (state?.etag) headers["If-None-Match"] = state.etag;
   if (state?.last_modified) headers["If-Modified-Since"] = state.last_modified;
   const res = await fetch(FEED, { headers });
-  if (res.status === 304) return { ok: true, status: 304 };
-  if (!res.ok) throw new Error(`feed: ${res.status} ${res.statusText}`);
+  const fresh = res.status === 304 ? null : await write(res, now);
+
+  const at = encodeURIComponent(now.toISOString());
+  await db(`campus_events?ends_at=lte.${at}`, { method: "DELETE" });
+  await saveFeedState(SOURCE, { fetched_at: now.toISOString(), ok: true, error: null, ...fresh });
+  return { ok: true, status: res.status, items: fresh?.items };
+}
+
+// A changed feed: its window's rows upserted, and the rows it no longer lists deleted. Returns
+// the feed_state columns that come with it.
+async function write(res: Response, now: Date) {
   const etag = res.headers.get("etag");
   const last_modified = res.headers.get("last-modified");
-
+  const text = await calendarText(res);
   const to = new Date(now.getTime() + WINDOW_MS);
-  const text = await res.text();
   const rows = campusRows(parseIcs(campusWindowIcs(text, now, to), { from: now, to }), now);
-  if (rows.length === 0 && !text.includes("BEGIN:VCALENDAR")) throw new Error("feed: not a calendar");
 
   // Upsert in batches, so no request carries the whole window (about 800 KB of rows).
   for (let i = 0; i < rows.length; i += BATCH) {
@@ -106,14 +82,9 @@ async function sync(now: Date) {
       body: JSON.stringify(rows.slice(i, i + BATCH)),
     });
   }
-
-  // Rows that have ended go, each sync. Every row in the window was just written with
-  // updated_at = now, so an older one has left the feed (a cancelled event) and goes too, unless
-  // the feed came back empty, which says more about the feed than the events.
-  const at = encodeURIComponent(now.toISOString());
-  await db(`campus_events?ends_at=lte.${at}`, { method: "DELETE" });
-  if (rows.length > 0) await db(`campus_events?updated_at=lt.${at}`, { method: "DELETE" });
-
-  await saveState({ etag, last_modified, fetched_at: now.toISOString(), ok: true, error: null, items: rows.length });
-  return { ok: true, status: res.status, items: rows.length };
+  // Every row in the window was just written with updated_at = now, so an older one has left the
+  // feed (a cancelled event) and goes, unless the window came back empty, which says more about
+  // the feed than the events (docs/sheet-sources.md, "Schema").
+  if (rows.length > 0) await db(`campus_events?updated_at=lt.${encodeURIComponent(now.toISOString())}`, { method: "DELETE" });
+  return { etag, last_modified, items: rows.length };
 }
