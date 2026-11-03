@@ -3,6 +3,8 @@
 // are as in https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query.
 // No network, so node --test covers it; supabase/functions/busy-sync does the calls.
 
+import { addDays, localNow, zonedIso } from "./logic.mjs";
+
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // The freebusy.query body: now through 7 days ahead, his main calendar (its id is his address)
@@ -40,4 +42,41 @@ export function freeBusyRows(response, now, blocksCalendar) {
   }
   const rows = [...spans.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.ends_at.localeCompare(b.ends_at));
   return { rows, failed };
+}
+
+// The one `changes` row a sync's new busy rows make, or null when `after` holds the same spans
+// as `before`. A span that is new and lands on a block today (approved or proposed) that hasn't
+// ended is busy_overlap; else an hour or more of busy time freed between now and midnight is
+// time_freed; else busy_change. Weights as REASON_WORDS (docs/sheet-v5.md, "replan.mjs").
+const key = (r) => `${r.starts_at}|${r.ends_at}`;
+export function busyChange(before, after, blocks, now, timeZone) {
+  const had = new Set(before.map(key));
+  const has = new Set(after.map(key));
+  if (had.size === has.size && [...has].every((k) => had.has(k))) return null;
+  const change = (reason, weight) => ({ kind: "busy", reason, weight, ref: null });
+
+  const today = localNow(now, timeZone).day;
+  const t = now.getTime();
+  const live = blocks.filter((b) => Date.parse(b.ends_at) > t && localNow(new Date(b.starts_at), timeZone).day === today);
+  const overlaps = (s, b) => Date.parse(s.starts_at) < Date.parse(b.ends_at) && Date.parse(b.starts_at) < Date.parse(s.ends_at);
+  if (after.some((s) => !had.has(key(s)) && live.some((b) => overlaps(s, b)))) return change("busy_overlap", 10);
+
+  const midnight = Date.parse(zonedIso(addDays(today, 1), 0, timeZone));
+  if (busyMinutes(before, t, midnight) - busyMinutes(after, t, midnight) >= 60) return change("time_freed", 4);
+  return change("busy_change", 2);
+}
+
+// Minutes from `from` to `to` covered by at least one span, overlaps counted once.
+function busyMinutes(spans, from, to) {
+  const cut = spans
+    .map((s) => [Math.max(Date.parse(s.starts_at), from), Math.min(Date.parse(s.ends_at), to)])
+    .filter(([a, b]) => b > a)
+    .sort((x, y) => x[0] - y[0]);
+  let total = 0;
+  let reach = from;
+  for (const [a, b] of cut) {
+    if (b > reach) total += b - Math.max(a, reach);
+    reach = Math.max(reach, b);
+  }
+  return total / 60_000;
 }
