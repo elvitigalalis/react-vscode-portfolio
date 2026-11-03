@@ -47,7 +47,7 @@ const wide = range("2026-01-01T00:00:00Z", "2028-01-01T00:00:00Z");
 
 // --- The contract's shape ----------------------------------------------------------------------
 
-test("shape: each event has exactly the contract's fields", { todo: true }, async () => {
+test("shape: each event has exactly the contract's fields", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("a@x", "DTSTART:20261104T180000Z", "DTEND:20261104T190000Z", "SUMMARY:Office hours")), wide);
   assert.deepEqual(Object.keys(ev).sort(),
@@ -56,7 +56,7 @@ test("shape: each event has exactly the contract's fields", { todo: true }, asyn
   assert.equal(ev.summary, "Office hours");
 });
 
-test("shape: an event with every field filled comes back whole", { todo: true }, async () => {
+test("shape: an event with every field filled comes back whole", async () => {
   const { parseIcs } = await mod();
   const text = cal(...vevent("full@x",
     "DTSTART:20261104T180000Z",
@@ -75,13 +75,13 @@ test("shape: an event with every field filled comes back whole", { todo: true },
 
 // --- Times ---------------------------------------------------------------------------------------
 
-test("times: a UTC `Z` time is that instant", { todo: true }, async () => {
+test("times: a UTC `Z` time is that instant", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("z@x", "DTSTART:20261107T045900Z", "DTEND:20261107T061500Z", "SUMMARY:Quiz")), wide);
   assert.deepEqual(times(ev), { start: "2026-11-07T04:59:00.000Z", end: "2026-11-07T06:15:00.000Z", allDay: false });
 });
 
-test("times: TZID local times in New York, before and after the change back to EST", { todo: true }, async () => {
+test("times: TZID local times in New York, before and after the change back to EST", async () => {
   const { parseIcs } = await mod();
   const text = cal(
     ...vevent("edt@x", "DTSTART;TZID=America/New_York:20261030T235900", "DTEND;TZID=America/New_York:20261031T010000", "SUMMARY:EDT"),
@@ -94,7 +94,7 @@ test("times: TZID local times in New York, before and after the change back to E
   assert.deepEqual(times(got["est@x"]), { start: "2026-11-04T14:00:00.000Z", end: "2026-11-04T15:15:00.000Z", allDay: false });
 });
 
-test("times: an event across the fall-back change (Sun 2026-11-01) gets each end's own offset", { todo: true }, async () => {
+test("times: an event across the fall-back change (Sun 2026-11-01) gets each end's own offset", async () => {
   const { parseIcs } = await mod();
   // 00:30 EDT (UTC-4) to 03:30 EST (UTC-5): three clock hours, four real hours.
   const [ev] = parseIcs(cal(...vevent("dst@x",
@@ -104,7 +104,7 @@ test("times: an event across the fall-back change (Sun 2026-11-01) gets each end
   assert.deepEqual(times(ev), { start: "2026-11-01T04:30:00.000Z", end: "2026-11-01T08:30:00.000Z", allDay: false });
 });
 
-test("times: DST edge cases follow RFC 5545 3.3.5 (repeated hour: first; skipped hour: offset before the gap)", { todo: true }, async () => {
+test("times: DST edge cases follow RFC 5545 3.3.5 (repeated hour: first; skipped hour: offset before the gap)", async () => {
   const { parseIcs } = await mod();
   const text = cal(
     // 01:30 happens twice on 2026-11-01; the first is EDT, 05:30Z.
@@ -117,7 +117,7 @@ test("times: DST edge cases follow RFC 5545 3.3.5 (repeated hour: first; skipped
   assert.equal(got["gap@x"].start, "2027-03-14T07:30:00.000Z");
 });
 
-test("times: TZID is not hard-wired to New York", { todo: true }, async () => {
+test("times: TZID is not hard-wired to New York", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("la@x",
     "DTSTART;TZID=America/Los_Angeles:20261104T090000",
@@ -127,7 +127,7 @@ test("times: TZID is not hard-wired to New York", { todo: true }, async () => {
   assert.deepEqual(times(ev), { start: "2026-11-04T17:00:00.000Z", end: "2026-11-04T18:00:00.000Z", allDay: false });
 });
 
-test("times: VALUE=DATE is an all-day event with dated strings, end exclusive", { todo: true }, async () => {
+test("times: VALUE=DATE is an all-day event with dated strings, end exclusive", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("break@x",
     "DTSTART;VALUE=DATE:20261125",
@@ -136,7 +136,7 @@ test("times: VALUE=DATE is an all-day event with dated strings, end exclusive", 
   assert.deepEqual(times(ev), { start: "2026-11-25", end: "2026-11-30", allDay: true });
 });
 
-test("times: no DTEND but a DURATION: the end is start plus the duration", { todo: true }, async () => {
+test("times: no DTEND but a DURATION: the end is start plus the duration", async () => {
   const { parseIcs } = await mod();
   const text = cal(
     ...vevent("dur@x", "DTSTART;TZID=America/New_York:20261112T203000", "DURATION:PT1H20M", "SUMMARY:Midterm 2"),
@@ -148,14 +148,14 @@ test("times: no DTEND but a DURATION: the end is start plus the duration", { tod
   assert.deepEqual(times(got["durz@x"]), { start: "2026-11-04T18:00:00.000Z", end: "2026-11-04T18:45:00.000Z", allDay: false });
 });
 
-test("times: no DTEND and no DURATION: zero length, end equals start", { todo: true }, async () => {
+test("times: no DTEND and no DURATION: zero length, end equals start", async () => {
   const { parseIcs } = await mod();
   const [ev] = parseIcs(cal(...vevent("due@x", "DTSTART;TZID=America/New_York:20261105T235900", "SUMMARY:Homework 4 - Due")), wide);
   // Thu Nov 5, 23:59 EST is 04:59Z on the 6th.
   assert.deepEqual(times(ev), { start: "2026-11-06T04:59:00.000Z", end: "2026-11-06T04:59:00.000Z", allDay: false });
 });
 
-test("times: RRULE is ignored, only the first occurrence is kept", { todo: true }, async () => {
+test("times: RRULE is ignored, only the first occurrence is kept", async () => {
   const { parseIcs } = await mod();
   const text = cal(...vevent("weekly@x",
     "DTSTART;TZID=America/New_York:20261104T140000",
