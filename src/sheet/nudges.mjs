@@ -6,7 +6,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural } from "./logic.mjs";
+import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -56,7 +56,9 @@ export function whatToSend(snapshot, now) {
 function dayOf(snapshot, now) {
   const tz = snapshot.settings.time_zone;
   const { day: today, minutes } = localNow(now, tz);
-  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), today, minutes, tz, now: now.getTime() };
+  // A snapshot from before the morning plan has none of its fields: no proposal, no open mail.
+  const needsOpen = (snapshot.needsOpen ?? []).filter((n) => !n.done);
+  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, today, minutes, tz, now: now.getTime() };
 }
 
 const BUDGETED = ["start", "repeat", "snooze"];
@@ -143,14 +145,19 @@ function snoozes(day) {
 
 // The check-in: at the day's shutdown line (the default unless he moved it), asking for the
 // shutdown. Once the day is shut down, or on a day with no tasks, there's nothing to ask.
-function checkin({ tasks, day: row, today, tz }) {
+// It also says what's due tomorrow and whether mail still needs him (docs/sheet-morning.md).
+function checkin({ tasks, day: row, today, tz, needsOpen }) {
   const todays = tasks.filter((t) => t.day === today);
   if (row?.shutdown || !todays.length) return [];
   const [h, m] = (row?.shutdown_at ?? SHEET.shutdownAt).split(":").map(Number);
   // A shutdown line in quiet hours still gets its check-in, just before them.
   const at = Math.min(h * 60 + m, CHECKIN_LATEST);
   const done = todays.filter((t) => t.done).length;
-  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: `Shutdown time. ${done} done, ${todays.length - done} left.`, buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
+  const lines = [`Shutdown time. ${done} done, ${todays.length - done} left.`];
+  const tomorrow = tasks.filter((t) => !t.done && t.due === addDays(today, 1));
+  if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
+  if (needsOpen.length) lines.push(`Mail: ${needsOpen.length} still need${needsOpen.length === 1 ? "s" : ""} you.`);
+  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
 }
 
 // --- Taps ----------------------------------------------------------------------------------
