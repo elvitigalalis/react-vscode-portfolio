@@ -37,7 +37,7 @@ const uids = (events) => events.map((e) => e.uid);
 
 // --- campusDay ---------------------------------------------------------------------------
 
-test("campusDay: only events that start on that local day, including one at 11:30 pm", { todo: true }, async () => {
+test("campusDay: only events that start on that local day, including one at 11:30 pm", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("noon", "2026-11-04T17:00:00Z", "2026-11-04T18:00:00Z"),        // 12 pm Nov 4
@@ -50,7 +50,7 @@ test("campusDay: only events that start on that local day, including one at 11:3
   assert.deepEqual(uids(campusDay(events, DAY, tz, {})), ["early", "noon", "late"]);
 });
 
-test("campusDay: an event spanning midnight belongs to the day it starts", { todo: true }, async () => {
+test("campusDay: an event spanning midnight belongs to the day it starts", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const span = ev("span", "2026-11-04T04:00:00Z", "2026-11-04T06:00:00Z"); // 11 pm Nov 3 to 1 am Nov 4
   const long = ev("long", "2026-11-02T15:00:00Z", "2026-11-30T22:00:00Z"); // runs for weeks
@@ -59,7 +59,7 @@ test("campusDay: an event spanning midnight belongs to the day it starts", { tod
   assert.deepEqual(uids(campusDay([span, long], "2026-11-02", tz, {})), ["long"]);
 });
 
-test("campusDay: free food first, then by start time", { todo: true }, async () => {
+test("campusDay: free food first, then by start time", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("b", "2026-11-04T16:00:00Z", "2026-11-04T17:00:00Z"),
@@ -71,7 +71,7 @@ test("campusDay: free food first, then by start time", { todo: true }, async () 
   assert.deepEqual(uids(campusDay(events, DAY, tz, {})), ["food-early", "food-late", "a", "b", "c"]);
 });
 
-test("campusDay: practices, meetings and general body meetings are hidden unless showRoutine", { todo: true }, async () => {
+test("campusDay: practices, meetings and general body meetings are hidden unless showRoutine", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const at = (h) => [`2026-11-04T${h}:00:00Z`, `2026-11-04T${h}:30:00Z`];
   const events = [
@@ -89,7 +89,7 @@ test("campusDay: practices, meetings and general body meetings are hidden unless
     ["practice-type", "meeting-type", "gbm-title", "practice-title", "meeting-title", "social", "workshop"]);
 });
 
-test("campusDay: with no options, routine events are hidden and nothing else is filtered", { todo: true }, async () => {
+test("campusDay: with no options, routine events are hidden and nothing else is filtered", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("m", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { event_type: "Meeting" }),
@@ -99,7 +99,7 @@ test("campusDay: with no options, routine events are hidden and nothing else is 
   assert.deepEqual(uids(campusDay(events, DAY, tz)), ["s", "n"]);
 });
 
-test("campusDay: a tag filter keeps events carrying any listed tag, and routine stays hidden", { todo: true }, async () => {
+test("campusDay: a tag filter keeps events carrying any listed tag, and routine stays hidden", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("games", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { tags: ["Games"] }),
@@ -115,7 +115,7 @@ test("campusDay: a tag filter keeps events carrying any listed tag, and routine 
   assert.deepEqual(uids(campusDay(events, DAY, tz, { tags: [] })), ["games", "career", "arts", "none", "null"]);
 });
 
-test("campusDay: no rows gives an empty list, and the input is left unchanged", { todo: true }, async () => {
+test("campusDay: no rows gives an empty list, and the input is left unchanged", async () => {
   const { campusDay } = await import("../src/sheet/campus.mjs");
   assert.deepEqual(campusDay([], DAY, tz, {}), []);
   assert.deepEqual(campusDay([], DAY, tz, { tags: ["Games"], showRoutine: true }), []);
@@ -127,7 +127,7 @@ test("campusDay: no rows gives an empty list, and the input is left unchanged", 
 
 // --- campusTags --------------------------------------------------------------------------
 
-test("campusTags: each tag in use with its count, by count then by name", { todo: true }, async () => {
+test("campusTags: each tag in use with its count, by count then by name", async () => {
   const { campusTags } = await import("../src/sheet/campus.mjs");
   const events = [
     ev("1", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { tags: ["Games", "Health & Wellness"] }),
@@ -145,7 +145,7 @@ test("campusTags: each tag in use with its count, by count then by name", { todo
   ]);
 });
 
-test("campusTags: no rows, or no tags, gives an empty list", { todo: true }, async () => {
+test("campusTags: no rows, or no tags, gives an empty list", async () => {
   const { campusTags } = await import("../src/sheet/campus.mjs");
   assert.deepEqual(campusTags([]), []);
   assert.deepEqual(campusTags([ev("1", "2026-11-04T14:00:00Z", "2026-11-04T15:00:00Z", { tags: null })]), []);
@@ -153,14 +153,14 @@ test("campusTags: no rows, or no tags, gives an empty list", { todo: true }, asy
 
 // --- eventToTask -------------------------------------------------------------------------
 
-test("eventToTask: a private #campus task on the event's day, at its local start, its length as the estimate", { todo: true }, async () => {
+test("eventToTask: a private #campus task on the event's day, at its local start, its length as the estimate", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const e = ev("1", "2026-11-04T23:00:00Z", "2026-11-05T00:30:00Z", { title: "Resume Workshop" }); // 6 pm to 7:30 pm EST
   assert.deepEqual(eventToTask(e, tz),
     { title: "Resume Workshop", day: DAY, list: null, at_time: "18:00", est_min: 90, tag: "campus", public: false });
 });
 
-test("eventToTask: an 11:30 pm start keeps its local day, and a midnight-spanning event its start day", { todo: true }, async () => {
+test("eventToTask: an 11:30 pm start keeps its local day, and a midnight-spanning event its start day", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const late = eventToTask(ev("late", "2026-11-05T04:30:00Z", "2026-11-05T05:15:00Z", { title: "Late Night Trivia" }), tz);
   assert.deepEqual(late, { title: "Late Night Trivia", day: DAY, list: null, at_time: "23:30", est_min: 45, tag: "campus", public: false });
@@ -170,7 +170,7 @@ test("eventToTask: an 11:30 pm start keeps its local day, and a midnight-spannin
   assert.equal(eventToTask(ev("edt", "2026-10-20T14:00:00Z", "2026-10-20T15:00:00Z"), tz).at_time, "10:00");
 });
 
-test("eventToTask: the estimate is capped at 240 minutes", { todo: true }, async () => {
+test("eventToTask: the estimate is capped at 240 minutes", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   assert.equal(eventToTask(ev("5h", "2026-11-04T15:00:00Z", "2026-11-04T20:00:00Z"), tz).est_min, 240);
   assert.equal(eventToTask(ev("4h", "2026-11-04T15:00:00Z", "2026-11-04T19:00:00Z"), tz).est_min, 240);
@@ -178,14 +178,14 @@ test("eventToTask: the estimate is capped at 240 minutes", { todo: true }, async
   assert.equal(eventToTask(ev("1m", "2026-11-04T15:00:00Z", "2026-11-04T15:01:00Z"), tz).est_min, 1);
 });
 
-test("eventToTask: an all-day event has no time and no estimate", { todo: true }, async () => {
+test("eventToTask: an all-day event has no time and no estimate", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const e = ev("allday", "2026-11-04T05:00:00Z", "2026-11-05T05:00:00Z", { all_day: true, title: "Homecoming Week" });
   assert.deepEqual(eventToTask(e, tz),
     { title: "Homecoming Week", day: DAY, list: null, at_time: null, est_min: null, tag: "campus", public: false });
 });
 
-test("eventToTask: the title fits the tasks table (1 to 500 characters, trimmed)", { todo: true }, async () => {
+test("eventToTask: the title fits the tasks table (1 to 500 characters, trimmed)", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const long = "A".repeat(600);
   const t = eventToTask(ev("long", "2026-11-04T15:00:00Z", "2026-11-04T16:00:00Z", { title: long }), tz);
@@ -213,14 +213,14 @@ function closure(entry) {
 const planFiles = () => closure("src/pages/plan/index.astro");
 const planSource = () => [...planFiles().values()].join("\n");
 
-test("/plan: loads campus.mjs and reads campus_events", { todo: true }, async () => {
+test("/plan: loads campus.mjs and reads campus_events", async () => {
   await import("../src/sheet/campus.mjs");
   const files = planFiles();
   assert.ok([...files.keys()].some((f) => f.endsWith("/src/sheet/campus.mjs")), "a module /plan loads imports campus.mjs");
   assert.match(planSource(), /campus_events/);
 });
 
-test("/plan: the Campus row has a markup hook, a count, Add to my day and the routine switch", { todo: true }, async () => {
+test("/plan: the Campus row has a markup hook, a count, Add to my day and the routine switch", async () => {
   await import("../src/sheet/campus.mjs");
   const src = planSource();
   assert.match(src, /data-campus/, "a data-campus hook on the row or list");
@@ -232,7 +232,7 @@ test("/plan: the Campus row has a markup hook, a count, Add to my day and the ro
   assert.match(src, /campusTags/);
 });
 
-test("/plan: Add to my day goes through eventToTask and the existing task insert, with undo", { todo: true }, async () => {
+test("/plan: Add to my day goes through eventToTask and the existing task insert, with undo", async () => {
   await import("../src/sheet/campus.mjs");
   const users = [...planFiles()].filter(([f, text]) => !f.endsWith("/campus.mjs") && /\beventToTask\b/.test(text));
   assert.ok(users.length, "a module /plan loads calls eventToTask");
@@ -242,7 +242,7 @@ test("/plan: Add to my day goes through eventToTask and the existing task insert
   }
 });
 
-test("/plan: the ? help list names the Campus list", { todo: true }, async () => {
+test("/plan: the ? help list names the Campus list", async () => {
   await import("../src/sheet/campus.mjs");
   const page = readFileSync(join(root, "src/pages/plan/index.astro"), "utf8");
   const help = page.match(/<dialog[^>]*data-help[\s\S]*?<\/dialog>/)?.[0];
@@ -250,7 +250,7 @@ test("/plan: the ? help list names the Campus list", { todo: true }, async () =>
   assert.match(help, /<dd>[^<]*campus/i, "a help entry for the Campus list");
 });
 
-test("/plan: the campus filters use localStorage only inside try/catch", { todo: true }, async () => {
+test("/plan: the campus filters use localStorage only inside try/catch", async () => {
   await import("../src/sheet/campus.mjs");
   const campusFiles = [...planFiles()].filter(([, text]) => /Show practices and meetings/.test(text));
   assert.ok(campusFiles.length, "the module drawing the campus filters");
@@ -267,7 +267,7 @@ test("/plan: the campus filters use localStorage only inside try/catch", { todo:
   assert.ok(uses > 0, "the filters are remembered in localStorage");
 });
 
-test("/plan: every event link opens in a new tab with rel=noopener", { todo: true }, async () => {
+test("/plan: every event link opens in a new tab with rel=noopener", async () => {
   await import("../src/sheet/campus.mjs");
   const campusFiles = [...planFiles()].filter(([, text]) => /Add to my day/.test(text));
   assert.ok(campusFiles.length, "the module drawing the campus list");
@@ -284,7 +284,7 @@ test("/plan: every event link opens in a new tab with rel=noopener", { todo: tru
   assert.ok(links > 0, "the list links each event's page");
 });
 
-test("/now: never loads campus.mjs or mentions campus events", { todo: true }, async () => {
+test("/now: never loads campus.mjs or mentions campus events", async () => {
   await import("../src/sheet/campus.mjs");
   const files = closure("src/pages/now/index.astro");
   assert.ok(![...files.keys()].some((f) => f.endsWith("/src/sheet/campus.mjs")), "/now never imports campus.mjs");
