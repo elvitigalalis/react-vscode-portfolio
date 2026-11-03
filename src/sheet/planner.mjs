@@ -315,6 +315,7 @@ export function render() {
   const rows = rowCount(Object.fromEntries(days.map((d) => [d, tasksOn(d)])));
   const anyEvents = days.some((d) => eventsOn(d).length);
   $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, anyEvents)));
+  $("[data-week]").style.setProperty("--rows", String(rows));
   const first = dayLabel(days[0]);
   $("[data-week-title]").textContent = `Week of ${first.date}`;
 
