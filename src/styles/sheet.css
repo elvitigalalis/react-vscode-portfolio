@@ -335,3 +335,10 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-rows.is-blank .sheet-add::placeholder { color: var(--muted); }
 /* Phones hide empty rows, but not these. */
 @media (max-width: 48rem) { .sheet-rows.is-blank > .sheet-row.is-add { display: flex; } }
+/* /now, safe polish (change 8): the row fix, a project icon, and an accent dot on Right now. */
+.sheet-week-public .sheet-row > :is(span, a):not(.sheet-bar, .visually-hidden) { min-width: min(8ch, 100%); }
+.sheet-week-public .sheet-row > .sheet-icon { color: var(--muted); margin-top: 0.125em; }
+.sheet-now .sheet-label::before {
+  content: ""; display: inline-block; width: 0.5em; height: 0.5em; margin-right: 0.4em;
+  border-radius: 50%; background: var(--accent); vertical-align: 0.1em;
+}
