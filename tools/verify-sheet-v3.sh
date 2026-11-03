@@ -93,7 +93,7 @@ with want(tbl, cols) as (values
   ('settings', array['interests']),
   ('feed_seen', array['source','uid','seen_at']),
   ('feed_state', array['source','etag','last_modified','fetched_at','ok','error','items']),
-  ('campus_events', array['uid','title','starts_at','ends_at','all_day','group_name','event_type','tags','description','url','location','updated_at']),
+  ('campus_events', array['uid','title','starts_at','ends_at','all_day','group_name','event_type','tags','description','url','location','updated_at','rsvp_count','rsvp_checked_at']),
   ('mail_accounts', array['id','email','label','vault_secret_id','connected_at','last_used_at','last_error'])),
 cols as (
   select w.tbl, array(select c from unnest(w.cols) c

@@ -63,6 +63,10 @@ _Avoid_: Assignment, Brightspace item
 A public event from SB Engaged (Stony Brook's CampusGroups site). It is something Lisul might go to, not a task.
 _Avoid_: Club event, CampusGroups event, activity
 
+**RSVP count**:
+How many people have registered for a campus event, read from its SB Engaged page and shown as "42 going". The list ranks by it.
+_Avoid_: Attendees, popularity score, going count
+
 **Campus pick**:
 A campus event Claude points out during "plan my day" because it fits the interest profile.
 _Avoid_: Suggestion, recommendation

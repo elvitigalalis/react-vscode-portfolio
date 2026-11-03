@@ -140,6 +140,9 @@ function toEvent(props) {
   // The organizer's name (CN, 3.2.2), only when the feed names one: SB Engaged's clubs.
   const cn = get("ORGANIZER")?.params.CN?.trim();
   if (cn) event.organizer = cn;
+  // The contact (3.8.1.2), only when the feed gives one: SB Engaged's link to the event's page.
+  const contact = get("CONTACT")?.value.trim();
+  if (contact) event.contact = contact;
   return { event, s: start.t, e: end.t };
 }
 
