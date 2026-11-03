@@ -228,6 +228,19 @@ function typedChip(input) {
   chip.hidden = !text;
 }
 
+// A task's details beside its title: time, clash, estimate, due date and private.
+function detailsOf(t, clash, risk) {
+  const kids = [
+    t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
+    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
+    t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
+    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) },
+      risk ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}`) : null,
+    t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+  ].filter(Boolean);
+  return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
+}
+
 export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
@@ -239,12 +252,8 @@ export function taskRow(t) {
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
-    t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
-    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
-    t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
-    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) },
-      risk ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}`) : null,
-    t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+    // The details, kept together so they move under the title as one line when they don't fit.
+    detailsOf(t, clash, risk),
     el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
