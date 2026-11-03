@@ -236,6 +236,34 @@ do $$ begin
   raise notice '✓ apply_proposal refuses an approved proposal';
 end $$;
 
+-- A resubmission replaces the day's open Needs you items (done ones stay), and shutting a day
+-- down lapses its proposal, which apply_proposal then refuses.
+update proposals set status = 'pending';
+select apply_proposal(sheet_today(), '[]',
+  '[{"account": "a@example.com", "message_id": "aaa111", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/aaa111",
+     "sender": "Ana", "subject": "One", "why": "Reply.", "kind": "reply"}]', '[]', null);
+select apply_proposal(sheet_today(), '[]',
+  '[{"account": "a@example.com", "message_id": "bbb222", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/bbb222",
+     "sender": "Ana", "subject": "Two", "why": "Reply.", "kind": "reply"}]', '[]', null);
+do $$ begin
+  if exists (select 1 from needs_you where message_id = 'aaa111') then raise exception 'an open needs_you item survived a resubmission'; end if;
+  if not exists (select 1 from needs_you where message_id = 'bbb222') then raise exception 'the resubmitted needs_you item is missing'; end if;
+  if not exists (select 1 from needs_you where message_id = 'abc123' and done) then raise exception 'a done needs_you item was removed'; end if;
+  raise notice '✓ a resubmission replaces open Needs you items';
+end $$;
+select shut_down(sheet_today(), null);
+do $$ begin
+  if (select status from proposals where day = sheet_today()) <> 'lapsed' then raise exception 'shutting down left the proposal pending'; end if;
+  begin
+    perform apply_proposal(sheet_today(), '[]', '[]', '[]', null);
+    raise exception 'apply_proposal reopened a lapsed proposal';
+  exception when raise_exception then
+    if sqlerrm not like '%already lapsed%' then raise; end if;
+  end;
+  raise notice '✓ a shut-down day lapses its proposal and stays closed';
+end $$;
+update proposals set status = 'approved';
+
 -- Someone else signed in can't write a proposal: RLS refuses the row.
 select pg_temp.as_user('authenticated', 'stranger@example.com');
 do $$ begin
@@ -260,7 +288,7 @@ do $$ begin
     then raise exception 'nightly_roll: proposal statuses'; end if;
   if (select count(*) from busy) <> 1 or exists (select 1 from busy where ends_at <= now())
     then raise exception 'nightly_roll: ended busy times kept'; end if;
-  if (select array_agg(message_id) from needs_you) <> array['def456']
+  if (select array_agg(message_id) from needs_you) <> array['bbb222']
     then raise exception 'nightly_roll: needs_you done or old rows kept'; end if;
   raise notice '✓ nightly_roll lapses, clears busy and needs_you';
 end $$;

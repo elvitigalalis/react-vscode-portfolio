@@ -492,7 +492,7 @@ language plpgsql security invoker set search_path = public as $$
 declare current text;
 begin
   select status into current from proposals where day = d for update;
-  if current in ('approved', 'skipped') then
+  if current in ('approved', 'skipped', 'lapsed') then
     raise exception 'the proposal for % is already %', d, current;
   end if;
   delete from public.blocks b
@@ -504,6 +504,8 @@ begin
   values (d, clock_timestamp(), 'pending', apply_proposal.note, coalesce(apply_proposal.picks, '[]'))
   on conflict (day) do update
   set created_at = excluded.created_at, status = 'pending', note = excluded.note, picks = excluded.picks;
+  -- A new submission replaces the day's open items, so repeated submits can't pile rows up.
+  delete from needs_you where day = d and not done;
   insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due)
   select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due
   from jsonb_to_recordset(coalesce(apply_proposal.needs, '[]'))
@@ -512,3 +514,11 @@ begin
 end $$;
 revoke execute on function apply_proposal(date, jsonb, jsonb, jsonb, text) from public, anon;
 grant execute on function apply_proposal(date, jsonb, jsonb, jsonb, text) to authenticated;
+
+-- Shutting a day down lapses its proposal as well as deleting the proposed blocks (redefined here,
+-- after the proposals table exists), so a later morning run can't plan a day that is closed.
+create or replace function lapse_proposals_on(d date) returns void
+language sql security definer set search_path = public as $$
+  delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d;
+  update proposals set status = 'lapsed' where day = d and status = 'pending';
+$$;
