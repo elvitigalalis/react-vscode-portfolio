@@ -1,0 +1,32 @@
+// Extra cases for the shared iCal reader (src/sheet/ical.mjs) beyond test/v3-a.verify.test.mjs.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { parseIcs } from "../src/sheet/ical.mjs";
+
+const cal = (...lines) => ["BEGIN:VCALENDAR", ...lines, "END:VCALENDAR", ""].join("\r\n");
+const wide = { from: new Date("2026-01-01T00:00:00Z"), to: new Date("2028-01-01T00:00:00Z") };
+
+test("ical: the window may be given as ISO strings", () => {
+  const text = cal("BEGIN:VEVENT", "UID:s@x", "DTSTART:20261104T180000Z", "END:VEVENT");
+  assert.equal(parseIcs(text, { from: "2026-11-04T00:00:00.000Z", to: "2026-11-05T00:00:00.000Z" }).length, 1);
+  assert.equal(parseIcs(text, { from: "2026-11-05T00:00:00.000Z", to: "2026-11-06T00:00:00.000Z" }).length, 0);
+});
+
+test("ical: a VALARM's lines don't leak into its event", () => {
+  const [ev] = parseIcs(cal("BEGIN:VEVENT", "UID:al@x", "DTSTART:20261104T180000Z", "SUMMARY:Exam",
+    "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "TRIGGER:-PT15M", "END:VALARM", "END:VEVENT"), wide);
+  assert.equal(ev.summary, "Exam");
+  assert.equal(ev.description, "");
+});
+
+test("ical: an unknown TZID skips that event only", () => {
+  const got = parseIcs(cal(
+    "BEGIN:VEVENT", "UID:bad@x", "DTSTART;TZID=Mars/Olympus:20261104T090000", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:ok@x", "DTSTART;TZID=\"America/New_York\":20261104T090000", "END:VEVENT"), wide);
+  assert.deepEqual(got.map((e) => [e.uid, e.start]), [["ok@x", "2026-11-04T14:00:00.000Z"]]);
+});
+
+test("ical: an all-day start with no end lasts one day", () => {
+  const [ev] = parseIcs(cal("BEGIN:VEVENT", "UID:d@x", "DTSTART;VALUE=DATE:20261231", "END:VEVENT"), wide);
+  assert.deepEqual([ev.start, ev.end, ev.allDay], ["2026-12-31", "2027-01-01", true]);
+});
