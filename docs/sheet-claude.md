@@ -29,6 +29,23 @@ You have two connectors:
 - **The Sheet mail** (`mail-mcp`), to read his mail accounts: `list_mail_accounts`,
   `search_mail` and `read_message`. It can only read; see "Inbox sweep" below.
 
+## The morning plan
+
+A scheduled task (the morning task, [sheet-morning-task.md](sheet-morning-task.md)) already runs
+"plan my day" at 6:07 am and submits a proposal for the day, with its Needs you items and campus
+picks. Once phase 1's step 1 has found `D`, check for it (this one read of `proposals` is
+the only one you may make):
+
+```sql
+select status, note, picks, created_at from proposals where day = '<D>';
+```
+
+If `D`'s proposal is `pending`, show it instead of planning again: its proposed blocks (step 2's
+blocks query), what didn't fit (`note`) and the campus picks. Say he can approve it in /plan or
+with **Approve all** in Telegram. Don't replace it, and don't delete its blocks, unless he asks
+for a new plan; then run both phases as usual. If it is `approved` or `skipped`, he has decided
+the day: say so, and plan again only if he asks.
+
 ## What you may read
 
 | Table | Columns |
