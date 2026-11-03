@@ -204,6 +204,9 @@ finish() {
 #   bash tools/sheet-setup.sh            everything
 #   bash tools/sheet-setup.sh telegram   only the tables and the Telegram stages, for a project
 #                                        that is already set up
+#   bash tools/sheet-setup.sh v3         the v3 deploy (docs/sheet-sources.md): tables, mail's Google
+#                                        access, function secrets, OAuth server, the four
+#                                        functions, Vault URLs, the mail connector, the live check
 # Public values (project URL, anon key, owner email, chat ID) are remembered in .env (gitignored)
 # so a re-run skips what's done. Secrets (the Google client secret, the bot token, the cron and
 # webhook secrets) are never written to disk: they live in this shell until pasted where they
@@ -232,6 +235,12 @@ json() {
     try { const j = JSON.parse(s); const v = $1; if (v !== undefined && v !== null) console.log(v); } catch {}"
 }
 
+# vault_put NAME VALUE prints SQL that creates the Vault secret NAME, or replaces its value.
+vault_put() {
+  printf "select vault.update_secret(id, '%s') from vault.secrets where name = '%s';\n" "$2" "$1"
+  printf "select vault.create_secret('%s', '%s') where not exists (select 1 from vault.secrets where name = '%s');\n" "$2" "$1" "$1"
+}
+
 # api PATH prints the HTTP status of a public Supabase request.
 api_status() {
   curl -s -o /dev/null -w '%{http_code}' "$SHEET_SUPABASE_URL$1" -H "apikey: $SHEET_ANON_KEY"
@@ -240,19 +249,22 @@ api_status() {
 run_wizard() {
 
 MODE="${1:-all}"
-[[ "$MODE" == all || "$MODE" == telegram ]] || { warn "Usage: bash tools/sheet-setup.sh [telegram]"; exit 1; }
+[[ "$MODE" == all || "$MODE" == telegram || "$MODE" == v3 ]] || { warn "Usage: bash tools/sheet-setup.sh [telegram|v3]"; exit 1; }
 ENV_FILE=.env
 [[ -f src/site.mjs && -f supabase/schema.sql ]] || { warn "Run this from the lisul-elvi-site repo root (the sheet branch)."; exit 1; }
 
 if [[ "$MODE" == telegram ]]; then
   TOTAL_STAGES=6
   banner "The Sheet: update the tables, connect Telegram and Claude"
+elif [[ "$MODE" == v3 ]]; then
+  TOTAL_STAGES=8
+  banner "The Sheet v3: Brightspace, campus events and mail"
 else
   TOTAL_STAGES=14
   banner "The Sheet: connect Supabase, Google Calendar, Telegram and Claude"
 fi
 
-if [[ "$MODE" == telegram ]]; then
+if [[ "$MODE" == telegram || "$MODE" == v3 ]]; then
 # The site is already connected: use the project src/site.mjs points at, never a new one.
 SHEET_SUPABASE_URL=$(sed -nE 's/^ *supabaseUrl: "([^"]*)".*/\1/p' src/site.mjs)
 SHEET_ANON_KEY=$(sed -nE 's/^ *anonKey: "([^"]*)".*/\1/p' src/site.mjs)
@@ -262,6 +274,7 @@ write_env SHEET_ANON_KEY "$SHEET_ANON_KEY"
 SHEET_REF="${SHEET_SUPABASE_URL#https://}"; SHEET_REF="${SHEET_REF%%.*}"
 say "Using the site's Supabase project: $SHEET_REF"
 note "Sign in to Supabase with the account that owns it."
+[[ "$MODE" == v3 ]] && pause "Press Enter for the tables"
 else
 
 # ── 1 ────────────────────────────────────────────────────────────────────
@@ -320,6 +333,126 @@ while :; do
   confirm "Skip this check and go on anyway?" && break
 done
 rm -f "$SQL_FILE"
+
+if [[ "$MODE" == v3 ]]; then
+# ──────────────────────────────────────────────────────────────────────────
+# v3 (docs/sheet-sources.md): stage 1 above re-ran schema.sql; these stages deploy the rest. No
+# secret passes through here: Lisul pastes the Brightspace URL and the Google client secret
+# straight into the dashboard, and makes the state secret himself.
+# ──────────────────────────────────────────────────────────────────────────
+SB=(npx -y supabase@latest)
+
+# ── v3 · 2 ───────────────────────────────────────────────────────────────
+# mail-connect asks Google for gmail.readonly with the Google client /plan already signs in with
+# (docs/sheet-sources.md, "Edge Functions"). Google's redirect check is exact, so the callback
+# URL goes in as is.
+stage "Google Cloud: let the sign-in client read mail"
+open_url "https://console.cloud.google.com/apis/library/gmail.googleapis.com"
+step "Check the top bar shows 'The Sheet', then click 'Enable' on the Gmail API."
+pause "Press Enter once it says 'API enabled'"
+open_url "https://console.cloud.google.com/auth/scopes"
+step "Data Access → 'Add or remove scopes' → 'Manually add scopes', paste (on your clipboard):"
+copy "https://www.googleapis.com/auth/gmail.readonly"
+note "https://www.googleapis.com/auth/gmail.readonly"
+step "'Add to table', 'Update', then 'Save'."
+pause "Press Enter when it's saved"
+open_url "https://console.cloud.google.com/auth/clients"
+step "Open the 'The Sheet' client. Under 'Authorized redirect URIs', 'Add URI', paste:"
+copy "$SHEET_SUPABASE_URL/functions/v1/mail-connect/callback"
+note "$SHEET_SUPABASE_URL/functions/v1/mail-connect/callback"
+step "Save. Keep this page open: the next stage needs its Client ID and secret."
+open_url "https://console.cloud.google.com/auth/audience"
+step "Under 'Test users', add every mail account you'll connect (your Stony Brook one too)."
+note "In Testing, Google's refresh tokens last 7 days: reconnect an account in /plan when it errors."
+pause "Press Enter when they're added"
+
+# ── v3 · 3 ───────────────────────────────────────────────────────────────
+stage "Supabase: the function secrets"
+say "Four new secrets. You paste each value straight into the dashboard; this script never sees them."
+open_url "https://supabase.com/dashboard/project/$SHEET_REF/functions/secrets"
+step "SHEET_BRIGHTSPACE_ICS: Brightspace → Calendar → Subscribe, copy the feed URL. Treat it like a"
+step "  password: anyone with it can read your courses."
+step "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET: from the Google client page you left open."
+step "MAIL_STATE_SECRET: any random value. In another terminal: openssl rand -hex 32 | pbcopy"
+note "SHEET_CRON_SECRET is already there from the Telegram setup; leave it."
+pause "Press Enter once all four are saved"
+
+# ── v3 · 4 ───────────────────────────────────────────────────────────────
+# Supabase Auth's OAuth 2.1 server signs Claude in to mail-mcp; the consent URL is the Site URL plus
+# the Authorization Path (supabase.com/docs/guides/auth/oauth-server/getting-started).
+stage "Supabase: the OAuth server Claude signs in through"
+open_url "https://supabase.com/dashboard/project/$SHEET_REF/auth/oauth-server"
+step "Turn the OAuth 2.1 server on. Authorization Path: /oauth/consent/"
+step "Turn on dynamic client registration (Claude registers itself), then save."
+open_url "https://supabase.com/dashboard/project/$SHEET_REF/auth/url-configuration"
+step "Redirect URLs → 'Add URL' (on your clipboard), then save:"
+copy "https://www.lisul-elvi.com/oauth/consent/"
+note "https://www.lisul-elvi.com/oauth/consent/"
+while :; do
+  pause "Press Enter to check the secrets and the OAuth server"
+  bash tools/verify-sheet-v3.sh --pre && break
+  warn "Fix the ✗ lines above (the names must match exactly)."
+  confirm "Skip this check and go on anyway?" && break
+done
+
+# ── v3 · 5 ───────────────────────────────────────────────────────────────
+stage "Supabase: deploy the four functions"
+say "Each is deployed like telegram: bundled on Supabase's side, with its own auth check."
+note "The CLI signs in through your browser first; --yes confirms a change to the live project."
+for f in brightspace campus mail-connect mail-mcp; do
+  note "${SB[*]} functions deploy $f --use-api --no-verify-jwt --remote=$SHEET_REF --yes"
+done
+if confirm "Run them now?"; then
+  "${SB[@]}" projects list >/dev/null 2>&1 || "${SB[@]}" login
+  for f in brightspace campus mail-connect mail-mcp; do
+    if "${SB[@]}" functions deploy "$f" --use-api --no-verify-jwt --remote="$SHEET_REF" --yes; then
+      printf '  %s✓ deployed %s%s\n' "$GREEN" "$f" "$RESET"
+    else
+      warn "Deploying $f failed; see the message above."
+      SKIPPED+=("deploy $f (the command above)")
+    fi
+  done
+else
+  SKIPPED+=("deploy the four functions (the commands above)")
+fi
+pause
+
+# ── v3 · 6 ───────────────────────────────────────────────────────────────
+stage "Supabase: start the hourly syncs"
+say "The jobs in schema.sql call brightspace at :20 and campus at :35 once Vault holds their"
+say "URLs. They're not secret; the cron secret is already in Vault."
+copy "$(vault_put sheet_brightspace_url "$SHEET_SUPABASE_URL/functions/v1/brightspace")
+$(vault_put sheet_campus_url "$SHEET_SUPABASE_URL/functions/v1/campus")"
+open_url "https://supabase.com/dashboard/project/$SHEET_REF/sql/new"
+step "Paste into a new SQL editor tab (⌘V) and click 'Run'."
+pause "Press Enter once it says 'Success'"
+
+# ── v3 · 7 ───────────────────────────────────────────────────────────────
+stage "Claude: the mail connector, and your accounts"
+say "The consent page ships with the site: deploy the site first if /oauth/consent/ isn't live."
+open_url "https://claude.ai/customize/connectors"
+step "'+ Add' → 'Add custom connector'. Name: Mail (The Sheet). URL (on your clipboard):"
+copy "$SHEET_SUPABASE_URL/functions/v1/mail-mcp"
+note "$SHEET_SUPABASE_URL/functions/v1/mail-mcp"
+step "Click 'Add', sign in with your /plan Google account and Approve on the consent page."
+step "Then in /plan → Settings → Mail accounts, 'Connect an account' for each inbox."
+step "Paste docs/sheet-claude.md into The Sheet project's instructions again (on your clipboard"
+step "after you press Enter), and turn the new connector on in its chats."
+pause "Press Enter for the instructions"
+copy "$(cat docs/sheet-claude.md)"
+pause "Press Enter once the connector is added and the instructions pasted"
+
+# ── v3 · 8 ───────────────────────────────────────────────────────────────
+stage "The live check"
+say "Read-only. Feeds and cron runs show up after the next :20 and :35; until then they warn or fail."
+while :; do
+  bash tools/verify-sheet-v3.sh && break
+  confirm "Check again? (No to finish)" || { SKIPPED+=("bash tools/verify-sheet-v3.sh until it passes"); break; }
+done
+pause "Press Enter to finish"
+finish
+return
+fi
 
 if [[ "$MODE" == all ]]; then
 
@@ -509,10 +642,6 @@ unset TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET hook
 stage "Supabase: start the minute job"
 say "The job in schema.sql calls the function every minute once Vault holds its URL and the"
 say "cron secret. This SQL puts them there and saves your chat ID."
-vault_put() { # NAME VALUE: SQL that creates the Vault secret NAME, or replaces its value
-  printf "select vault.update_secret(id, '%s') from vault.secrets where name = '%s';\n" "$2" "$1"
-  printf "select vault.create_secret('%s', '%s') where not exists (select 1 from vault.secrets where name = '%s');\n" "$2" "$1" "$1"
-}
 copy "$(vault_put sheet_telegram_url "$SHEET_SUPABASE_URL/functions/v1/telegram")
 $(vault_put sheet_cron_secret "$SHEET_CRON_SECRET")
 update settings set telegram_chat_id = $SHEET_TELEGRAM_CHAT_ID, nudges_on = true;"

@@ -1,0 +1,96 @@
+{
+  "id": "19a4f6e1c2d3b4a5",
+  "threadId": "19a4f2c3b5d6e7f8",
+  "labelIds": [
+    "UNREAD",
+    "IMPORTANT",
+    "CATEGORY_PERSONAL",
+    "INBOX"
+  ],
+  "snippet": "Hi Lisul, The CSE 416 project demo moved to Friday, Nov 6 at 2:30 pm in NCS 120. Please reply by Thursday if your team can&#39;t make it. Ana",
+  "historyId": "4823117",
+  "internalDate": "1793629805000",
+  "payload": {
+    "partId": "",
+    "mimeType": "multipart/alternative",
+    "filename": "",
+    "headers": [
+      {
+        "name": "Delivered-To",
+        "value": "lisul.elvitigala@stonybrook.edu"
+      },
+      {
+        "name": "MIME-Version",
+        "value": "1.0"
+      },
+      {
+        "name": "Date",
+        "value": "Mon, 2 Nov 2026 09:30:05 -0500"
+      },
+      {
+        "name": "Message-ID",
+        "value": "<CAF9x2b7Lq=demo@mail.gmail.com>"
+      },
+      {
+        "name": "Subject",
+        "value": "CSE 416: project demo moved to Friday"
+      },
+      {
+        "name": "From",
+        "value": "Ana Ruiz <ana.ruiz@stonybrook.edu>"
+      },
+      {
+        "name": "To",
+        "value": "Lisul Elvitigala <lisul.elvitigala@stonybrook.edu>"
+      },
+      {
+        "name": "Content-Type",
+        "value": "multipart/alternative; boundary=\"000000000000a1b2c3d4e5f6\""
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "partId": "0",
+        "mimeType": "text/plain",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/plain; charset=\"UTF-8\""
+          },
+          {
+            "name": "Content-Transfer-Encoding",
+            "value": "quoted-printable"
+          }
+        ],
+        "body": {
+          "size": 146,
+          "data": "SGkgTGlzdWwsDQoNClRoZSBDU0UgNDE2IHByb2plY3QgZGVtbyBtb3ZlZCB0byBGcmlkYXksIE5vdiA2IGF0IDI6MzAgcG0gaW4gTkNTIDEyMC4NClBsZWFzZSByZXBseSBieSBUaHVyc2RheSBpZiB5b3VyIHRlYW0gY2FuJ3QgbWFrZSBpdC4NCg0KQW5hDQo"
+        }
+      },
+      {
+        "partId": "1",
+        "mimeType": "text/html",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/html; charset=\"UTF-8\""
+          },
+          {
+            "name": "Content-Transfer-Encoding",
+            "value": "quoted-printable"
+          }
+        ],
+        "body": {
+          "size": 193,
+          "data": "PGRpdiBkaXI9Imx0ciI-PHA-SGkgTGlzdWwsPC9wPjxwPlRoZSBDU0UgNDE2IHByb2plY3QgZGVtbyBtb3ZlZCB0byA8Yj5GcmlkYXksIE5vdiA2PC9iPiBhdCAyOjMwIHBtIGluIE5DUyAxMjAuPGJyPlBsZWFzZSByZXBseSBieSBUaHVyc2RheSBpZiB5b3VyIHRlYW0gY2FuJiMzOTt0IG1ha2UgaXQuPC9wPjxwPkFuYTwvcD48L2Rpdj4NCg"
+        }
+      }
+    ]
+  },
+  "sizeEstimate": 6012
+}

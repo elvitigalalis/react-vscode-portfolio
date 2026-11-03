@@ -49,6 +49,36 @@ _Avoid_: Carry over, postpone
 The end-of-day step that moves missed tasks to tomorrow and closes the day.
 _Avoid_: Review, wrap-up
 
+## Sources
+
+**Feed**:
+A calendar subscription link (iCal) The Sheet reads on a schedule. There are two: Brightspace and SB Engaged.
+_Avoid_: Integration, sync, calendar link
+
+**Course task**:
+A task created from a Brightspace feed item. It carries the item's due date and lives in the "Brightspace" Someday list.
+_Avoid_: Assignment, Brightspace item
+
+**Campus event**:
+A public event from SB Engaged (Stony Brook's CampusGroups site). It is something Lisul might go to, not a task.
+_Avoid_: Club event, CampusGroups event, activity
+
+**Campus pick**:
+A campus event Claude points out during "plan my day" because it fits the interest profile.
+_Avoid_: Suggestion, recommendation
+
+**Interest profile**:
+Lisul's own short description of what he enjoys, which Claude matches campus events against.
+_Avoid_: Preferences, persona
+
+**Mail account**:
+One email inbox Lisul has connected for Claude to read, such as his personal Gmail or his Stony Brook Gmail.
+_Avoid_: Email, inbox connection
+
+**Inbox sweep**:
+The part of "plan my day" where Claude reads recent mail across every mail account and lists what may need Lisul: deadlines, meetings, requests.
+_Avoid_: Email check, triage
+
 ## Reminders
 
 **Nudge**:

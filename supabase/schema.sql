@@ -223,6 +223,189 @@ select cron.schedule('sheet-telegram', '* * * * *', $job$
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_telegram_url')
 $job$);
 
+-- Mail connector (docs/sheet-sources.md, ADR 0002): the refresh token of one mail account, read
+-- from Vault by the mail-mcp Edge Function with the service role. Nobody else may call it: the
+-- browser can read and delete mail_accounts rows, but never Vault. plpgsql, so it is created even
+-- before mail_accounts exists; null when the account or its secret is missing.
+create or replace function mail_refresh_token(account_email text) returns text
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return (select s.decrypted_secret from mail_accounts a
+          join vault.decrypted_secrets s on s.id = a.vault_secret_id
+          where a.email = account_email);
+end $$;
+revoke execute on function mail_refresh_token(text) from public, anon, authenticated;
+
 -- Set the owner: the Google account that signs in to /plan.
 insert into settings (owner_email) values ('you@example.com')
 on conflict (id) do nothing;
+
+-- Interest profile (docs/sheet-sources.md): a few plain lines on what Lisul likes, which Claude
+-- matches campus events against. Null until he writes one in /plan. Owner-only, like the rest
+-- of settings, and no view names it.
+alter table settings add column if not exists interests text;
+
+-- --- Mail accounts (docs/sheet-sources.md, v3) ----------------------------------------------
+-- One row per Google account connected for the inbox sweep (ADR 0002). The account's refresh
+-- token lives in Vault, never here: vault_secret_id points at it. The mail-connect Edge Function
+-- writes rows with the service key; the browser can read and delete them, nothing more, so it
+-- can never aim vault_secret_id at another secret.
+create table if not exists mail_accounts (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  label text,                        -- a short name, like "SBU"; null shows the email
+  vault_secret_id uuid,
+  connected_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  last_error text                    -- the last failure reading it; null while it works
+);
+alter table mail_accounts enable row level security;
+drop policy if exists owner_all on mail_accounts;
+create policy owner_all on mail_accounts for all using (is_owner()) with check (is_owner());
+revoke all on mail_accounts from anon;
+revoke insert, update on mail_accounts from authenticated;
+
+-- Removing an account deletes its refresh token too. Security definer because only the
+-- database owner may touch vault.secrets (supabase.com/docs/guides/database/vault: deleting
+-- from vault.secrets removes the secret).
+create or replace function mail_account_forget() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from vault.secrets where id = old.vault_secret_id;
+  return old;
+end $$;
+drop trigger if exists mail_accounts_forget on mail_accounts;
+create trigger mail_accounts_forget after delete on mail_accounts for each row execute function mail_account_forget();
+revoke execute on function mail_account_forget() from public, anon, authenticated;
+
+-- Store a connected account's refresh token: the mail-connect Edge Function calls this through
+-- PostgREST rpc with the service key, the only caller allowed. A new account gets a new Vault
+-- secret; reconnecting replaces the old token in place, so the row keeps its secret id
+-- (vault.create_secret(secret, name, description) and vault.update_secret(id, secret), as in
+-- supabase.com/docs/guides/database/vault). A row whose secret is gone gets a fresh one.
+create or replace function mail_account_save(account text, refresh text) returns void
+language plpgsql security definer set search_path = public as $$
+declare secret_id uuid;
+begin
+  select s.id into secret_id from vault.secrets s
+  where s.id = (select vault_secret_id from mail_accounts where email = account)
+     or s.name = 'mail_refresh:' || account
+  limit 1;
+  if secret_id is null then
+    secret_id := vault.create_secret(refresh, 'mail_refresh:' || account, 'Google refresh token, gmail.readonly');
+  else
+    perform vault.update_secret(secret_id, refresh);
+  end if;
+  insert into mail_accounts (email, vault_secret_id, connected_at, last_error)
+  values (account, secret_id, now(), null)
+  on conflict (email) do update
+  set vault_secret_id = excluded.vault_secret_id, connected_at = now(), last_error = null;
+end $$;
+revoke execute on function mail_account_save(text, text) from public, anon, authenticated;
+
+-- --- Course tasks from Brightspace (docs/sheet-sources.md, v3) -------------------------------
+-- A course task is an ordinary private task that came from a feed: source names the feed
+-- ('brightspace'), source_uid the feed item's UID. Both stay null for hand-made tasks, and the
+-- public views list their columns by name, so neither ever reaches /now. Unique together, so a
+-- feed item is one task at most (nulls are distinct, so hand-made tasks never clash).
+alter table tasks add column if not exists source text;
+alter table tasks add column if not exists source_uid text;
+create unique index if not exists tasks_source_uid on tasks (source, source_uid);
+
+-- Every feed item UID ever inserted as a task. A seen UID is never inserted again, so a course
+-- task Lisul deletes never comes back.
+create table if not exists feed_seen (
+  source text not null,
+  uid text not null,
+  seen_at timestamptz not null default now(),
+  primary key (source, uid)
+);
+
+-- One row per feed: the last fetch, whether it worked and how many items it read, for the Feeds
+-- status in /plan Settings. etag and last_modified let a feed be fetched conditionally (campus).
+-- error never holds the feed's URL: that URL is a secret.
+create table if not exists feed_state (
+  source text primary key,
+  etag text,
+  last_modified text,
+  fetched_at timestamptz,
+  ok boolean,
+  error text,
+  items int
+);
+
+alter table feed_seen enable row level security;
+alter table feed_state enable row level security;
+drop policy if exists owner_all on feed_seen;
+drop policy if exists owner_all on feed_state;
+create policy owner_all on feed_seen for all using (is_owner()) with check (is_owner());
+create policy owner_all on feed_state for all using (is_owner()) with check (is_owner());
+revoke all on feed_seen, feed_state from anon;
+
+-- At :20 every hour, call the brightspace Edge Function to sync course tasks. Like
+-- sheet-telegram, its URL and the shared secret come from Vault, so until both exist the job
+-- does nothing.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-brightspace';
+select cron.schedule('sheet-brightspace', '20 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_brightspace_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "sync"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_brightspace_url')
+$job$);
+
+-- --- Campus events (docs/sheet-sources.md, v3) ----------------------------------------------
+-- SB Engaged's public events from today through 14 days ahead, kept by the campus Edge Function
+-- (supabase/functions/campus), which writes with the service key. The data is public anyway,
+-- but it stays owner-only and out of every public view, so the anon key can't mirror it.
+-- The function records each fetch in feed_state under source 'campus'.
+create table if not exists campus_events (
+  uid text primary key,              -- the feed's UID
+  title text not null,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  all_day boolean not null default false,
+  group_name text,                   -- the organizer, or the club acronym without one
+  event_type text,                   -- "Meeting", "Workshop", …
+  tags text[] not null default '{}', -- "Free Food & Refreshments", "Health & Wellness", …
+  description text,
+  url text,                          -- the event's SB Engaged page
+  location text,                     -- null when the feed hides it behind sign-in
+  updated_at timestamptz not null default now()
+);
+create index if not exists campus_events_starts_at on campus_events (starts_at);
+alter table campus_events enable row level security;
+drop policy if exists owner_all on campus_events;
+create policy owner_all on campus_events for all using (is_owner()) with check (is_owner());
+revoke all on campus_events from anon;
+revoke insert, update, delete on campus_events from authenticated;
+
+-- At :35 every hour, call the campus Edge Function to sync the feed. Like sheet-telegram, its
+-- URL and the shared secret come from Vault; until both exist the job does nothing. The function
+-- takes several seconds (an 8 MB download, then batched writes), longer than pg_net's 2 s
+-- default timeout (supabase.com/docs/guides/database/extensions/pg_net), so it gets 2 minutes.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-campus';
+select cron.schedule('sheet-campus', '35 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_campus_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "campus"}'::jsonb,
+    timeout_milliseconds := 120000)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_campus_url')
+$job$);
+
+-- --- Mail connect states (docs/sheet-sources.md, v3) -----------------------------------------
+-- The nonce of each signed state mail-connect's /start hands out. /callback deletes it as it
+-- reads it, so a state works once: a replayed callback finds no row. Only the service role (the
+-- function) touches it; the browser's roles get nothing, and with RLS on and no policy they
+-- couldn't read it anyway.
+create table if not exists mail_connect_states (
+  nonce text primary key,
+  created_at timestamptz not null default now()
+);
+alter table mail_connect_states enable row level security;
+revoke all on mail_connect_states from anon, authenticated;

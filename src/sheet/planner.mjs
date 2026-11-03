@@ -66,7 +66,7 @@ export function failed(err) {
 let undoFn = null;
 let toastTimer;
 
-function offerUndo(text, fn) {
+export function offerUndo(text, fn) {
   undoFn = fn;
   $("[data-toast-text]").textContent = text;
   $("[data-toast]").hidden = false;
@@ -397,6 +397,32 @@ async function saveCalendars() {
   } catch (e) { failed(e); }
 }
 
+// Settings (docs/sheet-sources.md, "/plan"): one dialog of sections (mail accounts, interest
+// profile, feeds). Each module that owns a section pushes a function here that fills it; opening
+// Settings shows the dialog, then runs them all at once, so no section waits on or depends on
+// another, and the order they were added in doesn't matter.
+export const settingsHooks = [];
+
+async function openSettings() {
+  $("[data-interests-note]").textContent = "";
+  $("[data-settings]").showModal();
+  await Promise.all(settingsHooks.map(async (fill) => { try { await fill(); } catch (e) { failed(e); } }));
+}
+
+// Settings, interest profile: what Claude picks campus events against (docs/sheet-claude.md).
+// Blank saves null, so the column stays "not written yet" rather than an empty profile. Settings
+// stays open, so the note beside Save says it worked.
+settingsHooks.push(() => { $("#sheet-interests").value = state.settings?.interests ?? ""; });
+
+async function saveInterests() {
+  const interests = $("#sheet-interests").value.trim() || null;
+  try {
+    await api.saveSettings({ interests });
+    state.settings = { ...state.settings, interests };
+    $("[data-interests-note]").textContent = "Saved.";
+  } catch (e) { failed(e); }
+}
+
 // Telegram on or off. The "Time blocks" events from today on follow it: no alerts while Telegram
 // nudges him, Google's default alert as the backup while it's off.
 async function toggleTelegram() {
@@ -600,6 +626,8 @@ function wire() {
       }
       if (act === "close-calendars") return $("[data-calendars]").close();
       if (act === "save-calendars") return saveCalendars();
+      if (act === "settings") return openSettings();
+      if (act === "save-interests") return saveInterests();
       if (act === "telegram") return toggleTelegram();
       return actHooks[act]?.(e);
     }
@@ -655,6 +683,7 @@ function wire() {
     else if (e.key === "ArrowRight") showWeek(addDays(state.week, 7));
     else if (e.key === "t" || e.key === "T") showWeek(weekStart(now().day));
     else if (e.key === "?") $("[data-help]").showModal();
+    else if (e.key === "s" || e.key === "S") openSettings();
     else if (e.key === ".") {
       const li = document.activeElement?.closest?.(".sheet-task");
       if (li) { e.preventDefault(); if (!drag?.touch) openMenu(li.dataset.id, li); }
