@@ -28,3 +28,13 @@ export function weatherAlerts(geojson) {
     ends: iso(a.ends ?? a.expires),
   }));
 }
+
+// The periods starting on `day` from `from` to before `to` (minutes past local midnight).
+const periodsOn = (periods, day, timeZone, from, to) => periods.filter((p) => {
+  const m = minutesOn(p.start, day, timeZone);
+  return m >= from && m < to;
+});
+
+// read_planner's weather: the day's hours from 07:00 to before 23:00.
+export const weatherHours = (periods, day, timeZone) => periodsOn(periods, day, timeZone, 7 * 60, 23 * 60)
+  .map((p) => ({ at: p.start, temp_f: p.temp_f, pop: p.pop, short: p.short }));

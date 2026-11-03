@@ -154,7 +154,7 @@ test("weatherLine: an alert name that could become a link is left out", todo, as
 // weatherHours (read_planner's weather)
 // =============================================================================================
 
-test("weatherHours: the day's hours from 7 am to before 11 pm, for the planner", todo, async () => {
+test("weatherHours: the day's hours from 7 am to before 11 pm, for the planner", async () => {
   const { weatherPeriods, weatherHours } = await load();
   const hours = weatherHours(weatherPeriods(forecast), DAY, TZ);
   assert.equal(hours.length, 16);
