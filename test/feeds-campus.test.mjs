@@ -83,3 +83,10 @@ test("campusWindowIcs: no events give an empty calendar", () => {
   assert.deepEqual(parseIcs(campusWindowIcs(cal(), NOW, TO), { from: NOW, to: TO }), []);
   assert.deepEqual(parseIcs(campusWindowIcs("", NOW, TO), { from: NOW, to: TO }), []);
 });
+
+// --- Links and titles ----------------------------------------------------------------------
+
+test("campusRows: a long title is cut to 500 characters", () => {
+  const [row] = campusRows([{ ...ev("long", "2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"), summary: ` ${"y".repeat(700)}` }], NOW);
+  assert.equal(row.title, "y".repeat(500));
+});

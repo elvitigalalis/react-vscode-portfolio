@@ -21,12 +21,18 @@ export function weekStart(day) {
 
 export const weekDays = (day) => Array.from({ length: 7 }, (_, i) => addDays(weekStart(day), i));
 
+// One formatter per zone: making one costs far more than using it, and the campus sync asks
+// about a thousand instants a run.
+const clocks = new Map();
+const clockIn = (timeZone) => {
+  if (!clocks.has(timeZone)) {
+    clocks.set(timeZone, new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }));
+  }
+  return clocks.get(timeZone);
+};
 // The date and minutes past midnight at `now` in `timeZone`.
 export function localNow(now, timeZone) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-      .formatToParts(now).map((p) => [p.type, p.value]),
-  );
+  const parts = Object.fromEntries(clockIn(timeZone).formatToParts(now).map((p) => [p.type, p.value]));
   return { day: `${parts.year}-${parts.month}-${parts.day}`, minutes: Number(parts.hour) * 60 + Number(parts.minute) };
 }
 
