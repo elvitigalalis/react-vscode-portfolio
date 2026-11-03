@@ -208,3 +208,17 @@ export async function deleteEvent(id) {
 export const eventTimes = (starts_at, ends_at) => ({ ...(starts_at && { start: { dateTime: starts_at } }), end: { dateTime: ends_at } });
 export const eventTitle = (title, isPublic) => ({ summary: isPublic ? title : "Busy" });
 export const eventReminders = (settings) => ({ reminders: blockReminders(settings) });
+
+// --- Campus events (docs/sheet-sources.md) -----------------------------------------------
+
+// SB Engaged events starting in [from, to), read once per week on screen. Until the campus feed's
+// table exists PostgREST answers 404 (code PGRST205, "table not found";
+// https://docs.postgrest.org/en/stable/references/errors.html), which reads as no events.
+export async function listCampus(fromIso, toIso) {
+  try {
+    return await rest(`campus_events?select=uid,title,starts_at,ends_at,all_day,group_name,event_type,tags,url&starts_at=gte.${fromIso}&starts_at=lt.${toIso}&order=starts_at`);
+  } catch (e) {
+    if (/: 404$/.test(e.message)) return [];
+    throw e;
+  }
+}
