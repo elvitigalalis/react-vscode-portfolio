@@ -69,6 +69,7 @@ import "../../styles/sheet.css";
         <dt>T</dt><dd>This week</dd>
         <dt>.</dt><dd>Menu for the focused task</dd>
         <dt>⌘Z</dt><dd>Undo</dd>
+        <dt>C</dt><dd>Campus events for the focused day (or the "Campus · N" row under its calendar)</dd>
       </dl>
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
@@ -116,6 +117,7 @@ import "../../styles/sheet.css";
 
     <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
     <dialog class="sheet-dialog sheet-shut" data-shut aria-labelledby="sheet-shut-title"></dialog>
+    <dialog class="sheet-dialog sheet-campus" data-campus aria-labelledby="sheet-campus-title"></dialog>
 
   </section>
 </Base>
@@ -125,5 +127,6 @@ import "../../styles/sheet.css";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
   import { setupMailSettings } from "../../sheet/mail-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings]);
+  import { setupCampus } from "../../sheet/campus-list.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCampus]);
 </script>
