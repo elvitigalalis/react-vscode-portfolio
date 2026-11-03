@@ -328,3 +328,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   .sheet-tools .sheet-chip-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .sheet-tools .sheet-btn, .sheet-chips .sheet-chip { padding-inline: 0.45rem; }
 }
+/* Settings, Feeds: a check for a read that worked, an alert for one that failed. */
+[data-feeds] .sheet-icon { color: var(--accent); }
+[data-feeds] .sheet-mail-error, [data-feeds] .sheet-mail-error .sheet-icon { color: var(--danger); }
