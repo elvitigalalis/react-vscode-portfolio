@@ -28,17 +28,17 @@ const block = (starts_at, ends_at, proposed = false, task_id = "t1") =>
 
 // ---------------------------------------------------------------- sourceOf
 
-test("sourceOf: a Brightspace task is a course task", todo, async () => {
+test("sourceOf: a Brightspace task is a course task", async () => {
   const { sourceOf } = await import("../src/sheet/glance.mjs");
   assert.equal(sourceOf({ id: "t1", title: "CSE 320 HW4", source: "brightspace", tag: null }), "course");
 });
 
-test("sourceOf: a #campus task is a campus task", todo, async () => {
+test("sourceOf: a #campus task is a campus task", async () => {
   const { sourceOf } = await import("../src/sheet/glance.mjs");
   assert.equal(sourceOf({ id: "t2", title: "Hack night", source: null, tag: "campus" }), "campus");
 });
 
-test("sourceOf: any other task has no source, and Brightspace comes before the tag", todo, async () => {
+test("sourceOf: any other task has no source, and Brightspace comes before the tag", async () => {
   const { sourceOf } = await import("../src/sheet/glance.mjs");
   assert.equal(sourceOf({ id: "t3", title: "Ship auth", source: null, tag: "workit" }), null);
   assert.equal(sourceOf({ id: "t4", title: "Laundry", source: null, tag: null }), null);
@@ -47,12 +47,12 @@ test("sourceOf: any other task has no source, and Brightspace comes before the t
 
 // ---------------------------------------------------------------- campusSummary
 
-test("campusSummary: no events is zero of each", todo, async () => {
+test("campusSummary: no events is zero of each", async () => {
   const { campusSummary } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(campusSummary([]), { n: 0, food: 0 });
 });
 
-test("campusSummary: counts events and those with free food, as SB Engaged tags it", todo, async () => {
+test("campusSummary: counts events and those with free food, as SB Engaged tags it", async () => {
   const { campusSummary } = await import("../src/sheet/glance.mjs");
   const events = [
     { title: "Diwali Night", starts_at: "2026-11-10T23:00:00Z", tags: [" Free Food & Refreshments", "Cultural"] },
@@ -62,7 +62,7 @@ test("campusSummary: counts events and those with free food, as SB Engaged tags 
   assert.deepEqual(campusSummary(events), { n: 3, food: 2 });
 });
 
-test("campusSummary: an event without tags still counts, with no food", todo, async () => {
+test("campusSummary: an event without tags still counts, with no food", async () => {
   const { campusSummary } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(campusSummary([{ title: "Open Mic", starts_at: "2026-11-11T00:00:00Z" }, { title: "Chess Club", tags: [] }]), { n: 2, food: 0 });
 });
@@ -73,50 +73,50 @@ test("campusSummary: an event without tags still counts, with no food", todo, as
 const task = (due, done = false) => ({ id: "t1", title: "OS homework", due, done });
 const TODAY = "2026-11-10";
 
-test("dueLevel: due in two days with no block is at risk; in three days, or with no due date, it isn't", todo, async () => {
+test("dueLevel: due in two days with no block is at risk; in three days, or with no due date, it isn't", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   assert.equal(dueLevel(task("2026-11-12"), [], TODAY, TZ), "risk");
   assert.equal(dueLevel(task("2026-11-13"), [], TODAY, TZ), null);
   assert.equal(dueLevel(task(null), [], TODAY, TZ), null);
 });
 
-test("dueLevel: due today is at risk, not overdue", todo, async () => {
+test("dueLevel: due today is at risk, not overdue", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   assert.equal(dueLevel(task("2026-11-10"), [], TODAY, TZ), "risk");
 });
 
-test("dueLevel: an approved block starting at 11:30 pm on the due day clears the risk", todo, async () => {
+test("dueLevel: an approved block starting at 11:30 pm on the due day clears the risk", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   // 11:30 pm EST on Thu Nov 12.
   assert.equal(dueLevel(task("2026-11-12"), [block("2026-11-13T04:30:00Z", "2026-11-13T05:00:00Z")], TODAY, TZ), null);
 });
 
-test("dueLevel: a block starting just after the due day ends doesn't clear it", todo, async () => {
+test("dueLevel: a block starting just after the due day ends doesn't clear it", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   // 12:15 am EST on Fri Nov 13.
   assert.equal(dueLevel(task("2026-11-12"), [block("2026-11-13T05:15:00Z", "2026-11-13T06:00:00Z")], TODAY, TZ), "risk");
 });
 
-test("dueLevel: a proposed block, or another task's block, leaves it at risk", todo, async () => {
+test("dueLevel: a proposed block, or another task's block, leaves it at risk", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   // 2–3 pm EST on Wed Nov 11.
   assert.equal(dueLevel(task("2026-11-12"), [block("2026-11-11T19:00:00Z", "2026-11-11T20:00:00Z", true)], TODAY, TZ), "risk");
   assert.equal(dueLevel(task("2026-11-12"), [block("2026-11-11T19:00:00Z", "2026-11-11T20:00:00Z", false, "t9")], TODAY, TZ), "risk");
 });
 
-test("dueLevel: past due with no block is overdue, not risk", todo, async () => {
+test("dueLevel: past due with no block is overdue, not risk", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   assert.equal(dueLevel(task("2026-11-09"), [], TODAY, TZ), "overdue");
   assert.equal(dueLevel(task("2026-10-28"), [], TODAY, TZ), "overdue");
 });
 
-test("dueLevel: past due is overdue even when a block ran on its due day", todo, async () => {
+test("dueLevel: past due is overdue even when a block ran on its due day", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   // 4–5 pm EST on Mon Nov 9, the due day.
   assert.equal(dueLevel(task("2026-11-09"), [block("2026-11-09T21:00:00Z", "2026-11-09T22:00:00Z")], TODAY, TZ), "overdue");
 });
 
-test("dueLevel: a done task is always null, overdue or at risk", todo, async () => {
+test("dueLevel: a done task is always null, overdue or at risk", async () => {
   const { dueLevel } = await import("../src/sheet/glance.mjs");
   assert.equal(dueLevel(task("2026-11-09", true), [], TODAY, TZ), null);
   assert.equal(dueLevel(task("2026-11-11", true), [], TODAY, TZ), null);

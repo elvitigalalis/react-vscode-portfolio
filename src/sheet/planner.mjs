@@ -5,8 +5,9 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, atRisk, dueLabel, VIS, plural,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural,
 } from "./logic.mjs";
+import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
@@ -34,6 +35,12 @@ export function icon(name, label) {
   svg.append(use);
   return svg;
 }
+
+// A source's icon (docs/sheet-glance.md, change 3), paired with its edge colour in sheet.css.
+const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"] };
+export const sourceIcon = (src) => icon(...SOURCES[src]);
+// The words for the aria-label, since the icon is hidden.
+export const sourceWords = (src) => (src ? `, ${SOURCES[src][1].toLowerCase()}` : "");
 
 // --- State -------------------------------------------------------------------------------
 
@@ -230,14 +237,23 @@ function typedChip(input) {
   chip.hidden = !text;
 }
 
-// A task's details beside its title: time, clash, estimate, due date and private.
-function detailsOf(t, clash, risk) {
+// The due date's look by level: overdue in red with the word, at risk in amber; both carry ⚠.
+const DUE = {
+  overdue: { className: " sheet-overdue", title: "Overdue: its due date has passed", tail: " overdue" },
+  risk: { className: " sheet-risk", title: "At risk: no block before it is due", tail: "" },
+};
+
+// A task's details beside its title: source, time, clash, estimate, due date and private.
+function detailsOf(t, clash, level) {
+  const src = sourceOf(t);
+  const due = DUE[level];
   const kids = [
+    src ? el("span", { className: "sheet-meta sheet-source" }, sourceIcon(src)) : null,
     t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
-    t.due ? el("span", { className: `sheet-meta${risk ? " sheet-risk" : ""}`, ...(risk ? { title: "At risk: no block before it is due" } : {}) },
-      risk ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}`) : null,
+    t.due ? el("span", { className: `sheet-meta${due?.className ?? ""}`, ...(due ? { title: due.title } : {}) },
+      due ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
     t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
   ].filter(Boolean);
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
@@ -246,16 +262,17 @@ function detailsOf(t, clash, risk) {
 export function taskRow(t) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
+  if (sourceOf(t)) li.dataset.source = sourceOf(t);
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
-  const risk = atRisk(t, state.blocks, state.today, SHEET.timeZone);
-  title.setAttribute("aria-label", `${t.title}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${risk ? ", at risk" : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  const level = dueLevel(t, state.blocks, state.today, SHEET.timeZone);
+  title.setAttribute("aria-label", `${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
     // The details, kept together so they move under the title as one line when they don't fit.
-    detailsOf(t, clash, risk),
+    detailsOf(t, clash, level),
     el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));

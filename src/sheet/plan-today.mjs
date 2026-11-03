@@ -9,7 +9,8 @@ import {
   formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, DEFAULT_EST,
   blockMinutes, weekdayName, plural,
 } from "./logic.mjs";
-import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity } from "./planner.mjs";
+import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
+import { sourceOf } from "./glance.mjs";
 
 const START = 7 * 60;
 const END = 23 * 60;
@@ -68,9 +69,12 @@ function draw() {
       el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed ? "Turn down" : "Remove"} block for ${t.title}` }),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
+    // A block takes its task's source: the edge colour (sheet.css) and the icon.
+    const src = sourceOf(t);
+    if (src) { box.dataset.source = src; box.prepend(sourceIcon(src)); }
     // Focusable, so a block can be moved and approved from the keyboard (see the dialog's keys).
     box.tabIndex = 0;
-    box.ariaLabel = `${t.title}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
+    box.ariaLabel = `${t.title}${sourceWords(src)}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
     Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
     timeline.append(box);
   }

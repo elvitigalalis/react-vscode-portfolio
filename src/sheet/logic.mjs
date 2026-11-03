@@ -216,8 +216,10 @@ export const proposedOn = (blocks, day, timeZone) => blocks
   .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
 // What moving or resizing a block does in Google. A proposed block has no event: changing it
-// approves it, so its event is made then, as when a task is dragged on.
-export const googleStep = (block) => (block.proposed ? "create" : block.gcal_id ? "patch" : null);
+// approves it, so its event is made then, as when a task is dragged on. Given `now`, an approved
+// block with no event that hasn't ended (approved off the page, from Telegram) gets one too.
+export const googleStep = (block, now) => (block.proposed ? "create" : block.gcal_id ? "patch"
+  : now && now.getTime() < Date.parse(block.ends_at) ? "create" : null);
 
 // Telegram is on once the bot knows his chat and the switch in settings is on.
 export const telegramOn = (settings) => Boolean(settings?.nudges_on && settings?.telegram_chat_id);
