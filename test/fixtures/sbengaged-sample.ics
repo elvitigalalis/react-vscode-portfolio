@@ -1,0 +1,397 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:CAMPUSGROUPS
+X-WR-CALNAME:Stony Brook University SB Engaged
+X-PUBLISHED-TTL:PT1H
+BEGIN:VEVENT
+DTSTAMP:20261102T121559Z
+LAST-MODIFIED:20261016T054823Z
+CREATED:20261016T054823Z
+SEQUENCE:1
+ORGANIZER;CN="University & Medicine Community Relations":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/universitymedicinecommunityrelations/rsvp_boot?id=389388#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:UNIVERSITYMEDICINECOMMUNITYRELATIONS
+CATEGORIES;X-CG-CATEGORY=event_type:Tour
+DTSTART:20261101T040000Z
+DTEND:20261102T045500Z
+UID:a6b581395375f95214b387cd8f7b4c3f10162026_1:48:23_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Explore Port Jefferson - Art Walk
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=389388
+DESCRIPTION:Presented by the Greater Port Jefferson Chamber of Commerce, stop by Port Jefferson Self-Guided Fall Art Walk to embrace seasonal creativity! Enjoy the beauty of Fall in Port Jefferson at your own pace as you explore art across the village known as Seawolves Country.\n\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=389388
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121559Z
+LAST-MODIFIED:20261016T051816Z
+CREATED:20261016T051816Z
+SEQUENCE:1
+ORGANIZER;CN="Company of Archers":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/archery/rsvp_boot?id=384609#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:ARCHERY
+CATEGORIES;X-CG-CATEGORY=event_type:Rehearsal/Practice
+CATEGORIES;X-CG-CATEGORY=event_tags:Sports & Recreation
+DTSTART:20261101T150000Z
+DTEND:20261101T173000Z
+UID:9b04f2e8486934f5ca08d809be3ad5b010162026_1:18:16_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Indoor Archery Practice 
+LOCATION:The Recreation Center ( MAC Courts ), 100 Nicolls Road, Stony brook, NY 11794, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=384609
+DESCRIPTION:Join the Company of Archers for our indoor practice at the Recreation center ( MAC Courts ). All equipments are provided and we are open to all level of archers ( Including beginners).\n\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=384609
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121600Z
+LAST-MODIFIED:20261022T155656Z
+CREATED:20261021T192540Z
+SEQUENCE:3
+ORGANIZER;CN="Benedict South Residence Hall":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/benedictsouthresidencehall/rsvp_boot?id=390781#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:BENEDICTSOUTHRESIDENCEHALL
+CATEGORIES;X-CG-CATEGORY=event_type:Social
+CATEGORIES;X-CG-CATEGORY=event_tags: Free Food & Refreshments,Games & Entertainment,Arts & Creativity
+DTSTART:20261101T200000Z
+DTEND:20261101T220000Z
+UID:6deafe625715a7063acd3837b9ba577010212026_3:25:40_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Fall Fest
+LOCATION:Bauman Center, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390781
+DESCRIPTION:H community is proud to announce that Fall Fest, our annual fall festiveal will be taking place on Sunday, November 1, Join us from 3 - 5:00 PM in the Bauman Center, where there will be food, drinks, entertainment and games\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390781
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121601Z
+LAST-MODIFIED:20261023T045454Z
+CREATED:20261023T034534Z
+SEQUENCE:1
+ORGANIZER;CN="Stony Brook Southampton":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/stonybrooksouthampton/rsvp_boot?id=390948#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:STONYBROOKSOUTHAMPTON
+CATEGORIES;X-CG-CATEGORY=event_type:Drop-in/Open Space
+CATEGORIES;X-CG-CATEGORY=event_tags:Health & Wellness, Free Food & Refreshments
+DTSTART:20261102T160000Z
+DTEND:20261102T190000Z
+UID:c09823dd2d1e003af70c631dc4b7d0c210222026_11:45:34_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Sleep Well, Southampton!
+LOCATION:Chancellor's Hall Lobby at Stony Brook Southampton, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390948
+DESCRIPTION:Join Student Life and CPO for a relaxing drop-in session packed with practical tools and tips for building better sleep habits, optimizing your nighttime routine, and beating mid-semester fatigue.\n\nStop by to craft your very own DIY Sleep Kit packed with essential bedtime relaxation goodies to take home, and enjoy lunch by SBU EATS featuring a Masala Buffet menu.\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390948
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121603Z
+LAST-MODIFIED:20261020T175159Z
+CREATED:20261020T175146Z
+SEQUENCE:2
+ORGANIZER;CN="Stony Brook Hillel":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/stonybrookhillel/rsvp_boot?id=390590#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:STONYBROOKHILLEL
+CATEGORIES;X-CG-CATEGORY=event_type:Worship/Religious Service
+CATEGORIES;X-CG-CATEGORY=event_tags:Culture & Identity, Free Food & Refreshments,Faith & Spirituality
+DTSTART:20261102T173000Z
+DTEND:20261102T190000Z
+UID:cfd3156d09b63b59e9b0f8f1d9a8a28810202026_1:51:46_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Lunch & Learn
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390590
+DESCRIPTION:Join us for lunch every Monday at 12:30pm for some learning and kosher pizza!\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390590
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121603Z
+LAST-MODIFIED:20261028T131049Z
+CREATED:20261021T135727Z
+SEQUENCE:7
+ORGANIZER;CN="University Libraries":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/universitylibraries/rsvp_boot?id=390727#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:UNIVERSITYLIBRARIES
+CATEGORIES;X-CG-CATEGORY=event_type:Info Session/Panel
+CATEGORIES;X-CG-CATEGORY=event_tags:Academics & Research
+DTSTART:20261102T173000Z
+DTEND:20261201T193000Z
+UID:b1c6a7d9abd089715a367fefa43b548110212026_9:57:27_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Meet Rubo 
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390727
+DESCRIPTION:Rubo welcomes you to the Libraries! Meet Stony Brook University Libraries’ new experimental robot helper. Stop by and ask Rubo a question about the Libraries or campus. Rubo can answer questions, point you in the right direction, and even wave hello. More about Rubo: https://library.stonybrook.edu/projects/rubo/\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390727
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121604Z
+LAST-MODIFIED:20261030T174838Z
+CREATED:20261030T173447Z
+SEQUENCE:5
+ORGANIZER;CN="Diversity, Intercultural, and Community Engagement Office":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/dice/rsvp_boot?id=391627#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:DICE
+CATEGORIES;X-CG-CATEGORY=event_type:Social
+CATEGORIES;X-CG-CATEGORY=event_tags:Arts & Creativity,Culture & Identity, Free Food & Refreshments
+DTSTART:20261102T173000Z
+DTEND:20261102T184500Z
+UID:9489e6962af21c5140e2da97557e825c10302026_1:34:47_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Día de Los Muertos | Day of the Dead Celebration
+LOCATION:Latin American and Caribbean Studies Center- Social and Behavioral Sciences Building, Room N335, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=391627
+DESCRIPTION:Día de los Muertos | Day of the Dead Celebration\nDate: Monday, November 2nd, 2026\nTime: 12:30-1:45 PM\nLocation: Latin American & Caribbean Studies Center- Social and Behavioral Sciences Building, Room N335\n\nJoin us as we honor and celebrate Día de Los Muertos (Day of the Dead) — a vibrant cultural tradition that pays tribute to the lives and memories of our loved ones who have passed. Although Día de los Muertos is celebrated throughout Latin America, it has deep pre-colonial indigenous roots.\n\nGuests are invited to contribute photos or small offerings to a community ofrenda (altar) in remembrance of family, friends, and historical/cultural icons who have inspired them. Honor and celebrate your departed loved ones (human and animal) over lunch, marigolds, Spanish poetry, and mingling at our altar! Tacos and pan provided\n\nEnjoy Latin American refreshments as we come together to celebrate life, legacy, and cultural tradition. \n\nThis event is free and open to all.\n\nSponsored by:\nHispanic Heritage Month Committee\nDiversity, Intercultural and Community Engagement (DICE)\nLatin American and Caribbean Studies Center (LACS)\nDepartment of Hispanic Languages and Literature (HLL)\nDress Code: Casual (jeans ok)\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=391627
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121605Z
+LAST-MODIFIED:20261030T205539Z
+CREATED:20261029T145715Z
+SEQUENCE:3
+ORGANIZER;CN="Undergraduate Student Government":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/stonybrookusg/rsvp_boot?id=391546#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:STONYBROOKUSG
+CATEGORIES;X-CG-CATEGORY=event_type:Tabling
+CATEGORIES;X-CG-CATEGORY=event_tags: Free Food & Refreshments,Civic Engagement & Community Service
+DTSTART:20261102T213000Z
+DTEND:20261102T233000Z
+UID:8188f0700cbe6d66f92e015888569b2c10292026_10:57:15_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Your Plate, Your Voice: Campus Dining Initiative Tabling
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=391546
+DESCRIPTION:Your plate, your say! 🍽️🐺\n\nWant to see better dining options at Stony Brook? Here's your chance to make your voice heard!\n\nStop by our Campus Dining Initiative tabling, learn more about our efforts to expand dining options and improve food quality, and cast your vote to help shape the future of campus dining!\n\n🎁 Plus, we'll have FREE snacks, fun prizes, and giveaways! Stop by, grab a snack, share your thoughts, and get a chance to win some awesome prizes!\n\nYour voice matters, Seawolves! Let's make campus dining better together! ❤️\nDress Code: Casual (jeans ok)\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=391546
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121606Z
+LAST-MODIFIED:20261016T013637Z
+CREATED:20261016T013352Z
+SEQUENCE:1
+ORGANIZER;CN="Stony Brook Southampton":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/stonybrooksouthampton/rsvp_boot?id=390232#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:STONYBROOKSOUTHAMPTON
+CATEGORIES;X-CG-CATEGORY=event_type:Social
+CATEGORIES;X-CG-CATEGORY=event_tags:Arts & Creativity, Free Food & Refreshments,Health & Wellness
+DTSTART:20261102T230000Z
+DTEND:20261103T010000Z
+UID:3aa723747b7634c485764148a650031b10152026_9:33:52_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Piña & Paint Night
+LOCATION:Student Center/ Fitness Center, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390232
+DESCRIPTION:Join RA Jay for Virgin Piña Coladas, Snacks, and a Relaxing Paint Night\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390232
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121609Z
+LAST-MODIFIED:20261029T173445Z
+CREATED:20261028T161654Z
+SEQUENCE:2
+ORGANIZER;CN="Latino Medical Student Association":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/latinomedical/rsvp_boot?id=391437#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:LATINOMEDICAL
+CATEGORIES;X-CG-CATEGORY=event_type:Fundraiser
+CATEGORIES;X-CG-CATEGORY=event_tags: Free Food & Refreshments
+DTSTART:20261103T163000Z
+DTEND:20261103T190000Z
+UID:6cff0686bf29f5613607981c9a95f1bc10282026_12:16:54_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Sip N' Shack Boba Tea Pop Up (LMSA Dia De Muertos)
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=391437
+DESCRIPTION:Sip N' Shack, a boba tea vendor, is coming to Stony Brook Campus with a special Horchata inspired bubble tea to celebrate Dia De Muertos.\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=391437
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121610Z
+LAST-MODIFIED:20261024T045635Z
+CREATED:20261024T044047Z
+SEQUENCE:1
+ORGANIZER;CN="Office of Student Life for the Health Sciences Center (HSC)":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/officeofstudentlifeathsc/rsvp_boot?id=391096#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:OFFICEOFSTUDENTLIFEATHSC
+CATEGORIES;X-CG-CATEGORY=event_type:Competition/Tournament
+CATEGORIES;X-CG-CATEGORY=event_tags:Arts & Creativity, Free Food & Refreshments,Games & Entertainment
+DTSTART:20261103T190000Z
+DTEND:20261103T210000Z
+UID:4653c32640e418c772aa65e5c671c60710242026_12:40:47_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Pumpkin Craze And Craft Competition !!!
+LOCATION:HSC 2nd Floor Hallway, HSC 2nd Floor Hallway, Stony Brook 11790, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=391096
+DESCRIPTION:Event: Pumpkin Craze And Craft Competition\n\nDate: Tuesday, November 3, 2026 🗓️\n\nTime: 2:00 PM - 4:00 PM ⏰\n\nLocation: HSC 2nd Floor Hallway 📍\n\nOrganization: HSC Student Life 🏫\n\nDescription:\n\nUnwind after Halloween 🎃 and show off your artistic skills (or just laugh! 😂) with HSC Student Life! Join us in the HSC 2nd Floor Hallway on Tuesday, November 3, 2026, from 2:00 PM to 4:00 PM for a quick pop-in tabling event designed to give you a fast mental break 🧠⚡ without slowing down your busy day between classes or clinicals. 🩺📚\n\n🌟 Interactive Table Activities\n🖌️ Pumpkin Design Challenge (Takes under 1 minute!):\n\nGrab a paper pumpkin cut-out 🎃 and a marker ✏️ to create your custom design! Turn it in with your full name ✍️ and chosen competition category written on the back.\n\n🏆 Contest Categories:\n\n🧟 Spooky- Creepy crawlies, monsters, and spooky vibes!\n\n😂 Funny & Goofy- Silly faces, memes, and unexpected expressions.\n\n🦸 Character & Pop Culture- Favorite movie, TV, or pop culture icons!\n\n✨ Elegant & Silhouette- Intricate patterns, classy outlines, and artistic silhouettes.\n\n🧸 Cute & Whimsical- Sweet, adorable, and festive seasonal creations!\n\n👻 The Spooky Share Board:\n\nWhat’s the spookiest thing you saw this Halloween season? 👁️ Grab a marker and write your story, costume sighting, or movie recommendation on our community display board!\n\n🎁 Prizes & Sweet Rewards\n🧸 Grand Prizes: One lucky winner from each of the 5 pumpkin categories will win a soft, adorable pumpkin plush! 🎃 (Winners will be notified after the event to pick up their prize at the HSC Student Life office).\n\n🍬 Participation Reward: Everyone who stops by and takes part gets free Halloween candy to fuel their afternoon! 🍫🍭\n\n✨ Just stop by, doodle, share your spooky stories, grab some candy, and connect with HSC Student Life! We can’t wait to see you there! 🙌🎉\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=391096
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121613Z
+LAST-MODIFIED:20260921T142943Z
+CREATED:20260920T182903Z
+SEQUENCE:1
+ORGANIZER;CN="Science Olympiad at Stony Brook University":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/stonybrookscioly/rsvp_boot?id=387007#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:STONYBROOKSCIOLY
+CATEGORIES;X-CG-CATEGORY=event_type:Meeting
+DTSTART:20261104T000000Z
+DTEND:20261104T010000Z
+UID:f1c1dee86ae5669c1a2945b6cc4f2f589202026_2:29:03_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Science Olympiad Weekly GBM
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=387007
+DESCRIPTION:Join us for our weekly meetings every Tuesday in Frey 305, where we do various science and Science Olympiad related activities! \n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=387007
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121614Z
+LAST-MODIFIED:20261016T051717Z
+CREATED:20261016T051717Z
+SEQUENCE:1
+ORGANIZER;CN="Club Softball":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/softballclub/rsvp_boot?id=386866#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:SOFTBALLCLUB
+CATEGORIES;X-CG-CATEGORY=event_type:Rehearsal/Practice
+CATEGORIES;X-CG-CATEGORY=event_tags:Sports & Recreation,Health & Wellness
+DTSTART:20261104T003000Z
+DTEND:20261104T023000Z
+UID:79e82f07fada8d6f5c0e3029662285ac10162026_1:17:17_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Softball Practice
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=386866
+DESCRIPTION:At these practices we will be working on our skills in the batting cages. We will be working specifically on batting, along with sharpening our pitching and catching skills.\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=386866
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121615Z
+LAST-MODIFIED:20261016T054600Z
+CREATED:20261016T054600Z
+SEQUENCE:1
+ORGANIZER;CN="TaeKwonDo":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/taekwondo/rsvp_boot?id=383922#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:TAEKWONDO
+CATEGORIES;X-CG-CATEGORY=event_type:Rehearsal/Practice
+DTSTART:20261104T020000Z
+DTEND:20261104T033000Z
+UID:db4421e67f7ae706129b609931bf73b210162026_1:46:00_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Taekwondo Practice Fall 2026 - Tuesday
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=383922
+DESCRIPTION:Practice times are as follows:\n\nMonday 9:00 - 10:30 PM in Studio Room 128\n\nTuesday 9:00 - 10:30 PM in Studio Room 128\n\nThursday 8:15 - 9:30 PM  in Studio Room 128\n\nAll skill levels are welcome! Experience is not required. We will teach the basics and fundamentals of taekwondo.\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=383922
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121616Z
+LAST-MODIFIED:20261027T211458Z
+CREATED:20260916T180817Z
+SEQUENCE:7
+ORGANIZER;CN="Mexican Student Organization at Stony Brook":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/mexso/rsvp_boot?id=385963#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:MEXSO
+CATEGORIES;X-CG-CATEGORY=event_type:Fundraiser
+DTSTART:20261104T170000Z
+DTEND:20261104T190000Z
+UID:829761545edb173a48bb75865e4cf9129162026_2:08:17_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Chocolate de abuelita, con cookies
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=385963
+DESCRIPTION:🍫☕ COZY UP WITH MEXSO! 🇲🇽✨\n\nCraving something sweet and comforting? Come see MEXSO at the Union Ballroom Lobby from 12–2 PM and enjoy a delicious Mexican classic: Chocolate Abuelita! 🍫☕\n\nPair your warm, rich Mexican hot chocolate with some tasty cookies for the perfect sweet treat! 🍪🤎\n\n💰 ONLY $4! — Chocolate Abuelita + Cookies\n\nBring your friends, warm up, and enjoy a taste of Mexico! 🇲🇽❤️\n\nStop by and grab yours! 👀✨\n\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=385963
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121616Z
+LAST-MODIFIED:20261023T202520Z
+CREATED:20261019T235844Z
+SEQUENCE:5
+ORGANIZER;CN="Intervarsity Graduate Christian Fellowship ":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/IVGCF/rsvp_boot?id=390520#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:IVGCF
+CATEGORIES;X-CG-CATEGORY=event_type:Meeting
+CATEGORIES;X-CG-CATEGORY=event_tags:Faith & Spirituality, Free Food & Refreshments
+DTSTART:20261104T170000Z
+DTEND:20261104T181500Z
+UID:fd69637e4e25753c8d91aa15b0da8ced10192026_7:58:44_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Intervarsity Graduate Christian Fellowship Bible Study
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390520
+DESCRIPTION:We meet every other Wednesday. Over lunch (provided free), we have a Bible study and pray for one another. This semester, we are doing a Bible study series called Witness in the Academy: Acts Bible Studies. \nDress Code: Casual (jeans ok)\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390520
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121619Z
+LAST-MODIFIED:20261021T181123Z
+CREATED:20261019T031603Z
+SEQUENCE:5
+ORGANIZER;CN="Eisenhower Residence Hall":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/eisenhowerresidencehall/rsvp_boot?id=390401#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:EISENHOWERRESIDENCEHALL
+CATEGORIES;X-CG-CATEGORY=event_type:Social
+CATEGORIES;X-CG-CATEGORY=event_tags: Free Food & Refreshments,Culture & Identity
+DTSTART:20261104T220000Z
+DTEND:20261105T000000Z
+UID:080e2b670689696857c16d8c9972c7ba10182026_11:16:03_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:A Taste of the World
+LOCATION:Eisenhower Hall Classroom, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=390401
+DESCRIPTION:Join us for a flavourful journey around the world! Explore different cultures by trying foods and snacks from various countries. Residents can unwind, socialize and meet new people, and enjoy a relaxed environemnt while discovering new flavors and reditions \n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=390401
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121620Z
+LAST-MODIFIED:20261023T175250Z
+CREATED:20260917T002354Z
+SEQUENCE:4
+ORGANIZER;CN="Pre-Health Asian Pacific American Medical Student Association at Stony Brook University":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/prehealthapamsaabu/rsvp_boot?id=386597#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:PREHEALTHAPAMSAABU
+CATEGORIES;X-CG-CATEGORY=event_type:Workshop
+DTSTART:20261104T233000Z
+DTEND:20261105T003000Z
+UID:a3f7a7eb3a0ee4ed128b39ca952476739162026_8:23:54_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Suturing Workshop APAMSA
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=386597
+DESCRIPTION:Our APAMSA's Suturing Workshop helps students learn more skills pertaining to your pre-health journey! This event allows students to follow along with our leads to perform basic wound closure techniques, practice surgical knot tying, and explore a skill frequently used in medicine. Connect with fellow future healthcare professionals and gain hands on experience.👩‍⚕️👨‍⚕️ \n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=386597
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121622Z
+LAST-MODIFIED:20261027T230548Z
+CREATED:20261027T230039Z
+SEQUENCE:1
+ORGANIZER;CN="Irving Residence Hall":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/irvingresidencehall/rsvp_boot?id=391385#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:IRVINGRESIDENCEHALL
+CATEGORIES;X-CG-CATEGORY=event_type:Social
+CATEGORIES;X-CG-CATEGORY=event_tags:Health & Wellness,Arts & Creativity, Free Food & Refreshments,Nature & Outdoor Recreation
+DTSTART:20261105T000000Z
+DTEND:20261105T010000Z
+UID:f31dd0b9610d405ac57499e8e1bb311610272026_7:00:39_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Dirt and Destress
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=391385
+DESCRIPTION:Feeling bogged down by midterms season? Step away from the screens, get your hands a little dirty, and clear your mind! Research shows that spending time with plants and nature can significantly lower stress levels and boost your focus.\n\nJoin us for a hands-on gardening break where you will get to plant and customize your own dorm-friendly indoor garden. Whether you want to grow some fresh mint for your tea or a low-maintenance succulent for your desk, we’ve got you covered. It’s the perfect way to ground yourself before hitting the books again.\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=391385
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121624Z
+LAST-MODIFIED:20260903T221853Z
+CREATED:20260807T004843Z
+SEQUENCE:4
+ORGANIZER;CN="Rising Empowerment in Pre-PA":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/repa/rsvp_boot?id=376370#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:REPA
+CATEGORIES;X-CG-CATEGORY=event_type:Fundraiser
+CATEGORIES;X-CG-CATEGORY=event_tags:Nature & Outdoor Recreation,Games & Entertainment
+DTSTART:20261105T173000Z
+DTEND:20261105T190000Z
+UID:e265e5a6938e902ceefe2447606f75e0862026_8:48:43_PM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Winter Warm-up Fundraiser 
+LOCATION:Union Lobby, United States
+URL:https://sbengaged.stonybrook.edu/rsvp?id=376370
+DESCRIPTION:Take a break from your busy day and warm up with a cup of hot chocolate and a delicious brownie! Whether you're between classes, studying, or just looking for a sweet treat, this fundraiser is the perfect way to enjoy the fall season and spend time with friends. Stop by to relax, recharge, and enjoy some cozy fall vibes while treating yourself to a delicious snack. We can't wait to see you there!\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=376370
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121627Z
+LAST-MODIFIED:20261028T141850Z
+CREATED:20261016T050731Z
+SEQUENCE:3
+ORGANIZER;CN="Theta Tau":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/thetatau/rsvp_boot?id=388996#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:THETATAU
+CATEGORIES;X-CG-CATEGORY=event_type:Trip/Excursion
+CATEGORIES;X-CG-CATEGORY=event_tags:Career & Professional Development
+DTSTART:20261106T000000Z
+DTEND:20261107T230000Z
+UID:fa1db19ce7b493380e21f0cbcb9a504910162026_1:07:31_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Theta Tau SWE
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=388996
+DESCRIPTION:Theta Tau is going to SWE in Boston to have a chance to connect with a multitude of companies.\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=388996
+END:VEVENT
+BEGIN:VEVENT
+DTSTAMP:20261102T121631Z
+LAST-MODIFIED:20261016T052204Z
+CREATED:20261016T052203Z
+SEQUENCE:1
+ORGANIZER;CN="Dynamic Dance":mailto:noreply@sbengaged.stonybrook.edu
+CONTACT:https://sbengaged.stonybrook.edu/dynamicdance/rsvp_boot?id=387321#event_host
+CATEGORIES;X-CG-CATEGORY=club_acronym:DYNAMICDANCE
+CATEGORIES;X-CG-CATEGORY=event_type:Workshop
+CATEGORIES;X-CG-CATEGORY=event_tags:Arts & Creativity,Sports & Recreation
+DTSTART:20261106T180000Z
+DTEND:20261106T180000Z
+UID:41659f313023149b1cbed6f3d8dfe6a610162026_1:22:03_AM@campusgroups.com
+SUMMARY;ENCODING=QUOTED-PRINTABLE:Lyrical/Jazz Class
+LOCATION: Sign in to download the location
+URL:https://sbengaged.stonybrook.edu/rsvp?id=387321
+DESCRIPTION:Come join Dynamic Dance for Beginner Ballet class! Class will consist of warm-up, barre, down-the-floor, and center combinations. Dancers will also learn a routine that they will have the opportunity to perform at our Fall Showcase. This is a beginner class and all are welcome. With any questions, feel free to reach out to dynamicdancesbu@gmail.com or come try a class!\n---\nEvent Details: https://sbengaged.stonybrook.edu/rsvp?id=387321
+END:VEVENT
+END:VCALENDAR
