@@ -36,7 +36,10 @@ import "../../../styles/sheet.css";
 
 <script>
   import { configured, signInTo, signedIn, takeRedirect, settings } from "../../../sheet/api.mjs";
-  import { authorizationDetails, decide, scopeLines } from "../../../sheet/consent.mjs";
+  import { authorizationDetails, decide, scopeLines, trustedRedirect } from "../../../sheet/consent.mjs";
+
+  // Never inside another site's frame, where a click on Approve could be stolen: break out.
+  if (top !== self) top.location = location;
 
   const root = document.querySelector(".sheet-consent");
   const $ = (sel) => root.querySelector(sel);
@@ -83,10 +86,14 @@ import "../../../styles/sheet.css";
       if (d.client?.uri) Object.assign($("[data-site]"), { hidden: false, textContent: `Its website: ${d.client.uri}` });
       $("[data-scopes]").replaceChildren(...scopeLines(d.scope).map((s) => Object.assign(document.createElement("li"), { textContent: s })));
       $("[data-redirect]").textContent = d.redirect_uri ? new URL(d.redirect_uri).host : "the app";
-      $("[data-act=approve]").hidden = !owner;
+      // Only Claude may be approved: its redirect has to go back to claude.ai or claude.com.
+      const claude = trustedRedirect(d.redirect_uri);
+      $("[data-act=approve]").hidden = !(owner && claude);
       $("[data-act=approve]").addEventListener("click", () => act("approve"));
       $("[data-act=deny]").addEventListener("click", () => act("deny"));
-      say(owner ? "" : "Only Lisul's account can approve access. You can deny it.");
+      say(!owner ? "Only Lisul's account can approve access. You can deny it."
+        : !claude ? "Warning: this app would send your access somewhere other than Claude (claude.ai or claude.com). If you didn't start this from Claude, someone may be trying to get into your mail. Deny it."
+        : "");
       $("[data-ask]").hidden = false;
     } catch (e) {
       say(`Could not load this request (${e.message}). It may have expired; start again from the app.`);
