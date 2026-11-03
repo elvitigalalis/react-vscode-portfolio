@@ -33,7 +33,7 @@ function campusSection(doc) {
 
 // ---- Schema ---------------------------------------------------------------------------------
 
-test("v3-e schema: settings.interests is added as text, safe to re-run", { todo: true }, async () => {
+test("v3-e schema: settings.interests is added as text, safe to re-run", async () => {
   const { assert, read } = await load();
   const schema = read("supabase/schema.sql");
   assert.match(schema, /alter table settings add column if not exists interests text\b/);
@@ -43,7 +43,7 @@ test("v3-e schema: settings.interests is added as text, safe to re-run", { todo:
   assert.equal(columns(schema).settings.has("interests"), true);
 });
 
-test("v3-e schema: settings stays owner-only, and no view exposes interests", { todo: true }, async () => {
+test("v3-e schema: settings stays owner-only, and no view exposes interests", async () => {
   const { assert, read } = await load();
   const schema = read("supabase/schema.sql");
   assert.match(schema, /alter table settings enable row level security;/);
@@ -59,7 +59,7 @@ test("v3-e schema: settings stays owner-only, and no view exposes interests", { 
   assert.doesNotMatch(schema, /grant [^;]*\bon (table )?([\w, ]*\b)?settings\b[^;]*\bto [^;]*\banon\b/);
 });
 
-test("v3-e schema: the seed row carries no interest profile", { todo: true }, async () => {
+test("v3-e schema: the seed row carries no interest profile", async () => {
   const { assert, read } = await load();
   const schema = read("supabase/schema.sql");
   for (const [stmt] of schema.matchAll(/(insert into settings|update settings)[^;]*;/g)) {
@@ -232,7 +232,7 @@ test("v3-e sheet-claude: the reply shows the campus picks", { todo: true }, asyn
 
 // ---- The draft interest profile stays out of the public repo --------------------------------
 
-test("v3-e: no draft interest profile is committed anywhere in the repo", { todo: true }, async () => {
+test("v3-e: no draft interest profile is committed anywhere in the repo", async () => {
   const { assert } = await load();
   const { readFileSync, statSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
