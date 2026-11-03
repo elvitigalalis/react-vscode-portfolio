@@ -1,0 +1,140 @@
+{
+  "id": "19a3c4d5e6f70812",
+  "threadId": "19a3c4d5e6f70812",
+  "labelIds": [
+    "INBOX",
+    "CATEGORY_PERSONAL"
+  ],
+  "snippet": "Hi Lisul, Your résumé review is attached — 2 pages, comments in red. Questions? Reply here. Career Center",
+  "historyId": "4822001",
+  "internalDate": "1793383200000",
+  "payload": {
+    "partId": "",
+    "mimeType": "multipart/mixed",
+    "filename": "",
+    "headers": [
+      {
+        "name": "Subject",
+        "value": "Résumé review"
+      },
+      {
+        "name": "From",
+        "value": "Career Center <career@stonybrook.edu>"
+      },
+      {
+        "name": "To",
+        "value": "lisul.elvitigala@stonybrook.edu, elvitigalalis@gmail.com"
+      },
+      {
+        "name": "Date",
+        "value": "Fri, 30 Oct 2026 14:00:00 -0400"
+      },
+      {
+        "name": "Content-Type",
+        "value": "multipart/mixed; boundary=\"0000000000007f6e5d4c3b2a\""
+      }
+    ],
+    "body": {
+      "size": 0
+    },
+    "parts": [
+      {
+        "partId": "0",
+        "mimeType": "multipart/alternative",
+        "filename": "",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "multipart/alternative; boundary=\"0000000000007f6e5d4c3b29\""
+          }
+        ],
+        "body": {
+          "size": 0
+        },
+        "parts": [
+          {
+            "partId": "0.0",
+            "mimeType": "text/plain",
+            "filename": "",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain; charset=\"UTF-8\""
+              },
+              {
+                "name": "Content-Transfer-Encoding",
+                "value": "quoted-printable"
+              }
+            ],
+            "body": {
+              "size": 112,
+              "data": "SGkgTGlzdWwsCgpZb3VyIHLDqXN1bcOpIHJldmlldyBpcyBhdHRhY2hlZCDigJQgMiBwYWdlcywgY29tbWVudHMgaW4gcmVkLiBRdWVzdGlvbnM_IFJlcGx5IGhlcmUuCgpDYXJlZXIgQ2VudGVyCg"
+            }
+          },
+          {
+            "partId": "0.1",
+            "mimeType": "text/html",
+            "filename": "",
+            "headers": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=\"UTF-8\""
+              },
+              {
+                "name": "Content-Transfer-Encoding",
+                "value": "quoted-printable"
+              }
+            ],
+            "body": {
+              "size": 140,
+              "data": "PHA-SGkgTGlzdWwsPC9wPjxwPllvdXIgciYjMjMzO3N1bSYjMjMzOyByZXZpZXcgaXMgYXR0YWNoZWQgJiM4MjEyOyAyIHBhZ2VzLCBjb21tZW50cyBpbiByZWQuIFF1ZXN0aW9ucz8gUmVwbHkgaGVyZS48L3A-PHA-Q2FyZWVyIENlbnRlcjwvcD4"
+            }
+          }
+        ]
+      },
+      {
+        "partId": "1",
+        "mimeType": "application/pdf",
+        "filename": "Lisul_Elvitigala_Resume_review.pdf",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "application/pdf; name=\"Lisul_Elvitigala_Resume_review.pdf\""
+          },
+          {
+            "name": "Content-Disposition",
+            "value": "attachment; filename=\"Lisul_Elvitigala_Resume_review.pdf\""
+          },
+          {
+            "name": "Content-Transfer-Encoding",
+            "value": "base64"
+          }
+        ],
+        "body": {
+          "attachmentId": "ANGjdJ8wQ2x0YmFzZTY0dXJsLWF0dGFjaG1lbnQtaWQ",
+          "size": 84211
+        }
+      },
+      {
+        "partId": "2",
+        "mimeType": "text/plain",
+        "filename": "notes.txt",
+        "headers": [
+          {
+            "name": "Content-Type",
+            "value": "text/plain; charset=\"US-ASCII\"; name=\"notes.txt\""
+          },
+          {
+            "name": "Content-Disposition",
+            "value": "attachment; filename=\"notes.txt\""
+          }
+        ],
+        "body": {
+          "attachmentId": "ANGjdJ9ub3Rlcy10eHQtYXR0YWNobWVudA",
+          "size": 412
+        }
+      }
+    ]
+  },
+  "sizeEstimate": 118734
+}
