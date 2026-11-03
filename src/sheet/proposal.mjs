@@ -11,6 +11,9 @@ import { freeFood } from "./campus.mjs";
 const COURSE_AHEAD = 7;
 // The day's shutdown line when it has none of its own.
 const DEFAULT_SHUTDOWN = "17:00";
+// v5 D2: the day rules checkProposal holds a plan to (settings.workload_cap_min's default).
+const DEFAULT_CAP = 360;
+const dayRules = (settings) => ({ workload_cap_min: settings.workload_cap_min ?? DEFAULT_CAP, travel_min: 10, break_after_min: 90, break_min: 10 });
 
 // Whether an ISO span overlaps the local day `day` in `timeZone`.
 const onDay = (s, day, timeZone) => minutesOn(s.ends_at, day, timeZone) > 0 && minutesOn(s.starts_at, day, timeZone) < 1440;
@@ -59,6 +62,7 @@ export function planSnapshot(rows, now) {
     proposal: rows.proposal ? { status: rows.proposal.status, created_at: rows.proposal.created_at } : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
+    day_rules: dayRules(settings),
   };
 }
 

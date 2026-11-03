@@ -3,7 +3,7 @@
 // 2026-11-04 in New York (EST, UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkProposal, proposalLines } from "../src/sheet/proposal.mjs";
+import { checkProposal, couldntFitLine, planSnapshot, proposalLines } from "../src/sheet/proposal.mjs";
 
 const DAY = "2026-11-04";
 const SBU = "lisul.elvitigala@stonybrook.edu";
@@ -82,4 +82,26 @@ test("proposalLines: a campus pick whose title could become a link stays off Tel
   const lines = proposalLines({ day: DAY, status: "pending", note: null, picks: [{ uid: "a" }, { uid: "b" }] }, [], [], [], null, campus, "America/New_York");
   assert.ok(!lines.some((l) => l.includes("evil")), lines.join("\n"));
   assert.ok(lines.includes("Campus pick: Robotics GBM (7:00 pm, 9 going)"), lines.join("\n"));
+});
+
+// --- v5 D2: a realistic day ---------------------------------------------------------------------
+
+test("planSnapshot: day_rules carry the workload cap from settings, 6 hours without one", () => {
+  const rows = (settings) => ({ settings: { time_zone: "America/New_York", ...settings }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] });
+  const now = new Date("2026-11-04T11:07:00Z");
+  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10 });
+  assert.equal(planSnapshot(rows({}), now).day_rules.workload_cap_min, 360);
+});
+
+test("couldntFitLine: a title that could become a link reads \"A task\"; a gone task drops", () => {
+  const tasks = [{ id: "a", title: "Sign up at evil.com" }, { id: "b", title: "Lab 4" }];
+  assert.equal(couldntFitLine(["a", "b", "gone"], tasks), "Couldn't fit: A task, Lab 4.");
+  assert.equal(couldntFitLine(["gone"], tasks), null);
+  assert.equal(couldntFitLine(undefined, tasks), null);
+});
+
+test("checkProposal: without version 5, couldnt_fit is ignored and rows don't carry it", () => {
+  const r = checkProposal({ day: DAY, blocks: [], couldnt_fit: ["nope"] }, snap());
+  assert.equal(r.ok, true);
+  assert.equal("couldnt_fit" in r.rows, false);
 });
