@@ -34,9 +34,16 @@
 
 .sheet-rows { list-style: none; }
 /* Side by side, each day's head, stamps, calendar and tasks share the week's grid rows, so the
-   busiest calendar sets where every column's tasks begin. */
+   busiest calendar sets where every column's tasks begin. Each task row is a grid row of the
+   whole week too (--rows, set when the week is drawn), so when a long title wraps, that row
+   grows in every column and the lines stay level. */
 @media (min-width: 48.01rem) {
-  .sheet-planner .sheet-day { display: grid; grid-row: span 4; grid-template-rows: subgrid; align-content: start; }
+  .sheet-day { display: grid; grid-template-rows: subgrid; align-content: start; }
+  .sheet-planner .sheet-day { grid-row: span calc(3 + var(--rows, 1)); }
+  .sheet-week-public .sheet-day { grid-row: span calc(2 + var(--rows, 1)); }
+  .sheet-day > .sheet-rows { display: grid; grid-template-columns: minmax(0, 1fr); grid-row: span var(--rows, 1); grid-template-rows: subgrid; }
+  /* A short task in a row a long title made tall reads from the top, like ruled paper. */
+  .sheet-day > .sheet-rows > .sheet-row { align-items: flex-start; }
 }
 
 /* His calendar above the tasks: small, gray, read-only. */
@@ -113,6 +120,12 @@
 .sheet-add {
   width: 100%; font: inherit; font-size: 0.9375rem; color: var(--fg); background: transparent;
   border: 0; padding: 0; outline-offset: 2px;
+}
+/* The task box is a textarea that grows with its text (fitBox in planner.mjs), so a long title
+   wraps while it is typed or edited instead of scrolling out of sight on one line. */
+textarea.sheet-add {
+  display: block; flex: 1; min-width: 0; line-height: inherit; resize: none; overflow: hidden;
+  field-sizing: content;
 }
 .sheet-row.is-empty { cursor: text; }
 /* The add row's hint shows on hover and focus, and always on touch screens. */
