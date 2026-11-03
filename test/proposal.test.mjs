@@ -1,9 +1,9 @@
-// The morning plan's checks (src/sheet/proposal.mjs), past what the verification tests pin:
-// whitespace, a lapsed proposal and input that isn't a list. Wednesday 2026-11-04 in New York
-// (EST, UTC-5).
+// The morning plan (src/sheet/proposal.mjs), past what the verification tests pin: whitespace,
+// a lapsed proposal, input that isn't a list, and the brief's lines for a small plan. Wednesday
+// 2026-11-04 in New York (EST, UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkProposal } from "../src/sheet/proposal.mjs";
+import { checkProposal, proposalLines } from "../src/sheet/proposal.mjs";
 
 const DAY = "2026-11-04";
 const SBU = "lisul.elvitigala@stonybrook.edu";
@@ -46,4 +46,13 @@ test("checkProposal: a block over an approved block names it, both ends in the m
   const r = checkProposal({ day: DAY, blocks: [{ task_id: "t1", start: "10:30", minutes: 45 }] },
     snap({ blocks: [{ task_id: "t1", starts_at: "2026-11-04T15:00:00Z", ends_at: "2026-11-04T16:00:00Z", proposed: false }] }));
   assert.deepEqual(r.errors, ["blocks[0]: overlaps an approved block 10:00–11:00 am"]);
+});
+
+test("proposalLines: a morning-only plan names its half of the day once, and one open mail \"needs\" you", () => {
+  const p = { day: DAY, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [] };
+  const blocks = [{ id: "p1", task_id: "t1", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true }];
+  const tasks = [{ id: "t1", title: "OS homework" }];
+  assert.deepEqual(proposalLines(p, blocks, tasks, [{ done: false }], [], [], "America/New_York"),
+    ["Morning plan: 1 block, 9:30–10:15 am.", "9:30 am · OS homework (45 min)", "Mail: 1 needs you."]);
+  assert.deepEqual(proposalLines(p, [], tasks, [], [], [], "America/New_York"), ["Morning plan: no blocks."]);
 });
