@@ -45,7 +45,8 @@ Lisul's own Claude app, and only when he asks.
   - Claude doesn't read campus event descriptions, only the title, time, group, type and tags,
     so the longest free text in the feed never reaches it.
   - The consent page approves only clients whose redirect goes back to claude.ai or claude.com,
-    so another app registered under a borrowed name can't be granted the mail connector.
+    or to Claude Code on Lisul's own computer (http on a loopback address), so another app
+    registered under a borrowed name can't be granted the mail connector.
   - Dynamic client registration on Supabase's OAuth server is turned off once Claude's client
     exists, so no new client can register at all.
   - Supabase Auth's email/password provider stays off: Google sign-in is the only way in, and
