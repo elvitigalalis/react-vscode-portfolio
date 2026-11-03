@@ -104,7 +104,7 @@ for (const w of [1440, 1280]) for (const dark of [false, true]) {
 }
 await shot("/plan/", "plan-today", 1440, 900, false, async (pg) => { await pg.keyboard.press("p"); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
-await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.keyboard.press("s"); await new Promise((r) => setTimeout(r, 800)); });
+await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click("[data-feed-alert]"); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await pg.click('[data-more] [data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
 for (const dark of [false, true]) {
   await shot("/plan/", `plan-phone-${dark ? "dark" : "light"}`, 390, 844, dark, (pg) => checkTopBar(pg, `/plan 390px ${dark ? "dark" : "light"}`));
