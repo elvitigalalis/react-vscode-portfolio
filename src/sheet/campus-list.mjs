@@ -71,7 +71,8 @@ function item(e) {
   add.dataset.add = e.uid;
   const when = e.all_day ? "All day" : formatSpan(minutesOn(e.starts_at, day, tz), minutesOn(e.ends_at, day, tz));
   return el("li", { className: "sheet-campus-item" },
-    el("p", { className: "sheet-meta" }, when, freeFood(e) ? " " : null, freeFood(e) ? el("span", { className: "sheet-campus-food", textContent: "Free food" }) : null),
+    el("p", { className: "sheet-meta" }, when, e.rsvp_count > 0 ? ` · ${e.rsvp_count} going` : null,
+      freeFood(e) ? " " : null, freeFood(e) ? el("span", { className: "sheet-campus-food", textContent: "Free food" }) : null),
     el("a", { className: "sheet-campus-title", href: e.url ?? EVENTS, target: "_blank", rel: "noopener", textContent: e.title }),
     e.group_name ? el("p", { className: "sheet-meta", textContent: e.group_name }) : null,
     tags.length ? el("p", { className: "sheet-campus-tags" }, ...tags.map((g) => el("span", { className: "sheet-campus-tag", textContent: g }))) : null,

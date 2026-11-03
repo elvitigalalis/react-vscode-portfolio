@@ -14,14 +14,19 @@ export const freeFood = (e) => tagsOf(e).some((t) => /free food/i.test(t));
 const ROUTINE = /\b(practice|meeting)s?\b/i;
 export const routine = (e) => ROUTINE.test(e.event_type ?? "") || ROUTINE.test(e.title ?? "");
 
-// A day's events, by the local day they start on: free food first, then by start time. Routine
-// events show only with `showRoutine`; with `tags`, only events carrying one of them.
+// How many have registered, from the event's page (feeds.mjs, rsvpCount); -1 when unknown, so an
+// unread count sorts after a real 0.
+const going = (e) => (Number.isInteger(e.rsvp_count) ? e.rsvp_count : -1);
+
+// A day's events, by the local day they start on: most RSVPs first (the well-attended ones are
+// usually the funded ones), unknown counts last; ties go free food first, then by start time.
+// Routine events show only with `showRoutine`; with `tags`, only events carrying one of them.
 export function campusDay(events, day, timeZone, { tags, showRoutine = false } = {}) {
   const want = tags?.length ? new Set(tags) : null;
   return events
     .filter((e) => startOf(e, timeZone).day === day && (showRoutine || !routine(e))
       && (!want || tagsOf(e).some((t) => want.has(t))))
-    .sort((a, b) => (freeFood(b) - freeFood(a)) || Date.parse(a.starts_at) - Date.parse(b.starts_at));
+    .sort((a, b) => (going(b) - going(a)) || (freeFood(b) - freeFood(a)) || Date.parse(a.starts_at) - Date.parse(b.starts_at));
 }
 
 // The tags in use, with how many events carry each: most used first, then A to Z.
