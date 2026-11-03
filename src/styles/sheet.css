@@ -328,3 +328,34 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   position: absolute; top: 14px; left: 0; transform: translateX(calc(-1 * var(--at))); white-space: nowrap;
   font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums;
 }
+
+/* Proposals and the timeline (docs/sheet-glance.md, change 5). */
+.sheet-btn-approve {
+  display: inline-flex; align-items: center; gap: 0.2rem; flex: none; align-self: flex-start;
+  font: inherit; font-size: 0.75rem; font-weight: 600; line-height: 1.2; cursor: pointer;
+  background: var(--accent); color: var(--on-btn); border: 0; border-radius: 0.25rem; padding: 0 0.35rem;
+}
+.sheet-btn-approve:hover { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+.sheet-block-title .sheet-icon { margin-right: 0.2rem; color: var(--accent); }
+/* Under 30 minutes a block is one line: the title ends in an ellipsis, in full on hover. */
+.sheet-block.is-short { align-items: center; padding-block: 0; }
+.sheet-block.is-short .sheet-block-title { white-space: nowrap; text-overflow: ellipsis; }
+.sheet-block.is-short .sheet-block-x { align-self: center; }
+.sheet-block.is-short .sheet-btn-approve { align-self: center; }
+/* The now line: 2px, a dot at the timeline's edge and its time in the hour gutter. It comes
+   before the blocks, which cover it, so it never runs through their text. */
+.sheet-nowline { border-top: 2px solid var(--danger); margin-top: -1px; }
+.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.sheet-nowline span {
+  position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
+  font-size: 0.6875rem; line-height: 1; color: var(--danger); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.sheet-banner {
+  display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.875rem;
+  border: 1px dashed var(--accent); border-radius: 0.4rem;
+}
+.sheet-banner > .sheet-icon { color: var(--accent); }
+.sheet-banner > .sheet-btn-approve { margin-left: auto; align-self: center; font-size: 0.8125rem; padding: 0.15rem 0.5rem; }
+.sheet-proposal { align-items: center; }
+.sheet-proposal > .sheet-icon { color: var(--accent); }
+.sheet-proposal > .sheet-btn-approve { margin-left: auto; align-self: center; }
