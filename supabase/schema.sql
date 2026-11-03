@@ -226,3 +226,23 @@ $job$);
 -- Set the owner: the Google account that signs in to /plan.
 insert into settings (owner_email) values ('you@example.com')
 on conflict (id) do nothing;
+
+-- --- Mail accounts (docs/sheet-sources.md, v3) ----------------------------------------------
+-- One row per Google account connected for the inbox sweep (ADR 0002). The account's refresh
+-- token lives in Vault, never here: vault_secret_id points at it. The mail-connect Edge Function
+-- writes rows with the service key; the browser can read and delete them, nothing more, so it
+-- can never aim vault_secret_id at another secret.
+create table if not exists mail_accounts (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  label text,                        -- a short name, like "SBU"; null shows the email
+  vault_secret_id uuid,
+  connected_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  last_error text                    -- the last failure reading it; null while it works
+);
+alter table mail_accounts enable row level security;
+drop policy if exists owner_all on mail_accounts;
+create policy owner_all on mail_accounts for all using (is_owner()) with check (is_owner());
+revoke all on mail_accounts from anon;
+revoke insert, update on mail_accounts from authenticated;

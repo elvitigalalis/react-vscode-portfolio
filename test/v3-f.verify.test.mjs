@@ -130,7 +130,7 @@ test("mailconnect: the module is pure and uses Web Crypto", async () => {
 
 const mailTable = () => schema.match(/create table if not exists mail_accounts \(([\s\S]*?)\n\);/)?.[1] ?? "";
 
-test("schema: mail_accounts has the contract's columns, email unique", { todo: true }, async () => {
+test("schema: mail_accounts has the contract's columns, email unique", async () => {
   await import(MOD);
   const body = mailTable();
   assert.ok(body, "no `create table if not exists mail_accounts (…);`");
@@ -146,7 +146,7 @@ test("schema: mail_accounts has the contract's columns, email unique", { todo: t
   col("last_error", "text");
 });
 
-test("schema: mail_accounts is owner-only and closed to anon", { todo: true }, async () => {
+test("schema: mail_accounts is owner-only and closed to anon", async () => {
   await import(MOD);
   assert.match(schema, /alter table mail_accounts enable row level security;/);
   assert.match(schema, /drop policy if exists owner_all on mail_accounts;/);
@@ -185,7 +185,7 @@ test("schema: the browser's roles are never granted Vault", { todo: true }, asyn
   }
 });
 
-test("schema: the mail_accounts parts are safe to re-run", { todo: true }, async () => {
+test("schema: the mail_accounts parts are safe to re-run", async () => {
   await import(MOD);
   assert.ok(mailTable(), "no `create table if not exists mail_accounts`");
   assert.doesNotMatch(schema, /create table mail_accounts/);
