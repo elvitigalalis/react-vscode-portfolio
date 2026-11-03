@@ -412,6 +412,8 @@ export async function load() {
   scrollToToday($("[data-week]"));
 }
 
+export const eventHooks = [];
+
 // Google's access lasts an hour. Until he reconnects, the week shows the last copy of its
 // events kept in this browser, and says so.
 const EVENTS_KEY = "sheet.events.";
@@ -423,6 +425,9 @@ async function loadEvents(days) {
       state.events = await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone), state.calendars);
       state.eventsStale = false;
       try { localStorage.setItem(key, JSON.stringify(state.events)); } catch {}
+      // Work that needs Google and runs after each load, in the background (busy times, events
+      // for blocks approved off the page). A hook that fails never stops the page.
+      for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error);
       return;
     } catch (e) { console.error(e); }
   }
