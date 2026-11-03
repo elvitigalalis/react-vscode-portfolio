@@ -153,14 +153,14 @@ test("campusTags: no rows, or no tags, gives an empty list", async () => {
 
 // --- eventToTask -------------------------------------------------------------------------
 
-test("eventToTask: a private #campus task on the event's day, at its local start, its length as the estimate", { todo: true }, async () => {
+test("eventToTask: a private #campus task on the event's day, at its local start, its length as the estimate", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const e = ev("1", "2026-11-04T23:00:00Z", "2026-11-05T00:30:00Z", { title: "Resume Workshop" }); // 6 pm to 7:30 pm EST
   assert.deepEqual(eventToTask(e, tz),
     { title: "Resume Workshop", day: DAY, list: null, at_time: "18:00", est_min: 90, tag: "campus", public: false });
 });
 
-test("eventToTask: an 11:30 pm start keeps its local day, and a midnight-spanning event its start day", { todo: true }, async () => {
+test("eventToTask: an 11:30 pm start keeps its local day, and a midnight-spanning event its start day", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const late = eventToTask(ev("late", "2026-11-05T04:30:00Z", "2026-11-05T05:15:00Z", { title: "Late Night Trivia" }), tz);
   assert.deepEqual(late, { title: "Late Night Trivia", day: DAY, list: null, at_time: "23:30", est_min: 45, tag: "campus", public: false });
@@ -170,7 +170,7 @@ test("eventToTask: an 11:30 pm start keeps its local day, and a midnight-spannin
   assert.equal(eventToTask(ev("edt", "2026-10-20T14:00:00Z", "2026-10-20T15:00:00Z"), tz).at_time, "10:00");
 });
 
-test("eventToTask: the estimate is capped at 240 minutes", { todo: true }, async () => {
+test("eventToTask: the estimate is capped at 240 minutes", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   assert.equal(eventToTask(ev("5h", "2026-11-04T15:00:00Z", "2026-11-04T20:00:00Z"), tz).est_min, 240);
   assert.equal(eventToTask(ev("4h", "2026-11-04T15:00:00Z", "2026-11-04T19:00:00Z"), tz).est_min, 240);
@@ -178,14 +178,14 @@ test("eventToTask: the estimate is capped at 240 minutes", { todo: true }, async
   assert.equal(eventToTask(ev("1m", "2026-11-04T15:00:00Z", "2026-11-04T15:01:00Z"), tz).est_min, 1);
 });
 
-test("eventToTask: an all-day event has no time and no estimate", { todo: true }, async () => {
+test("eventToTask: an all-day event has no time and no estimate", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const e = ev("allday", "2026-11-04T05:00:00Z", "2026-11-05T05:00:00Z", { all_day: true, title: "Homecoming Week" });
   assert.deepEqual(eventToTask(e, tz),
     { title: "Homecoming Week", day: DAY, list: null, at_time: null, est_min: null, tag: "campus", public: false });
 });
 
-test("eventToTask: the title fits the tasks table (1 to 500 characters, trimmed)", { todo: true }, async () => {
+test("eventToTask: the title fits the tasks table (1 to 500 characters, trimmed)", async () => {
   const { eventToTask } = await import("../src/sheet/campus.mjs");
   const long = "A".repeat(600);
   const t = eventToTask(ev("long", "2026-11-04T15:00:00Z", "2026-11-04T16:00:00Z", { title: long }), tz);
