@@ -61,3 +61,14 @@ test("countsDue: skips events already started, routine ones, and ones without a 
   ];
   assert.deepEqual(due(rows, 10), ["ok"]);
 });
+
+test("countsDue: reads only SB Engaged pages over https", () => {
+  const rows = [
+    row("other-host", 3, null, { url: "https://example.com/rsvp_boot?id=1" }),
+    row("lookalike", 3, null, { url: "https://sbengaged.stonybrook.edu.evil.test/rsvp?id=2" }),
+    row("plain-http", 3, null, { url: "http://sbengaged.stonybrook.edu/rsvp?id=3" }),
+    row("junk", 3, null, { url: "not a url" }),
+    row("ok", 3),
+  ];
+  assert.deepEqual(due(rows, 10), ["ok"]);
+});

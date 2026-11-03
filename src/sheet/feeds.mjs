@@ -183,10 +183,12 @@ export function rsvpCount(html) {
 }
 
 // The campus_events rows whose count to fetch this run, at most `limit`: events not yet started,
-// with a page, that the list shows by default (not routine). A count is fresh for 6 hours while
+// with a page on SB Engaged, that the list shows by default (not routine). A count is fresh for 6 hours while
 // the event is within 3 days, for 24 hours before that. Never-checked events come first, then
 // stale ones; each group soonest first.
 const HOUR = 3_600_000;
+// Only SB Engaged's own pages are fetched, whatever URL a feed item carries.
+const sbEngaged = (u) => { try { const x = new URL(u); return x.protocol === "https:" && x.hostname === "sbengaged.stonybrook.edu"; } catch { return false; } };
 export function countsDue(rows, now, limit) {
   const t = +new Date(now);
   const stale = (r) => {
@@ -195,7 +197,7 @@ export function countsDue(rows, now, limit) {
     return t - Date.parse(r.rsvp_checked_at) > fresh;
   };
   return rows
-    .filter((r) => r.url && Date.parse(r.starts_at) > t && !routine(r) && stale(r))
+    .filter((r) => sbEngaged(r.url) && Date.parse(r.starts_at) > t && !routine(r) && stale(r))
     .sort((a, b) => (!b.rsvp_checked_at - !a.rsvp_checked_at) || Date.parse(a.starts_at) - Date.parse(b.starts_at))
     .slice(0, limit);
 }
