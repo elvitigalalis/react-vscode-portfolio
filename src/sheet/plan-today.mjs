@@ -43,6 +43,17 @@ function meter(d) {
   return { ...m, finish: finishAt(from, m.total) };
 }
 
+// The day's load bar at full width, with a marker where the work ends: "Done ≈". Decoration
+// only; the line above says it in words (docs/sheet-glance.md, change 4).
+function planBar(m) {
+  const { pct, level } = loadShare(m.total, m.capacity);
+  const fill = el("span", { className: `sheet-bar-fill is-${level}` });
+  fill.style.width = `${pct}%`;
+  const mark = el("span", { className: "sheet-bar-mark" }, el("span", { textContent: `Done ≈ ${formatClock(m.finish)}` }));
+  mark.style.setProperty("--at", `${pct}%`);
+  return el("div", { className: "sheet-planbar", ariaHidden: "true" }, el("span", { className: "sheet-bar" }, fill), mark);
+}
+
 // --- The dialog --------------------------------------------------------------------------
 
 function draw() {
@@ -115,6 +126,7 @@ function draw() {
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
+    planBar(m),
     el("p", { className: "small", textContent: picked
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday; ↑ ↓ move the focused block." }),

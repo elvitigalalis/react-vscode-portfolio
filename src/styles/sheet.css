@@ -320,3 +320,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-seg.is-block { background: var(--accent); }
 .sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
 .sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--danger); }
+/* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
+.sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
+.sheet-planbar .sheet-bar { height: 6px; border-radius: 3px; }
+.sheet-bar-mark { position: absolute; top: -3px; left: var(--at); width: 2px; height: 12px; margin-left: -1px; background: var(--fg); }
+.sheet-bar-mark span {
+  position: absolute; top: 14px; left: 0; transform: translateX(calc(-1 * var(--at))); white-space: nowrap;
+  font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
