@@ -97,6 +97,13 @@ export const listTasks = (from, to) => rest(`tasks?or=(day.is.null,and(day.gte.$
 export const listBlocks = (from, to) => rest(`blocks?starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
 // The approved blocks with a Google event that start at or after `from`.
 export const eventBlocksFrom = (from) => rest(`blocks?starts_at=gte.${from}&proposed=is.false&gcal_id=not.is.null`);
+// Approved blocks with no Google event that end after `from`, with their task's title and
+// visibility (an embedded many-to-one row,
+// https://docs.postgrest.org/en/stable/references/api/resource_embedding.html).
+export const eventlessBlocks = (from) => rest(`blocks?select=*,tasks(title,public)&proposed=is.false&gcal_id=is.null&ends_at=gt.${from}&order=starts_at`);
+// Sets a block's gcal_id only while it has none; the saved row, or undefined when another tab or
+// device got there first.
+export const claimEvent = async (id, gcal_id) => one(await rest(`blocks?id=eq.${id}&gcal_id=is.null`, { method: "PATCH", body: { gcal_id }, prefer: "return=representation" }));
 export const listDays = (from, to) => rest(`days?day=gte.${from}&day=lte.${to}`);
 export const parkedOn = (day) => rest(`tasks?select=id&parked_on=eq.${day}`);
 export const settings = async () => (await rest("settings"))[0] ?? null;

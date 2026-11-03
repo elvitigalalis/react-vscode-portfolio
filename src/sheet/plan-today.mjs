@@ -9,7 +9,7 @@ import {
   formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, DEFAULT_EST,
   blockMinutes, weekdayName, plural,
 } from "./logic.mjs";
-import { el, icon, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
+import { el, icon, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare, stripSegments } from "./glance.mjs";
 
 const START = 7 * 60;
@@ -216,6 +216,34 @@ async function resizeBlock(id, endMin) {
   state.tasks.set(b.task_id, await api.updateTask(b.task_id, { est_min: total }));
 }
 
+// --- Off-page approvals (docs/sheet-morning.md, "/plan") ---------------------------------
+
+// Blocks approved from Telegram have no Google event, and only the browser can make one. Each
+// time the page loads Google events (eventHooks), the approved blocks without one that haven't
+// ended get theirs, as createEvent makes it for a block approved here. Three guards keep an
+// event from being made twice: one run at a time in this tab, a lock shared by this browser's
+// tabs (https://developer.mozilla.org/en-US/docs/Web/API/LockManager/request), and gcal_id set
+// only while it is still empty, so an event a second device made too is deleted again.
+let creating = null;
+const shared = (fn) => (navigator.locks ? navigator.locks.request("sheet.gcal-create", fn) : fn());
+
+async function createMissed() {
+  const now = new Date();
+  let made = 0;
+  for (const b of await api.eventlessBlocks(now.toISOString())) {
+    if (googleStep(b, now) !== "create" || b.proposed || !b.tasks) continue;
+    const id = await api.createEvent(b.tasks.title, b.tasks.public, b.starts_at, b.ends_at);
+    const saved = await api.claimEvent(b.id, id);
+    if (!saved) { await api.deleteEvent(id); continue; }
+    const mine = state.blocks.find((x) => x.id === b.id);
+    if (mine) mine.gcal_id = saved.gcal_id;
+    made++;
+  }
+  if (made) render();
+}
+
+const createMissedOnce = () => (creating ??= shared(createMissed).finally(() => { creating = null; }));
+
 // --- Pointer work inside the timeline ----------------------------------------------------
 
 function timelineBox() { return dialog.querySelector(".sheet-timeline").getBoundingClientRect(); }
@@ -292,6 +320,7 @@ function onPointerDown(e) {
 export function setupPlanToday(root) {
   dialog = root.querySelector("[data-plan]");
   dropTargets.push(timelineDrop);
+  eventHooks.push(createMissedOnce);
   renderHooks.push(() => { if (dialog.open) draw(); });
   actHooks.plan = () => open().catch(failed);
   keyHooks.push((e) => { if (e.key === "p" || e.key === "P") { actHooks.plan(); return true; } return false; });
