@@ -10,6 +10,9 @@ import { el, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed }
 
 const tz = SHEET.timeZone;
 const KEY = "sheet.campus";
+// Every event links out: to its own page, or (no page known) to SB Engaged's public events list,
+// which needs no sign-in. Its search box is filled by script, so there is no search link to make.
+const EVENTS = "https://sbengaged.stonybrook.edu/events";
 
 let root, dialog;
 let events = [];   // the week's campus_events rows
@@ -69,9 +72,7 @@ function item(e) {
   const when = e.all_day ? "All day" : formatSpan(minutesOn(e.starts_at, day, tz), minutesOn(e.ends_at, day, tz));
   return el("li", { className: "sheet-campus-item" },
     el("p", { className: "sheet-meta" }, when, freeFood(e) ? " " : null, freeFood(e) ? el("span", { className: "sheet-campus-food", textContent: "Free food" }) : null),
-    e.url
-      ? el("a", { className: "sheet-campus-title", href: e.url, target: "_blank", rel: "noopener", textContent: e.title })
-      : el("span", { className: "sheet-campus-title", textContent: e.title }),
+    el("a", { className: "sheet-campus-title", href: e.url ?? EVENTS, target: "_blank", rel: "noopener", textContent: e.title }),
     e.group_name ? el("p", { className: "sheet-meta", textContent: e.group_name }) : null,
     tags.length ? el("p", { className: "sheet-campus-tags" }, ...tags.map((g) => el("span", { className: "sheet-campus-tag", textContent: g }))) : null,
     add);
