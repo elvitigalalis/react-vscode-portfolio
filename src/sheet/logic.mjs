@@ -289,3 +289,5 @@ export function rightNow(row) {
   if (!row || row.public == null) return null;
   return row.public ? row.title : "Heads down";
 }
+
+export const cutTitle = (s) => String(s ?? "").trim().slice(0, 500);
