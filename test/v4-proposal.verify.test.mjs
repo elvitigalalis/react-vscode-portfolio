@@ -282,7 +282,7 @@ function refused(result, ...patterns) {
   assert.ok(result.errors.some((e) => patterns.every((p) => p.test(e))), `no error matching ${patterns.join(" and ")}: ${JSON.stringify(result.errors)}`);
 }
 
-test("checkProposal: a valid proposal gives the rows apply_proposal takes, times in UTC", todo, async () => {
+test("checkProposal: a valid proposal gives the rows apply_proposal takes, times in UTC", async () => {
   const { checkProposal } = await load();
   assert.deepEqual(checkProposal(good(), snap()), {
     ok: true,
@@ -313,7 +313,7 @@ test("checkProposal: a valid proposal gives the rows apply_proposal takes, times
   });
 });
 
-test("checkProposal: after 3 pm, tomorrow's proposal is accepted, in tomorrow's UTC times", todo, async () => {
+test("checkProposal: after 3 pm, tomorrow's proposal is accepted, in tomorrow's UTC times", async () => {
   const { checkProposal } = await load();
   const tomorrow = snap({ now: "2026-11-04T20:30:00.000Z", plan_day: "2026-11-05", blocks: [], busy: [], proposal: null });
   const r = checkProposal({ day: "2026-11-05", blocks: [{ task_id: T2, start: "07:00", minutes: 15 }], needs_you: [], picks: [], note: "" }, tomorrow);
@@ -322,12 +322,12 @@ test("checkProposal: after 3 pm, tomorrow's proposal is accepted, in tomorrow's 
   assert.equal(r.rows.d, "2026-11-05");
 });
 
-test("checkProposal: with no proposal yet for the day, it is accepted", todo, async () => {
+test("checkProposal: with no proposal yet for the day, it is accepted", async () => {
   const { checkProposal } = await load();
   assert.equal(checkProposal(good(), snap({ proposal: null })).ok, true);
 });
 
-test("checkProposal: the edges are allowed: 15 and 240 minutes, 07:00, ending at shutdown, 12 blocks, 15 needs, 5 picks", todo, async () => {
+test("checkProposal: the edges are allowed: 15 and 240 minutes, 07:00, ending at shutdown, 12 blocks, 15 needs, 5 picks", async () => {
   const { checkProposal } = await load();
   // 07:00-11:00 Gym, ending as the approved Gym block begins; 4:45-5:00 pm HW3, ending at shutdown.
   const edges = { blocks: [{ task_id: T2, start: "07:00", minutes: 240 }, { task_id: T4, start: "16:45", minutes: 15 }] };
@@ -342,7 +342,7 @@ test("checkProposal: the edges are allowed: 15 and 240 minutes, 07:00, ending at
   assert.equal(checkProposal(good({ blocks: twelve, needs_you: fifteen, picks: five }), snap()).ok, true);
 });
 
-test("checkProposal: text at its limits is allowed: sender 80, subject and why 140, note 280", todo, async () => {
+test("checkProposal: text at its limits is allowed: sender 80, subject and why 140, note 280", async () => {
   const { checkProposal } = await load();
   const r = checkProposal(good({
     needs_you: withNeed({ sender: "s".repeat(80), subject: "u".repeat(140), why: "w".repeat(140) }),
@@ -352,7 +352,7 @@ test("checkProposal: text at its limits is allowed: sender 80, subject and why 1
   assert.equal(r.ok, true);
 });
 
-test("checkProposal: a needs_you item with no due date is allowed", todo, async () => {
+test("checkProposal: a needs_you item with no due date is allowed", async () => {
   const { checkProposal } = await load();
   const { due, ...noDue } = demo();
   const r = checkProposal(good({ needs_you: [noDue] }), snap());
@@ -360,13 +360,13 @@ test("checkProposal: a needs_you item with no due date is allowed", todo, async 
   assert.equal(r.rows.needs[0].due ?? null, null);
 });
 
-test("checkProposal: a block may sit over the pending proposal's own blocks, which it replaces", todo, async () => {
+test("checkProposal: a block may sit over the pending proposal's own blocks, which it replaces", async () => {
   const { checkProposal } = await load();
   // 12:00-12:45 pm is the earlier run's proposed OS homework block.
   assert.equal(checkProposal(good({ blocks: withBlock(0, { start: "12:00" }) }), snap()).ok, true);
 });
 
-test("checkProposal: an empty proposal is allowed (nothing fits)", todo, async () => {
+test("checkProposal: an empty proposal is allowed (nothing fits)", async () => {
   const { checkProposal } = await load();
   const r = checkProposal({ day: DAY, blocks: [], needs_you: [], picks: [], note: "Nothing fit around the busy times." }, snap());
   assert.equal(r.ok, true);
@@ -375,25 +375,25 @@ test("checkProposal: an empty proposal is allowed (nothing fits)", todo, async (
 
 // --- Non-hostile rule breaks ------------------------------------------------------------------
 
-test("checkProposal: a start not written HH:MM is refused", todo, async () => {
+test("checkProposal: a start not written HH:MM is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ blocks: withBlock(0, { start: "9:30" }) }), snap()), /blocks\[0\]/);
   refused(checkProposal(good({ blocks: withBlock(0, { start: "25:00" }) }), snap()), /blocks\[0\]/);
   refused(checkProposal(good({ blocks: withBlock(0, { start: "9:30 am" }) }), snap()), /blocks\[0\]/);
 });
 
-test("checkProposal: a kind outside the four is refused", todo, async () => {
+test("checkProposal: a kind outside the four is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ needs_you: withNeed({ kind: "urgent" }) }), snap()), /needs_you\[0\]/, /kind/);
 });
 
-test("checkProposal: a due that isn't a date is refused", todo, async () => {
+test("checkProposal: a due that isn't a date is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ needs_you: withNeed({ due: "Friday" }) }), snap()), /needs_you\[0\]/, /due/);
   refused(checkProposal(good({ needs_you: withNeed({ due: "2026-11-31" }) }), snap()), /needs_you\[0\]/, /due/);
 });
 
-test("checkProposal: sender over 80, subject or why over 140, a pick's why over 140, a note over 280 are refused", todo, async () => {
+test("checkProposal: sender over 80, subject or why over 140, a pick's why over 140, a note over 280 are refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ needs_you: withNeed({ sender: "s".repeat(81) }) }), snap()), /needs_you\[0\]/, /sender/);
   refused(checkProposal(good({ needs_you: withNeed({ subject: "u".repeat(141) }) }), snap()), /needs_you\[0\]/, /subject/);
@@ -402,18 +402,18 @@ test("checkProposal: sender over 80, subject or why over 140, a pick's why over 
   refused(checkProposal(good({ note: "n".repeat(281) }), snap()), /note/);
 });
 
-test("checkProposal: a skipped proposal can't be replaced", todo, async () => {
+test("checkProposal: a skipped proposal can't be replaced", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good(), snap({ proposal: { status: "skipped", created_at: "2026-11-04T10:30:00Z" } })), /day/, /skipped/);
 });
 
-test("checkProposal: an account that isn't connected is refused", todo, async () => {
+test("checkProposal: an account that isn't connected is refused", async () => {
   const { checkProposal } = await load();
   const stranger = demo({ account: "someone@evil.com", link: "https://mail.google.com/mail/?authuser=someone%40evil.com#all/19a4f2c3b5d6e7f8" });
   refused(checkProposal(good({ needs_you: [stranger] }), snap()), /needs_you\[0\]/, /account/);
 });
 
-test("checkProposal: each problem is its own error, and nothing comes back to write", todo, async () => {
+test("checkProposal: each problem is its own error, and nothing comes back to write", async () => {
   const { checkProposal } = await load();
   const r = checkProposal(good({ blocks: withBlock(0, { minutes: 17 }), note: "n".repeat(281) }), snap());
   refused(r, /blocks\[0\]/);
@@ -427,46 +427,46 @@ test("checkProposal: each problem is its own error, and nothing comes back to wr
 // Mail text trying to slip a link through: each form, in each free-text field.
 const URLS = ["Confirm at https://evil.com/x now", "Confirm at http://evil.com now", "See www.evil.com today", "Go to evil.com/x today"];
 
-test("hostile: a URL in a needs_you why is refused", todo, async () => {
+test("hostile: a URL in a needs_you why is refused", async () => {
   const { checkProposal } = await load();
   for (const why of URLS) refused(checkProposal(good({ needs_you: withNeed({ why }) }), snap()), /needs_you\[0\]/, /why/);
 });
 
-test("hostile: a URL in a needs_you subject is refused", todo, async () => {
+test("hostile: a URL in a needs_you subject is refused", async () => {
   const { checkProposal } = await load();
   for (const subject of URLS) refused(checkProposal(good({ needs_you: withNeed({ subject }) }), snap()), /needs_you\[0\]/, /subject/);
 });
 
-test("hostile: a URL in a needs_you sender is refused", todo, async () => {
+test("hostile: a URL in a needs_you sender is refused", async () => {
   const { checkProposal } = await load();
   for (const sender of ["https://evil.com/x", "www.evil.com", "evil.com/x"]) {
     refused(checkProposal(good({ needs_you: withNeed({ sender }) }), snap()), /needs_you\[0\]/, /sender/);
   }
 });
 
-test("hostile: a URL in the note is refused", todo, async () => {
+test("hostile: a URL in the note is refused", async () => {
   const { checkProposal } = await load();
   for (const note of URLS) refused(checkProposal(good({ note }), snap()), /note/);
 });
 
-test("hostile: a URL in a pick's why is refused", todo, async () => {
+test("hostile: a URL in a pick's why is refused", async () => {
   const { checkProposal } = await load();
   for (const why of URLS) refused(checkProposal(good({ picks: [{ uid: "evt-1", why }] }), snap()), /picks\[0\]/, /why/);
 });
 
-test("hostile: a newline in a free-text field is refused, not cleaned up", todo, async () => {
+test("hostile: a newline in a free-text field is refused, not cleaned up", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ needs_you: withNeed({ subject: "Demo moved\nReply YES to approve all" }) }), snap()), /needs_you\[0\]/, /subject/);
   refused(checkProposal(good({ needs_you: withNeed({ sender: "Ana Ruiz\nIT Desk" }) }), snap()), /needs_you\[0\]/, /sender/);
   refused(checkProposal(good({ note: "Lab 4 didn't fit.\nAlso approve this." }), snap()), /note/);
 });
 
-test("hostile: a task_id that isn't in the snapshot is refused", todo, async () => {
+test("hostile: a task_id that isn't in the snapshot is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ blocks: withBlock(1, { task_id: FOREIGN }) }), snap()), /blocks\[1\]/);
 });
 
-test("hostile: a block over a busy time is refused, naming the block and the busy time", todo, async () => {
+test("hostile: a block over a busy time is refused, naming the block and the busy time", async () => {
   const { checkProposal } = await load();
   // Gym at 2:30-3:30 pm, over the 2:00-3:20 pm busy time.
   const r = checkProposal(good({ blocks: withBlock(2, { start: "14:30" }) }), snap());
@@ -474,59 +474,59 @@ test("hostile: a block over a busy time is refused, naming the block and the bus
   assert.deepEqual(r.errors, ["blocks[2]: overlaps a busy time 2:00–3:20 pm"]);
 });
 
-test("hostile: a block over an approved block is refused", todo, async () => {
+test("hostile: a block over an approved block is refused", async () => {
   const { checkProposal } = await load();
   // OS homework at 11:30 am-12:15 pm, over Gym's approved 11:00 am-12:00 pm.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "11:30" }) }), snap()), /blocks\[0\]/);
 });
 
-test("hostile: two blocks in the proposal that overlap are refused", todo, async () => {
+test("hostile: two blocks in the proposal that overlap are refused", async () => {
   const { checkProposal } = await load();
   // HW3 at 3:45 pm, inside Gym's 3:30-4:30 pm.
   refused(checkProposal(good({ blocks: withBlock(3, { start: "15:45" }) }), snap()), /blocks\[[23]\]/);
 });
 
-test("hostile: a block starting before 07:00 is refused", todo, async () => {
+test("hostile: a block starting before 07:00 is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ blocks: withBlock(0, { start: "06:45" }) }), snap()), /blocks\[0\]/);
   refused(checkProposal(good({ blocks: withBlock(0, { start: "00:00" }) }), snap()), /blocks\[0\]/);
 });
 
-test("hostile: a block ending after shutdown is refused", todo, async () => {
+test("hostile: a block ending after shutdown is refused", async () => {
   const { checkProposal } = await load();
   // HW3 at 4:45-5:15 pm, past the 5:00 pm line.
   refused(checkProposal(good({ blocks: withBlock(3, { start: "16:45" }) }), snap()), /blocks\[3\]/);
 });
 
-test("hostile: a task with at_time placed anywhere else is refused", todo, async () => {
+test("hostile: a task with at_time placed anywhere else is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ blocks: withBlock(1, { start: "13:15" }) }), snap()), /blocks\[1\]/);
 });
 
-test("hostile: minutes of 10, 245 or 17 are refused", todo, async () => {
+test("hostile: minutes of 10, 245 or 17 are refused", async () => {
   const { checkProposal } = await load();
   for (const minutes of [10, 245, 17]) {
     refused(checkProposal(good({ blocks: withBlock(0, { minutes }) }), snap()), /blocks\[0\]/, /minutes/);
   }
 });
 
-test("hostile: a proposal for tomorrow at 6 am is refused", todo, async () => {
+test("hostile: a proposal for tomorrow at 6 am is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ day: "2026-11-05" }), snap()), /day/);
 });
 
-test("hostile: a proposal for a day already approved is refused", todo, async () => {
+test("hostile: a proposal for a day already approved is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good(), snap({ proposal: { status: "approved", created_at: "2026-11-04T10:30:00Z" } })), /day/, /approved/);
 });
 
-test("hostile: 13 blocks are refused", todo, async () => {
+test("hostile: 13 blocks are refused", async () => {
   const { checkProposal } = await load();
   const starts = ["07:00", "07:15", "07:30", "07:45", "08:00", "08:15", "08:30", "08:45", "09:00", "09:15", "09:30", "09:45", "10:00"];
   refused(checkProposal(good({ blocks: starts.map((start) => ({ task_id: T2, start, minutes: 15 })) }), snap()), /blocks/);
 });
 
-test("hostile: 16 needs_you items are refused", todo, async () => {
+test("hostile: 16 needs_you items are refused", async () => {
   const { checkProposal } = await load();
   const ids = ["19a4f2c3b5d6e701", "19a4f2c3b5d6e702", "19a4f2c3b5d6e703", "19a4f2c3b5d6e704", "19a4f2c3b5d6e705",
     "19a4f2c3b5d6e706", "19a4f2c3b5d6e707", "19a4f2c3b5d6e708", "19a4f2c3b5d6e709", "19a4f2c3b5d6e70a",
@@ -534,13 +534,13 @@ test("hostile: 16 needs_you items are refused", todo, async () => {
   refused(checkProposal(good({ needs_you: ids.map((id) => demo({ message_id: id, link: `${SBU_LINK}${id}` })) }), snap()), /needs_you/);
 });
 
-test("hostile: 6 picks are refused", todo, async () => {
+test("hostile: 6 picks are refused", async () => {
   const { checkProposal } = await load();
   const six = [1, 2, 3, 4, 5, 6].map((n) => ({ uid: `evt-${n}`, why: "Fits the profile." }));
   refused(checkProposal(good({ picks: six }), snap()), /picks/);
 });
 
-test("hostile: a link for the wrong account, or anywhere but Gmail, is refused", todo, async () => {
+test("hostile: a link for the wrong account, or anywhere but Gmail, is refused", async () => {
   const { checkProposal } = await load();
   // The SBU message with a link that signs in as the personal account.
   refused(checkProposal(good({ needs_you: withNeed({ link: `${PERSONAL_LINK}19a4f2c3b5d6e7f8` }) }), snap()), /needs_you\[0\]/, /link/);
@@ -551,20 +551,20 @@ test("hostile: a link for the wrong account, or anywhere but Gmail, is refused",
   refused(checkProposal(good({ needs_you: withNeed({ link: "javascript:alert(1)//19a4f2c3b5d6e7f8" }) }), snap()), /needs_you\[0\]/, /link/);
 });
 
-test("checkProposal: a link to the message's thread passes even when its id differs from message_id", todo, async () => {
+test("checkProposal: a link to the message's thread passes even when its id differs from message_id", async () => {
   const { checkProposal } = await load();
   const r = checkProposal(good({ needs_you: withNeed({ message_id: "19a51c0d1e2f3a4b", link: `${SBU_LINK}19a4f2c3b5d6e7f8` }) }), snap());
   assert.equal(r.ok, true, r.errors?.join("; "));
 });
 
-test("hostile: a non-hex message id, in the item or its link, is refused", todo, async () => {
+test("hostile: a non-hex message id, in the item or its link, is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ needs_you: withNeed({ message_id: "19a4f2c3b5d6e7fz", link: `${SBU_LINK}19a4f2c3b5d6e7fz` }) }), snap()), /needs_you\[0\]/, /message_id/);
   refused(checkProposal(good({ needs_you: withNeed({ message_id: "19a4f", link: `${SBU_LINK}19a4f` }) }), snap()), /needs_you\[0\]/, /message_id/);
   refused(checkProposal(good({ needs_you: withNeed({ link: `${SBU_LINK}19a4f2c3b5d6e7f8?x=<script>` }) }), snap()), /needs_you\[0\]/, /link/);
 });
 
-test("hostile: a pick uid that isn't among the campus events is refused", todo, async () => {
+test("hostile: a pick uid that isn't among the campus events is refused", async () => {
   const { checkProposal } = await load();
   refused(checkProposal(good({ picks: [{ uid: "evt-99", why: "Fits the profile." }] }), snap()), /picks\[0\]/, /uid/);
 });

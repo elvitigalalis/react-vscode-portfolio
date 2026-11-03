@@ -61,3 +61,146 @@ export function planSnapshot(rows, now) {
     accounts: rows.accounts.map((a) => a.email),
   };
 }
+
+// --- submit_proposal -------------------------------------------------------------------------
+
+export const MAX_BLOCKS = 12;
+export const MAX_NEEDS = 15;
+export const MAX_PICKS = 5;
+export const NEEDS_KINDS = ["reply", "deadline", "meeting", "admin"];
+// No block starts before 7:00 am.
+const EARLIEST = 7 * 60;
+const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const HEX_ID = /^[0-9a-f]{6,32}$/;
+// A link in any form Telegram or a browser would make clickable: a scheme, "www." or a
+// "word.word/" path.
+const URLISH = /https?:\/\/|www\.|[a-z0-9-]+\.[a-z0-9-]+\//i;
+// Line breaks and other control characters.
+const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+
+const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
+const list = (v) => (v == null ? [] : v);
+
+// "2:00–3:20 pm", "11:00 am–12:00 pm": the half of the day once when both ends share it.
+function clockSpan(start, end) {
+  const [a, b] = [formatClock(((start % 1440) + 1440) % 1440), formatClock(((end % 1440) + 1440) % 1440)];
+  return a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
+}
+
+// One free-text field: text, one line, no link, at most `max` characters once runs of spaces
+// are collapsed. Returns the collapsed text, or pushes an error naming `name` and returns null.
+function text(value, name, max, errors) {
+  if (typeof value !== "string") return errors.push(`${name}: must be text`), null;
+  if (CONTROL.test(value)) return errors.push(`${name}: must be one line, with no line breaks or control characters`), null;
+  if (URLISH.test(value)) return errors.push(`${name}: must not hold a link or web address`), null;
+  const t = value.replace(/\s+/g, " ").trim();
+  if (t.length > max) return errors.push(`${name}: at most ${max} characters, got ${t.length}`), null;
+  return t;
+}
+
+// The checks submit_proposal runs on `input` ({ day, blocks: [{ task_id, start: "HH:MM",
+// minutes }], needs_you: [{ account, message_id, link, sender, subject, why, kind, due? }],
+// picks: [{ uid, why }], note }) against a fresh planSnapshot. Every problem is its own error,
+// a sentence starting with the field it names, so Claude can fix them all and submit again.
+// When there is none, `rows` holds apply_proposal's arguments: { d, blocks: [{ task_id,
+// starts_at, ends_at }], needs, picks, note }, times in UTC.
+export function checkProposal(input, snapshot) {
+  const errors = [];
+  const tz = snapshot.time_zone;
+  const day = snapshot.plan_day;
+  if (input?.day !== day) errors.push(`day: must be ${day}, the day being planned`);
+  else if (snapshot.proposal && snapshot.proposal.status !== "pending") {
+    errors.push(`day: the proposal for ${day} is already ${snapshot.proposal.status}`);
+  }
+
+  // Blocks.
+  const blocks = [];
+  const inBlocks = list(input?.blocks);
+  if (!Array.isArray(inBlocks)) errors.push("blocks: must be a list");
+  else if (inBlocks.length > MAX_BLOCKS) errors.push(`blocks: at most ${MAX_BLOCKS}, got ${inBlocks.length}`);
+  else {
+    const tasks = new Map(snapshot.tasks.map((t) => [t.id, t]));
+    const shutdown = toMinutes(snapshot.shutdown);
+    const taken = (spans, label) => spans.map((s) => ({ start: minutesOn(s.starts_at, day, tz), end: minutesOn(s.ends_at, day, tz), label }));
+    const fixed = [
+      ...taken(snapshot.busy, "a busy time"),
+      ...taken(snapshot.blocks.filter((b) => !b.proposed), "an approved block"),
+    ];
+    const placed = [];
+    inBlocks.forEach((b, i) => {
+      const name = `blocks[${i}]`;
+      const before = errors.length;
+      const task = tasks.get(b?.task_id);
+      if (!task) errors.push(`${name}: task_id is not one of the tasks read_planner gave`);
+      const { minutes, start } = b ?? {};
+      if (!Number.isInteger(minutes) || minutes < 15 || minutes > 240 || minutes % 5) {
+        errors.push(`${name}: minutes must be 15 to 240, a multiple of 5`);
+      }
+      if (typeof start !== "string" || !HHMM.test(start)) return errors.push(`${name}: start must be "HH:MM", 24-hour`);
+      const from = toMinutes(start);
+      if (from < EARLIEST) errors.push(`${name}: starts before 07:00`);
+      if (task?.at_time && task.at_time.slice(0, 5) !== start) errors.push(`${name}: this task is fixed at ${task.at_time.slice(0, 5)}, so it must start then`);
+      if (errors.length > before && !Number.isInteger(minutes)) return;
+      const to = from + minutes;
+      if (to > shutdown) errors.push(`${name}: ends after the ${snapshot.shutdown} shutdown line`);
+      // A block may end exactly when the next one starts.
+      const hit = fixed.find((s) => from < s.end && s.start < to);
+      if (hit) errors.push(`${name}: overlaps ${hit.label} ${clockSpan(hit.start, hit.end)}`);
+      const twin = placed.find((p) => from < p.end && p.start < to);
+      if (twin) errors.push(`${name}: overlaps blocks[${twin.i}]`);
+      placed.push({ i, start: from, end: to });
+      if (errors.length === before) {
+        blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
+      }
+    });
+  }
+
+  // Needs you.
+  const needs = [];
+  const inNeeds = list(input?.needs_you);
+  if (!Array.isArray(inNeeds)) errors.push("needs_you: must be a list");
+  else if (inNeeds.length > MAX_NEEDS) errors.push(`needs_you: at most ${MAX_NEEDS}, got ${inNeeds.length}`);
+  else {
+    inNeeds.forEach((n, i) => {
+      const name = `needs_you[${i}]`;
+      const before = errors.length;
+      const { account, message_id, link, kind, due } = n ?? {};
+      const connected = snapshot.accounts.includes(account);
+      if (!connected) errors.push(`${name}.account: not a connected mail account`);
+      if (typeof message_id !== "string" || !HEX_ID.test(message_id)) errors.push(`${name}.message_id: must be the hex id search_mail gave`);
+      // Exactly the link search_mail builds (mail.mjs, messageSummary): Gmail, signed in as this
+      // account, at a hex thread id.
+      const prefix = `https://mail.google.com/mail/?authuser=${encodeURIComponent(String(account))}#all/`;
+      if (typeof link !== "string" || !link.startsWith(prefix) || !HEX_ID.test(link.slice(prefix.length))) {
+        errors.push(`${name}.link: must be the link search_mail gave for this account's message`);
+      }
+      if (!NEEDS_KINDS.includes(kind)) errors.push(`${name}.kind: must be one of ${NEEDS_KINDS.join(", ")}`);
+      if (due != null && !isDate(due)) errors.push(`${name}.due: must be a date, "YYYY-MM-DD"`);
+      const sender = text(n?.sender, `${name}.sender`, 80, errors);
+      const subject = text(n?.subject, `${name}.subject`, 140, errors);
+      const why = text(n?.why, `${name}.why`, 140, errors);
+      if (errors.length === before) needs.push({ account, message_id, link, sender, subject, why, kind, due: due ?? null });
+    });
+  }
+
+  // Campus picks.
+  const picks = [];
+  const inPicks = list(input?.picks);
+  if (!Array.isArray(inPicks)) errors.push("picks: must be a list");
+  else if (inPicks.length > MAX_PICKS) errors.push(`picks: at most ${MAX_PICKS}, got ${inPicks.length}`);
+  else {
+    const uids = new Set(snapshot.campus.map((e) => e.uid));
+    inPicks.forEach((p, i) => {
+      const name = `picks[${i}]`;
+      const before = errors.length;
+      if (!uids.has(p?.uid)) errors.push(`${name}.uid: not one of the campus events read_planner gave`);
+      const why = text(p?.why, `${name}.why`, 140, errors);
+      if (errors.length === before) picks.push({ uid: p.uid, why });
+    });
+  }
+
+  const note = input?.note == null ? null : text(input.note, "note", 280, errors);
+
+  return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
+}
