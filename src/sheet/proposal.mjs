@@ -152,6 +152,24 @@ function dayRuleErrors(spans, snapshot, errors) {
   }
 }
 
+export const MAX_COULDNT_FIT = 12;
+
+// The tasks Claude couldn't fit: ids from the task list, each once, none also given a block.
+function couldntFitIds(input, snapshot, errors) {
+  const ids = list(input?.couldnt_fit);
+  if (!Array.isArray(ids)) return errors.push("couldnt_fit: must be a list"), [];
+  if (ids.length > MAX_COULDNT_FIT) return errors.push(`couldnt_fit: at most ${MAX_COULDNT_FIT}, got ${ids.length}`), [];
+  const tasks = new Set(snapshot.tasks.map((t) => t.id));
+  const placed = new Set(Array.isArray(input?.blocks) ? input.blocks.map((b) => b?.task_id) : []);
+  ids.forEach((id, i) => {
+    const name = `couldnt_fit[${i}]`;
+    if (!tasks.has(id)) errors.push(`${name}: not one of the tasks read_planner gave`);
+    else if (ids.indexOf(id) < i) errors.push(`${name}: given twice`);
+    else if (placed.has(id)) errors.push(`${name}: this task has a block, so it fit`);
+  });
+  return ids;
+}
+
 // The checks submit_proposal runs on `input` ({ day, blocks: [{ task_id, start: "HH:MM",
 // minutes }], needs_you: [{ account, message_id, link, sender, subject, why, kind, due? }],
 // picks: [{ uid, why }], note }) against a fresh planSnapshot. Every problem is its own error,
@@ -256,8 +274,12 @@ export function checkProposal(input, snapshot) {
   }
 
   const note = input?.note == null ? null : text(input.note, "note", 280, errors);
+  const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
 
-  return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
+  if (errors.length) return { ok: false, errors, rows: null };
+  const rows = { d: day, blocks, needs, picks, note };
+  if (v5) rows.couldnt_fit = couldntFit;
+  return { ok: true, errors: [], rows };
 }
 
 // --- The brief -------------------------------------------------------------------------------
