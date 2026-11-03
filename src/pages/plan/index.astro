@@ -19,12 +19,14 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
         <button type="button" class="sheet-btn" data-act="calendars">Calendars</button>
         <button type="button" class="sheet-btn" data-act="telegram" title="While Telegram is off, blocks get Google's default alert">Telegram off</button>
+        <button type="button" class="sheet-btn" data-act="settings">Settings</button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
       </div>
     </div>
     <p class="sheet-status" data-status>Loading…</p>
     <p class="sheet-notice" data-notice hidden></p>
+    <p class="sheet-notice" role="status" data-mail-notice hidden></p>
     <p class="sheet-notice" data-events-stale hidden>Google Calendar needs reconnecting to show new events. <button type="button" class="sheet-link" data-act="connect">Connect</button></p>
     <div class="sheet-daynav" data-daynav hidden>
       <button type="button" class="sheet-btn" data-act="prev-day" aria-label="Previous day">‹</button>
@@ -82,6 +84,23 @@ import "../../styles/sheet.css";
       </div>
     </dialog>
 
+    <dialog class="sheet-dialog" data-settings aria-labelledby="sheet-settings-title">
+      <h2 id="sheet-settings-title">Settings</h2>
+
+      <!-- Mail accounts (docs/sheet-sources.md, "/plan"): src/sheet/mail-settings.mjs fills the list. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-mail-title">
+        <h3 id="sheet-mail-title">Mail accounts</h3>
+        <p class="small">Claude reads these, read-only, when you plan your day. Their sign-ins stay on the server.</p>
+        <ul class="sheet-mail" data-mail-accounts></ul>
+        <template data-mail-row>
+          <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-link" data-act="mail-remove">Remove</button></li>
+        </template>
+        <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
+      </section>
+
+      <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
+    </dialog>
+
     <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
     <dialog class="sheet-dialog sheet-shut" data-shut aria-labelledby="sheet-shut-title"></dialog>
 
@@ -92,5 +111,6 @@ import "../../styles/sheet.css";
   import { start } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown]);
+  import { setupMailSettings } from "../../sheet/mail-settings.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings]);
 </script>
