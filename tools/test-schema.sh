@@ -88,7 +88,7 @@ do $$ begin
   raise notice '✓ mail_refresh_token and mail_account_save revoked';
 
   -- RLS on every v3 table.
-  if exists (select 1 from pg_class where relname in ('feed_seen', 'feed_state', 'campus_events', 'mail_accounts')
+  if exists (select 1 from pg_class where relname in ('feed_seen', 'feed_state', 'campus_events', 'mail_accounts', 'mail_connect_states')
              and relnamespace = 'public'::regnamespace and not relrowsecurity)
     then raise exception 'RLS off on a v3 table'; end if;
 
@@ -118,6 +118,8 @@ do $$ begin
   begin perform 1 from campus_events; raise exception 'anon read campus_events';
   exception when insufficient_privilege then null; end;
   begin perform 1 from mail_accounts; raise exception 'anon read mail_accounts';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from mail_connect_states; raise exception 'anon read mail_connect_states';
   exception when insufficient_privilege then null; end;
   perform 1 from public_week;
   raise notice '✓ anon: no v3 tables, public_week still answers';
