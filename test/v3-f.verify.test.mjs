@@ -30,7 +30,7 @@ const PAYLOAD = { owner: "lisul@example.com", nonce: "n-4f1c" };
 
 // --- signState / verifyState ----------------------------------------------------------------
 
-test("mailconnect: a fresh state verifies back to its payload", { todo: true }, async () => {
+test("mailconnect: a fresh state verifies back to its payload", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   assert.equal(typeof state, "string");
@@ -38,14 +38,14 @@ test("mailconnect: a fresh state verifies back to its payload", { todo: true }, 
   assert.deepEqual(await m.verifyState(state, SECRET, NOW + 9 * MIN + 59_000), PAYLOAD);
 });
 
-test("mailconnect: a state is URL-safe and doesn't contain the secret", { todo: true }, async () => {
+test("mailconnect: a state is URL-safe and doesn't contain the secret", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   assert.match(state, /^[A-Za-z0-9._~-]+$/);
   assert.ok(!state.includes(SECRET));
 });
 
-test("mailconnect: a state expires after 10 minutes", { todo: true }, async () => {
+test("mailconnect: a state expires after 10 minutes", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   assert.equal(await m.verifyState(state, SECRET, NOW + 10 * MIN + 1000), null);
@@ -55,13 +55,13 @@ test("mailconnect: a state expires after 10 minutes", { todo: true }, async () =
   assert.equal(await m.verifyState(old, SECRET, NOW), null);
 });
 
-test("mailconnect: a state signed with another secret is refused", { todo: true }, async () => {
+test("mailconnect: a state signed with another secret is refused", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, OTHER, NOW);
   assert.equal(await m.verifyState(state, SECRET, NOW), null);
 });
 
-test("mailconnect: a tampered state is refused", { todo: true }, async () => {
+test("mailconnect: a tampered state is refused", async () => {
   const m = await import(MOD);
   const state = await m.signState(PAYLOAD, SECRET, NOW);
   const swap = (c) => (c === "A" ? "B" : "A");
@@ -78,7 +78,7 @@ test("mailconnect: a tampered state is refused", { todo: true }, async () => {
   assert.notEqual(other, state);
 });
 
-test("mailconnect: junk is refused without throwing", { todo: true }, async () => {
+test("mailconnect: junk is refused without throwing", async () => {
   const m = await import(MOD);
   for (const junk of ["", ".", "abc", "abc.def", "...", "%%%", undefined, null]) {
     assert.equal(await m.verifyState(junk, SECRET, NOW), null, String(junk));
