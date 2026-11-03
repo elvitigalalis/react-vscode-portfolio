@@ -88,7 +88,7 @@ async function planMarkup() {
   return walk(resolve(root, "src/pages/plan/index.astro"));
 }
 
-test("v3-e /plan: Settings has a labelled Interests textarea", { todo: true }, async () => {
+test("v3-e /plan: Settings has a labelled Interests textarea", async () => {
   const { assert } = await load();
   const html = await planMarkup();
   const areas = [...html.matchAll(/<textarea\b([^>]*)>/g)].map(([, attrs]) => ({
@@ -106,7 +106,7 @@ test("v3-e /plan: Settings has a labelled Interests textarea", { todo: true }, a
   assert.doesNotMatch(labelled[0].attrs, /\bdisabled\b/);
 });
 
-test("v3-e /plan: the Interests box has a Save button beside it", { todo: true }, async () => {
+test("v3-e /plan: the Interests box has a Save button beside it", async () => {
   const { assert } = await load();
   const html = await planMarkup();
   const at = html.search(/<textarea\b[^>]*>/g);
@@ -121,7 +121,7 @@ test("v3-e /plan: the Interests box has a Save button beside it", { todo: true }
   assert.doesNotMatch(box.match(/<button\b[^>]*>\s*Save\b/)[0], /tabindex="-1"/);
 });
 
-test("v3-e /plan: saving writes settings.interests and says so", { todo: true }, async () => {
+test("v3-e /plan: saving writes settings.interests and says so", async () => {
   const { assert } = await load();
   const { readdirSync, readFileSync } = await import("node:fs");
   const dir = new URL("../src/sheet/", import.meta.url);

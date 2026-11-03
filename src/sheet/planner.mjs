@@ -397,6 +397,18 @@ async function saveCalendars() {
   } catch (e) { failed(e); }
 }
 
+// The interest profile Claude picks campus events against (docs/sheet-claude.md). Blank saves
+// null, so the column stays "not written yet" rather than an empty profile.
+async function saveInterests() {
+  const interests = $("#sheet-interests").value.trim() || null;
+  try {
+    await api.saveSettings({ interests });
+    state.settings = { ...state.settings, interests };
+    $("[data-interests]").close();
+    setStatus("Interests saved.");
+  } catch (e) { failed(e); }
+}
+
 // Telegram on or off. The "Time blocks" events from today on follow it: no alerts while Telegram
 // nudges him, Google's default alert as the backup while it's off.
 async function toggleTelegram() {
@@ -600,6 +612,12 @@ function wire() {
       }
       if (act === "close-calendars") return $("[data-calendars]").close();
       if (act === "save-calendars") return saveCalendars();
+      if (act === "interests") {
+        $("#sheet-interests").value = state.settings?.interests ?? "";
+        return $("[data-interests]").showModal();
+      }
+      if (act === "close-interests") return $("[data-interests]").close();
+      if (act === "save-interests") return saveInterests();
       if (act === "telegram") return toggleTelegram();
       return actHooks[act]?.(e);
     }
