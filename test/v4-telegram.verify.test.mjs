@@ -104,7 +104,7 @@ const sent = (block_id, kind, send_at) => ({ block_id, kind, day, send_at, sent_
 // The brief
 // =============================================================================================
 
-test("brief: with today's proposal pending, it keeps its first and at-risk lines and adds the plan", todo, async () => {
+test("brief: with today's proposal pending, it keeps its first and at-risk lines and adds the plan", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(withPlan(), at("2026-11-04T13:00:00Z")), [{
     kind: "brief", block_id: null, day, send_at: "2026-11-04T13:00:00.000Z",
@@ -121,7 +121,7 @@ test("brief: with today's proposal pending, it keeps its first and at-risk lines
   }]);
 });
 
-test("brief: with a pending proposal, \"Nothing planned yet\" is dropped", todo, async () => {
+test("brief: with a pending proposal, \"Nothing planned yet\" is dropped", async () => {
   const { whatToSend } = await nudges();
   const snap = withPlan({ proposal: pending({ note: null, picks: [] }), needsOpen: [] });
   const [brief] = whatToSend(snap, at("2026-11-04T13:00:00Z"));
@@ -130,7 +130,7 @@ test("brief: with a pending proposal, \"Nothing planned yet\" is dropped", todo,
   assert.deepEqual(brief.text.split("\n").slice(0, 3), ["Today: 3 tasks, 0 blocks.", "At risk: OS homework (due Thu).", "Morning plan: 4 blocks, 9:30 am–4:00 pm."]);
 });
 
-test("brief: a pending proposal made in chat shows even with morning_on false", todo, async () => {
+test("brief: a pending proposal made in chat shows even with morning_on false", async () => {
   const { whatToSend } = await nudges();
   const snap = withPlan({ settings: { ...settings, morning_on: false } });
   const [brief] = whatToSend(snap, at("2026-11-04T13:00:00Z"));
@@ -138,7 +138,7 @@ test("brief: a pending proposal made in chat shows even with morning_on false", 
   assert.deepEqual(brief.buttons, planButtons(day));
 });
 
-test("brief: with morning_on and no proposal for today, it says no morning plan came in", todo, async () => {
+test("brief: with morning_on and no proposal for today, it says no morning plan came in", async () => {
   const { whatToSend } = await nudges();
   const snap = snapshot({ tasks: [task("t2", "Gym"), task("t3", "Office hours")] });
   assert.deepEqual(whatToSend(snap, at("2026-11-04T13:00:00Z")), [{
@@ -148,7 +148,7 @@ test("brief: with morning_on and no proposal for today, it says no morning plan 
   }]);
 });
 
-test("brief: with morning_on false and no proposal, it is unchanged", todo, async () => {
+test("brief: with morning_on false and no proposal, it is unchanged", async () => {
   const { whatToSend } = await nudges();
   const snap = snapshot({ settings: { ...settings, morning_on: false }, tasks: [task("t2", "Gym"), task("t3", "Office hours")] });
   assert.deepEqual(whatToSend(snap, at("2026-11-04T13:00:00Z")), [{
@@ -158,7 +158,7 @@ test("brief: with morning_on false and no proposal, it is unchanged", todo, asyn
   }]);
 });
 
-test("brief: a snapshot without the new fields reads as morning_on false, no proposal, no mail", todo, async () => {
+test("brief: a snapshot without the new fields reads as morning_on false, no proposal, no mail", async () => {
   const { whatToSend } = await nudges();
   const old = { settings: { time_zone: "America/New_York", telegram_chat_id: 42, nudges_on: true }, day: null, tasks: [task("t2", "Gym")], blocks: [], log: [] };
   const [brief] = whatToSend(old, at("2026-11-04T13:00:00Z"));
@@ -173,7 +173,7 @@ test("brief: a snapshot without the new fields reads as morning_on false, no pro
 // The brief went out at 8:00 without a plan; a run of "plan my day" at 10:42 am made one.
 const late = (extra = {}) => withPlan({ proposal: pending({ created_at: "2026-11-04T15:42:00Z" }), log: [briefSent], ...extra });
 
-test("proposal message: a plan landing after the brief is sent on its own, with the three buttons", todo, async () => {
+test("proposal message: a plan landing after the brief is sent on its own, with the three buttons", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(late(), at("2026-11-04T15:42:30Z")), [{
     kind: "proposal", block_id: null, day, send_at: "2026-11-04T15:42:00.000Z",
@@ -186,14 +186,14 @@ test("proposal message: a plan landing after the brief is sent on its own, with 
   }]);
 });
 
-test("proposal message: once per created_at", todo, async () => {
+test("proposal message: once per created_at", async () => {
   const { whatToSend } = await nudges();
   const snap = late({ log: [briefSent, sent(null, "proposal", "2026-11-04T15:42:00.000Z")] });
   assert.deepEqual(whatToSend(snap, at("2026-11-04T15:43:00Z")), []);
   assert.deepEqual(whatToSend(snap, at("2026-11-04T18:00:00Z")), []);
 });
 
-test("proposal message: a resubmitted proposal (a new created_at) is sent again", todo, async () => {
+test("proposal message: a resubmitted proposal (a new created_at) is sent again", async () => {
   const { whatToSend } = await nudges();
   const snap = late({
     proposal: pending({ created_at: "2026-11-04T16:05:00Z" }),
@@ -202,18 +202,18 @@ test("proposal message: a resubmitted proposal (a new created_at) is sent again"
   assert.deepEqual(whatToSend(snap, at("2026-11-04T16:05:20Z")).map((m) => [m.kind, m.send_at]), [["proposal", "2026-11-04T16:05:00.000Z"]]);
 });
 
-test("proposal message: none while the brief is still to go out; the brief carries the plan", todo, async () => {
+test("proposal message: none while the brief is still to go out; the brief carries the plan", async () => {
   const { whatToSend } = await nudges();
   // The 6:07 am plan, and the 8:00 run.
   assert.deepEqual(whatToSend(withPlan(), at("2026-11-04T13:00:00Z")).map((m) => m.kind), ["brief"]);
 });
 
-test("proposal message: none when the brief already went out with the plan", todo, async () => {
+test("proposal message: none when the brief already went out with the plan", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(withPlan({ log: [briefSent] }), at("2026-11-04T13:30:00Z")), []);
 });
 
-test("proposal message: only from 8 am to 11 pm", todo, async () => {
+test("proposal message: only from 8 am to 11 pm", async () => {
   const { whatToSend } = await nudges();
   // Made at 10:50 pm (03:50 UTC on the 5th); the check-in went out at 5 pm.
   const snap = late({
@@ -224,7 +224,7 @@ test("proposal message: only from 8 am to 11 pm", todo, async () => {
   assert.deepEqual(whatToSend(snap, at("2026-11-05T04:00:00Z")), []);                               // 11:00 pm
 });
 
-test("proposal message: only while the proposal is pending", todo, async () => {
+test("proposal message: only while the proposal is pending", async () => {
   const { whatToSend } = await nudges();
   // Approved in /plan before the run; its blocks are no longer proposed.
   const approvedBlocks = planBlocks.map((b) => ({ ...b, proposed: false }));
@@ -232,7 +232,7 @@ test("proposal message: only while the proposal is pending", todo, async () => {
   assert.deepEqual(whatToSend(snap, at("2026-11-04T15:42:30Z")).filter((m) => m.kind === "proposal"), []);
 });
 
-test("proposal message: outside the nudge budget, it goes out once the six are spent", todo, async () => {
+test("proposal message: outside the nudge budget, it goes out once the six are spent", async () => {
   const { whatToSend } = await nudges();
   const log = [briefSent, ...["a", "b", "c", "d", "e", "f"].map((id, i) => sent(id, "start", `2026-11-04T1${3 + i}:00:00.000Z`))];
   assert.deepEqual(whatToSend(late({ log }), at("2026-11-04T15:42:30Z")).map((m) => m.kind), ["proposal"]);
