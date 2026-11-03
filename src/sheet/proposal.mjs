@@ -204,3 +204,36 @@ export function checkProposal(input, snapshot) {
 
   return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
 }
+
+// --- The brief -------------------------------------------------------------------------------
+
+// Block lines the brief shows before "+N more", and campus picks it names.
+const SHOWN_BLOCKS = 6;
+const SHOWN_PICKS = 2;
+
+// The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
+// up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
+// may hold any blocks; only the proposal day's proposed ones count. `picks` is [{ uid, why }],
+// `campus` the events they name, `needsOpen` the needs_you rows not done.
+export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus, tz) {
+  const day = proposal.day;
+  const mine = proposedOn(blocks, day, tz);
+  const at = (iso) => minutesOn(iso, day, tz);
+  const lines = [mine.length
+    ? `Morning plan: ${plural(mine.length, "block")}, ${clockSpan(at(mine[0].starts_at), at(mine.at(-1).ends_at))}.`
+    : "Morning plan: no blocks."];
+  for (const b of mine.slice(0, SHOWN_BLOCKS)) {
+    const title = tasks.find((t) => t.id === b.task_id)?.title ?? "A task";
+    lines.push(`${formatClock(at(b.starts_at))} · ${title} (${blockMinutes(b)} min)`);
+  }
+  if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
+  if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
+  const events = (picks ?? proposal.picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
+  for (const e of events.slice(0, SHOWN_PICKS)) {
+    const going = Number.isInteger(e.rsvp_count) ? `, ${e.rsvp_count} going` : "";
+    lines.push(`Campus pick: ${e.title} (${formatClock(localNow(new Date(e.starts_at), tz).minutes)}${going})`);
+  }
+  const open = needsOpen.filter((n) => !n.done).length;
+  if (open) lines.push(`Mail: ${open} ${open === 1 ? "needs" : "need"} you.`);
+  return lines;
+}

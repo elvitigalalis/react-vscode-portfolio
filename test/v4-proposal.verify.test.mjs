@@ -596,7 +596,7 @@ const openNeed = (id) => ({ id, day: DAY, account: SBU, message_id: id, link: `$
 const threeNeeds = [openNeed("19a4f2c3b5d6e701"), openNeed("19a4f2c3b5d6e702"), openNeed("19a4f2c3b5d6e703")];
 const pendingRow = (extra = {}) => ({ day: DAY, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], ...extra });
 
-test("proposalLines: the summary, each block, the note, the pick and the mail count", todo, async () => {
+test("proposalLines: the summary, each block, the note, the pick and the mail count", async () => {
   const { proposalLines } = await load();
   const picks = [{ uid: "evt-1", why: "Painting, and free food." }];
   const p = pendingRow({ note: "Lab 4 didn't fit before shutdown.", picks });
@@ -612,7 +612,7 @@ test("proposalLines: the summary, each block, the note, the pick and the mail co
   ]);
 });
 
-test("proposalLines: more than 6 blocks shows the first 6, then \"+2 more\"", todo, async () => {
+test("proposalLines: more than 6 blocks shows the first 6, then \"+2 more\"", async () => {
   const { proposalLines } = await load();
   // Eight half-hour Gym blocks on the hour, 9:00 am to 4:30 pm.
   const eight = [
@@ -638,7 +638,7 @@ test("proposalLines: more than 6 blocks shows the first 6, then \"+2 more\"", to
   ]);
 });
 
-test("proposalLines: at most 2 campus picks, in the order given", todo, async () => {
+test("proposalLines: at most 2 campus picks, in the order given", async () => {
   const { proposalLines } = await load();
   const picks = [{ uid: "evt-2", why: "Robotics." }, { uid: "evt-1", why: "Painting." }, { uid: "evt-3", why: "Music." }];
   const lines = proposalLines(pendingRow({ picks }), fourBlocks, lineTasks, threeNeeds, picks, lineCampus, TZ);
@@ -648,7 +648,7 @@ test("proposalLines: at most 2 campus picks, in the order given", todo, async ()
   ]);
 });
 
-test("proposalLines: no note, no picks: no \"Didn't fit\" or \"Campus pick\" line", todo, async () => {
+test("proposalLines: no note, no picks: no \"Didn't fit\" or \"Campus pick\" line", async () => {
   const { proposalLines } = await load();
   assert.deepEqual(proposalLines(pendingRow(), fourBlocks, lineTasks, threeNeeds, [], lineCampus, TZ), [
     "Morning plan: 4 blocks, 9:30 am–4:00 pm.",
@@ -660,7 +660,7 @@ test("proposalLines: no note, no picks: no \"Didn't fit\" or \"Campus pick\" lin
   ]);
 });
 
-test("proposalLines: exactly 6 blocks shows all six and no \"more\" line", todo, async () => {
+test("proposalLines: exactly 6 blocks shows all six and no \"more\" line", async () => {
   const { proposalLines } = await load();
   const six = [
     proposed("g1", T2, "2026-11-04T14:00:00Z", "2026-11-04T14:30:00Z"),
