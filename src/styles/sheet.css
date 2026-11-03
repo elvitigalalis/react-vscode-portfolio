@@ -171,6 +171,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; font-size: 0.875rem; margin: 0 0 1rem; }
 .sheet-keys dt { font-weight: 600; }
 .sheet-keys dd { margin: 0; color: var(--muted); }
+/* The icon legend under the keys. */
+.sheet-legend-title { font-size: 0.875rem; margin: 0 0 0.35rem; }
 
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
