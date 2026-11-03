@@ -28,11 +28,12 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
         <li>
           <strong>Google Calendar:</strong> it creates and edits events on one calendar of its own
           ("Time blocks") and reads my other events so it can plan around them. Those events are
-          read in my browser and not stored.
+          read in my browser; only their busy times are stored (see below).
         </li>
         <li>
           <strong>Gmail, read-only:</strong> for the mail accounts I connect, it can list, search
-          and read messages, and only when I ask Claude to plan my day. It can't send, change,
+          and read messages, only when Claude plans my day: when I ask, or each morning as a
+          scheduled Claude task that runs on my own Claude account. It can't send, change,
           label or delete mail.
         </li>
       </ul>
@@ -41,8 +42,14 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
       <p>
         My tasks, plan and settings live in my own Supabase database, which only my account can
         read. The keys that let it read a connected mailbox are kept encrypted there and used only
-        by its server. Mail itself isn't stored: it's fetched when Claude asks and passed to my
-        own Claude app.
+        by its server. Message bodies aren't stored: mail is fetched when Claude asks and passed to
+        my own Claude app.
+      </p>
+      <p>
+        For each email that needs me, the planner's Needs you list keeps the sender, the subject
+        and a one-line note for up to 14 days, then deletes it. The busy times it plans around
+        are saved from my calendar as start and end only, never titles, and deleted once they
+        end.
       </p>
 
       <h2>Google's rules</h2>
