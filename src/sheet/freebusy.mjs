@@ -16,3 +16,28 @@ export function freeBusyRequest(settings, now) {
     items: ids.map((id) => ({ id })),
   };
 }
+
+// The busy rows from a freebusy.query answer: start and end only, in UTC, for the spans that
+// overlap now through 7 days ahead, kept whole, once each and earliest first (as busyRows in
+// morning.mjs, unmerged). "Time blocks" (`blocksCalendar`) adds nothing even if Google answers
+// for it. A calendar whose entry has `errors` adds nothing and is listed in `failed`. All-day
+// events count, since free/busy can't tell them apart; events marked free never appear.
+export function freeBusyRows(response, now, blocksCalendar) {
+  const from = now.getTime();
+  const to = from + WEEK_MS;
+  const failed = [];
+  const spans = new Map();
+  for (const [id, cal] of Object.entries(response?.calendars ?? {})) {
+    if (cal?.errors?.length) { failed.push(id); continue; }
+    if (blocksCalendar && id === blocksCalendar) continue;
+    for (const b of cal?.busy ?? []) {
+      const start = Date.parse(b.start);
+      const end = Date.parse(b.end);
+      if (!(end > from && start < to)) continue;
+      const row = { starts_at: new Date(start).toISOString(), ends_at: new Date(end).toISOString() };
+      spans.set(`${row.starts_at}|${row.ends_at}`, row);
+    }
+  }
+  const rows = [...spans.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at) || a.ends_at.localeCompare(b.ends_at));
+  return { rows, failed };
+}
