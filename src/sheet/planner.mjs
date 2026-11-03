@@ -62,6 +62,8 @@ export const state = {
 let root;
 const $ = (sel) => root.querySelector(sel);
 const now = () => localNow(new Date(), SHEET.timeZone);
+// Phones show one day at a time (sheet.css, max-width 48rem).
+export const NARROW = "(max-width: 48rem)";
 
 const tasksOn = (day) => [...state.tasks.values()].filter((t) => t.day === day).sort(byPosition);
 const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null && t.list === list).sort(byPosition);
@@ -282,8 +284,8 @@ export function taskRow(t) {
 const taskBox = (props) => el("textarea", { className: "sheet-add", rows: 1, autocomplete: "off", spellcheck: true, ...props });
 const fitBox = (box) => { box.style.height = "auto"; box.style.height = `${box.scrollHeight}px`; };
 
-function addRow(where, label) {
-  const input = taskBox({ ariaLabel: label, placeholder: "+ Add a task" });
+function addRow(where, label, placeholder = "+ Add a task") {
+  const input = taskBox({ ariaLabel: label, placeholder });
   if (where.day) input.dataset.day = where.day; else input.dataset.list = where.list;
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
@@ -330,7 +332,10 @@ function dayColumn(day, rows, anyEvents) {
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
   const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
-  const ul = el("ul", { className: "sheet-rows" }, ...list.map(taskRow), addRow({ day }, `Add a task to ${weekday} ${date}`));
+  // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
+  const blank = day === state.today && !list.length;
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...list.map(taskRow),
+    addRow({ day }, `Add a task to ${weekday} ${date}`, blank ? "Nothing planned. Press P to plan today" : undefined));
   ul.dataset.day = day;
   for (let i = list.length + 1; i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
   const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
@@ -349,7 +354,8 @@ function dayColumn(day, rows, anyEvents) {
 
 function listColumn(name) {
   const list = tasksIn(name);
-  const ul = el("ul", { className: "sheet-rows" }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
+  // An empty list always shows its "+ Add a task" hint.
+  const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
   return el("section", { className: "sheet-list" }, el("h3", { className: "sheet-head" }, el("span", { className: "sheet-wd", textContent: name })), ul);
 }
@@ -370,9 +376,6 @@ export function render() {
   const newList = el("input", { className: "sheet-add sheet-newlist", type: "text", autocomplete: "off", placeholder: "New list…", ariaLabel: "New Someday list" });
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
-
-  const on = Boolean(state.settings?.nudges_on);
-  Object.assign($('[data-act="telegram"]'), { textContent: `Telegram ${on ? "on" : "off"}`, ariaLabel: `Telegram nudges are ${on ? "on" : "off"}. Switch them ${on ? "off" : "on"}` });
 
   const stale = $("[data-events-stale]");
   stale.hidden = !state.eventsStale;
@@ -656,15 +659,17 @@ function wire() {
     if (Date.now() - wasDrag.at < 300) return;
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act) {
-      if (act === "prev-week") return showWeek(addDays(state.week, -7));
-      if (act === "next-week") return showWeek(addDays(state.week, 7));
-      if (act === "this-week") return showWeek(weekStart(now().day));
-      if (act === "prev-day" || act === "next-day") {
-        const next = addDays(state.focus, act === "prev-day" ? -1 : 1);
+      // A pick from the top bar's ⋯ menu closes it first.
+      if (e.target.closest("[data-more]")) $("[data-more]").hidePopover();
+      // The top bar's arrows step a week, or a day on phones (one day shows at a time).
+      if (act === "prev" || act === "next") {
+        if (!matchMedia(NARROW).matches) return showWeek(addDays(state.week, act === "prev" ? -7 : 7));
+        const next = addDays(state.focus, act === "prev" ? -1 : 1);
         state.focus = next;
         if (weekStart(next) !== state.week) return showWeek(weekStart(next));
         return render();
       }
+      if (act === "this-week") { state.focus = now().day; return showWeek(weekStart(state.focus)); }
       if (act === "help") return $("[data-help]").showModal();
       if (act === "undo") return undo();
       if (act === "sign-out") { api.signOut(); forgetEvents(); location.reload(); return; }
@@ -780,7 +785,6 @@ export async function start(node, plugins = []) {
     state.today = now().day;
     state.week = weekStart(state.today);
     $("[data-tools]").hidden = false;
-    $("[data-daynav]").hidden = false;
     setStatus(null);
     await syncGoogle();
     await load();

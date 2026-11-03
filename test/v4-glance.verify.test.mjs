@@ -286,20 +286,20 @@ test("stripSegments: times are read in the given zone (EDT in October)", async (
 
 const feed = (source, ok) => ({ source, fetched_at: "2026-11-10T11:07:00Z", ok, error: ok === false ? "HTTP 503" : null, items: 12 });
 
-test("feedAlert: no feed rows, or every feed ok, gives []", todo, async () => {
+test("feedAlert: no feed rows, or every feed ok, gives []", async () => {
   const { feedAlert } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(feedAlert([]), []);
   assert.deepEqual(feedAlert([feed("brightspace", true), feed("campus", true)]), []);
 });
 
-test("feedAlert: failed feeds are named", todo, async () => {
+test("feedAlert: failed feeds are named", async () => {
   const { feedAlert } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(feedAlert([feed("brightspace", true), feed("campus", false)]), ["campus"]);
   // Both failed: both, in row order.
   assert.deepEqual(feedAlert([feed("brightspace", false), feed("campus", false)]), ["brightspace", "campus"]);
 });
 
-test("feedAlert: ok null (not fetched yet) is not a failure; only false is", todo, async () => {
+test("feedAlert: ok null (not fetched yet) is not a failure; only false is", async () => {
   const { feedAlert } = await import("../src/sheet/glance.mjs");
   assert.deepEqual(feedAlert([feed("brightspace", null), feed("campus", true)]), []);
   assert.deepEqual(feedAlert([feed("brightspace", false), feed("campus", null)]), ["brightspace"]);

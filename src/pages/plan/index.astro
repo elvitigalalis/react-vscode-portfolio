@@ -9,29 +9,37 @@ import "../../styles/sheet.css";
 <Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
   {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
   <section class="sheet-page sheet-planner">
+    <!-- The top bar (docs/sheet-glance.md, change 6): ‹ Today › (‹ Tue Nov 3 › on phones, where
+         the arrows step a day), Plan today, Shut down in its window, chips, Nudges and a ⋯ menu.
+         src/sheet/topbar.mjs keeps its labels and the menu; feed-status.mjs the Feed failed chip. -->
     <div class="sheet-bar-top">
       <h1 data-week-title>Plan</h1>
       <div class="sheet-tools" data-tools hidden>
-        <button type="button" class="sheet-btn" data-act="prev-week" aria-label="Previous week">←</button>
-        <button type="button" class="sheet-btn" data-act="this-week">Today</button>
-        <button type="button" class="sheet-btn" data-act="next-week" aria-label="Next week">→</button>
+        <span class="sheet-nav">
+          <button type="button" class="sheet-btn sheet-icon-btn" data-act="prev" aria-label="Previous week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg></button>
+          <button type="button" class="sheet-btn" data-act="this-week"><span class="sheet-wide">Today</span><span class="sheet-narrow" data-focus-day></span></button>
+          <button type="button" class="sheet-btn sheet-icon-btn" data-act="next" aria-label="Next week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
+        </span>
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
-        <button type="button" class="sheet-btn" data-act="calendars">Calendars</button>
-        <button type="button" class="sheet-btn" data-act="telegram" title="While Telegram is off, blocks get Google's default alert">Telegram off</button>
-        <button type="button" class="sheet-btn" data-act="settings">Settings <kbd>S</kbd></button>
-        <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
-        <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
+        <!-- Status chips. M4's "Needs you" chip goes first in here, before Feed failed. -->
+        <span class="sheet-chips" data-chips>
+          <button type="button" class="sheet-chip is-alert" data-act="settings" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
+        </span>
+        <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
+        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
       </div>
+    </div>
+    <div class="sheet-menu" id="sheet-more" data-more popover>
+      <button type="button" data-act="calendars">Calendars</button>
+      <button type="button" data-act="settings">Settings <kbd>S</kbd></button>
+      <button type="button" data-act="help">Help <kbd>?</kbd></button>
+      <button type="button" data-act="sign-out">Sign out</button>
     </div>
     <p class="sheet-status" data-status>Loading…</p>
     <p class="sheet-notice" data-notice hidden></p>
     <p class="sheet-notice" role="status" data-mail-notice hidden></p>
     <p class="sheet-notice" data-events-stale hidden>Google Calendar needs reconnecting to show new events. <button type="button" class="sheet-link" data-act="connect">Connect</button></p>
-    <div class="sheet-daynav" data-daynav hidden>
-      <button type="button" class="sheet-btn" data-act="prev-day" aria-label="Previous day">‹</button>
-      <button type="button" class="sheet-btn" data-act="next-day" aria-label="Next day">›</button>
-    </div>
     <div class="sheet-week" data-week aria-label="Week" role="group"></div>
     <h2 class="sheet-someday-title" data-someday-title hidden>Someday</h2>
     <div class="sheet-someday" data-someday></div>
@@ -82,8 +90,10 @@ import "../../styles/sheet.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-ticket"></use></svg><span class="visually-hidden">Ticket</span></dt><dd>Campus event</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-utensils"></use></svg><span class="visually-hidden">Utensils</span></dt><dd>Campus events with free food</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-check"></use></svg><span class="visually-hidden">Check</span></dt><dd>Complete the task</dd>
-        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg><span class="visually-hidden">More</span></dt><dd>Menu for the task</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg><span class="visually-hidden">More</span></dt><dd>Menu for the task, or Calendars, Settings, Help and Sign out</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span class="visually-hidden">Sparkles</span></dt><dd>Proposed by Claude, until you approve it</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell"></use></svg><span class="visually-hidden">Bell</span></dt><dd>Nudges: Telegram reminds you of blocks (crossed out when off)</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="visually-hidden">Alert</span></dt><dd>A feed failed: open Settings to see which</dd>
       </dl>
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
@@ -196,5 +206,6 @@ import "../../styles/sheet.css";
   import { setupMailSettings } from "../../sheet/mail-settings.mjs";
   import { setupFeedStatus } from "../../sheet/feed-status.mjs";
   import { setupCampus } from "../../sheet/campus-list.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus]);
+  import { setupTopBar } from "../../sheet/topbar.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus, setupTopBar]);
 </script>
