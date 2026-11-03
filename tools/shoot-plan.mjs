@@ -1,3 +1,6 @@
+// Usage: npm run build, then npx astro preview --port 4321, then node tools/shoot-plan.mjs <outdir>
+// (BASE=http://localhost:<port> for another port). Screenshots /plan and /now with Supabase and
+// Google stubbed, and checks the layout (docs/sheet-glance.md, "Quality bar"); exits 1 on a failure.
 import puppeteer from "puppeteer";
 const OUT = process.argv[2];
 const BASE = process.env.BASE ?? "http://localhost:4321";
@@ -69,12 +72,32 @@ async function shot(path, name, w, h, dark, after) {
   await pg.screenshot({ path: `${OUT}/${name}.png`, fullPage: true });
   await pg.close();
 }
-await shot("/plan/", "plan-week-light", 1440, 900, false);
-await shot("/plan/", "plan-week-dark", 1440, 900, true);
+// --- Checks ------------------------------------------------------------------------------
+const failures = [];
+// No task title is taller than 3 lines, and every icon is hidden from screen readers.
+async function checkRows(pg, name) {
+  const r = await pg.evaluate(() => {
+    const tall = [...document.querySelectorAll(".sheet-title")].filter((t) => t.getClientRects().length)
+      .filter((t) => t.getBoundingClientRect().height > 3 * parseFloat(getComputedStyle(t).lineHeight) + 1)
+      .map((t) => `${t.textContent} (${Math.round(t.getBoundingClientRect().height)}px)`);
+    const shown = [...document.querySelectorAll("svg.sheet-icon")].filter((s) => s.getAttribute("aria-hidden") !== "true").length;
+    return { tall, shown, titles: document.querySelectorAll(".sheet-title").length };
+  });
+  if (!r.titles) failures.push(`${name}: no task titles drawn`);
+  for (const t of r.tall) failures.push(`${name}: title taller than 3 lines: ${t}`);
+  if (r.shown) failures.push(`${name}: ${r.shown} svg.sheet-icon without aria-hidden="true"`);
+}
+for (const w of [1440, 1280]) for (const dark of [false, true]) {
+  await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, (pg) => checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`));
+}
 await shot("/plan/", "plan-today", 1440, 900, false, async (pg) => { await pg.keyboard.press("p"); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
 await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click('[data-act="settings"]'); await new Promise((r) => setTimeout(r, 800)); });
+await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
 await shot("/plan/", "plan-phone", 390, 844, false);
 await shot("/now/", "now-light", 1440, 900, false);
 await shot("/now/", "now-phone", 390, 844, false);
 await b.close();
+for (const f of failures) console.error("FAIL", f);
+console.log(failures.length ? `${failures.length} check(s) failed` : "All checks passed");
+process.exit(failures.length ? 1 : 0);
