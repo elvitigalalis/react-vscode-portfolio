@@ -397,3 +397,15 @@ select cron.schedule('sheet-campus', '35 * * * *', $job$
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_campus_url')
 $job$);
+
+-- --- Mail connect states (docs/sheet-sources.md, v3) -----------------------------------------
+-- The nonce of each signed state mail-connect's /start hands out. /callback deletes it as it
+-- reads it, so a state works once: a replayed callback finds no row. Only the service role (the
+-- function) touches it; the browser's roles get nothing, and with RLS on and no policy they
+-- couldn't read it anyway.
+create table if not exists mail_connect_states (
+  nonce text primary key,
+  created_at timestamptz not null default now()
+);
+alter table mail_connect_states enable row level security;
+revoke all on mail_connect_states from anon, authenticated;

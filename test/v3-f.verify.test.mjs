@@ -15,7 +15,10 @@ const read = (f) => {
   return existsSync(u) ? readFileSync(u, "utf8") : "";
 };
 const schema = read("supabase/schema.sql");
-const fn = read("supabase/functions/mail-connect/index.ts");
+// The function's source followed by the supabase/functions/_shared helpers it imports, since
+// those hold its env reads, secret check and database calls (the shared-helpers fix).
+const withShared = (src) => [src, ...[...src.matchAll(/from ["']\.\.\/_shared\/([\w.-]+)["']/g)].map((m) => read(`supabase/functions/_shared/${m[1]}`))].join("\n");
+const fn = withShared(read("supabase/functions/mail-connect/index.ts"));
 const page = read("src/pages/plan/index.astro");
 const sheetJs = readdirSync(new URL("../src/sheet/", import.meta.url))
   .filter((f) => f.endsWith(".mjs") && f !== "mailconnect.mjs")
@@ -217,10 +220,15 @@ test("mail-connect: deployed like telegram, secrets from the environment", async
   assert.match(fn, /from ["']\.\.\/\.\.\/\.\.\/src\/sheet\/mailconnect\.mjs["']/);
 });
 
+// Changed with the mail-connect fix: /start is a POST carrying the token in an Authorization
+// header (never the URL) and answers with Google's URL; a GET is refused.
 test("mail-connect: /start checks the owner's token before sending him to Google", async () => {
   await import(MOD);
   assert.match(fn, /["'`/]start\b/);
-  assert.match(fn, /access_token/);
+  assert.match(fn, /headers\.get\(\s*["']authorization["']\s*\)/i);
+  assert.match(fn, /Bearer/);
+  assert.doesNotMatch(fn, /searchParams\.get\(\s*["']access_token["']/);
+  assert.match(fn, /status:\s*405/);
   // The token is checked with Supabase Auth, and its email against settings.owner_email.
   assert.match(fn, /\/auth\/v1\/user|auth\.getUser/);
   assert.match(fn, /owner_email/);
@@ -292,12 +300,18 @@ test("/plan: Settings lists the mail accounts with their last error", async () =
   assert.match(sheetJs, /last_error/);
 });
 
+// Changed with the mail-connect fix: the token goes in a POST's Authorization header, and the
+// page follows the URL /start answers with.
 test("/plan: Connect an account opens mail-connect/start with the sign-in token", async () => {
   await import(MOD);
   // A real button or link, so it is reachable from the keyboard.
   assert.match(page + sheetJs, /<(button|a)\b[^>]*>\s*Connect an account\s*</);
   assert.match(page + sheetJs, /mail-connect\/start/);
-  assert.match(sheetJs, /access_token/);
+  const settings = read("src/sheet/mail-settings.mjs");
+  assert.match(settings, /method:\s*["']POST["']/);
+  assert.match(settings, /authorization:\s*`Bearer \$\{/i);
+  assert.match(settings, /location\.assign\(/);
+  assert.doesNotMatch(settings, /start\?access_token=/);
 });
 
 test("/plan: Remove asks first, then deletes the row", async () => {

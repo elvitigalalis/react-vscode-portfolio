@@ -34,6 +34,8 @@ campus_events  uid text pk, title text, starts_at timestamptz, ends_at timestamp
 settings       + interests text       -- the interest profile; null until Lisul writes one
 mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
                connected_at timestamptz, last_used_at timestamptz, last_error text
+mail_connect_states  nonce text pk, created_at timestamptz   -- service role only, no grants
+               to anon or authenticated; one row per unused mail-connect state
 ```
 
 - Course tasks, campus events and mail accounts never reach `public_week`, `public_days` or
@@ -123,6 +125,9 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
     `response_type=code`, `scope=https://www.googleapis.com/auth/gmail.readonly`,
     `access_type=offline`, `prompt=consent`, `include_granted_scopes=false`, `state`, and
     `login_hint` only when `loginHint` is given.
+  - `READONLY` is the Gmail scope above, the one constant `mail-connect` checks the grant against.
+  - `corsFor(origin)` returns `/start`'s CORS headers: `Access-Control-Allow-*` only for the site's
+    origin and `http://localhost:4321`, `Vary: Origin` always.
 
 ### Edge Functions
 
@@ -132,7 +137,7 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
 |---|---|---|---|
 | `brightspace` | `pg_cron` at :20 every hour | `x-sheet-cron` header = `SHEET_CRON_SECRET` | Fetches `SHEET_BRIGHTSPACE_ICS`, applies `courseTaskChanges`, writes `feed_state` |
 | `campus` | `pg_cron` at :35 every hour | same | Fetches the SB Engaged feed with `If-None-Match` and `If-Modified-Since`, applies `campusRows`, writes `feed_state` |
-| `mail-connect` | Lisul's browser (/plan) | `GET /start?access_token=<owner's Supabase JWT>`, checked against `is_owner`, then a signed `state` | Google OAuth (`gmail.readonly`, `access_type=offline`, `prompt=consent`). The callback stores the refresh token in Vault and upserts `mail_accounts`, then redirects to `/plan/?mail=connected` |
+| `mail-connect` | Lisul's browser (/plan) | `POST /start` with `Authorization: Bearer <owner's Supabase JWT>` (CORS: the site's origin and `http://localhost:4321` only; `GET` is 405), checked against `is_owner`; it answers `{ url }`, Google's consent URL. Then a signed, single-use `state`: its nonce sits in `mail_connect_states` until `/callback` consumes it | Google OAuth (`gmail.readonly`, `access_type=offline`, `prompt=consent`). The callback stores the refresh token in Vault and upserts `mail_accounts`, then redirects to `/plan/?mail=connected` |
 | `mail-mcp` | Claude (custom connector) | Supabase Auth OAuth 2.1 access token for the owner | MCP over Streamable HTTP. Tools: `list_mail_accounts`, `search_mail`, `read_message` |
 
 - **Cron:** each job reads its URL from Vault (`sheet_brightspace_url`, `sheet_campus_url`) and
@@ -164,7 +169,7 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
   - On narrow screens it sits under the day, like the calendar.
 - **Settings:**
   - **Mail accounts** lists the connected accounts, each with its last error, plus
-    "Connect an account" (it opens `mail-connect/start`) and Remove.
+    "Connect an account" (it POSTs to `mail-connect/start` and opens the URL it answers) and Remove.
   - **Interests** is a textarea saved to `settings.interests`.
   - **Feeds status** shows each feed's last fetch, whether it worked, and its item count.
 
