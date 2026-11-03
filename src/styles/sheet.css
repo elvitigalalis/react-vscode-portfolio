@@ -89,7 +89,6 @@
 .sheet-btn kbd { font: inherit; font-size: 0.75rem; opacity: 0.75; margin-left: 0.25rem; }
 .sheet-link { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
-.sheet-daynav { display: none; }
 
 .sheet-task { position: relative; cursor: grab; }
 .sheet-task > :not(.sheet-check, .sheet-more, .visually-hidden) { opacity: var(--ink, 1); }
@@ -177,7 +176,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
   .sheet-planner .sheet-day:not(.is-focus) { display: none; }
-  .sheet-planner .sheet-daynav:not([hidden]) { display: flex; gap: 0.4rem; margin-bottom: 0.5rem; }
   .sheet-planner .sheet-row.is-empty:not(.is-add) { display: none; }
   .sheet-events:empty { display: none; }
 }
@@ -207,15 +205,13 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block { cursor: grab; }
 /* Proposed blocks are Claude's until approved: a dashed outline, no fill. */
 .sheet-block.is-proposed { background: var(--bg); border: 1px dashed var(--accent); }
-.sheet-approve { font-size: inherit; align-self: flex-start; }
 .sheet-row:has(.sheet-proposal) { flex-wrap: wrap; }
 .sheet-proposal {
-  flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 0 0.4rem; border: 1px dashed var(--accent); border-radius: 0.3rem;
+  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.4rem; border: 1px dashed var(--accent); border-radius: 0.3rem;
   padding: 0 0.3rem; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 .sheet-shutline { position: absolute; left: -3.25rem; right: 0; border-top: 2px dashed var(--accent); cursor: ns-resize; touch-action: none; height: 0.75rem; }
 .sheet-shutline span { position: absolute; right: 0.4rem; top: -1.1rem; font-size: 0.6875rem; color: var(--accent); }
-.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--danger); pointer-events: none; }
 .sheet-dialog-end { display: flex; justify-content: flex-end; margin-top: 1rem; }
 .sheet-plan .sheet-task { cursor: grab; }
 .sheet-plan .sheet-task.is-picked { background: var(--chip); border-bottom-color: var(--accent); }
@@ -360,7 +356,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block.is-short .sheet-btn-approve { align-self: center; }
 /* The now line: 2px, a dot at the timeline's edge and its time in the hour gutter. It comes
    before the blocks, which cover it, so it never runs through their text. */
-.sheet-nowline { border-top: 2px solid var(--danger); margin-top: -1px; }
+.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--danger); margin-top: -1px; pointer-events: none; }
 .sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
 .sheet-nowline span {
   position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
@@ -372,7 +368,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 .sheet-banner > .sheet-icon { color: var(--accent); }
 .sheet-banner > .sheet-btn-approve { margin-left: auto; align-self: center; font-size: 0.8125rem; padding: 0.15rem 0.5rem; }
-.sheet-proposal { align-items: center; }
 .sheet-proposal > .sheet-icon { color: var(--accent); }
 .sheet-proposal > .sheet-btn-approve { margin-left: auto; align-self: center; }
 
