@@ -23,7 +23,7 @@ const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h *
 let dialog;
 let day;          // the day being planned
 let events = [];  // his Google events that day
-let notes = [];   // the day's proposal: "Didn't fit: …", "Campus pick: …"
+let notes = [];   // the day's proposal: "Didn't fit: …", "Couldn't fit: …", "Campus pick: …"
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
@@ -167,7 +167,7 @@ async function fetchNotes() {
   try {
     const p = await api.proposalOn(day);
     const campus = p?.picks?.length ? await api.campusByUid(p.picks.map((x) => x.uid)) : [];
-    notes = planNotes(p, campus, SHEET.timeZone);
+    notes = planNotes(p, campus, SHEET.timeZone, [...state.tasks.values()]);
   } catch (e) { console.error(e); }
 }
 
