@@ -147,7 +147,7 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
   **Add to my day**.
   - The filters are tag chips, the counts from `campusTags`, and a "Show practices and meetings"
     switch. They are remembered in localStorage.
-  - It is keyboard-reachable, and the `?` help list names it.
+  - It is keyboard-reachable (`C` opens the focused day's list), and the `?` help list names it.
   - On narrow screens it sits under the day, like the calendar.
 - **Settings:**
   - **Mail accounts** lists the connected accounts, each with its last error, plus

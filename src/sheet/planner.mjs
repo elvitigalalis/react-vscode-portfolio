@@ -66,7 +66,7 @@ export function failed(err) {
 let undoFn = null;
 let toastTimer;
 
-function offerUndo(text, fn) {
+export function offerUndo(text, fn) {
   undoFn = fn;
   $("[data-toast-text]").textContent = text;
   $("[data-toast]").hidden = false;

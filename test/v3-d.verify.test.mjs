@@ -213,14 +213,14 @@ function closure(entry) {
 const planFiles = () => closure("src/pages/plan/index.astro");
 const planSource = () => [...planFiles().values()].join("\n");
 
-test("/plan: loads campus.mjs and reads campus_events", { todo: true }, async () => {
+test("/plan: loads campus.mjs and reads campus_events", async () => {
   await import("../src/sheet/campus.mjs");
   const files = planFiles();
   assert.ok([...files.keys()].some((f) => f.endsWith("/src/sheet/campus.mjs")), "a module /plan loads imports campus.mjs");
   assert.match(planSource(), /campus_events/);
 });
 
-test("/plan: the Campus row has a markup hook, a count, Add to my day and the routine switch", { todo: true }, async () => {
+test("/plan: the Campus row has a markup hook, a count, Add to my day and the routine switch", async () => {
   await import("../src/sheet/campus.mjs");
   const src = planSource();
   assert.match(src, /data-campus/, "a data-campus hook on the row or list");
@@ -232,7 +232,7 @@ test("/plan: the Campus row has a markup hook, a count, Add to my day and the ro
   assert.match(src, /campusTags/);
 });
 
-test("/plan: Add to my day goes through eventToTask and the existing task insert, with undo", { todo: true }, async () => {
+test("/plan: Add to my day goes through eventToTask and the existing task insert, with undo", async () => {
   await import("../src/sheet/campus.mjs");
   const users = [...planFiles()].filter(([f, text]) => !f.endsWith("/campus.mjs") && /\beventToTask\b/.test(text));
   assert.ok(users.length, "a module /plan loads calls eventToTask");
@@ -242,7 +242,7 @@ test("/plan: Add to my day goes through eventToTask and the existing task insert
   }
 });
 
-test("/plan: the ? help list names the Campus list", { todo: true }, async () => {
+test("/plan: the ? help list names the Campus list", async () => {
   await import("../src/sheet/campus.mjs");
   const page = readFileSync(join(root, "src/pages/plan/index.astro"), "utf8");
   const help = page.match(/<dialog[^>]*data-help[\s\S]*?<\/dialog>/)?.[0];
@@ -250,7 +250,7 @@ test("/plan: the ? help list names the Campus list", { todo: true }, async () =>
   assert.match(help, /<dd>[^<]*campus/i, "a help entry for the Campus list");
 });
 
-test("/plan: the campus filters use localStorage only inside try/catch", { todo: true }, async () => {
+test("/plan: the campus filters use localStorage only inside try/catch", async () => {
   await import("../src/sheet/campus.mjs");
   const campusFiles = [...planFiles()].filter(([, text]) => /Show practices and meetings/.test(text));
   assert.ok(campusFiles.length, "the module drawing the campus filters");
@@ -267,7 +267,7 @@ test("/plan: the campus filters use localStorage only inside try/catch", { todo:
   assert.ok(uses > 0, "the filters are remembered in localStorage");
 });
 
-test("/plan: every event link opens in a new tab with rel=noopener", { todo: true }, async () => {
+test("/plan: every event link opens in a new tab with rel=noopener", async () => {
   await import("../src/sheet/campus.mjs");
   const campusFiles = [...planFiles()].filter(([, text]) => /Add to my day/.test(text));
   assert.ok(campusFiles.length, "the module drawing the campus list");
@@ -284,7 +284,7 @@ test("/plan: every event link opens in a new tab with rel=noopener", { todo: tru
   assert.ok(links > 0, "the list links each event's page");
 });
 
-test("/now: never loads campus.mjs or mentions campus events", { todo: true }, async () => {
+test("/now: never loads campus.mjs or mentions campus events", async () => {
   await import("../src/sheet/campus.mjs");
   const files = closure("src/pages/now/index.astro");
   assert.ok(![...files.keys()].some((f) => f.endsWith("/src/sheet/campus.mjs")), "/now never imports campus.mjs");
