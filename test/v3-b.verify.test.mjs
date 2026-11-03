@@ -263,7 +263,10 @@ test("schema: sheet-brightspace runs at minute 20 through Vault, and does nothin
 
 // --- The brightspace Edge Function (supabase/functions/brightspace/index.ts) -------------------
 
-const fn = () => read("supabase/functions/brightspace/index.ts");
+// The function's source followed by the supabase/functions/_shared helpers it imports, since
+// those hold its env reads, secret check and database calls (the shared-helpers fix).
+const withShared = (src) => [src, ...[...src.matchAll(/from ["']\.\.\/_shared\/([\w.-]+)["']/g)].map((m) => read(`supabase/functions/_shared/${m[1]}`))].join("\n");
+const fn = () => withShared(read("supabase/functions/brightspace/index.ts"));
 
 test("function: it lets in only the cron, comparing the secret in constant time", async () => {
   const src = fn();

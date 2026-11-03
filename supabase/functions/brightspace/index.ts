@@ -14,13 +14,12 @@
 // Secrets (function secrets, set by Lisul, never in the repo): SHEET_BRIGHTSPACE_ICS, the feed's
 // subscription URL (Brightspace Calendar, "Subscribe"; it carries a private token, so it is
 // never logged or written to feed_state), and SHEET_CRON_SECRET. SUPABASE_URL and
-// SUPABASE_SERVICE_ROLE_KEY are provided by Supabase.
+// SUPABASE_SERVICE_ROLE_KEY are provided by Supabase and read in ../_shared/server.ts, with the
+// shared-secret check and the database calls.
 import { parseIcs } from "../../../src/sheet/ical.mjs";
 import { courseTaskChanges } from "../../../src/sheet/feeds.mjs";
+import { calendarText, db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
-const env = (name: string) => Deno.env.get(name) ?? "";
-const SUPABASE_URL = env("SUPABASE_URL");
-const SERVICE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const FEED = env("SHEET_BRIGHTSPACE_ICS");
 // Brightspace may hand out the link as webcal://, which fetch can't open; it is https underneath.
@@ -38,50 +37,13 @@ Deno.serve(async (req) => {
   const fetched_at = new Date().toISOString();
   try {
     const out = await sync(new Date());
-    await saveState({ fetched_at, ok: true, error: null, items: out.items });
+    await saveFeedState(SOURCE, { fetched_at, ok: true, error: null, items: out.items });
     return Response.json({ ok: true, ...out });
   } catch (e) {
-    const error = scrub(e instanceof Error ? e.message : String(e));
-    console.error("brightspace:", error);
-    // Recording the failure can fail too (the database being the problem); say so either way.
-    await saveState({ fetched_at, ok: false, error }).catch(() => {});
-    return Response.json({ ok: false, error }, { status: 502 });
+    // The feed URL carries a private token, so it is taken out of the error (_shared/server.ts).
+    return feedFailed(SOURCE, e, fetched_at, [FEED, FEED_URL]);
   }
 });
-
-// Whether a header holds the secret, compared without stopping at the first difference.
-function secretMatches(a: string, b: string) {
-  const x = new TextEncoder().encode(a);
-  const y = new TextEncoder().encode(b);
-  let diff = x.length ^ y.length;
-  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
-  return diff === 0;
-}
-
-// An error's text with the feed URL taken out (fetch errors can quote it), and any other link
-// too, cut to a line's length.
-const scrub = (msg: string) => msg.split(FEED).join("<feed>").split(FEED_URL).join("<feed>").replace(/(https?|webcals?):\/\/\S+/g, "<link>").slice(0, 300);
-
-// --- The database, through PostgREST with the service key (it bypasses row-level security) ---
-
-async function db(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...init,
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json", ...init.headers },
-  });
-  if (!res.ok) throw new Error(`${path.split("?")[0]}: ${res.status} ${await res.text()}`);
-  return res.status === 204 || res.status === 201 ? null : res.json();
-}
-
-// Upserts follow PostgREST: on_conflict names the unique columns, and
-// Prefer: resolution=ignore-duplicates or merge-duplicates says what a clash does
-// (docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
-const saveState = (row: Record<string, unknown>) =>
-  db("feed_state?on_conflict=source", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ source: SOURCE, ...row }),
-  });
 
 // --- Sync ---------------------------------------------------------------------------------
 
@@ -96,10 +58,7 @@ async function sync(now: Date) {
   const tasks = await db(`tasks?select=id,title,due,done,source,source_uid&source=eq.${SOURCE}`);
   const seen = (await db(`feed_seen?select=uid&source=eq.${SOURCE}`)).map((r: { uid: string }) => r.uid);
 
-  const res = await fetch(FEED_URL, { headers: { Accept: "text/calendar" } });
-  if (!res.ok) throw new Error(`feed: HTTP ${res.status}`);
-  const text = await res.text();
-  if (!text.includes("BEGIN:VCALENDAR")) throw new Error("feed: not an iCal calendar");
+  const text = await calendarText(await fetch(FEED_URL, { headers: { Accept: "text/calendar" } }));
 
   // From yesterday on: items already past when the sync first runs don't become tasks, and a
   // past item keeps the due date it last had. Brightspace lists the term ahead, so half a year
