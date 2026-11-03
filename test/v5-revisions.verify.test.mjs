@@ -271,7 +271,7 @@ const snapshot = (extra = {}) => ({ settings, day: null, tasks, blocks: planBloc
 const openPlan = { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" };
 const briefSent = { block_id: null, kind: "brief", day, send_at: "2026-11-04T13:00:00.000Z", sent_at: "2026-11-04T13:00:01Z" };
 
-test("brief: Approve all and Skip carry the day and the revision", todo, async () => {
+test("brief: Approve all and Skip carry the day and the revision", async () => {
   const { whatToSend } = await nudges();
   const [brief] = whatToSend(snapshot(), new Date("2026-11-04T13:00:00Z"));
   assert.equal(brief.kind, "brief");
@@ -282,7 +282,7 @@ test("brief: Approve all and Skip carry the day and the revision", todo, async (
   ]);
 });
 
-test("proposal message: a morning revision 2 made after the brief carries revision 2", todo, async () => {
+test("proposal message: a morning revision 2 made after the brief carries revision 2", async () => {
   const { whatToSend } = await nudges();
   const snap2 = snapshot({ proposal: revision(2, { created_at: "2026-11-04T15:42:00Z" }), log: [briefSent] });
   const out = whatToSend(snap2, new Date("2026-11-04T15:42:30Z"));
@@ -296,14 +296,14 @@ test("proposal message: a morning revision 2 made after the brief carries revisi
 
 const update = (data, chat = 42) => ({ callback_query: { id: "q1", data, message: { message_id: 7, chat: { id: chat } } } });
 
-test("readTap: pa: and ps: with a revision name the action, the day and the revision", todo, async () => {
+test("readTap: pa: and ps: with a revision name the action, the day and the revision", async () => {
   const { readTap } = await nudges();
   assert.deepEqual(readTap(update("pa:2026-11-04:2"), settings), { action: "pa", day, rev: 2, query_id: "q1", chat_id: 42, message_id: 7 });
   assert.deepEqual(readTap(update("ps:2026-11-04:13"), settings), { action: "ps", day, rev: 13, query_id: "q1", chat_id: 42, message_id: 7 });
   assert.deepEqual(readTap(update("pa:2026-11-04:999"), settings), { action: "pa", day, rev: 999, query_id: "q1", chat_id: 42, message_id: 7 });
 });
 
-test("readTap: a revision that isn't 1-999 without leading zeros is ignored", todo, async () => {
+test("readTap: a revision that isn't 1-999 without leading zeros is ignored", async () => {
   const { readTap } = await nudges();
   for (const data of ["pa:2026-11-04:0", "pa:2026-11-04:02", "pa:2026-11-04:1000", "pa:2026-11-04:x", "pa:2026-11-04:", "pa:2026-11-04:2:3", "ps:2026-11-04:-1"]) {
     assert.equal(readTap(update(data), settings), null, data);
@@ -313,7 +313,7 @@ test("readTap: a revision that isn't 1-999 without leading zeros is ignored", to
 
 const tapAt = new Date("2026-11-04T13:05:00Z");
 
-test("Approve all on the current revision approves it through approve_proposal", todo, async () => {
+test("Approve all on the current revision approves it through approve_proposal", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "pa", day, rev: 2 }, snapshot({ proposal: revision(2) }), tapAt), {
     changes: [{ rpc: "approve_proposal", args: { d: day, rev: 2 } }],
@@ -321,7 +321,7 @@ test("Approve all on the current revision approves it through approve_proposal",
   });
 });
 
-test("Skip on the current revision skips it through skip_proposal", todo, async () => {
+test("Skip on the current revision skips it through skip_proposal", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "ps", day, rev: 2 }, snapshot({ proposal: revision(2) }), tapAt), {
     changes: [{ rpc: "skip_proposal", args: { d: day, rev: 2 } }],
@@ -329,7 +329,7 @@ test("Skip on the current revision skips it through skip_proposal", todo, async 
   });
 });
 
-test("a tap on an older revision says a newer plan is out and changes nothing", todo, async () => {
+test("a tap on an older revision says a newer plan is out and changes nothing", async () => {
   const { handleTap } = await nudges();
   const newer = { changes: [], text: "A newer plan is out" };
   assert.deepEqual(handleTap({ action: "pa", day, rev: 1 }, snapshot({ proposal: revision(2) }), tapAt), newer);
@@ -338,13 +338,13 @@ test("a tap on an older revision says a newer plan is out and changes nothing", 
   assert.deepEqual(handleTap({ action: "pa", day, rev: 1 }, snapshot({ proposal: revision(2, { status: "approved" }) }), tapAt), newer);
 });
 
-test("a v4 button with no revision acts as revision 1", todo, async () => {
+test("a v4 button with no revision acts as revision 1", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "pa", day }, snapshot({ proposal: revision(2) }), tapAt), { changes: [], text: "A newer plan is out" });
   assert.deepEqual(handleTap({ action: "pa", day }, snapshot(), tapAt), { changes: [{ rpc: "approve_proposal", args: { d: day, rev: 1 } }], text: "✓ Approved 3 blocks" });
 });
 
-test("a tap on the current revision once decided says so; a lapsed or missing plan says it lapsed", todo, async () => {
+test("a tap on the current revision once decided says so; a lapsed or missing plan says it lapsed", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "pa", day, rev: 2 }, snapshot({ proposal: revision(2, { status: "approved" }) }), tapAt), { changes: [], text: "Already approved" });
   assert.deepEqual(handleTap({ action: "pa", day, rev: 2 }, snapshot({ proposal: revision(2, { status: "skipped" }) }), tapAt), { changes: [], text: "Already skipped" });
