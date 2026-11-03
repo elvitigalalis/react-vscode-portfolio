@@ -23,8 +23,9 @@ const all = {
 // The home page gets 100 KB for everything but the fonts, plus the fonts' own 64 KB.
 const home = { "resource-summary:total:size": fail({ maxNumericValue: (100 + 64) * 1024 }), "resource-summary:total:count": fail({ maxNumericValue: 15 }) };
 const writeup = { "resource-summary:total:size": fail({ maxNumericValue: 300 * 1024 }) };
-// The Sheet's pages (docs/sheet.md) run the planner's script and make a few requests to one
-// third-party origin, Supabase; they are noindex, so they cannot be "crawlable" either.
+// The Sheet's pages (docs/sheet.md, and the OAuth consent page) run the planner's script and
+// make a few requests to one third-party origin, Supabase; they are noindex, so they cannot be
+// "crawlable" either.
 const sheet = {
   "resource-summary:script:size": fail({ maxNumericValue: 60 * 1024 }),
   "resource-summary:third-party:count": fail({ maxNumericValue: 8 }),
@@ -47,8 +48,8 @@ module.exports = {
       assertMatrix: [
         entry("/404\\.html$", home, notFound),
         entry("/projects/", writeup),
-        entry("/(plan|now)/", sheet),
-        entry("^(?!.*/projects/)(?!.*/(plan|now)/)(?!.*/404\\.html$).*$", home),
+        entry("/(plan|now|oauth/consent)/", sheet),
+        entry("^(?!.*/projects/)(?!.*/(plan|now|oauth/consent)/)(?!.*/404\\.html$).*$", home),
         // Drift shows up as a warning well before it fails.
         { matchingUrlPattern: ".*", assertions: {
           "largest-contentful-paint": ["warn", { maxNumericValue: 1500 }],

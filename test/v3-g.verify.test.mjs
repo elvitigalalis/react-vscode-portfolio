@@ -305,7 +305,7 @@ function consentCode(html) {
   return html + [...seen].map((f) => readFileSync(f, "utf8")).join("\n");
 }
 
-test("consent: the page exists, is noindex and stays out of the sitemap", { todo: true }, async () => {
+test("consent: the page exists, is noindex and stays out of the sitemap", async () => {
   await import("../src/sheet/mail.mjs");
   const html = consentPage();
   assert.match(html, /<meta name="robots" content="noindex/);
@@ -315,7 +315,7 @@ test("consent: the page exists, is noindex and stays out of the sitemap", { todo
   }
 });
 
-test("consent: it shows Approve and Deny, the client and the scopes, through Supabase's OAuth server", { todo: true }, async () => {
+test("consent: it shows Approve and Deny, the client and the scopes, through Supabase's OAuth server", async () => {
   await import("../src/sheet/mail.mjs");
   const code = consentCode(consentPage());
   assert.match(code, /<button[^>]*>\s*Approve\s*<\/button>|["'`]Approve["'`]/);

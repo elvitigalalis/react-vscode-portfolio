@@ -16,8 +16,11 @@ const GOOGLE_TTL = 55 * 60 * 1000;
 const read = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
 const save = (s) => { try { s ? localStorage.setItem(KEY, JSON.stringify(s)) : localStorage.removeItem(KEY); } catch {} };
 
-export function signIn() {
-  const q = new URLSearchParams({ provider: "google", redirect_to: `${location.origin}/plan/`, scopes: SCOPES });
+export const signIn = () => signInTo("/plan/");
+
+// Google sign-in that comes back to `path` on this site (the OAuth consent page uses it).
+export function signInTo(path) {
+  const q = new URLSearchParams({ provider: "google", redirect_to: `${location.origin}${path}`, scopes: SCOPES });
   location.assign(`${SHEET.supabaseUrl}/auth/v1/authorize?${q}`);
 }
 
@@ -55,6 +58,8 @@ async function session() {
 }
 
 export const signedIn = async () => Boolean(await session());
+// The signed-in user's Supabase access token, refreshed when stale; null when signed out.
+export const accessToken = async () => (await session())?.access_token ?? null;
 export const googleReady = () => { const s = read(); return Boolean(s?.provider_token && Date.now() < s.provider_expires_at); };
 
 // --- Supabase REST -----------------------------------------------------------------------
