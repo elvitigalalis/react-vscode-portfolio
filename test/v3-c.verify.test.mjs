@@ -104,7 +104,7 @@ const ev = (uid, start, end) => ({
 
 // --- campusRows ------------------------------------------------------------------------------
 
-test("v3-c campusRows: maps real SB Engaged events to campus_events rows", { todo: true }, async () => {
+test("v3-c campusRows: maps real SB Engaged events to campus_events rows", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const rows = campusRows([toscanini, bayGull, greenDot, lgbt, midterms], NOW);
   assert.deepEqual(pick(rows), [
@@ -149,7 +149,7 @@ test("v3-c campusRows: maps real SB Engaged events to campus_events rows", { tod
   ]);
 });
 
-test("v3-c campusRows: categories split on commas give the same tags", { todo: true }, async () => {
+test("v3-c campusRows: categories split on commas give the same tags", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const split = { ...toscanini, categories: ["club_acronym:TOSCANINIRESIDENCEHALL", "event_type:Trip/Excursion",
     "event_tags: Free Food & Refreshments", "Health & Wellness"] };
@@ -159,7 +159,7 @@ test("v3-c campusRows: categories split on commas give the same tags", { todo: t
   assert.equal(row.group_name, "Toscanini Residence Hall");
 });
 
-test("v3-c campusRows: group falls back to the club acronym; no categories give null type and no tags", { todo: true }, async () => {
+test("v3-c campusRows: group falls back to the club acronym; no categories give null type and no tags", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const noOrganizer = { ...bayGull, organizer: undefined };
   const bare = { ...lgbt, uid: "bare@campusgroups.com", organizer: undefined, categories: [] };
@@ -172,7 +172,7 @@ test("v3-c campusRows: group falls back to the club acronym; no categories give 
   assert.deepEqual(byUid["bare@campusgroups.com"].tags, []);
 });
 
-test("v3-c campusRows: location is kept when present, null when hidden or blank", { todo: true }, async () => {
+test("v3-c campusRows: location is kept when present, null when hidden or blank", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const at = (uid, location) => ({ ...ev(uid, "2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"), location });
   const rows = campusRows([
@@ -189,7 +189,7 @@ test("v3-c campusRows: location is kept when present, null when hidden or blank"
   ]);
 });
 
-test("v3-c campusRows: keeps events overlapping now to 14 days ahead", { todo: true }, async () => {
+test("v3-c campusRows: keeps events overlapping now to 14 days ahead", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const rows = campusRows([
     ev("ended-earlier", "2026-11-02T22:00:00.000Z", "2026-11-03T00:00:00.000Z"), // yesterday evening
@@ -206,7 +206,7 @@ test("v3-c campusRows: keeps events overlapping now to 14 days ahead", { todo: t
   assert.equal(running.ends_at, "2026-11-03T16:00:00.000Z");
 });
 
-test("v3-c campusRows: an all-day event in the window is kept as all_day", { todo: true }, async () => {
+test("v3-c campusRows: an all-day event in the window is kept as all_day", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const allDay = { ...ev("all-day", "2026-11-06", "2026-11-07"), allDay: true };
   const [row] = campusRows([allDay], NOW);
@@ -216,7 +216,7 @@ test("v3-c campusRows: an all-day event in the window is kept as all_day", { tod
   assert.ok(String(row.ends_at).startsWith("2026-11-07"), row.ends_at);
 });
 
-test("v3-c campusRows: no events give no rows", { todo: true }, async () => {
+test("v3-c campusRows: no events give no rows", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   assert.deepEqual(campusRows([], NOW), []);
 });
@@ -225,7 +225,7 @@ test("v3-c campusRows: no events give no rows", { todo: true }, async () => {
 
 const tableBody = (sql, name) => sql.match(new RegExp(`create table if not exists ${name} \\(([\\s\\S]*?)\\n\\);`))?.[1];
 
-test("v3-c schema: campus_events has the contract's columns and uid primary key", { todo: true }, async () => {
+test("v3-c schema: campus_events has the contract's columns and uid primary key", async () => {
   const sql = read("supabase/schema.sql");
   const body = tableBody(sql, "campus_events");
   assert.ok(body, "no `create table if not exists campus_events (…\\n);`");
@@ -236,7 +236,7 @@ test("v3-c schema: campus_events has the contract's columns and uid primary key"
   assert.match(body, /^\s*uid text[^\n]*primary key/m);
 });
 
-test("v3-c schema: campus_events is owner-only under is_owner()", { todo: true }, async () => {
+test("v3-c schema: campus_events is owner-only under is_owner()", async () => {
   const sql = read("supabase/schema.sql");
   assert.match(sql, /alter table campus_events enable row level security;/);
   const policy = sql.match(/create policy (\w+) on campus_events for all using \(is_owner\(\)\) with check \(is_owner\(\)\);/);
@@ -246,7 +246,7 @@ test("v3-c schema: campus_events is owner-only under is_owner()", { todo: true }
   assert.doesNotMatch(sql, /create policy \w+ on campus_events (?!for all using \(is_owner\(\)\))/);
 });
 
-test("v3-c schema: campus_events never reaches the public views or anon", { todo: true }, async () => {
+test("v3-c schema: campus_events never reaches the public views or anon", async () => {
   const sql = read("supabase/schema.sql");
   const views = [...sql.matchAll(/create or replace view (public_\w+) as([\s\S]*?);/g)];
   assert.ok(views.length >= 3);
@@ -254,7 +254,7 @@ test("v3-c schema: campus_events never reaches the public views or anon", { todo
   assert.doesNotMatch(sql, /grant [^;]*on [^;]*campus_events[^;]*;/);
 });
 
-test("v3-c schema: the campus_events part is safe to re-run", { todo: true }, async () => {
+test("v3-c schema: the campus_events part is safe to re-run", async () => {
   const sql = read("supabase/schema.sql");
   assert.doesNotMatch(sql, /create table (?!if not exists )campus_events/);
   assert.doesNotMatch(sql, /create (unique )?index (?!if not exists )\w* ?on campus_events/);
@@ -263,7 +263,7 @@ test("v3-c schema: the campus_events part is safe to re-run", { todo: true }, as
   assert.ok(unschedule >= 0 && schedule > unschedule, "sheet-campus is unscheduled before it is scheduled");
 });
 
-test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", { todo: true }, async () => {
+test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", async () => {
   const sql = read("supabase/schema.sql");
   const job = sql.match(/select cron\.schedule\('sheet-campus', '35 \* \* \* \*', \$job\$([\s\S]*?)\$job\$\);/);
   assert.ok(job, "no `cron.schedule('sheet-campus', '35 * * * *', $job$…$job$)`");
@@ -279,21 +279,21 @@ test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", { to
 
 const fn = () => read("supabase/functions/campus/index.ts");
 
-test("v3-c function: refuses calls without the cron secret", { todo: true }, async () => {
+test("v3-c function: refuses calls without the cron secret", async () => {
   const src = fn();
   assert.match(src, /Deno\.env\.get\(\s*["'`]?SHEET_CRON_SECRET|env\(\s*["'`]SHEET_CRON_SECRET["'`]\s*\)/);
   assert.match(src, /["'`]x-sheet-cron["'`]/);
   assert.match(src, /status:\s*(401|403)/);
 });
 
-test("v3-c function: uses parseIcs and campusRows from the shared modules", { todo: true }, async () => {
+test("v3-c function: uses parseIcs and campusRows from the shared modules", async () => {
   const src = fn();
   assert.match(src, /import \{[^}]*\bcampusRows\b[^}]*\} from ["'][./]+\/src\/sheet\/feeds\.mjs["']/);
   assert.match(src, /import \{[^}]*\bparseIcs\b[^}]*\} from ["'][./]+\/src\/sheet\/ical\.mjs["']/);
   assert.match(src, /https:\/\/sbengaged\.stonybrook\.edu\/ical\/stonybrook\/ical_stonybrook\.ics/);
 });
 
-test("v3-c function: sends conditional requests from feed_state and stops on 304", { todo: true }, async () => {
+test("v3-c function: sends conditional requests from feed_state and stops on 304", async () => {
   const src = fn();
   assert.match(src, /feed_state/);
   assert.match(src, /["'`]campus["'`]/, "its feed_state source is 'campus'");
@@ -306,7 +306,7 @@ test("v3-c function: sends conditional requests from feed_state and stops on 304
   assert.match(src, /status\s*===?\s*304/);
 });
 
-test("v3-c function: upserts and deletes ended rows in batches, then writes feed_state", { todo: true }, async () => {
+test("v3-c function: upserts and deletes ended rows in batches, then writes feed_state", async () => {
   const src = fn();
   assert.match(src, /campus_events/);
   assert.match(src, /on_conflict=uid|resolution=merge-duplicates|onConflict:\s*["'`]uid["'`]/);
@@ -317,7 +317,7 @@ test("v3-c function: upserts and deletes ended rows in batches, then writes feed
   assert.match(src, /ok:\s*false/, "a failed fetch is recorded");
 });
 
-test("v3-c function: holds no secret literals", { todo: true }, async () => {
+test("v3-c function: holds no secret literals", async () => {
   const src = fn();
   assert.doesNotMatch(src, /eyJ[A-Za-z0-9_-]{10,}/, "a JWT");
   assert.doesNotMatch(src, /["'`][A-Za-z0-9_+/=-]{32,}["'`]/, "a long token");
