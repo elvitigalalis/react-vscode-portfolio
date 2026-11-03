@@ -1,0 +1,103 @@
+---
+// The authorization page for Supabase Auth's OAuth 2.1 server (docs/sheet-sources.md, ADR 0002):
+// when Claude connects the mail connector, Supabase sends Lisul here to approve it. Noindex and
+// out of the sitemap (astro.config.mjs). Its script is src/sheet/consent.mjs.
+import Base from "../../../layouts/Base.astro";
+import { siteConfig } from "../../../config";
+import { SHEET } from "../../../site.mjs";
+import "../../../styles/sheet.css";
+---
+
+<Base title={`Approve access · ${siteConfig.title}`} description="Approve or deny an app asking to connect to Lisul Elvitigala's planner. Only he can sign in." path="/oauth/consent/" noindex>
+  {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
+  <section class="sheet-page sheet-consent">
+    <h1>Approve access</h1>
+    <p class="sheet-status" data-status role="status">Loading…</p>
+    <p data-signin hidden><button type="button" class="sheet-btn primary" data-act="sign-in">Sign in with Google</button></p>
+    <div data-ask hidden>
+      <p><strong data-client></strong> is asking to connect to The Sheet as <span data-user></span>.</p>
+      <p class="sheet-notice" data-site hidden></p>
+      <h2>It asks to</h2>
+      <ul data-scopes></ul>
+      <p class="sheet-notice">Approving sends you back to <span data-redirect></span>.</p>
+      <p class="sheet-consent-actions">
+        <button type="button" class="sheet-btn primary" data-act="approve">Approve</button>
+        <button type="button" class="sheet-btn" data-act="deny">Deny</button>
+      </p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .sheet-consent { max-width: 36rem; }
+  .sheet-consent h2 { font-size: 1.0625rem; margin: 1.25rem 0 0.25rem; }
+  .sheet-consent-actions { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+</style>
+
+<script>
+  import { configured, signInTo, signedIn, takeRedirect, settings } from "../../../sheet/api.mjs";
+  import { authorizationDetails, decide, scopeLines, trustedRedirect } from "../../../sheet/consent.mjs";
+
+  // Never inside another site's frame, where a click on Approve could be stolen: break out.
+  if (top !== self) top.location = location;
+
+  const root = document.querySelector(".sheet-consent");
+  const $ = (sel) => root.querySelector(sel);
+  const status = $("[data-status]");
+  const say = (text) => { status.textContent = text; status.hidden = !text; };
+  // Kept across the Google sign-in, which comes back to this page without the query string.
+  const KEY = "sheet.oauth.authorization_id";
+  const fromUrl = new URLSearchParams(location.search).get("authorization_id");
+  if (fromUrl) try { sessionStorage.setItem(KEY, fromUrl); } catch {}
+  let id = fromUrl;
+  if (!id) try { id = sessionStorage.getItem(KEY); } catch {}
+
+  async function act(action) {
+    for (const b of root.querySelectorAll("button")) b.disabled = true;
+    say(action === "approve" ? "Approving…" : "Denying…");
+    try {
+      const { redirect_url } = await decide(id, action);
+      try { sessionStorage.removeItem(KEY); } catch {}
+      location.assign(redirect_url);
+    } catch (e) {
+      say(`That didn't work (${e.message}). Start the connection again from the app.`);
+    }
+  }
+
+  async function load() {
+    takeRedirect();
+    if (!configured) return say("The planner is not set up yet.");
+    if (!id) return say("Nothing to approve: this page opens when an app asks to connect.");
+    if (!(await signedIn())) {
+      say("Sign in to see what's asking for access.");
+      $("[data-signin]").hidden = false;
+      $("[data-act=sign-in]").addEventListener("click", () => signInTo("/oauth/consent/"));
+      return;
+    }
+    try {
+      const d = await authorizationDetails(id);
+      // Approved before for the same scopes: Supabase hands back the redirect straight away.
+      if (!d.authorization_id) return location.assign(d.redirect_url);
+      // Only the owner can read settings (row-level security), and only the owner's sign-in
+      // opens the mail connector; anyone else may only deny.
+      const owner = Boolean(await settings().catch(() => null));
+      $("[data-client]").textContent = d.client?.name || "An app";
+      $("[data-user]").textContent = d.user?.email ?? "you";
+      if (d.client?.uri) Object.assign($("[data-site]"), { hidden: false, textContent: `Its website: ${d.client.uri}` });
+      $("[data-scopes]").replaceChildren(...scopeLines(d.scope).map((s) => Object.assign(document.createElement("li"), { textContent: s })));
+      $("[data-redirect]").textContent = d.redirect_uri ? new URL(d.redirect_uri).host : "the app";
+      // Only Claude may be approved: its redirect has to go back to claude.ai or claude.com.
+      const claude = trustedRedirect(d.redirect_uri);
+      $("[data-act=approve]").hidden = !(owner && claude);
+      $("[data-act=approve]").addEventListener("click", () => act("approve"));
+      $("[data-act=deny]").addEventListener("click", () => act("deny"));
+      say(!owner ? "Only Lisul's account can approve access. You can deny it."
+        : !claude ? "Warning: this app would send your access somewhere other than Claude (claude.ai or claude.com). If you didn't start this from Claude, someone may be trying to get into your mail. Deny it."
+        : "");
+      $("[data-ask]").hidden = false;
+    } catch (e) {
+      say(`Could not load this request (${e.message}). It may have expired; start again from the app.`);
+    }
+  }
+  load();
+</script>

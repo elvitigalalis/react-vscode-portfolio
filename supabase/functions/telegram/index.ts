@@ -13,13 +13,11 @@
 //
 // Secrets (function secrets, set by Lisul, never in the repo): TELEGRAM_BOT_TOKEN,
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
-// provided by Supabase.
+// provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock } from "../../../src/sheet/nudges.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
+import { db, env, secretMatches } from "../_shared/server.ts";
 
-const env = (name: string) => Deno.env.get(name) ?? "";
-const SUPABASE_URL = env("SUPABASE_URL");
-const SERVICE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const WEBHOOK_SECRET = env("TELEGRAM_WEBHOOK_SECRET");
@@ -35,26 +33,6 @@ Deno.serve(async (req) => {
   }
   return new Response("forbidden", { status: 403 });
 });
-
-// Whether a header holds the secret, compared without stopping at the first difference.
-function secretMatches(a: string, b: string) {
-  const x = new TextEncoder().encode(a);
-  const y = new TextEncoder().encode(b);
-  let diff = x.length ^ y.length;
-  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
-  return diff === 0;
-}
-
-// --- The database, through PostgREST with the service key (it bypasses row-level security) ---
-
-async function db(path: string, init: RequestInit = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...init,
-    headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json", ...init.headers },
-  });
-  if (!res.ok) throw new Error(`${path.split("?")[0]}: ${res.status} ${await res.text()}`);
-  return res.status === 204 ? null : res.json();
-}
 
 // The snapshot whatToSend takes: settings, today's day row, today's tasks and every undone task
 // with a due date, the blocks of those tasks and of today, and today's log.

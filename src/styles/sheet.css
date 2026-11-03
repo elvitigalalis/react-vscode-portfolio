@@ -234,3 +234,34 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   }
   .sheet-day { scroll-snap-align: start; }
 }
+
+/* Settings: mail accounts (src/sheet/mail-settings.mjs) */
+.sheet-settings-part h3 { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
+.sheet-mail { list-style: none; padding: 0; margin: 0.5rem 0; }
+.sheet-mail li { padding: 0.25rem 0; }
+
+/* The Campus list (docs/sheet-sources.md): a row under each day's calendar, the list in a dialog. */
+.sheet-campus-row { font-size: 0.75rem; }
+.sheet-campus { width: min(40rem, calc(100vw - 2rem)); max-width: none; }
+.sheet-campus-filters { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sheet-chip {
+  font: inherit; font-size: 0.75rem; color: var(--fg); background: var(--bg); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; padding: 0.15rem 0.6rem; min-height: 1.75rem;
+}
+.sheet-chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.sheet-campus-switch { font-size: 0.875rem; margin: 0.6rem 0; }
+.sheet-campus-list { list-style: none; }
+.sheet-campus-item {
+  display: grid; grid-template-columns: 1fr auto; gap: 0.1rem 0.75rem; align-items: center;
+  padding: 0.5rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere;
+}
+.sheet-campus-item > :not(.sheet-btn) { grid-column: 1; margin: 0; }
+.sheet-campus-item > .sheet-btn { grid-column: 2; grid-row: 1 / span 4; white-space: nowrap; }
+.sheet-campus-title { font-weight: 600; color: var(--fg); }
+.sheet-campus-food { padding: 0 0.45rem; border-radius: 999px; background: var(--accent); color: var(--on-btn); font-weight: 600; }
+.sheet-campus-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.sheet-campus-tag { font-size: 0.6875rem; color: var(--muted); background: var(--chip); border-radius: 999px; padding: 0 0.45rem; }
+@media (max-width: 40rem) {
+  .sheet-campus-item { grid-template-columns: 1fr; }
+  .sheet-campus-item > .sheet-btn { grid-column: 1; grid-row: auto; justify-self: start; }
+}
