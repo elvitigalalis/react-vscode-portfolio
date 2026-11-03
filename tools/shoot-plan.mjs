@@ -87,14 +87,29 @@ async function checkRows(pg, name) {
   for (const t of r.tall) failures.push(`${name}: title taller than 3 lines: ${t}`);
   if (r.shown) failures.push(`${name}: ${r.shown} svg.sheet-icon without aria-hidden="true"`);
 }
+// The top bar is one row: every control it shows starts on the same line, inside the page.
+async function checkTopBar(pg, name) {
+  const r = await pg.evaluate(() => {
+    const items = [...document.querySelectorAll(".sheet-tools button")].filter((x) => x.getClientRects().length && !x.closest(".visually-hidden"));
+    const rects = items.map((x) => x.getBoundingClientRect());
+    const tops = rects.map((x) => x.top);
+    return { n: items.length, spread: Math.max(...tops) - Math.min(...tops), right: Math.max(...rects.map((x) => x.right)), width: document.documentElement.clientWidth };
+  });
+  if (!r.n) failures.push(`${name}: no top bar drawn`);
+  if (r.spread > 8) failures.push(`${name}: top bar wraps (${Math.round(r.spread)}px between rows)`);
+  if (r.right > r.width) failures.push(`${name}: top bar runs ${Math.round(r.right - r.width)}px off the page`);
+}
 for (const w of [1440, 1280]) for (const dark of [false, true]) {
-  await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, (pg) => checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`));
+  await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, async (pg) => { await checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`); await checkTopBar(pg, `/plan ${w}px ${dark ? "dark" : "light"}`); });
 }
 await shot("/plan/", "plan-today", 1440, 900, false, async (pg) => { await pg.keyboard.press("p"); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
-await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click('[data-act="settings"]'); await new Promise((r) => setTimeout(r, 800)); });
-await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
-await shot("/plan/", "plan-phone", 390, 844, false);
+await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.keyboard.press("s"); await new Promise((r) => setTimeout(r, 800)); });
+await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await pg.click('[data-more] [data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
+for (const dark of [false, true]) {
+  await shot("/plan/", `plan-phone-${dark ? "dark" : "light"}`, 390, 844, dark, (pg) => checkTopBar(pg, `/plan 390px ${dark ? "dark" : "light"}`));
+}
+await shot("/plan/", "plan-more", 1440, 900, false, async (pg) => { await pg.click('[popovertarget="sheet-more"]'); await new Promise((r) => setTimeout(r, 300)); });
 await shot("/now/", "now-light", 1440, 900, false);
 await shot("/now/", "now-phone", 390, 844, false);
 await b.close();
