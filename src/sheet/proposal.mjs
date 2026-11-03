@@ -100,6 +100,45 @@ function text(value, name, max, errors) {
   return t;
 }
 
+// --- v5 D2: a realistic day (docs/sheet-v5.md, "checkProposal") -------------------------------
+
+// "6h00", "6h30": a workload in hours and minutes.
+const hoursLabel = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+
+// The day rules on a proposal's spans ({ name, start, end }, minutes on the day), pushing an
+// error for each: the break rule and the workload cap. The day's approved blocks count; the
+// pending revision's proposed blocks don't, since the new revision replaces them.
+function dayRuleErrors(spans, snapshot, errors) {
+  const rules = snapshot.day_rules;
+  const approved = snapshot.blocks.filter((b) => !b.proposed);
+  const at = (iso) => minutesOn(iso, snapshot.plan_day, snapshot.time_zone);
+
+  // The break rule: blocks less than break_min apart are one run, and a run holding a proposed
+  // block spans at most break_after_min. A single long block is fine; one error per run.
+  const all = [...approved.map((b) => ({ start: at(b.starts_at), end: at(b.ends_at) })), ...spans].sort((a, b) => a.start - b.start);
+  const runs = [];
+  for (const s of all) {
+    const run = runs.at(-1);
+    if (run && s.start - run.end < rules.break_min) run.items.push(s), (run.end = Math.max(run.end, s.end));
+    else runs.push({ start: s.start, end: s.end, items: [s] });
+  }
+  for (const run of runs) {
+    if (run.end - run.start <= rules.break_after_min || run.items.length < 2) continue;
+    const mine = run.items.filter((s) => s.name);
+    if (!mine.length) continue;
+    // The first block to carry the run past the limit, or, when that one is approved, the
+    // run's latest proposed block.
+    const over = run.items.find((s) => s.end - run.start > rules.break_after_min);
+    const named = over?.name ? over : mine.at(-1);
+    errors.push(`${named.name}: makes ${run.end - run.start} minutes of blocks in a row; leave a ${rules.break_min}-minute break after every ${rules.break_after_min}`);
+  }
+
+  const planned = approved.reduce((n, b) => n + blockMinutes(b), 0) + spans.reduce((n, s) => n + s.end - s.start, 0);
+  if (planned > rules.workload_cap_min) {
+    errors.push(`blocks: ${hoursLabel(planned)} planned, over the ${hoursLabel(rules.workload_cap_min)} workload cap`);
+  }
+}
+
 // The checks submit_proposal runs on `input` ({ day, blocks: [{ task_id, start: "HH:MM",
 // minutes }], needs_you: [{ account, message_id, link, sender, subject, why, kind, due? }],
 // picks: [{ uid, why }], note }) against a fresh planSnapshot. Every problem is its own error,
@@ -108,6 +147,7 @@ function text(value, name, max, errors) {
 // starts_at, ends_at }], needs, picks, note }, times in UTC.
 export function checkProposal(input, snapshot) {
   const errors = [];
+  const v5 = snapshot.version === 5;
   const tz = snapshot.time_zone;
   const day = snapshot.plan_day;
   if (input?.day !== day) errors.push(`day: must be ${day}, the day being planned`);
@@ -155,6 +195,7 @@ export function checkProposal(input, snapshot) {
         blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
       }
     });
+    if (v5) dayRuleErrors(placed.map((p) => ({ ...p, name: `blocks[${p.i}]` })), snapshot, errors);
   }
 
   // Needs you.
