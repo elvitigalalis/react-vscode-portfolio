@@ -28,17 +28,17 @@ const block = (starts_at, ends_at, proposed = false, task_id = "t1") =>
 
 // ---------------------------------------------------------------- sourceOf
 
-test("sourceOf: a Brightspace task is a course task", todo, async () => {
+test("sourceOf: a Brightspace task is a course task", async () => {
   const { sourceOf } = await import("../src/sheet/glance.mjs");
   assert.equal(sourceOf({ id: "t1", title: "CSE 320 HW4", source: "brightspace", tag: null }), "course");
 });
 
-test("sourceOf: a #campus task is a campus task", todo, async () => {
+test("sourceOf: a #campus task is a campus task", async () => {
   const { sourceOf } = await import("../src/sheet/glance.mjs");
   assert.equal(sourceOf({ id: "t2", title: "Hack night", source: null, tag: "campus" }), "campus");
 });
 
-test("sourceOf: any other task has no source, and Brightspace comes before the tag", todo, async () => {
+test("sourceOf: any other task has no source, and Brightspace comes before the tag", async () => {
   const { sourceOf } = await import("../src/sheet/glance.mjs");
   assert.equal(sourceOf({ id: "t3", title: "Ship auth", source: null, tag: "workit" }), null);
   assert.equal(sourceOf({ id: "t4", title: "Laundry", source: null, tag: null }), null);
