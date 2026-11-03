@@ -1,6 +1,6 @@
 import puppeteer from "puppeteer";
 const OUT = process.argv[2];
-const BASE = "http://localhost:4321";
+const BASE = process.env.BASE ?? "http://localhost:4321";
 // Week of Mon 2026-11-02; today Tue 11-03.
 const T = (id, title, day, extra = {}) => ({ id, title, day, list: day ? null : "Inbox", position: id, est_min: null, at_time: null, tag: null, public: true, done: false, rolls: 0, due: null, source: null, created_at: "2026-11-01T00:00:00Z", ...extra });
 const tasks = [
