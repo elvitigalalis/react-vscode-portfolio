@@ -16,8 +16,11 @@ const GOOGLE_TTL = 55 * 60 * 1000;
 const read = () => { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } };
 const save = (s) => { try { s ? localStorage.setItem(KEY, JSON.stringify(s)) : localStorage.removeItem(KEY); } catch {} };
 
-export function signIn() {
-  const q = new URLSearchParams({ provider: "google", redirect_to: `${location.origin}/plan/`, scopes: SCOPES });
+export const signIn = () => signInTo("/plan/");
+
+// Google sign-in that comes back to `path` on this site (the OAuth consent page uses it).
+export function signInTo(path) {
+  const q = new URLSearchParams({ provider: "google", redirect_to: `${location.origin}${path}`, scopes: SCOPES });
   location.assign(`${SHEET.supabaseUrl}/auth/v1/authorize?${q}`);
 }
 
@@ -55,7 +58,8 @@ async function session() {
 }
 
 export const signedIn = async () => Boolean(await session());
-// The live Supabase access token, for a page the browser opens itself (mail-connect/start).
+// The signed-in user's Supabase access token, refreshed when stale; null when signed out. Pages
+// the browser opens itself (mail-connect/start) and the OAuth consent page use it.
 export const accessToken = async () => (await session())?.access_token ?? null;
 export const googleReady = () => { const s = read(); return Boolean(s?.provider_token && Date.now() < s.provider_expires_at); };
 
@@ -208,3 +212,17 @@ export async function deleteEvent(id) {
 export const eventTimes = (starts_at, ends_at) => ({ ...(starts_at && { start: { dateTime: starts_at } }), end: { dateTime: ends_at } });
 export const eventTitle = (title, isPublic) => ({ summary: isPublic ? title : "Busy" });
 export const eventReminders = (settings) => ({ reminders: blockReminders(settings) });
+
+// --- Campus events (docs/sheet-sources.md) -----------------------------------------------
+
+// SB Engaged events starting in [from, to), read once per week on screen. Until the campus feed's
+// table exists PostgREST answers 404 (code PGRST205, "table not found";
+// https://docs.postgrest.org/en/stable/references/errors.html), which reads as no events.
+export async function listCampus(fromIso, toIso) {
+  try {
+    return await rest(`campus_events?select=uid,title,starts_at,ends_at,all_day,group_name,event_type,tags,url&starts_at=gte.${fromIso}&starts_at=lt.${toIso}&order=starts_at`);
+  } catch (e) {
+    if (/: 404$/.test(e.message)) return [];
+    throw e;
+  }
+}

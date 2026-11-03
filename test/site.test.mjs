@@ -61,16 +61,18 @@ test("no client JS beyond three tiny inline scripts, except on The Sheet's pages
     assert.doesNotMatch(attrs, /src=/);
     assert.ok(code.length < 1024, `${attrs.trim() || "hash"} script stays tiny`);
   }
-  // Script files exist only for /plan and /now (docs/sheet.md): no other page loads one, and every
-  // one is loaded by those pages, directly or through another script's import.
+  // Script files exist only for /plan, /now (docs/sheet.md) and the OAuth consent page
+  // (docs/sheet-sources.md): no other page loads one, and every one is loaded by those pages,
+  // directly or through another script's import.
   const rel = (f) => f.slice(dist.length);
+  const sheetPage = (f) => /^\/(plan|now|oauth\/consent)\//.test(rel(f));
   const html = builtFiles().filter((f) => f.endsWith(".html"));
   const jsFiles = builtFiles().filter((f) => f.endsWith(".js"));
   const loads = (file, js) => readFileSync(file, "utf8").includes(js.split("/").pop());
-  for (const page of html.filter((f) => !/^\/(plan|now)\//.test(rel(f)))) {
+  for (const page of html.filter((f) => !sheetPage(f))) {
     for (const js of jsFiles) assert.ok(!loads(page, js), `${rel(page)} loads ${rel(js)}`);
   }
-  const reached = new Set(jsFiles.filter((js) => html.some((page) => /^\/(plan|now)\//.test(rel(page)) && loads(page, js))));
+  const reached = new Set(jsFiles.filter((js) => html.some((page) => sheetPage(page) && loads(page, js))));
   for (let grew = true; grew;) {
     grew = false;
     for (const js of jsFiles) if (!reached.has(js) && [...reached].some((from) => loads(from, js))) { reached.add(js); grew = true; }
