@@ -46,7 +46,7 @@ const hour = (h, pop, short = "Mostly Cloudy", temp_f = 50) => ({
 // weatherPeriods and weatherAlerts
 // =============================================================================================
 
-test("weatherPeriods: each hour as start, end, °F, chance of precipitation and the short forecast", todo, async () => {
+test("weatherPeriods: each hour as start, end, °F, chance of precipitation and the short forecast", async () => {
   const { weatherPeriods } = await load();
   const periods = weatherPeriods(forecast);
   assert.equal(periods.length, 19);
@@ -56,7 +56,7 @@ test("weatherPeriods: each hour as start, end, °F, chance of precipitation and 
   assert.deepEqual(periods[16], { start: "2026-11-05T03:00:00.000Z", end: "2026-11-05T04:00:00.000Z", temp_f: 43, pop: 0, short: "Mostly Cloudy" });
 });
 
-test("weatherPeriods: a temperature in °C is converted to °F, rounded", todo, async () => {
+test("weatherPeriods: a temperature in °C is converted to °F, rounded", async () => {
   const { weatherPeriods } = await load();
   const one = {
     properties: {
@@ -70,7 +70,7 @@ test("weatherPeriods: a temperature in °C is converted to °F, rounded", todo, 
   assert.deepEqual(weatherPeriods(one), [{ start: "2026-11-04T19:00:00.000Z", end: "2026-11-04T20:00:00.000Z", temp_f: 52, pop: 5, short: "Sunny" }]);
 });
 
-test("weatherAlerts: event, start (onset, else effective) and end (ends, else expires)", todo, async () => {
+test("weatherAlerts: event, start (onset, else effective) and end (ends, else expires)", async () => {
   const { weatherAlerts } = await load();
   const alerts = {
     type: "FeatureCollection",
