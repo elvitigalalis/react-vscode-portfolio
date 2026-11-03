@@ -228,12 +228,14 @@ for f in brightspace campus; do
   expect "$f refuses a wrong cron secret" "$(status POST "/functions/v1/$f" -H "x-sheet-cron: $WRONG")" 403
 done
 
-# mail-connect answers every outcome with a redirect to /plan carrying a fixed reason word.
-loc=$(curl -s -o /dev/null -m 30 -w '%{http_code} %{redirect_url}' "$URL/functions/v1/mail-connect/start?access_token=$WRONG")
-case "$loc" in
-  *reason=not-owner*) pass "mail-connect refuses a wrong access token" ;;
-  *reason=not-set-up*) fail "mail-connect: its Google client or state secret is not set" ;;
-  *) fail "mail-connect: got ${loc%% *}, want a redirect to /plan with reason=not-owner" ;;
+# mail-connect's /start is a POST with the token in an Authorization header; it answers
+# { error: <reason word> } for a wrong token, and a GET is refused.
+expect "mail-connect /start refuses a GET" "$(status GET /functions/v1/mail-connect/start)" 405
+got=$(curl -s -m 30 -w ' %{http_code}' -X POST "$URL/functions/v1/mail-connect/start" -H "Authorization: Bearer $WRONG")
+case "$got" in
+  *'"not-owner"'*' 403') pass "mail-connect refuses a wrong access token" ;;
+  *'"not-set-up"'*) fail "mail-connect: its Google client or state secret is not set" ;;
+  *) fail "mail-connect: got ${got##* }, want 403 with error not-owner" ;;
 esac
 
 # mail-mcp: RFC 9728 metadata at {resource}/oauth-protected-resource (@supabase/server
