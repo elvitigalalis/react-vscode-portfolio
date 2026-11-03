@@ -289,3 +289,45 @@ begin
   set vault_secret_id = excluded.vault_secret_id, connected_at = now(), last_error = null;
 end $$;
 revoke execute on function mail_account_save(text, text) from public, anon, authenticated;
+
+-- --- Campus events (docs/sheet-sources.md, v3) ----------------------------------------------
+-- SB Engaged's public events from today through 14 days ahead, kept by the campus Edge Function
+-- (supabase/functions/campus), which writes with the service key. The data is public anyway,
+-- but it stays owner-only and out of every public view, so the anon key can't mirror it.
+-- The function records each fetch in feed_state under source 'campus'.
+create table if not exists campus_events (
+  uid text primary key,              -- the feed's UID
+  title text not null,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  all_day boolean not null default false,
+  group_name text,                   -- the organizer, or the club acronym without one
+  event_type text,                   -- "Meeting", "Workshop", …
+  tags text[] not null default '{}', -- "Free Food & Refreshments", "Health & Wellness", …
+  description text,
+  url text,                          -- the event's SB Engaged page
+  location text,                     -- null when the feed hides it behind sign-in
+  updated_at timestamptz not null default now()
+);
+create index if not exists campus_events_starts_at on campus_events (starts_at);
+alter table campus_events enable row level security;
+drop policy if exists owner_all on campus_events;
+create policy owner_all on campus_events for all using (is_owner()) with check (is_owner());
+revoke all on campus_events from anon;
+revoke insert, update, delete on campus_events from authenticated;
+
+-- At :35 every hour, call the campus Edge Function to sync the feed. Like sheet-telegram, its
+-- URL and the shared secret come from Vault; until both exist the job does nothing. The function
+-- takes several seconds (an 8 MB download, then batched writes), longer than pg_net's 2 s
+-- default timeout (supabase.com/docs/guides/database/extensions/pg_net), so it gets 2 minutes.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-campus';
+select cron.schedule('sheet-campus', '35 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_campus_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "campus"}'::jsonb,
+    timeout_milliseconds := 120000)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_campus_url')
+$job$);

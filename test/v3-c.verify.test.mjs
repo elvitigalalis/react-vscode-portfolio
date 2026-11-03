@@ -225,7 +225,7 @@ test("v3-c campusRows: no events give no rows", async () => {
 
 const tableBody = (sql, name) => sql.match(new RegExp(`create table if not exists ${name} \\(([\\s\\S]*?)\\n\\);`))?.[1];
 
-test("v3-c schema: campus_events has the contract's columns and uid primary key", { todo: true }, async () => {
+test("v3-c schema: campus_events has the contract's columns and uid primary key", async () => {
   const sql = read("supabase/schema.sql");
   const body = tableBody(sql, "campus_events");
   assert.ok(body, "no `create table if not exists campus_events (…\\n);`");
@@ -236,7 +236,7 @@ test("v3-c schema: campus_events has the contract's columns and uid primary key"
   assert.match(body, /^\s*uid text[^\n]*primary key/m);
 });
 
-test("v3-c schema: campus_events is owner-only under is_owner()", { todo: true }, async () => {
+test("v3-c schema: campus_events is owner-only under is_owner()", async () => {
   const sql = read("supabase/schema.sql");
   assert.match(sql, /alter table campus_events enable row level security;/);
   const policy = sql.match(/create policy (\w+) on campus_events for all using \(is_owner\(\)\) with check \(is_owner\(\)\);/);
@@ -246,7 +246,7 @@ test("v3-c schema: campus_events is owner-only under is_owner()", { todo: true }
   assert.doesNotMatch(sql, /create policy \w+ on campus_events (?!for all using \(is_owner\(\)\))/);
 });
 
-test("v3-c schema: campus_events never reaches the public views or anon", { todo: true }, async () => {
+test("v3-c schema: campus_events never reaches the public views or anon", async () => {
   const sql = read("supabase/schema.sql");
   const views = [...sql.matchAll(/create or replace view (public_\w+) as([\s\S]*?);/g)];
   assert.ok(views.length >= 3);
@@ -254,7 +254,7 @@ test("v3-c schema: campus_events never reaches the public views or anon", { todo
   assert.doesNotMatch(sql, /grant [^;]*on [^;]*campus_events[^;]*;/);
 });
 
-test("v3-c schema: the campus_events part is safe to re-run", { todo: true }, async () => {
+test("v3-c schema: the campus_events part is safe to re-run", async () => {
   const sql = read("supabase/schema.sql");
   assert.doesNotMatch(sql, /create table (?!if not exists )campus_events/);
   assert.doesNotMatch(sql, /create (unique )?index (?!if not exists )\w* ?on campus_events/);
@@ -263,7 +263,7 @@ test("v3-c schema: the campus_events part is safe to re-run", { todo: true }, as
   assert.ok(unschedule >= 0 && schedule > unschedule, "sheet-campus is unscheduled before it is scheduled");
 });
 
-test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", { todo: true }, async () => {
+test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", async () => {
   const sql = read("supabase/schema.sql");
   const job = sql.match(/select cron\.schedule\('sheet-campus', '35 \* \* \* \*', \$job\$([\s\S]*?)\$job\$\);/);
   assert.ok(job, "no `cron.schedule('sheet-campus', '35 * * * *', $job$…$job$)`");
