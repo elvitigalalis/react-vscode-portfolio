@@ -18,8 +18,12 @@ The day a task must be finished by. It is optional and separate from the day the
 _Avoid_: Deadline
 
 **At risk**:
-An undone task due within two days, or already past due, with no approved block starting before its due day ends. A block any time on the due day clears it.
-_Avoid_: Overdue, urgent
+An undone task due today or within the next two days, with no approved block starting before its due day ends. A block any time on the due day clears it.
+_Avoid_: Urgent
+
+**Overdue**:
+An undone task whose due date has passed.
+_Avoid_: Late, past due
 
 **Block**:
 A stretch of time on a day reserved for one task, mirrored to the "Time blocks" calendar.
