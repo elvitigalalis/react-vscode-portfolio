@@ -1,9 +1,9 @@
 // The Campus list in /plan (docs/sheet-sources.md, "campus.mjs"): which SB Engaged events show
 // under a day, and the task "Add to my day" makes from one. Pure, so node --test covers it.
-import { localNow } from "./logic.mjs";
+import { localNow, cutTitle } from "./logic.mjs";
 
 // Tags as SB Engaged sends them can carry stray spaces; they compare trimmed.
-const tagsOf = (e) => (e.tags ?? []).map((t) => t.trim()).filter(Boolean);
+export const tagsOf = (e) => (e.tags ?? []).map((t) => t.trim()).filter(Boolean);
 const startOf = (e, timeZone) => localNow(new Date(e.starts_at), timeZone);
 
 // SB Engaged tags free food as " Free Food & Refreshments", leading space and all.
@@ -31,21 +31,19 @@ export function campusTags(events) {
   return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }
 
-// SB Engaged sends all-day events as 12 am to 11:55 pm with all_day false; those read as all day
-// in the list, and Add to my day treats them so (no time, no estimate).
+// All day is the row's `all_day`. The feed read (feeds.mjs) sets it, SB Engaged's 12 am to
+// 11:55 pm events included, so the rule lives in one place.
 const minutesLong = (e) => Math.round((Date.parse(e.ends_at) - Date.parse(e.starts_at)) / 60_000);
-export const allDay = (e, timeZone) => Boolean(e.all_day) || (startOf(e, timeZone).minutes === 0 && minutesLong(e) >= 1435);
 
 const pad = (n) => String(n).padStart(2, "0");
 
 // The task "Add to my day" makes: private, tagged #campus, on the day the event starts, at its
 // local start time, with its length as the estimate (at most 4 hours). An all-day event gets
-// neither. The title fits the tasks table's 1 to 500 characters.
+// neither. The title fits the tasks table's 1 to 500 characters (cutTitle).
 export function eventToTask(e, timeZone) {
   const { day, minutes } = startOf(e, timeZone);
-  const title = e.title?.trim() || "Campus event";
   return {
-    title: title.length > 500 ? `${title.slice(0, 499)}…` : title,
+    title: cutTitle(e.title) || "Campus event",
     day,
     list: null,
     at_time: e.all_day ? null : `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
@@ -54,3 +52,11 @@ export function eventToTask(e, timeZone) {
     public: false,
   };
 }
+
+// Whether "Add to my day" already made this event's task: a #campus task with its title on its
+// day. `tasks` is any iterable of task rows (the planner's state.tasks values).
+export const isAdded = (tasks, t) => [...tasks].some((x) => x.tag === "campus" && x.day === t.day && x.title === t.title);
+
+// The tag filters in force on a day: the picked tags that have a chip on screen (`campusTags` of
+// that day). A tag picked on another day is remembered but never empties this one.
+export const activeTags = (picked, onScreen) => picked.filter((g) => onScreen.some((x) => x.tag === g));
