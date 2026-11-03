@@ -33,7 +33,7 @@ function campusSection(doc) {
 
 // ---- Schema ---------------------------------------------------------------------------------
 
-test("v3-e schema: settings.interests is added as text, safe to re-run", { todo: true }, async () => {
+test("v3-e schema: settings.interests is added as text, safe to re-run", async () => {
   const { assert, read } = await load();
   const schema = read("supabase/schema.sql");
   assert.match(schema, /alter table settings add column if not exists interests text\b/);
@@ -43,7 +43,7 @@ test("v3-e schema: settings.interests is added as text, safe to re-run", { todo:
   assert.equal(columns(schema).settings.has("interests"), true);
 });
 
-test("v3-e schema: settings stays owner-only, and no view exposes interests", { todo: true }, async () => {
+test("v3-e schema: settings stays owner-only, and no view exposes interests", async () => {
   const { assert, read } = await load();
   const schema = read("supabase/schema.sql");
   assert.match(schema, /alter table settings enable row level security;/);
@@ -59,7 +59,7 @@ test("v3-e schema: settings stays owner-only, and no view exposes interests", { 
   assert.doesNotMatch(schema, /grant [^;]*\bon (table )?([\w, ]*\b)?settings\b[^;]*\bto [^;]*\banon\b/);
 });
 
-test("v3-e schema: the seed row carries no interest profile", { todo: true }, async () => {
+test("v3-e schema: the seed row carries no interest profile", async () => {
   const { assert, read } = await load();
   const schema = read("supabase/schema.sql");
   for (const [stmt] of schema.matchAll(/(insert into settings|update settings)[^;]*;/g)) {
@@ -88,7 +88,7 @@ async function planMarkup() {
   return walk(resolve(root, "src/pages/plan/index.astro"));
 }
 
-test("v3-e /plan: Settings has a labelled Interests textarea", { todo: true }, async () => {
+test("v3-e /plan: Settings has a labelled Interests textarea", async () => {
   const { assert } = await load();
   const html = await planMarkup();
   const areas = [...html.matchAll(/<textarea\b([^>]*)>/g)].map(([, attrs]) => ({
@@ -106,7 +106,7 @@ test("v3-e /plan: Settings has a labelled Interests textarea", { todo: true }, a
   assert.doesNotMatch(labelled[0].attrs, /\bdisabled\b/);
 });
 
-test("v3-e /plan: the Interests box has a Save button beside it", { todo: true }, async () => {
+test("v3-e /plan: the Interests box has a Save button beside it", async () => {
   const { assert } = await load();
   const html = await planMarkup();
   const at = html.search(/<textarea\b[^>]*>/g);
@@ -121,7 +121,7 @@ test("v3-e /plan: the Interests box has a Save button beside it", { todo: true }
   assert.doesNotMatch(box.match(/<button\b[^>]*>\s*Save\b/)[0], /tabindex="-1"/);
 });
 
-test("v3-e /plan: saving writes settings.interests and says so", { todo: true }, async () => {
+test("v3-e /plan: saving writes settings.interests and says so", async () => {
   const { assert } = await load();
   const { readdirSync, readFileSync } = await import("node:fs");
   const dir = new URL("../src/sheet/", import.meta.url);
@@ -184,7 +184,7 @@ test("v3-e sheet-claude: the campus-picks query reads only real columns for day 
   assert.match(events[0], /<D>/, "for the day being planned");
 });
 
-test("v3-e sheet-claude: campus picks name up to 5 events, one line each on why", { todo: true }, async () => {
+test("v3-e sheet-claude: campus picks name up to 5 events, one line each on why", async () => {
   const { assert, read } = await load();
   const section = campusSection(read("docs/sheet-claude.md"));
   assert.ok(section, "a Campus picks step heading");
@@ -195,7 +195,7 @@ test("v3-e sheet-claude: campus picks name up to 5 events, one line each on why"
   assert.match(section, /interest profile/i);
 });
 
-test("v3-e sheet-claude: free food and fitting around blocks count for an event", { todo: true }, async () => {
+test("v3-e sheet-claude: free food and fitting around blocks count for an event", async () => {
   const { assert, read } = await load();
   const section = campusSection(read("docs/sheet-claude.md"));
   assert.ok(section, "a Campus picks step heading");
@@ -205,7 +205,7 @@ test("v3-e sheet-claude: free food and fitting around blocks count for an event"
   assert.match(section, /in (an event's|its) favou?r|counts? for|prefer/i);
 });
 
-test("v3-e sheet-claude: a campus pick is never written without Lisul's say-so", { todo: true }, async () => {
+test("v3-e sheet-claude: a campus pick is never written without Lisul's say-so", async () => {
   const { assert, read } = await load();
   const doc = read("docs/sheet-claude.md");
   const section = campusSection(doc);
@@ -223,7 +223,7 @@ test("v3-e sheet-claude: a campus pick is never written without Lisul's say-so",
   assert.doesNotMatch(section, /\b(suggestion|recommendation)s?\b/i);
 });
 
-test("v3-e sheet-claude: the reply shows the campus picks", { todo: true }, async () => {
+test("v3-e sheet-claude: the reply shows the campus picks", async () => {
   const { assert, read } = await load();
   const doc = read("docs/sheet-claude.md");
   const reply = doc.slice(doc.search(/^## Reply$/m));
@@ -232,7 +232,7 @@ test("v3-e sheet-claude: the reply shows the campus picks", { todo: true }, asyn
 
 // ---- The draft interest profile stays out of the public repo --------------------------------
 
-test("v3-e: no draft interest profile is committed anywhere in the repo", { todo: true }, async () => {
+test("v3-e: no draft interest profile is committed anywhere in the repo", async () => {
   const { assert } = await load();
   const { readFileSync, statSync } = await import("node:fs");
   const { execFileSync } = await import("node:child_process");
