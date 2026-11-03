@@ -207,5 +207,6 @@ import "../../styles/sheet.css";
   import { setupFeedStatus } from "../../sheet/feed-status.mjs";
   import { setupCampus } from "../../sheet/campus-list.mjs";
   import { setupTopBar } from "../../sheet/topbar.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus, setupTopBar]);
+  import { setupBusy } from "../../sheet/busy-sync.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy]);
 </script>

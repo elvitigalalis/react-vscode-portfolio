@@ -128,6 +128,14 @@ export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { met
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
+// Busy times (docs/sheet-morning.md, "/plan"): the rows overlapping [from, to) are replaced by
+// `rows`. The insert ignores rows already there, so two tabs saving at once don't fail on the
+// primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+export async function replaceBusy(fromIso, toIso, rows) {
+  await rest(`busy?starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
+  if (rows.length) await rest("busy", { method: "POST", body: rows, prefer: "resolution=ignore-duplicates" });
+}
+
 // --- Google Calendar ---------------------------------------------------------------------
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
@@ -146,12 +154,14 @@ async function google(path, { method = "GET", body } = {}) {
 }
 
 // His events between two instants, from his main calendar and any extra calendars he added.
-// Only his browser reads them; they are never saved. An extra calendar that fails is skipped.
+// Only his browser reads them; they are never saved, except as busy times (start and end only,
+// busy-sync.mjs). An extra calendar that fails is skipped.
 // "busy" is false for events Google marks as free; those don't take time from the day.
+// "calendar" is the ID it was read from ("primary" for his main one).
 export async function calendarEvents(fromIso, toIso, extra = []) {
   const q = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime" });
   const lists = await Promise.all(["primary", ...extra].map(async (id) => {
-    try { return (await google(`calendars/${encodeURIComponent(id)}/events?${q}`)).items ?? []; }
+    try { return ((await google(`calendars/${encodeURIComponent(id)}/events?${q}`)).items ?? []).map((e) => ({ ...e, calendar: id })); }
     catch (e) { if (id === "primary") throw e; console.error(e); return []; }
   }));
   // The same event can sit on two calendars he reads; show it once.
@@ -168,6 +178,7 @@ export async function calendarEvents(fromIso, toIso, extra = []) {
     starts_at: e.start.dateTime ?? e.start.date,
     ends_at: e.end.dateTime ?? e.end.date,
     link: e.htmlLink ?? null,
+    calendar: e.calendar,
   }));
 }
 
