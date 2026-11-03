@@ -104,7 +104,7 @@ const ev = (uid, start, end) => ({
 
 // --- campusRows ------------------------------------------------------------------------------
 
-test("v3-c campusRows: maps real SB Engaged events to campus_events rows", { todo: true }, async () => {
+test("v3-c campusRows: maps real SB Engaged events to campus_events rows", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const rows = campusRows([toscanini, bayGull, greenDot, lgbt, midterms], NOW);
   assert.deepEqual(pick(rows), [
@@ -149,7 +149,7 @@ test("v3-c campusRows: maps real SB Engaged events to campus_events rows", { tod
   ]);
 });
 
-test("v3-c campusRows: categories split on commas give the same tags", { todo: true }, async () => {
+test("v3-c campusRows: categories split on commas give the same tags", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const split = { ...toscanini, categories: ["club_acronym:TOSCANINIRESIDENCEHALL", "event_type:Trip/Excursion",
     "event_tags: Free Food & Refreshments", "Health & Wellness"] };
@@ -159,7 +159,7 @@ test("v3-c campusRows: categories split on commas give the same tags", { todo: t
   assert.equal(row.group_name, "Toscanini Residence Hall");
 });
 
-test("v3-c campusRows: group falls back to the club acronym; no categories give null type and no tags", { todo: true }, async () => {
+test("v3-c campusRows: group falls back to the club acronym; no categories give null type and no tags", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const noOrganizer = { ...bayGull, organizer: undefined };
   const bare = { ...lgbt, uid: "bare@campusgroups.com", organizer: undefined, categories: [] };
@@ -172,7 +172,7 @@ test("v3-c campusRows: group falls back to the club acronym; no categories give 
   assert.deepEqual(byUid["bare@campusgroups.com"].tags, []);
 });
 
-test("v3-c campusRows: location is kept when present, null when hidden or blank", { todo: true }, async () => {
+test("v3-c campusRows: location is kept when present, null when hidden or blank", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const at = (uid, location) => ({ ...ev(uid, "2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"), location });
   const rows = campusRows([
@@ -189,7 +189,7 @@ test("v3-c campusRows: location is kept when present, null when hidden or blank"
   ]);
 });
 
-test("v3-c campusRows: keeps events overlapping now to 14 days ahead", { todo: true }, async () => {
+test("v3-c campusRows: keeps events overlapping now to 14 days ahead", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const rows = campusRows([
     ev("ended-earlier", "2026-11-02T22:00:00.000Z", "2026-11-03T00:00:00.000Z"), // yesterday evening
@@ -206,7 +206,7 @@ test("v3-c campusRows: keeps events overlapping now to 14 days ahead", { todo: t
   assert.equal(running.ends_at, "2026-11-03T16:00:00.000Z");
 });
 
-test("v3-c campusRows: an all-day event in the window is kept as all_day", { todo: true }, async () => {
+test("v3-c campusRows: an all-day event in the window is kept as all_day", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   const allDay = { ...ev("all-day", "2026-11-06", "2026-11-07"), allDay: true };
   const [row] = campusRows([allDay], NOW);
@@ -216,7 +216,7 @@ test("v3-c campusRows: an all-day event in the window is kept as all_day", { tod
   assert.ok(String(row.ends_at).startsWith("2026-11-07"), row.ends_at);
 });
 
-test("v3-c campusRows: no events give no rows", { todo: true }, async () => {
+test("v3-c campusRows: no events give no rows", async () => {
   const { campusRows } = await import("../src/sheet/feeds.mjs");
   assert.deepEqual(campusRows([], NOW), []);
 });
