@@ -152,7 +152,9 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
   in it."
 - **The consent page:** `/oauth/consent/` on the site (`noindex`, owner sign-in) is the
   authorization page for Supabase's OAuth server. It shows the asking client and the scopes, with
-  Approve and Deny.
+  Approve and Deny. Approve shows only when the client's `redirect_uri` is https on `claude.ai`
+  or `claude.com` (or a subdomain; `trustedRedirect` in `consent.mjs`); any other client gets a
+  warning and Deny only. The page breaks out of any frame it is put in.
 - **Function secrets** (Lisul sets them; they are never in the repo): `SHEET_BRIGHTSPACE_ICS`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `MAIL_STATE_SECRET`. `SHEET_CRON_SECRET` is
   already set.

@@ -36,3 +36,15 @@ const SCOPES = {
   phone: "See your phone number",
 };
 export const scopeLines = (scope) => (scope ?? "").split(/\s+/).filter(Boolean).map((s) => SCOPES[s] ?? s);
+
+// Whether an authorization's redirect_uri goes back to Claude: https, on claude.ai or claude.com
+// or a subdomain of either. Anyone can register a client with Supabase's OAuth server (dynamic
+// registration) under any name, so the name proves nothing; where the grant would be sent does.
+// Only such a request may be approved here (docs/adr/0002).
+const CLAUDE_HOSTS = ["claude.ai", "claude.com"];
+export function trustedRedirect(uri) {
+  let url;
+  try { url = new URL(uri); } catch { return false; }
+  if (url.protocol !== "https:" || url.username || url.password) return false;
+  return CLAUDE_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`));
+}
