@@ -185,7 +185,7 @@ test("course tasks: a new course task gets the due chip and the at-risk mark lik
 const schema = () => read("supabase/schema.sql");
 const tableBody = (sql, name) => sql.match(new RegExp(`create table if not exists ${name} \\(([\\s\\S]*?)\\n\\);`))?.[1];
 
-test("schema: tasks gains source and source_uid, unique together, added re-runnably", { todo: true }, async () => {
+test("schema: tasks gains source and source_uid, unique together, added re-runnably", async () => {
   const sql = schema();
   assert.match(sql, /alter table tasks add column if not exists source text\b/);
   assert.match(sql, /alter table tasks add column if not exists source_uid text\b/);
@@ -195,7 +195,7 @@ test("schema: tasks gains source and source_uid, unique together, added re-runna
   if (!uniqueIndex.test(sql)) assert.match(sql, /drop constraint if exists|if not exists \(select[\s\S]{0,200}pg_constraint/, "an added constraint must be re-runnable");
 });
 
-test("schema: feed_seen keys a UID by its source, and feed_state has one row per feed", { todo: true }, async () => {
+test("schema: feed_seen keys a UID by its source, and feed_state has one row per feed", async () => {
   const sql = schema();
   const seen = tableBody(sql, "feed_seen");
   assert.ok(seen, "create table if not exists feed_seen");
@@ -210,7 +210,7 @@ test("schema: feed_seen keys a UID by its source, and feed_state has one row per
     assert.match(state, new RegExp(`\\b${col}\\b`), `feed_state.${col}`);
 });
 
-test("schema: feed_seen and feed_state are owner-only under row-level security", { todo: true }, async () => {
+test("schema: feed_seen and feed_state are owner-only under row-level security", async () => {
   const sql = schema();
   for (const t of ["feed_seen", "feed_state"]) {
     assert.match(sql, new RegExp(`alter table ${t} enable row level security;`), `${t} RLS`);
@@ -221,7 +221,7 @@ test("schema: feed_seen and feed_state are owner-only under row-level security",
   }
 });
 
-test("schema: the whole file stays safe to re-run", { todo: true }, async () => {
+test("schema: the whole file stays safe to re-run", async () => {
   const sql = schema();
   assert.equal([...sql.matchAll(/create table (?!if not exists)/g)].length, 0, "every create table has if not exists");
   assert.equal([...sql.matchAll(/create (unique )?index (?!if not exists)/g)].length, 0, "every create index has if not exists");
@@ -232,7 +232,7 @@ test("schema: the whole file stays safe to re-run", { todo: true }, async () => 
     assert.match(sql, new RegExp(`cron\\.unschedule\\(jobid\\) from cron\\.job where jobname = '${job}'`), `${job} is unscheduled first`);
 });
 
-test("schema: the public views never select source or source_uid", { todo: true }, async () => {
+test("schema: the public views never select source or source_uid", async () => {
   const sql = schema();
   const views = [...sql.matchAll(/create or replace view (public_\w+) as([\s\S]*?);/g)];
   assert.deepEqual(views.map((v) => v[1]).sort(), ["public_days", "public_now", "public_week"]);
@@ -243,7 +243,7 @@ test("schema: the public views never select source or source_uid", { todo: true 
   }
 });
 
-test("schema: sheet-brightspace runs at minute 20 through Vault, and does nothing until Vault has its entries", { todo: true }, async () => {
+test("schema: sheet-brightspace runs at minute 20 through Vault, and does nothing until Vault has its entries", async () => {
   const sql = schema();
   const job = sql.match(/select cron\.schedule\('sheet-brightspace', '([^']+)', \$job\$([\s\S]*?)\$job\$\);/);
   assert.ok(job, "a sheet-brightspace cron job");
