@@ -84,6 +84,10 @@ function localMidnight(day) {
 }
 const minutesAt = (t) => localNow(new Date(t), CAMPUS_TZ).minutes;
 
+// Only a link to SB Engaged itself goes to the page as the event's link.
+const ENGAGED = "https://sbengaged.stonybrook.edu/";
+const engagedUrl = (url) => (typeof url === "string" && url.startsWith(ENGAGED) ? url : null);
+
 // Splits SB Engaged's categories into the club acronym, the event type and the tags. parseIcs
 // gives "club_acronym:X", "event_type:Y" and "event_tags: A,B" (or the tags split on commas);
 // any other string is a tag. Tags are trimmed, in feed order, each once.
@@ -130,7 +134,7 @@ export function campusRows(events, now) {
       event_type: type,
       tags,
       description: e.description || null,
-      url: e.url || null,
+      url: engagedUrl(e.url),
       location,
       updated_at,
     });

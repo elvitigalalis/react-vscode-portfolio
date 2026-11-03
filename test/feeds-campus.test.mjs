@@ -86,6 +86,19 @@ test("campusWindowIcs: no events give an empty calendar", () => {
 
 // --- Links and titles ----------------------------------------------------------------------
 
+test("campusRows: only an SB Engaged https link is kept as the event's url", () => {
+  const at = ["2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"];
+  const urls = [
+    "https://sbengaged.stonybrook.edu/rsvp?id=391210",
+    "http://sbengaged.stonybrook.edu/rsvp?id=1",
+    "https://sbengaged.stonybrook.edu.evil.example/rsvp",
+    "javascript:alert(1)",
+    "https://example.com/",
+  ];
+  const rows = campusRows(urls.map((url, i) => ({ ...ev(`u${i}`, ...at), url })), NOW);
+  assert.deepEqual(rows.map((r) => r.url), ["https://sbengaged.stonybrook.edu/rsvp?id=391210", null, null, null, null]);
+});
+
 test("campusRows: a long title is cut to 500 characters", () => {
   const [row] = campusRows([{ ...ev("long", "2026-11-05T18:00:00.000Z", "2026-11-05T19:00:00.000Z"), summary: ` ${"y".repeat(700)}` }], NOW);
   assert.equal(row.title, "y".repeat(500));
