@@ -3,6 +3,7 @@
 // platform.claude.com/docs/en/api/claude-code/routines-fire.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
 import { fireRequest, fireText, retryAfterMs, fireRoutine } from "../src/sheet/routine-fire.mjs";
 
 const ID = "trig_011M52jmViV3VFUuYG7o2kg2";
@@ -129,4 +130,28 @@ test("fireRoutine: bad reasons are refused before anything is sent", async () =>
   const f = fakeFetch(200, {});
   await assert.rejects(fireRoutine(f.fn, { ...RUN, counts: { "Subject: hi": 1 } }, NOW, () => {}), /reason/);
   assert.equal(f.calls.length, 0);
+});
+
+// ---------------------------------------------------------------- the Edge Function and the schema
+
+const read = (f) => readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
+
+test("routine-fire function: refuses without the cron secret, and fires only the fixed test text", () => {
+  const fn = read("supabase/functions/routine-fire/index.ts");
+  assert.match(fn, /secretMatches\(req\.headers\.get\("x-sheet-cron"\)/);
+  assert.match(fn, /status: 403/);
+  assert.match(fn, /trigger: "test", counts: \{\}/);
+  assert.doesNotMatch(fn, /req\.(json|text|formData)\(/);   // nothing from the request reaches the text
+  assert.doesNotMatch(fn, /\bdb\(/);
+});
+
+test("the routine token is only ever an Edge Function secret: never in the schema, a db call or a pg_net header", () => {
+  assert.doesNotMatch(read("supabase/schema.sql"), /routine|claude_code|sk-ant/i);
+  for (const dir of readdirSync(new URL("../supabase/functions/", import.meta.url))) {
+    let src;
+    try { src = read(`supabase/functions/${dir}/index.ts`); } catch { continue; }
+    for (const line of src.split("\n").filter((l) => /SHEET_ROUTINE_TOKEN|ROUTINE_TOKEN/.test(l))) {
+      assert.doesNotMatch(line, /\bdb\(|net\.http_post|vault/i, `${dir}: ${line}`);
+    }
+  }
 });
