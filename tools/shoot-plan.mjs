@@ -53,7 +53,7 @@ function route(r) {
   return json(r, map[p] ?? []);
 }
 const b = await puppeteer.launch({ headless: true });
-async function shot(path, name, w, h, dark, after) {
+async function shot(path, name, w, h, dark, after, at = "2026-11-03T15:20:00Z") {
   const pg = await b.newPage();
   await pg.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
   await pg.emulateMediaFeatures([{ name: "prefers-color-scheme", value: dark ? "dark" : "light" }]);
@@ -61,11 +61,11 @@ async function shot(path, name, w, h, dark, after) {
   await pg.setRequestInterception(true);
   pg.on("request", route);
   pg.on("pageerror", (e) => console.log("pageerror", e.message));
-  await pg.evaluateOnNewDocument(() => {
-    const fixed = new Date("2026-11-03T15:20:00Z").getTime(); const RD = Date; const off = fixed - RD.now();
+  await pg.evaluateOnNewDocument((at) => {
+    const fixed = new Date(at).getTime(); const RD = Date; const off = fixed - RD.now();
     globalThis.Date = class extends RD { constructor(...a) { super(...(a.length ? a : [RD.now() + off])); } static now() { return RD.now() + off; } };
     localStorage.setItem("sheet.session", JSON.stringify({ access_token: "a", refresh_token: "r", expires_at: Date.now() + 3e6, provider_token: "g", provider_expires_at: Date.now() + 3e6 }));
-  });
+  }, at);
   await pg.goto(BASE + path, { waitUntil: "networkidle0" });
   await new Promise((r) => setTimeout(r, 800));
   if (after) await after(pg);
@@ -87,14 +87,59 @@ async function checkRows(pg, name) {
   for (const t of r.tall) failures.push(`${name}: title taller than 3 lines: ${t}`);
   if (r.shown) failures.push(`${name}: ${r.shown} svg.sheet-icon without aria-hidden="true"`);
 }
+// Plan today (docs/sheet-glance.md, change 5): the now line never runs over a block's title, and
+// a block under 30 minutes keeps its title on one line. `onTitle` says the now line crosses a
+// block title at this time, so the first check can't pass by missing every block.
+async function checkTimeline(pg, name, onTitle) {
+  const r = await pg.evaluate(() => {
+    const line = document.querySelector(".sheet-nowline");
+    if (!line) return { noLine: true };
+    line.scrollIntoView({ block: "center" });
+    // The line ignores the pointer in use; let elementFromPoint see it while it looks.
+    line.style.pointerEvents = "auto";
+    const lr = line.getBoundingClientRect();
+    const covered = [];
+    let crossed = 0;
+    for (const t of document.querySelectorAll(".sheet-block-title")) {
+      const tr = t.getBoundingClientRect();
+      const x0 = Math.max(tr.left, lr.left), x1 = Math.min(tr.right, lr.right);
+      const y = lr.top + lr.height / 2;
+      if (x1 <= x0 || y < tr.top || y > tr.bottom) continue;
+      crossed++;
+      for (const x of [x0 + 2, (x0 + x1) / 2, x1 - 2]) if (line.contains(document.elementFromPoint(x, y))) { covered.push(t.textContent); break; }
+    }
+    line.style.pointerEvents = "";
+    const tall = [];
+    let short = 0;
+    for (const b of document.querySelectorAll(".sheet-block")) {
+      if (parseFloat(b.style.height) >= 30 * 1.2) continue;
+      short++;
+      const t = b.querySelector(".sheet-block-title");
+      if (t.getBoundingClientRect().height > parseFloat(getComputedStyle(t).lineHeight) + 1) tall.push(t.textContent);
+    }
+    return { covered, crossed, tall, short };
+  });
+  if (r.noLine) return failures.push(`${name}: no now line`);
+  for (const t of r.covered) failures.push(`${name}: the now line covers the title of "${t}"`);
+  if (onTitle && !r.crossed) failures.push(`${name}: the now line should cross a block title here`);
+  if (!r.short) failures.push(`${name}: no block under 30 minutes drawn`);
+  for (const t of r.tall) failures.push(`${name}: short block title on more than one line: "${t}"`);
+}
+const planToday = (name, onTitle) => async (pg) => { await pg.keyboard.press("p"); await new Promise((r) => setTimeout(r, 800)); await checkTimeline(pg, name, onTitle); };
+for (const w of [1440, 390]) for (const dark of [false, true]) {
+  const mode = dark ? "dark" : "light";
+  await shot("/plan/", `plan-today-${w}-${mode}`, w, w > 400 ? 900 : 844, dark, planToday(`Plan today ${w}px ${mode}`, false));
+}
+// 10:05 am: the line runs through "WorkIt: batch apply PR review"'s title row.
+await shot("/plan/", "plan-today-on-title", 1440, 900, false, planToday("Plan today at 10:05 am", true), "2026-11-03T15:05:00Z");
 for (const w of [1440, 1280]) for (const dark of [false, true]) {
   await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, (pg) => checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`));
 }
-await shot("/plan/", "plan-today", 1440, 900, false, async (pg) => { await pg.keyboard.press("p"); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
 await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click('[data-act="settings"]'); await new Promise((r) => setTimeout(r, 800)); });
 await shot("/plan/", "plan-help", 1440, 900, false, async (pg) => { await pg.click('[data-act="help"]'); await new Promise((r) => setTimeout(r, 500)); });
 await shot("/plan/", "plan-phone", 390, 844, false);
+await shot("/plan/", "plan-phone-dark", 390, 844, true);
 await shot("/now/", "now-light", 1440, 900, false);
 await shot("/now/", "now-phone", 390, 844, false);
 await b.close();
