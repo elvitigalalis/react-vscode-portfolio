@@ -252,7 +252,7 @@ const lineTasks = [
 const pendingRow = (extra = {}) => ({ day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], ...extra });
 const oneBlock = [{ id: "p1", task_id: T1, starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true }];
 
-test("proposalLines: \"Couldn't fit\" follows \"Didn't fit\", naming the tasks", todo, async () => {
+test("proposalLines: \"Couldn't fit\" follows \"Didn't fit\", naming the tasks", async () => {
   const { proposalLines } = await proposal();
   const p = pendingRow({ note: "Gym got squeezed.", couldnt_fit: [T5, T4] });
   assert.deepEqual(proposalLines(p, oneBlock, lineTasks, [], [], [], TZ), [
@@ -263,7 +263,7 @@ test("proposalLines: \"Couldn't fit\" follows \"Didn't fit\", naming the tasks",
   ]);
 });
 
-test("proposalLines: titles cut to 30 characters, at most 3, then the rest counted", todo, async () => {
+test("proposalLines: titles cut to 30 characters, at most 3, then the rest counted", async () => {
   const { proposalLines } = await proposal();
   const p = pendingRow({ couldnt_fit: [T8, T5, T4, T1] });
   assert.deepEqual(proposalLines(p, oneBlock, lineTasks, [], [], [], TZ), [
@@ -273,7 +273,7 @@ test("proposalLines: titles cut to 30 characters, at most 3, then the rest count
   ]);
 });
 
-test("proposalLines: an empty couldn't-fit list adds no line", todo, async () => {
+test("proposalLines: an empty couldn't-fit list adds no line", async () => {
   const { proposalLines } = await proposal();
   assert.deepEqual(proposalLines(pendingRow(), oneBlock, lineTasks, [], [], [], TZ), [
     "Morning plan: 1 block, 9:30–10:15 am.",

@@ -297,6 +297,21 @@ export function pickLine(e, tz) {
 // The campus events a proposal's picks name, in pick order; a pick whose event is gone drops.
 export const pickedEvents = (picks, campus) => (picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
 
+// Couldn't-fit titles the line names before "+N more", and the characters kept of each.
+const SHOWN_COULDNT_FIT = 3;
+const COULDNT_FIT_CHARS = 30;
+
+// "Couldn't fit: Lab 4, HW3 +1 more.", for the brief, the plan and replan messages and /plan,
+// or null for none. `ids` are task ids; a task that's gone drops, and a title that could become a
+// link reads "A task".
+export function couldntFitLine(ids, tasks) {
+  const titles = (ids ?? []).map((id) => tasks.find((t) => t.id === id)?.title).filter(Boolean)
+    .map((t) => (linkish(t) ? "A task" : String(t).replace(/\s+/g, " ").trim().slice(0, COULDNT_FIT_CHARS).trim()));
+  if (!titles.length) return null;
+  const more = titles.length > SHOWN_COULDNT_FIT ? ` +${titles.length - SHOWN_COULDNT_FIT} more` : "";
+  return `Couldn't fit: ${titles.slice(0, SHOWN_COULDNT_FIT).join(", ")}${more}.`;
+}
+
 // The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
 // up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
 // may hold any blocks; only the proposal day's proposed ones count. `picks` is [{ uid, why }],
@@ -314,6 +329,8 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   }
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
+  const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
+  if (unfit) lines.push(unfit);
   const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).
