@@ -4,7 +4,8 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { plural } from "./logic.mjs";
-import { el, settingsHooks } from "./planner.mjs";
+import { el, icon, settingsHooks } from "./planner.mjs";
+import { feedAlert } from "./glance.mjs";
 
 const NAMES = { brightspace: "Brightspace", campus: "Campus events" };
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -17,14 +18,29 @@ function line(f) {
   return `${name}: ${how}, ${when(f.fetched_at)}`;
 }
 
+// A check for a read that worked, an alert for one that failed, nothing before the first read.
+const mark = (f) => (f.ok === true ? icon("circle-check") : f.ok === false ? icon("circle-alert") : null);
+
 async function draw(root) {
   const list = root.querySelector("[data-feeds]");
   const rows = await api.listFeedState();
-  list.replaceChildren(...rows.map((f) => el("li", { className: f.ok === false ? "sheet-mail-error" : "", textContent: line(f) })));
+  list.replaceChildren(...rows.map((f) => el("li", { className: f.ok === false ? "sheet-mail-error" : "" }, mark(f), " ", line(f))));
   if (!rows.length) list.append(el("li", { className: "small", textContent: "No feed has been read yet." }));
+  chip(root, rows);
+}
+
+// The top bar's Feed failed chip (docs/sheet-glance.md, change 6) shows while any feed's last
+// read failed, and opens Settings (data-act="settings").
+function chip(root, rows) {
+  const failed = feedAlert(rows);
+  const button = root.querySelector("[data-feed-alert]");
+  button.hidden = !failed.length;
+  button.title = `${failed.map((s) => NAMES[s] ?? s).join(" and ")} failed. Open Settings to see why`;
 }
 
 // The Feeds section of Settings, filled each time Settings opens (planner.mjs, settingsHooks).
+// The chip is set once on load too, from the same rows.
 export function setupFeedStatus(root) {
   settingsHooks.push(() => draw(root));
+  api.listFeedState().then((rows) => chip(root, rows), () => {});
 }

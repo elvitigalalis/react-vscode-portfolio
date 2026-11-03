@@ -9,7 +9,9 @@ import {
   formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, DEFAULT_EST,
   blockMinutes, weekdayName, plural,
 } from "./logic.mjs";
-import { el, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, failed, dayCapacity } from "./planner.mjs";
+import { el, icon, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
+import { sourceOf, loadShare, stripSegments } from "./glance.mjs";
+import { planNotes } from "./morning.mjs";
 
 const START = 7 * 60;
 const END = 23 * 60;
@@ -21,11 +23,20 @@ const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h *
 let dialog;
 let day;          // the day being planned
 let events = [];  // his Google events that day
+let notes = [];   // the day's proposal: "Didn't fit: …", "Campus pick: …"
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
 const blocksOn = (d) => state.blocks.filter((b) => minutesOn(b.starts_at, d, SHEET.timeZone) >= 0 && minutesOn(b.starts_at, d, SHEET.timeZone) < 1440);
 const shutdownAt = (d) => clock((state.days[d]?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5));
+
+// A day's load as a 4px bar on a track (docs/sheet-glance.md, change 4).
+function loadBar(d) {
+  const { pct, level } = loadShare(load(tasksOn(d), dayCapacity(d).capacity).total, dayCapacity(d).capacity);
+  const fill = el("span", { className: `sheet-meter-fill is-${level}` });
+  fill.style.width = `${pct}%`;
+  return el("span", { className: "sheet-meter" }, fill);
+}
 
 function meter(d) {
   const m = load(tasksOn(d), dayCapacity(d).capacity);
@@ -33,6 +44,21 @@ function meter(d) {
   const from = d === local.day ? Math.max(local.minutes, 9 * 60) : 9 * 60;
   return { ...m, finish: finishAt(from, m.total) };
 }
+
+// The day's load bar at full width, with a marker where the work ends: "Done ≈". Decoration
+// only; the line above says it in words (docs/sheet-glance.md, change 4).
+function planBar(m) {
+  const { pct, level } = loadShare(m.total, m.capacity);
+  const fill = el("span", { className: `sheet-meter-fill is-${level}` });
+  fill.style.width = `${pct}%`;
+  const mark = el("span", { className: "sheet-meter-mark" }, el("span", { textContent: `Done ≈ ${formatClock(m.finish)}` }));
+  mark.style.setProperty("--at", `${pct}%`);
+  return el("div", { className: "sheet-planbar", ariaHidden: "true" }, el("span", { className: "sheet-meter" }, fill), mark);
+}
+
+// A small accent button with the check icon (docs/sheet-glance.md, change 5).
+const approveButton = (ariaLabel, cls = "", text = "Approve") =>
+  el("button", { type: "button", className: `sheet-btn-approve ${cls}`.trim(), ariaLabel }, icon("check"), text);
 
 // --- The dialog --------------------------------------------------------------------------
 
@@ -57,20 +83,32 @@ function draw() {
     Object.assign(box.style, { top: `${y(top)}px`, height: `${(end - top) * PX}px` });
     timeline.append(box);
   }
+  // The now line goes in before the blocks, so it draws beneath their text; its time ("10:20",
+  // the hour labels carry am and pm) sits in the hour gutter, where no block reaches.
+  const nowMin = minutesOn(new Date().toISOString(), day, SHEET.timeZone);
+  if (nowMin > START && nowMin < END) {
+    const nowLine = el("div", { className: "sheet-nowline", ariaHidden: "true" }, el("span", { textContent: formatClock(nowMin).replace(/ [ap]m$/, "") }));
+    nowLine.style.top = `${y(nowMin)}px`;
+    timeline.append(nowLine);
+  }
   for (const b of blocksOn(day)) {
     const t = state.tasks.get(b.task_id);
     if (!t) continue;
     const top = minutesOn(b.starts_at, day, SHEET.timeZone);
     const end = minutesOn(b.ends_at, day, SHEET.timeZone);
-    const box = el("div", { className: `sheet-block${t.done ? " is-done" : ""}${b.proposed ? " is-proposed" : ""}` },
-      el("span", { className: "sheet-block-title", textContent: `${t.title}${b.proposed ? " (proposed)" : b.gcal_id ? "" : " (not in Google)"}`, title: t.title }),
-      b.proposed ? el("button", { type: "button", className: "sheet-link sheet-approve", textContent: "Approve", ariaLabel: `Approve block for ${t.title}` }) : null,
+    const box = el("div", { className: `sheet-block${t.done ? " is-done" : ""}${b.proposed ? " is-proposed" : ""}${end - top < 30 ? " is-short" : ""}` },
+      el("span", { className: "sheet-block-title", title: t.title },
+        b.proposed ? icon("sparkles", "Proposed by Claude") : null, `${t.title}${b.proposed || b.gcal_id ? "" : " (not in Google)"}`),
+      b.proposed ? approveButton(`Approve block for ${t.title}`, "sheet-approve") : null,
       el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed ? "Turn down" : "Remove"} block for ${t.title}` }),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
+    // A block takes its task's source: the edge colour (sheet.css) and the icon.
+    const src = sourceOf(t);
+    if (src) { box.dataset.source = src; box.prepend(sourceIcon(src)); }
     // Focusable, so a block can be moved and approved from the keyboard (see the dialog's keys).
     box.tabIndex = 0;
-    box.ariaLabel = `${t.title}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
+    box.ariaLabel = `${t.title}${sourceWords(src)}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
     Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
     timeline.append(box);
   }
@@ -78,12 +116,6 @@ function draw() {
     el("span", { textContent: `Shutdown ${formatClock(shut)}` }));
   shutLine.style.top = `${y(shut)}px`;
   timeline.append(shutLine);
-  const nowMin = minutesOn(new Date().toISOString(), day, SHEET.timeZone);
-  if (nowMin > START && nowMin < END) {
-    const nowLine = el("div", { className: "sheet-nowline" });
-    nowLine.style.top = `${y(nowMin)}px`;
-    timeline.append(nowLine);
-  }
   const preview = el("div", { className: "sheet-preview", hidden: true });
   timeline.append(preview);
 
@@ -106,12 +138,14 @@ function draw() {
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
+    planBar(m),
     el("p", { className: "small", textContent: picked
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
-      : "Drag a task onto the timeline, or tap it and then tap a time. D moves the focused task to tomorrow, Z to Someday; ↑ ↓ move the focused block." }),
+      : "Drag tasks onto the timeline · ? for keys" }),
     google,
-    proposals ? el("p", { className: "sheet-notice" }, `Claude proposed ${plural(proposals, "block")}, shown dashed. `,
-      el("button", { type: "button", className: "sheet-link sheet-approve-all", textContent: "Approve all" })) : null,
+    proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"), el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
+      approveButton("Approve all proposed blocks", "sheet-approve-all", "Approve all")) : null,
+    notes.length ? el("ul", { className: "sheet-plan-notes" }, ...notes.map((n) => el("li", { textContent: n }))) : null,
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
@@ -127,9 +161,19 @@ async function fetchEvents() {
   try { events = (await api.calendarEvents(zonedIso(day, 0, SHEET.timeZone), zonedIso(day, 1440, SHEET.timeZone), state.calendars)).filter((e) => !e.allDay); } catch (e) { console.error(e); }
 }
 
+// The morning plan's note and campus picks for the day. Without them the dialog still opens.
+async function fetchNotes() {
+  notes = [];
+  try {
+    const p = await api.proposalOn(day);
+    const campus = p?.picks?.length ? await api.campusByUid(p.picks.map((x) => x.uid)) : [];
+    notes = planNotes(p, campus, SHEET.timeZone);
+  } catch (e) { console.error(e); }
+}
+
 async function open() {
   day = planningDay(localNow(new Date(), SHEET.timeZone));
-  await fetchEvents();
+  await Promise.all([fetchEvents(), fetchNotes()]);
   draw();
   dialog.showModal();
   dialog.querySelector(".sheet-timeline-wrap").scrollTop = Math.max(0, y(Math.min(meter(day).finish, shutdownAt(day))) - 300);
@@ -184,6 +228,34 @@ async function resizeBlock(id, endMin) {
     .reduce((s, x) => s + blockMinutes(x), 0);
   state.tasks.set(b.task_id, await api.updateTask(b.task_id, { est_min: total }));
 }
+
+// --- Off-page approvals (docs/sheet-morning.md, "/plan") ---------------------------------
+
+// Blocks approved from Telegram have no Google event, and only the browser can make one. Each
+// time the page loads Google events (eventHooks), the approved blocks without one that haven't
+// ended get theirs, as createEvent makes it for a block approved here. Three guards keep an
+// event from being made twice: one run at a time in this tab, a lock shared by this browser's
+// tabs (https://developer.mozilla.org/en-US/docs/Web/API/LockManager/request), and gcal_id set
+// only while it is still empty, so an event a second device made too is deleted again.
+let creating = null;
+const shared = (fn) => (navigator.locks ? navigator.locks.request("sheet.gcal-create", fn) : fn());
+
+async function createMissed() {
+  const now = new Date();
+  let made = 0;
+  for (const b of await api.eventlessBlocks(now.toISOString())) {
+    if (googleStep(b, now) !== "create" || b.proposed || !b.tasks) continue;
+    const id = await api.createEvent(b.tasks.title, b.tasks.public, b.starts_at, b.ends_at);
+    const saved = await api.claimEvent(b.id, id);
+    if (!saved) { await api.deleteEvent(id); continue; }
+    const mine = state.blocks.find((x) => x.id === b.id);
+    if (mine) mine.gcal_id = saved.gcal_id;
+    made++;
+  }
+  if (made) render();
+}
+
+const createMissedOnce = () => (creating ??= shared(createMissed).finally(() => { creating = null; }));
 
 // --- Pointer work inside the timeline ----------------------------------------------------
 
@@ -261,6 +333,7 @@ function onPointerDown(e) {
 export function setupPlanToday(root) {
   dialog = root.querySelector("[data-plan]");
   dropTargets.push(timelineDrop);
+  eventHooks.push(createMissedOnce);
   renderHooks.push(() => { if (dialog.open) draw(); });
   actHooks.plan = () => open().catch(failed);
   keyHooks.push((e) => { if (e.key === "p" || e.key === "P") { actHooks.plan(); return true; } return false; });
@@ -344,9 +417,10 @@ export function setupPlanToday(root) {
         const row = col.querySelector(`.sheet-task[data-id="${b.task_id}"]`);
         if (!row) continue;
         const span = formatSpan(minutesOn(b.starts_at, d, SHEET.timeZone), minutesOn(b.ends_at, d, SHEET.timeZone));
-        const ok = el("button", { type: "button", className: "sheet-link", textContent: "Approve", ariaLabel: `Approve ${span} block for ${state.tasks.get(b.task_id).title}` });
+        const ok = approveButton(`Approve ${span} block for ${state.tasks.get(b.task_id).title}`);
         Object.assign(ok.dataset, { act: "approve", block: b.id });
-        row.append(el("span", { className: "sheet-proposal", title: "Proposed by Claude" }, el("span", { textContent: `${span} proposed` }), ok));
+        row.append(el("span", { className: "sheet-proposal", title: "Proposed by Claude" },
+          icon("sparkles"), el("span", { textContent: span }), el("span", { className: "visually-hidden", textContent: " proposed" }), ok));
       }
     }
   });
@@ -367,6 +441,26 @@ export function setupPlanToday(root) {
         textContent: short ? `${formatMinutes(m.total)} / ${formatMinutes(capacity)}` : formatMinutes(m.total),
         title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(clock(SHEET.dayStartAt))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(SHEET.capacityMin)}.`,
       }));
+    }
+  });
+  // Load and free time, drawn (docs/sheet-glance.md, change 4): under each day's header, a 4px
+  // load bar and a 6px strip of the day from 7 am to 11 pm, with a now tick on today. Both are
+  // decoration: the chip's text carries the load.
+  renderHooks.push(() => {
+    const local = localNow(new Date(), SHEET.timeZone);
+    for (const col of root.querySelectorAll(".sheet-day")) {
+      const d = col.dataset.day;
+      const strip = el("span", { className: "sheet-strip" }, ...stripSegments(state.events, state.blocks, d, SHEET.timeZone).map((s) => {
+        const seg = el("span", { className: `sheet-seg is-${s.kind}` });
+        Object.assign(seg.style, { left: `${s.from}%`, width: `${s.to - s.from}%` });
+        return seg;
+      }));
+      if (d === local.day && local.minutes > START && local.minutes < END) {
+        const tick = el("span", { className: "sheet-strip-now" });
+        tick.style.left = `${(100 * (local.minutes - START)) / (END - START)}%`;
+        strip.append(tick);
+      }
+      col.querySelector(".sheet-stamps").prepend(el("span", { className: "sheet-glance", ariaHidden: "true" }, loadBar(d), strip));
     }
   });
 }
