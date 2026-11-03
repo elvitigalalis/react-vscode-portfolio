@@ -39,9 +39,12 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
   - deletes `d`'s proposed blocks;
   - inserts `blocks` (`[{ task_id, starts_at, ends_at }]`) with `proposed = true`;
   - upserts the `proposals` row as `pending`, with a new `created_at`;
-  - inserts `needs` rows, skipping any `(account, message_id)` already there, done or not.
+  - deletes `d`'s `needs_you` rows that aren't done, then inserts `needs` rows, skipping any
+    `(account, message_id)` already there (so a done item never comes back).
 
-  It refuses (`raise exception`) when `d`'s proposal is already `approved` or `skipped`. The
+  It refuses (`raise exception`) when `d`'s proposal is already `approved`, `skipped` or `lapsed`.
+- Shutting a day down (`lapse_proposals_on`) marks its pending proposal `lapsed`, so a later run
+  can't plan a day that is closed. The
   function checks nothing else: `checkProposal` does that before it is called.
 - `nightly_roll()` also:
   - marks earlier days' `pending` proposals as `lapsed`;
@@ -83,15 +86,17 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
       at most 140 characters.
     - **note:** at most 280 characters.
     - **Every free-text field** (`sender`, `subject`, `why`, `note`) is one line, with
-      whitespace collapsed. It must hold no URL: nothing matching `https?://`, `www.` or a
-      `word.word/` path. That keeps links from mail out of Telegram and /plan, where they would
+      whitespace collapsed. It must hold nothing Telegram or a browser could turn into a link or a
+      command: a scheme (`https://`, `tg://`), `www.`, a bare domain (`evil.com`, `t.me`), an
+      `@mention` or email address, or a `/command`. That keeps links from mail out of Telegram and /plan, where they would
       become clickable. A field that breaks this is an error, not cleaned up silently.
 - `proposalLines(proposal, blocks, tasks, needsOpen, picks, campus, tz)` returns the lines the
   brief adds:
   - `"Morning plan: 4 blocks, 9:30 am–4:00 pm."`
   - up to 6 lines like `"9:30 am · OS homework (45 min)"`, then `"+2 more"`;
   - `"Didn't fit: <note>"` when there is a note;
-  - `"Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)"` for at most 2 picks;
+  - `"Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)"` for at most 2 picks, leaving out
+    any pick whose feed title could become a link (`linkish`);
   - `"Mail: 3 need you."`
 
 `src/sheet/nudges.mjs`, extended:
