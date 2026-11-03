@@ -381,6 +381,11 @@ drop policy if exists owner_all on campus_events;
 create policy owner_all on campus_events for all using (is_owner()) with check (is_owner());
 revoke all on campus_events from anon;
 revoke insert, update, delete on campus_events from authenticated;
+-- How many have registered, read from the event's public page (the feed has no count), and when
+-- it was last read. The function refreshes a few dozen an hour (feeds.mjs, countsDue); the feed
+-- upsert leaves both alone, since it never sends them.
+alter table campus_events add column if not exists rsvp_count int;
+alter table campus_events add column if not exists rsvp_checked_at timestamptz;
 
 -- At :35 every hour, call the campus Edge Function to sync the feed. Like sheet-telegram, its
 -- URL and the shared secret come from Vault; until both exist the job does nothing. The function
