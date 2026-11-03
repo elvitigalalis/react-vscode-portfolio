@@ -164,6 +164,8 @@ begin
   update proposals set status = 'lapsed' where status = 'pending' and day < today;
   delete from busy where ends_at <= now();
   delete from needs_you where done or coalesce(created_at, day::timestamptz) < now() - interval '14 days';
+  -- v5 P1: actuals are kept 120 days.
+  delete from actuals where at < now() - interval '120 days';
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -522,3 +524,29 @@ language sql security definer set search_path = public as $$
   delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d;
   update proposals set status = 'lapsed' where day = d and status = 'pending';
 $$;
+
+-- --- v5 P1, Finished? and pace (docs/sheet-v5.md) ----------------------------------------------
+-- What a task really took, recorded by Telegram's Finished answer; pace per kind of task is
+-- worked out from these in src/sheet/pace.mjs. No foreign keys, so a row outlives its task and
+-- block. Owner-only, only the server writes it, and nightly_roll keeps 120 days.
+create table if not exists actuals (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  day date not null,
+  task_id uuid not null,
+  block_id uuid,
+  kind text not null check (kind in ('course', 'campus', 'github', 'jira', 'other')),
+  est_min int,
+  minutes int not null check (minutes between 1 and 960)
+);
+create index if not exists actuals_kind_at on actuals (kind, at desc);
+alter table actuals enable row level security;
+drop policy if exists owner_all on actuals;
+create policy owner_all on actuals for all using (is_owner()) with check (is_owner());
+revoke all on actuals from anon;
+revoke insert, update, delete on actuals from authenticated;
+
+-- The Finished? check, and the replan message (R1), in the nudges log.
+alter table nudges drop constraint if exists nudges_kind_check;
+alter table nudges add constraint nudges_kind_check
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
