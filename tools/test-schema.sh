@@ -425,4 +425,19 @@ begin
   raise notice '✓ v5: a shut-down day lapses its revision and stays closed';
 end $$;
 SQL
+psql_as postgres <<'SQL'
+-- --- v5 D2, a realistic day (docs/sheet-v5.md, "Schema") -----------------------------------
+do $$
+begin
+  if (select workload_cap_min from settings) <> 360 then raise exception 'workload_cap_min should default to 360'; end if;
+  begin
+    update settings set workload_cap_min = 30;
+    raise exception 'a 30-minute workload cap was allowed';
+  exception when check_violation then null;
+  end;
+  if (select udt_name from information_schema.columns where table_name = 'proposals' and column_name = 'couldnt_fit') is distinct from '_uuid'
+    then raise exception 'proposals.couldnt_fit should be uuid[]'; end if;
+  raise notice '✓ v5: the workload cap defaults to 6 hours and stays within 1 to 16; proposals has couldnt_fit';
+end $$;
+SQL
 echo "✓ all schema checks passed"
