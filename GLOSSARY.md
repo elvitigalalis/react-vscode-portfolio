@@ -49,6 +49,22 @@ _Avoid_: Carry over, postpone
 The end-of-day step that moves missed tasks to tomorrow and closes the day.
 _Avoid_: Review, wrap-up
 
+**Morning plan**:
+The proposal Claude makes on its own at 6:07 each morning, delivered with the morning brief for Lisul to approve or skip.
+_Avoid_: Auto-plan, daily run, routine
+
+**Busy time**:
+A stretch of Lisul's calendar that is taken, known only by its start and end, which the morning plan fits around.
+_Avoid_: Event, free/busy, slot
+
+**Needs you**:
+The list of emails that need something from Lisul (a reply owed, a deadline, a meeting, school or admin), each with a one-line reason. He clears an item by marking it done.
+_Avoid_: Inbox, triage list, action items
+
+**Reply owed**:
+A mail thread where someone wrote to Lisul two or more days ago and he has not answered.
+_Avoid_: Follow-up, unanswered
+
 ## Sources
 
 **Feed**:
