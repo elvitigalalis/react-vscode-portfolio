@@ -11,6 +11,7 @@ import {
 } from "./logic.mjs";
 import { el, icon, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare, stripSegments } from "./glance.mjs";
+import { planNotes } from "./morning.mjs";
 
 const START = 7 * 60;
 const END = 23 * 60;
@@ -22,6 +23,7 @@ const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h *
 let dialog;
 let day;          // the day being planned
 let events = [];  // his Google events that day
+let notes = [];   // the day's proposal: "Didn't fit: …", "Campus pick: …"
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
@@ -143,6 +145,7 @@ function draw() {
     google,
     proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"), el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
       approveButton("Approve all proposed blocks", "sheet-approve-all", "Approve all")) : null,
+    notes.length ? el("ul", { className: "sheet-plan-notes" }, ...notes.map((n) => el("li", { textContent: n }))) : null,
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
@@ -158,9 +161,19 @@ async function fetchEvents() {
   try { events = (await api.calendarEvents(zonedIso(day, 0, SHEET.timeZone), zonedIso(day, 1440, SHEET.timeZone), state.calendars)).filter((e) => !e.allDay); } catch (e) { console.error(e); }
 }
 
+// The morning plan's note and campus picks for the day. Without them the dialog still opens.
+async function fetchNotes() {
+  notes = [];
+  try {
+    const p = await api.proposalOn(day);
+    const campus = p?.picks?.length ? await api.campusByUid(p.picks.map((x) => x.uid)) : [];
+    notes = planNotes(p, campus, SHEET.timeZone);
+  } catch (e) { console.error(e); }
+}
+
 async function open() {
   day = planningDay(localNow(new Date(), SHEET.timeZone));
-  await fetchEvents();
+  await Promise.all([fetchEvents(), fetchNotes()]);
   draw();
   dialog.showModal();
   dialog.querySelector(".sheet-timeline-wrap").scrollTop = Math.max(0, y(Math.min(meter(day).finish, shutdownAt(day))) - 300);
