@@ -261,7 +261,7 @@ test("schema: sheet-brightspace runs at minute 20 through Vault, and does nothin
 
 const fn = () => read("supabase/functions/brightspace/index.ts");
 
-test("function: it lets in only the cron, comparing the secret in constant time", { todo: true }, async () => {
+test("function: it lets in only the cron, comparing the secret in constant time", async () => {
   const src = fn();
   assert.match(src, /["']x-sheet-cron["']/);
   assert.match(src, /["']SHEET_CRON_SECRET["']/);
@@ -271,7 +271,7 @@ test("function: it lets in only the cron, comparing the secret in constant time"
   assert.match(src, /status:\s*403|status:\s*401/, "a wrong secret is refused");
 });
 
-test("function: it fetches SHEET_BRIGHTSPACE_ICS and uses the shared pure modules", { todo: true }, async () => {
+test("function: it fetches SHEET_BRIGHTSPACE_ICS and uses the shared pure modules", async () => {
   const src = fn();
   assert.match(src, /["']SHEET_BRIGHTSPACE_ICS["']/);
   assert.match(src, /import\s*\{[^}]*\bparseIcs\b[^}]*\}\s*from\s*["'](\.\.\/)+src\/sheet\/ical\.mjs["']/);
@@ -280,7 +280,7 @@ test("function: it fetches SHEET_BRIGHTSPACE_ICS and uses the shared pure module
   assert.match(src, /\bcourseTaskChanges\(/);
 });
 
-test("function: it writes tasks, feed_seen and feed_state, recording a failure", { todo: true }, async () => {
+test("function: it writes tasks, feed_seen and feed_state, recording a failure", async () => {
   const src = fn();
   assert.match(src, /feed_state/);
   assert.match(src, /feed_seen/);
@@ -290,7 +290,7 @@ test("function: it writes tasks, feed_seen and feed_state, recording a failure",
   assert.match(src, /["']brightspace["']/, "rows carry source 'brightspace'");
 });
 
-test("function and schema: no secret or feed link is written into the repo", { todo: true }, async () => {
+test("function and schema: no secret or feed link is written into the repo", async () => {
   for (const f of ["supabase/functions/brightspace/index.ts", "supabase/schema.sql", "src/sheet/feeds.mjs", "src/sheet/api.mjs"]) {
     const src = readIf(f);
     assert.ok(src, `${f} exists`);
