@@ -71,6 +71,7 @@ mail_accounts  id uuid pk, email text unique, label text, vault_secret_id uuid,
     - an already-seen UID that still has an undone task updates that task's title and due date;
     - done tasks, deleted tasks and items that drop out of the feed are left alone.
   - `campusRows(events, now)` returns rows for `campus_events`, from now to 14 days ahead.
+    `url` is kept only when it starts with `https://sbengaged.stonybrook.edu/`, otherwise null.
 - **`campus.mjs`:**
   - `campusDay(events, day, timeZone, { tags, showRoutine })` returns the day's events, sorted:
     free food first, then by start time.
