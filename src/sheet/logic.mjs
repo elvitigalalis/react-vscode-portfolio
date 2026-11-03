@@ -299,3 +299,4 @@ export function rightNow(row) {
   if (!row || row.public == null) return null;
   return row.public ? row.title : "Heads down";
 }
+

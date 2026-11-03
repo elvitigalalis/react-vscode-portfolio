@@ -4,7 +4,7 @@
 // only ever sees the mail_accounts rows. Text goes in through textContent only.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { actHooks, failed } from "./planner.mjs";
+import { actHooks, failed, settingsHooks } from "./planner.mjs";
 
 let root;
 const $ = (sel) => root.querySelector(sel);
@@ -33,11 +33,6 @@ async function draw() {
     return li;
   }));
   if (!rows.length) list.append(Object.assign(document.createElement("li"), { className: "small", textContent: "No accounts yet." }));
-}
-
-async function open() {
-  $("[data-settings]").showModal();
-  try { await draw(); } catch (e) { failed(e); }
 }
 
 // The function checks the sign-in token is the owner's, then answers with Google's consent
@@ -87,7 +82,7 @@ function outcome() {
 
 export function setupMailSettings(node) {
   root = node;
-  actHooks.settings = open;
+  settingsHooks.push(draw);
   actHooks["mail-connect"] = connect;
   actHooks["mail-remove"] = remove;
   outcome();

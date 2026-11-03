@@ -18,9 +18,8 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-btn primary" data-act="plan">Plan today <kbd>P</kbd></button>
         <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
         <button type="button" class="sheet-btn" data-act="calendars">Calendars</button>
-        <button type="button" class="sheet-btn" data-act="interests">Interests</button>
         <button type="button" class="sheet-btn" data-act="telegram" title="While Telegram is off, blocks get Google's default alert">Telegram off</button>
-        <button type="button" class="sheet-btn" data-act="settings">Settings</button>
+        <button type="button" class="sheet-btn" data-act="settings">Settings <kbd>S</kbd></button>
         <button type="button" class="sheet-btn" data-act="help" aria-label="Keyboard shortcuts">?</button>
         <button type="button" class="sheet-btn" data-act="sign-out">Sign out</button>
       </div>
@@ -69,6 +68,7 @@ import "../../styles/sheet.css";
         <dt>T</dt><dd>This week</dd>
         <dt>.</dt><dd>Menu for the focused task</dd>
         <dt>⌘Z</dt><dd>Undo</dd>
+        <dt>S</dt><dd>Settings: mail accounts, interest profile, feeds</dd>
         <dt>C</dt><dd>Campus events for the focused day (or the "Campus · N" row under its calendar)</dd>
       </dl>
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
@@ -86,18 +86,6 @@ import "../../styles/sheet.css";
       </div>
     </dialog>
 
-    <dialog class="sheet-dialog" data-interests aria-labelledby="sheet-int-title">
-      <h2 id="sheet-int-title">Interests</h2>
-      <p class="small">A few plain lines on what you like: topics, clubs, career goals, and what you'd skip. Claude picks campus events against them when it plans your day.</p>
-      <label class="visually-hidden" for="sheet-interests">Your interests, a few lines</label>
-      <textarea id="sheet-interests" class="sheet-reflect" rows="6" placeholder="Robotics, embedded systems, free food"></textarea>
-      <p class="small">Only you and Claude read this. It never shows on /now.</p>
-      <div class="sheet-dialog-end">
-        <button type="button" class="sheet-btn" data-act="close-interests">Cancel</button>
-        <button type="button" class="sheet-btn primary" data-act="save-interests">Save</button>
-      </div>
-    </dialog>
-
     <dialog class="sheet-dialog" data-settings aria-labelledby="sheet-settings-title">
       <h2 id="sheet-settings-title">Settings</h2>
 
@@ -110,6 +98,16 @@ import "../../styles/sheet.css";
           <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-link" data-act="mail-remove">Remove</button></li>
         </template>
         <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
+      </section>
+
+      <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-int-title">
+        <h3 id="sheet-int-title">Interest profile</h3>
+        <p class="small">A few plain lines on what you like: topics, clubs, career goals, and what you'd skip. Claude picks campus events against them when it plans your day.</p>
+        <label class="visually-hidden" for="sheet-interests">Your interest profile, a few lines</label>
+        <textarea id="sheet-interests" class="sheet-reflect" rows="6" placeholder="Robotics, embedded systems, free food"></textarea>
+        <p class="small">Only you and Claude read this. It never shows on /now.</p>
+        <p class="sheet-dialog-end"><span class="small" role="status" data-interests-note></span> <button type="button" class="sheet-btn primary" data-act="save-interests">Save</button></p>
       </section>
 
       <!-- Feeds status (docs/sheet-sources.md, "/plan"): src/sheet/feed-status.mjs fills the list. -->
