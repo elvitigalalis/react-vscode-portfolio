@@ -211,6 +211,12 @@ export function checkProposal(input, snapshot) {
 const SHOWN_BLOCKS = 6;
 const SHOWN_PICKS = 2;
 
+// "Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)", for the brief and for /plan.
+export function pickLine(e, tz) {
+  const going = Number.isInteger(e.rsvp_count) ? `, ${e.rsvp_count} going` : "";
+  return `Campus pick: ${e.title} (${formatClock(localNow(new Date(e.starts_at), tz).minutes)}${going})`;
+}
+
 // The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
 // up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
 // may hold any blocks; only the proposal day's proposed ones count. `picks` is [{ uid, why }],
@@ -229,10 +235,7 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
   const events = (picks ?? proposal.picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
-  for (const e of events.slice(0, SHOWN_PICKS)) {
-    const going = Number.isInteger(e.rsvp_count) ? `, ${e.rsvp_count} going` : "";
-    lines.push(`Campus pick: ${e.title} (${formatClock(localNow(new Date(e.starts_at), tz).minutes)}${going})`);
-  }
+  for (const e of events.slice(0, SHOWN_PICKS)) lines.push(pickLine(e, tz));
   const open = needsOpen.filter((n) => !n.done).length;
   if (open) lines.push(`Mail: ${open} ${open === 1 ? "needs" : "need"} you.`);
   return lines;
