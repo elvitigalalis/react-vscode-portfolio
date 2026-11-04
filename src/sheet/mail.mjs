@@ -8,6 +8,7 @@
 // https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages
 
 import { addDays, localNow } from "./logic.mjs";
+import { changeRow } from "./replan.mjs";
 
 // A message's summary, for the account (its email address) it was read from. `link` opens the
 // thread in Gmail signed in as that account.
@@ -237,4 +238,25 @@ export function replyState(thread, timeZone, now) {
   const who = displayName(sent ? newest.to : newest.from);
   if (!who) return null;
   return { state: sent ? "awaiting" : "owed", since: newest.date, message_id: newest.id, who };
+}
+
+// The mail sync's changes rows (replan.mjs's REASON_WORDS). added: the messages new since the
+// last sync, [{ id, labels, automated }], each from a person and not skipped giving mail_new
+// (weight 2). owed: the threads that turned owed this sync, [{ message_id, known }], each from
+// a known sender giving mail_owed (weight 8).
+export function mailChanges(added, owed) {
+  const quiet = ["SENT", "SPAM", "TRASH"];
+  return [
+    ...added.filter((m) => !m.automated && !skippedCategory(m.labels) && !m.labels.some((l) => quiet.includes(l)))
+      .map((m) => changeRow("mail_new", m.id)),
+    ...owed.filter((t) => t.known).map((t) => changeRow("mail_owed", t.message_id)),
+  ];
+}
+
+// A known sender's key: hex SHA-256 of the salt (SHEET_SENDER_SALT) and the address, trimmed
+// and lowercased, so no address is kept in plain text (crypto.subtle, in Node and Deno alike).
+export async function senderHash(address, salt) {
+  const bytes = new TextEncoder().encode(salt + String(address).trim().toLowerCase());
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
