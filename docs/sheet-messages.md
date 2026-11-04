@@ -47,7 +47,8 @@ with `trigger: message`, and that run does the reading. Terms are as in
 - **/plan** (src/sheet/message-box.mjs): one line and Send, owner-only. A sent message shows
   "Sending to Claude…", then its row is polled every 5 s for up to 3 minutes while the tab is
   visible, and the reply shows with "Added: 2 tasks, 1 event". A done message's events are
-  created in the Time blocks calendar through `createEvent`, as private ("Busy") events, after
+  created in the Time blocks calendar through `createMessageEvent`: titled, with Google's
+  `visibility: "private"` (anyone else viewing a shared calendar sees only busy), after
   claiming `created_in_calendar` so two tabs never make them twice; any left over (a closed tab,
   no Google access) are created on the next load with Google access.
 

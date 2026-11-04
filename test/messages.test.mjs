@@ -209,3 +209,16 @@ test("addedLine: what an answered message added, as /plan shows it under the rep
   assert.equal(addedLine({ status: "failed", tasks_added: 0, events: [] }), "Nothing added");
   assert.equal(addedLine({ status: "pending", tasks_added: 0, events: [] }), "");
 });
+
+// ---------------------------------------------------------------- messageEventBody (/plan)
+
+test("messageEventBody: a message's event keeps its title, private to the owner, with Google's default alerts", async () => {
+  const { messageEventBody } = await import("../src/sheet/api.mjs");
+  assert.deepEqual(messageEventBody("Dentist", "2026-11-05T20:00:00.000Z", "2026-11-05T21:00:00.000Z"), {
+    summary: "Dentist",
+    visibility: "private",
+    start: { dateTime: "2026-11-05T20:00:00.000Z" },
+    end: { dateTime: "2026-11-05T21:00:00.000Z" },
+    reminders: { useDefault: true },
+  });
+});
