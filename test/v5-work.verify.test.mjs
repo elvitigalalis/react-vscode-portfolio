@@ -43,7 +43,7 @@ const gh = (title, uid, due) => ({ title, day: null, list: "GitHub", due, public
 // GitHub
 // =============================================================================================
 
-test("githubTaskChanges: review requests and assigned items in his orgs become private GitHub tasks", todo, async () => {
+test("githubTaskChanges: review requests and assigned items in his orgs become private GitHub tasks", async () => {
   const { githubTaskChanges } = await load();
   const out = githubTaskChanges(ITEMS, { tasks: [], seen: [], orgs: ORGS, today: TODAY });
   assert.deepEqual(out.insert, [
@@ -60,7 +60,7 @@ test("githubTaskChanges: review requests and assigned items in his orgs become p
   assert.deepEqual(out.close, []);
 });
 
-test("githubTaskChanges: a change per insert, weight 8 when due within 48 hours, otherwise 3", todo, async () => {
+test("githubTaskChanges: a change per insert, weight 8 when due within 48 hours, otherwise 3", async () => {
   const { githubTaskChanges } = await load();
   const out = githubTaskChanges(ITEMS, { tasks: [], seen: [], orgs: ORGS, today: TODAY });
   assert.deepEqual(out.changes, [
@@ -70,7 +70,7 @@ test("githubTaskChanges: a change per insert, weight 8 when due within 48 hours,
   ]);
 });
 
-test("githubTaskChanges: due today counts as soon", todo, async () => {
+test("githubTaskChanges: due today counts as soon", async () => {
   const { githubTaskChanges } = await load();
   const item = { ...assigned.items[0], milestone: { ...assigned.items[1].milestone, due_on: "2026-11-04T07:00:00Z" } };
   const out = githubTaskChanges([item], { tasks: [], seen: [], orgs: ORGS, today: TODAY });
@@ -78,7 +78,7 @@ test("githubTaskChanges: due today counts as soon", todo, async () => {
   assert.deepEqual(out.changes, [{ kind: "github", reason: "github_due_soon", weight: 8, ref: ISSUE38 }]);
 });
 
-test("githubTaskChanges: titles and links only, never a body", todo, async () => {
+test("githubTaskChanges: titles and links only, never a body", async () => {
   const { githubTaskChanges } = await load();
   const out = JSON.stringify(githubTaskChanges(ITEMS, { tasks: [], seen: [], orgs: ["acme-robotics", "other-org"], today: TODAY }));
   assert.doesNotMatch(out, /BODY-TEXT|MILESTONE-TEXT|Sprint 9|alex-chen-dev/);
@@ -88,7 +88,7 @@ test("githubTaskChanges: titles and links only, never a body", todo, async () =>
   }
 });
 
-test("githubTaskChanges: only repositories in the orgs set in Settings", todo, async () => {
+test("githubTaskChanges: only repositories in the orgs set in Settings", async () => {
   const { githubTaskChanges } = await load();
   assert.deepEqual(githubTaskChanges(ITEMS, { tasks: [], seen: [], orgs: [], today: TODAY }).insert, []);
   const both = githubTaskChanges(ITEMS, { tasks: [], seen: [], orgs: ["acme-robotics", "other-org"], today: TODAY });
@@ -98,7 +98,7 @@ test("githubTaskChanges: only repositories in the orgs set in Settings", todo, a
   assert.deepEqual(other.insert.map((r) => r.source_uid), [PR7]);
 });
 
-test("githubTaskChanges: a seen item updates its undone task, leaves a done or deleted one alone", todo, async () => {
+test("githubTaskChanges: a seen item updates its undone task, leaves a done or deleted one alone", async () => {
   const { githubTaskChanges } = await load();
   const tasks = [
     { id: "a1", title: "Review: Add retry", due: null, done: false, source: "github", source_uid: PR41, link: PR41 },
@@ -114,7 +114,7 @@ test("githubTaskChanges: a seen item updates its undone task, leaves a done or d
   assert.deepEqual(out.close, []);
 });
 
-test("githubTaskChanges: a review done or an issue closed closes its task", todo, async () => {
+test("githubTaskChanges: a review done or an issue closed closes its task", async () => {
   const { githubTaskChanges } = await load();
   const MERGED = "https://github.com/acme-robotics/planner/pull/40";
   const CLOSED = "https://github.com/acme-robotics/planner/issues/30";
@@ -131,7 +131,7 @@ test("githubTaskChanges: a review done or an issue closed closes its task", todo
   assert.deepEqual(out.update, []);
 });
 
-test("githubTaskChanges: an item in both searches is one task", todo, async () => {
+test("githubTaskChanges: an item in both searches is one task", async () => {
   const { githubTaskChanges } = await load();
   const out = githubTaskChanges([...review.items, ...assigned.items, ...review.items], { tasks: [], seen: [], orgs: ORGS, today: TODAY });
   assert.equal(out.insert.filter((r) => r.source_uid === PR41).length, 1);
@@ -147,7 +147,7 @@ const jt = (key, summary, due) => ({
   title: `${key} ${summary}`, day: null, list: "Jira", due, public: false, source: "jira", source_uid: key, link: `https://${SITE}/browse/${key}`,
 });
 
-test("jiraTaskChanges: open tickets become private Jira tasks with a browse link", todo, async () => {
+test("jiraTaskChanges: open tickets become private Jira tasks with a browse link", async () => {
   const { jiraTaskChanges } = await load();
   const out = jiraTaskChanges(jira.issues, { tasks: [], seen: [], site: SITE, today: TODAY });
   assert.deepEqual(out.insert, [
@@ -159,7 +159,7 @@ test("jiraTaskChanges: open tickets become private Jira tasks with a browse link
   assert.deepEqual(out.close, []);
 });
 
-test("jiraTaskChanges: weight 8 when due within 48 hours, otherwise 3", todo, async () => {
+test("jiraTaskChanges: weight 8 when due within 48 hours, otherwise 3", async () => {
   const { jiraTaskChanges } = await load();
   assert.deepEqual(jiraTaskChanges(jira.issues, { tasks: [], seen: [], site: SITE, today: TODAY }).changes, [
     { kind: "jira", reason: "jira_due_soon", weight: 8, ref: "KAN-12" },
@@ -168,12 +168,12 @@ test("jiraTaskChanges: weight 8 when due within 48 hours, otherwise 3", todo, as
   ]);
 });
 
-test("jiraTaskChanges: never the description", todo, async () => {
+test("jiraTaskChanges: never the description", async () => {
   const { jiraTaskChanges } = await load();
   assert.doesNotMatch(JSON.stringify(jiraTaskChanges(jira.issues, { tasks: [], seen: [], site: SITE, today: TODAY })), /DESC-TEXT|In Progress|Medium/);
 });
 
-test("jiraTaskChanges: updates an undone task; a done ticket closes its task", todo, async () => {
+test("jiraTaskChanges: updates an undone task; a done ticket closes its task", async () => {
   const { jiraTaskChanges } = await load();
   const tasks = [
     { id: "j1", title: "KAN-12 Onboarding", due: null, done: false, source: "jira", source_uid: "KAN-12", link: `https://${SITE}/browse/KAN-12` },
