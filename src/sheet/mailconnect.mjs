@@ -8,6 +8,11 @@ import { ORIGIN } from "../site.mjs";
 // grant holds it.
 export const READONLY = "https://www.googleapis.com/auth/gmail.readonly";
 
+// The calendar grant (docs/sheet-v5.md, calendar-connect): free/busy only, plus openid and email,
+// which are there only to prove whose account it is (the ID token's verified email).
+export const FREEBUSY = "https://www.googleapis.com/auth/calendar.freebusy";
+export const CALENDAR_SCOPES = `openid email ${FREEBUSY}`;
+
 // A state lives 10 minutes: long enough to pick an account and click through Google's screens.
 const STATE_TTL = 10 * 60_000;
 
@@ -48,13 +53,14 @@ export async function verifyState(state, secret, now) {
 // Google's consent screen for one mail account, read-only. Per Google's web server flow
 // (developers.google.com/identity/protocols/oauth2/web-server): access_type=offline asks for a
 // refresh token, and prompt=consent makes Google send one again when an account reconnects.
-// include_granted_scopes=false keeps the grant to gmail.readonly alone.
-export function googleAuthUrl({ clientId, redirectUri, state, loginHint }) {
+// include_granted_scopes=false keeps the grant to the scope asked for alone: gmail.readonly by
+// default, CALENDAR_SCOPES for calendar-connect.
+export function googleAuthUrl({ clientId, redirectUri, state, loginHint, scope = READONLY }) {
   const q = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: READONLY,
+    scope,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "false",
@@ -62,6 +68,20 @@ export function googleAuthUrl({ clientId, redirectUri, state, loginHint }) {
   });
   if (loginHint) q.set("login_hint", loginHint);
   return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}
+
+// The email an ID token names, or null unless Google marks it verified. Only for an ID token
+// fresh from Google's token endpoint over HTTPS, which needs no signature check: "you can be
+// confident that the token you receive really comes from Google and is valid"
+// (developers.google.com/identity/openid-connect/openid-connect, "Obtain user information from
+// the ID token").
+export function idTokenEmail(idToken) {
+  try {
+    const claims = JSON.parse(new TextDecoder().decode(fromB64(String(idToken ?? "").split(".")[1] ?? "")));
+    return claims?.email_verified === true && typeof claims.email === "string" && claims.email ? claims.email : null;
+  } catch {
+    return null;
+  }
 }
 
 // The CORS headers for a browser call to /start from `origin`: the site, or `astro dev` on its
