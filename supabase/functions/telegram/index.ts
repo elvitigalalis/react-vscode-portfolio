@@ -72,7 +72,9 @@ async function snapshot(now: Date) {
   const replanSent = log.filter((n: { kind: string }) => n.kind === "replan").length;
   // v5 SRC3: today's academic calendar entries, for the brief's calendar line.
   const [academicDay = null] = await db(`academic_days?select=entries&day=eq.${today}`);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [] };
+  // v5 M1: the threads he's awaiting a reply on, oldest first, for the brief's Awaiting reply line.
+  const awaiting = await db("reply_state?select=who,since&state=eq.awaiting&order=since");
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
