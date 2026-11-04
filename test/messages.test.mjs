@@ -162,6 +162,14 @@ test("checkAnswers: bad dates, times and lengths each name their field", () => {
   ]);
 });
 
+test("checkAnswers: a task with a fixed time needs a length, so the day list can show when it ends", () => {
+  const out = checkAnswers({ answers: [answer({
+    tasks: [{ title: "Register for classes", day: "2026-11-05", due: null, at_time: "19:00", est_min: null }],
+  })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, ["answers[0].tasks[0].est_min: a task with at_time needs est_min (15 to 480): estimate a reasonable length if none was given"]);
+  assert.deepEqual(out.answers, []);
+});
+
 test("checkAnswers: past dates are fine (he may log what already happened); missing fields read as null", () => {
   const out = checkAnswers({ answers: [answer({
     tasks: [{ title: "Expense report", day: "2026-10-01", due: "2026-10-02" }, { title: "Read ch. 4" }],

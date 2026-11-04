@@ -206,7 +206,7 @@ function plannerServer(db: Db) {
   server.registerTool("answer_messages", {
     description: "Answer Lisul's pending messages from read_planner's messages, one answer per message: { id, " +
       "tasks: [{ title, day: \"YYYY-MM-DD\" or null (Inbox), due: \"YYYY-MM-DD\" or null, at_time: \"HH:MM\" or " +
-      "null (needs a day), est_min: 15-480 or null, why }], events: [{ title, start: \"YYYY-MM-DDTHH:MM\", " +
+      "null (needs a day), est_min: 15-480 or null (required with at_time: estimate one), why }], events: [{ title, start: \"YYYY-MM-DDTHH:MM\", " +
       "minutes: 15-720, why }], reply }. why is optional: one line of at most 140 characters, no link, telling " +
       "Lisul why it is a task or an event, why that day or time, or what you assumed. Times are local in time_zone. Titles are at most 120 characters; reply is one line of " +
       "at most 500 characters with no link, saying what was added, and what was skipped and why. At most 20 " +
