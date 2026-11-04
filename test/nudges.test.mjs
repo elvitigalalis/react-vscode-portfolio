@@ -107,11 +107,11 @@ test("morning brief: an empty day still says the morning plan didn't come in", (
   assert.equal(brief.text, 'Nothing on today.\nNo morning plan came in today: say "plan my day" to Claude.');
 });
 
-test("check-in: two open needs_you rows read \"still need you\"", () => {
+test("check-in: two open needs_you rows read \"Needs you: 2\"", () => {
   const n = (id) => ({ id, done: false });
   const snap = snapshot({ tasks: [task("t1", "Gym")], needsOpen: [n("a"), n("b"), { id: "c", done: true }] });
   const [m] = whatToSend(snap, at("2026-10-26T21:00:00Z")).filter((x) => x.kind === "checkin");
-  assert.equal(m.text, "Shutdown time. 0 done, 1 left.\nMail: 2 still need you.");
+  assert.equal(m.text, "Shutdown time. 0 done, 1 left.\nNeeds you: 2.");
 });
 
 test("quiet hours: a brief still unsent at 11 pm waits for tomorrow", () => {

@@ -274,7 +274,8 @@ function finishedChecks(day) {
 
 // The check-in: at the day's shutdown line (the default unless he moved it), asking for the
 // shutdown. Once the day is shut down, or on a day with no tasks, there's nothing to ask.
-// It also says what's due tomorrow and whether mail still needs him (docs/sheet-morning.md).
+// It also says what's due tomorrow and how many Needs you rows, mail and Slack, are
+// still open (docs/sheet-morning.md).
 function checkin({ tasks, day: row, today, tz, needsOpen }) {
   const todays = tasks.filter((t) => t.day === today);
   if (row?.shutdown || !todays.length) return [];
@@ -285,7 +286,7 @@ function checkin({ tasks, day: row, today, tz, needsOpen }) {
   const lines = [`Shutdown time. ${done} done, ${todays.length - done} left.`];
   const tomorrow = tasks.filter((t) => !t.done && t.due === addDays(today, 1));
   if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
-  if (needsOpen.length) lines.push(`Mail: ${needsOpen.length} still need${needsOpen.length === 1 ? "s" : ""} you.`);
+  if (needsOpen.length) lines.push(`Needs you: ${needsOpen.length}.`);
   return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
 }
 
