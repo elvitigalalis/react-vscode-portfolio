@@ -8,9 +8,9 @@ import { CALENDAR_SCOPES, FREEBUSY, READONLY, googleAuthUrl, idTokenEmail } from
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const idToken = (claims) => `${b64({ alg: "RS256" })}.${b64(claims)}.sig`;
 
-test("the calendar consent URL asks for free/busy and identity only, offline, for his account", () => {
+test("the calendar consent URL asks for free/busy, /plan's two scopes and identity, offline, for his account", () => {
   const u = new URL(googleAuthUrl({ clientId: "c", redirectUri: "https://x.example/cb", state: "s", loginHint: "me@example.com", scope: CALENDAR_SCOPES }));
-  assert.equal(u.searchParams.get("scope"), "openid email https://www.googleapis.com/auth/calendar.freebusy");
+  assert.equal(u.searchParams.get("scope"), "openid email https://www.googleapis.com/auth/calendar.freebusy https://www.googleapis.com/auth/calendar.events.readonly https://www.googleapis.com/auth/calendar.app.created");
   assert.equal(FREEBUSY, "https://www.googleapis.com/auth/calendar.freebusy");
   assert.equal(u.searchParams.get("access_type"), "offline");
   assert.equal(u.searchParams.get("prompt"), "consent");
