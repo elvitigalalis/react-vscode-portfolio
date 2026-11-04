@@ -469,7 +469,18 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-message-text { white-space: pre-wrap; }
 .sheet-message-text.is-folded { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .sheet-message-status, .sheet-message-note { color: var(--muted); }
-.sheet-message-status.is-unparsed { color: var(--fg); }
+.sheet-message-status.is-unparsed, .sheet-message-reply.is-unparsed { color: var(--danger); }
+.sheet-message-elapsed { margin-left: 0.5rem; font-variant-numeric: tabular-nums; }
+.sheet-message-steps { list-style: none; margin: 0.15rem 0 0; padding: 0; }
+.sheet-message-steps li { padding: 0.05rem 0; }
+.sheet-message-steps .is-done { color: var(--muted); }
+.sheet-message-tick { display: inline-block; width: 1em; color: var(--accent); }
+.sheet-message-decided { margin-top: 0.25rem; }
+.sheet-message-decided summary { cursor: pointer; color: var(--muted); }
+.sheet-message-notes { margin: 0.15rem 0; padding-left: 1.1rem; }
+.sheet-message-run { display: inline-block; margin-top: 0.15rem; color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .sheet-message-steps .is-current .sheet-message-tick { animation: sheet-pulse 1.2s ease-in-out infinite; } }
+@keyframes sheet-pulse { 50% { opacity: 0.35; } }
 .sheet-message-added { list-style: none; margin: 0.25rem 0 0; padding: 0; }
 .sheet-message-added li { padding: 0.15rem 0; }
 .sheet-message-kind { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }

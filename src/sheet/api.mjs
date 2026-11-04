@@ -336,7 +336,7 @@ export async function sendMessage(text) {
   if (!res.ok || !out.id) throw new SheetError(`message: ${res.status} ${out.error ?? ""}`.trim());
   return out;
 }
-const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,tasks,events,created_in_calendar,fired_at";
+const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,tasks,events,created_in_calendar,fired_at,steps,session_url,answered_at";
 export const getMessage = async (id) => (await rest(`messages?select=${MESSAGE_COLUMNS}&id=eq.${id}`))[0] ?? null;
 // The newest 10 messages, newest first, for /plan's Recent list. 404 (no table yet) reads as none.
 export const recentMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&order=at.desc&limit=10`)
