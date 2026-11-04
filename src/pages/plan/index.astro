@@ -155,6 +155,13 @@ import "../../styles/sheet.css";
         <p class="sheet-dialog-end"><label for="sheet-cap">Hours a day</label> <input id="sheet-cap" class="sheet-cap" type="number" min="1" max="16" step="0.5" inputmode="decimal"> <span class="small" role="status" data-cap-note></span> <button type="button" class="sheet-btn primary" data-act="save-cap">Save</button></p>
       </section>
 
+      <!-- Replans (docs/sheet-v5.md, "/plan"): src/sheet/replan-settings.mjs fills and saves it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-replans-title">
+        <h3 id="sheet-replans-title">Replans</h3>
+        <p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. You still approve every change.</p>
+        <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
+      </section>
+
       <!-- Enrollment time (docs/sheet-v5.md, "/plan"): src/sheet/enrollment-settings.mjs fills and saves it. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-enroll-title">
         <h3 id="sheet-enroll-title">Enrollment</h3>
@@ -247,6 +254,7 @@ import "../../styles/sheet.css";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
+  import { setupReplanSettings } from "../../sheet/replan-settings.mjs";
   import { setupEnrollmentSettings } from "../../sheet/enrollment-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupEnrollmentSettings]);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupEnrollmentSettings, setupReplanSettings]);
 </script>

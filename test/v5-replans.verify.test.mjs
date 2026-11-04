@@ -43,23 +43,23 @@ const hold = (h) => ({ fire: false, hold: h });
 // shouldReplan: the rules
 // =============================================================================================
 
-test("shouldReplan: a change of weight 10 fires at once", todo, async () => {
+test("shouldReplan: a change of weight 10 fires at once", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan(urgent, state(), now), { fire: true, reasons: ["busy_overlap"], counts: { busy: 1 }, ids: ["c1"] });
 });
 
-test("shouldReplan: a change of weight 8 fires at once, even logged this minute", todo, async () => {
+test("shouldReplan: a change of weight 8 fires at once, even logged this minute", async () => {
   const { shouldReplan } = await replan();
   const changes = [change("c1", "2026-11-04T15:02:00Z", "course", "course_due_soon", 8)];
   assert.deepEqual(shouldReplan(changes, state(), now), { fire: true, reasons: ["course_due_soon"], counts: { course: 1 }, ids: ["c1"] });
 });
 
-test("shouldReplan: a lone change under weight 8, a minute old, waits", todo, async () => {
+test("shouldReplan: a lone change under weight 8, a minute old, waits", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan([change("c1", "2026-11-04T15:01:00Z", "course", "course_change", 3)], state(), now), hold("waiting"));
 });
 
-test("shouldReplan: weights adding to 4 fire once the oldest is 15 minutes old", todo, async () => {
+test("shouldReplan: weights adding to 4 fire once the oldest is 15 minutes old", async () => {
   const { shouldReplan } = await replan();
   // 9:47 am is 15 minutes before 10:02.
   const changes = [change("c1", "2026-11-04T14:47:00Z", "mail", "mail_new", 2), change("c2", "2026-11-04T15:00:00Z", "busy", "busy_change", 2)];
@@ -70,25 +70,25 @@ test("shouldReplan: weights adding to 4 fire once the oldest is 15 minutes old",
   assert.deepEqual([...r.ids].sort(), ["c1", "c2"]);
 });
 
-test("shouldReplan: weights adding to 4 wait while the oldest is 14 minutes old", todo, async () => {
+test("shouldReplan: weights adding to 4 wait while the oldest is 14 minutes old", async () => {
   const { shouldReplan } = await replan();
   const changes = [change("c1", "2026-11-04T14:48:00Z", "mail", "mail_new", 2), change("c2", "2026-11-04T15:00:00Z", "busy", "busy_change", 2)];
   assert.deepEqual(shouldReplan(changes, state(), now), hold("waiting"));
 });
 
-test("shouldReplan: one change of weight 4 is enough at 15 minutes old, not at 14", todo, async () => {
+test("shouldReplan: one change of weight 4 is enough at 15 minutes old, not at 14", async () => {
   const { shouldReplan } = await replan();
   const at = (t) => [change("c1", t, "busy", "time_freed", 4)];
   assert.deepEqual(shouldReplan(at("2026-11-04T14:47:00Z"), state(), now), { fire: true, reasons: ["time_freed"], counts: { busy: 1 }, ids: ["c1"] });
   assert.deepEqual(shouldReplan(at("2026-11-04T14:48:00Z"), state(), now), hold("waiting"));
 });
 
-test("shouldReplan: weights adding to 3 wait at 22 minutes old", todo, async () => {
+test("shouldReplan: weights adding to 3 wait at 22 minutes old", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan([change("c1", "2026-11-04T14:40:00Z", "course", "course_change", 3)], state(), now), hold("waiting"));
 });
 
-test("shouldReplan: any change fires once it is 45 minutes old, not at 44", todo, async () => {
+test("shouldReplan: any change fires once it is 45 minutes old, not at 44", async () => {
   const { shouldReplan } = await replan();
   // 9:17 am is 45 minutes before 10:02.
   const at = (t) => [change("c1", t, "mail", "mail_new", 2)];
@@ -96,12 +96,12 @@ test("shouldReplan: any change fires once it is 45 minutes old, not at 44", todo
   assert.deepEqual(shouldReplan(at("2026-11-04T14:18:00Z"), state(), now), hold("waiting"));
 });
 
-test("shouldReplan: with no changes it holds with nothing", todo, async () => {
+test("shouldReplan: with no changes it holds with nothing", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan([], state(), now), hold("nothing"));
 });
 
-test("shouldReplan: changes after now, or at or before the last plan, don't count", todo, async () => {
+test("shouldReplan: changes after now, or at or before the last plan, don't count", async () => {
   const { shouldReplan } = await replan();
   const ignored = [
     change("c1", "2026-11-04T15:03:00Z", "busy", "busy_overlap", 10), // a minute in the future
@@ -114,7 +114,7 @@ test("shouldReplan: changes after now, or at or before the last plan, don't coun
   assert.deepEqual(r, hold("waiting"));
 });
 
-test("shouldReplan: the run's own proposal doesn't count; a change a minute after it does", todo, async () => {
+test("shouldReplan: the run's own proposal doesn't count; a change a minute after it does", async () => {
   const { shouldReplan } = await replan();
   // The replan's revision went in at 9:30 am; the change it caused is stamped with it.
   const s = state({ last_plan_at: "2026-11-04T14:00:00Z", plans_today: 2 });
@@ -122,13 +122,13 @@ test("shouldReplan: the run's own proposal doesn't count; a change a minute afte
   assert.equal(shouldReplan([change("c1", "2026-11-04T14:01:00Z", "busy", "busy_overlap", 10)], s, new Date("2026-11-04T15:00:00Z")).fire, true);
 });
 
-test("shouldReplan: with no plan today nothing is ignored for being old", todo, async () => {
+test("shouldReplan: with no plan today nothing is ignored for being old", async () => {
   const { shouldReplan } = await replan();
   const r = shouldReplan([change("c1", "2026-11-04T11:00:00Z", "mail", "mail_new", 2)], state({ last_plan_at: null, plans_today: 0 }), now);
   assert.deepEqual(r, { fire: true, reasons: ["mail_new"], counts: { mail: 1 }, ids: ["c1"] });
 });
 
-test("shouldReplan: reasons are distinct, highest weight first, then by name; counts by kind", todo, async () => {
+test("shouldReplan: reasons are distinct, highest weight first, then by name; counts by kind", async () => {
   const { shouldReplan } = await replan();
   const changes = [
     change("c1", "2026-11-04T14:50:00Z", "mail", "mail_new", 2),
@@ -147,7 +147,7 @@ test("shouldReplan: reasons are distinct, highest weight first, then by name; co
   assert.deepEqual([...r.ids].sort(), ["c1", "c2", "c3", "c4", "c5", "c6", "c7"]);
 });
 
-test("shouldReplan: the counts make the fire text", todo, async () => {
+test("shouldReplan: the counts make the fire text", async () => {
   const { shouldReplan } = await replan();
   const { fireText } = await import("../src/sheet/routine-fire.mjs");
   const changes = [
@@ -163,26 +163,26 @@ test("shouldReplan: the counts make the fire text", todo, async () => {
 // shouldReplan: the holds
 // =============================================================================================
 
-test("hold: replans off", todo, async () => {
+test("hold: replans off", async () => {
   const { shouldReplan } = await replan();
   const s = state({ settings: { time_zone: TZ, replans_on: false, morning_on: true } });
   assert.deepEqual(shouldReplan(urgent, s, now), hold("replans_off"));
   assert.deepEqual(shouldReplan([], s, now), hold("replans_off"));
 });
 
-test("hold: the morning task off", todo, async () => {
+test("hold: the morning task off", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan(urgent, state({ settings: { time_zone: TZ, replans_on: true, morning_on: false } }), now), hold("morning_off"));
 });
 
-test("hold: quiet hours before 8:00 am; 8:00 am itself is open", todo, async () => {
+test("hold: quiet hours before 8:00 am; 8:00 am itself is open", async () => {
   const { shouldReplan } = await replan();
   const early = [change("c1", "2026-11-04T12:58:00Z", "busy", "busy_overlap", 10)]; // 7:58 am
   assert.deepEqual(shouldReplan(early, state(), new Date("2026-11-04T12:59:00Z")), hold("quiet")); // 7:59 am
   assert.equal(shouldReplan(early, state(), new Date("2026-11-04T13:00:00Z")).fire, true); // 8:00 am
 });
 
-test("hold: quiet hours from 11:00 pm; 10:59 pm is open", todo, async () => {
+test("hold: quiet hours from 11:00 pm; 10:59 pm is open", async () => {
   const { shouldReplan } = await replan();
   const s = state({ shutdown: "23:30" });
   const late = [change("c1", "2026-11-05T03:58:00Z", "busy", "busy_overlap", 10)]; // 10:58 pm
@@ -190,47 +190,47 @@ test("hold: quiet hours from 11:00 pm; 10:59 pm is open", todo, async () => {
   assert.deepEqual(shouldReplan(late, s, new Date("2026-11-05T04:00:00Z")), hold("quiet")); // 11:00 pm
 });
 
-test("hold: the day is shut down", todo, async () => {
+test("hold: the day is shut down", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan(urgent, state({ day: { day: DAY, shutdown: true, shutdown_at: null } }), now), hold("shut_down"));
   // No days row yet is not shut down.
   assert.equal(shouldReplan(urgent, state({ day: null }), now).fire, true);
 });
 
-test("hold: at or after the shutdown line", todo, async () => {
+test("hold: at or after the shutdown line", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan(urgent, state({ shutdown: "10:00" }), now), hold("after_shutdown"));
   assert.deepEqual(shouldReplan(urgent, state({ shutdown: "10:02" }), now), hold("after_shutdown"));
   assert.equal(shouldReplan(urgent, state({ shutdown: "10:03" }), now).fire, true);
 });
 
-test("hold: the daily cap of 8 plans", todo, async () => {
+test("hold: the daily cap of 8 plans", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan(urgent, state({ plans_today: 8 }), now), hold("daily_cap"));
   assert.deepEqual(shouldReplan(urgent, state({ plans_today: 9 }), now), hold("daily_cap"));
   assert.equal(shouldReplan(urgent, state({ plans_today: 7 }), now).fire, true);
 });
 
-test("hold: under 60 minutes since the last plan", todo, async () => {
+test("hold: under 60 minutes since the last plan", async () => {
   const { shouldReplan } = await replan();
   const changes = [change("c1", "2026-11-04T14:30:00Z", "busy", "busy_overlap", 10)];
   assert.deepEqual(shouldReplan(changes, state({ last_plan_at: "2026-11-04T14:03:00Z" }), now), hold("too_soon")); // 59 min
   assert.equal(shouldReplan(changes, state({ last_plan_at: "2026-11-04T14:02:00Z" }), now).fire, true); // 60 min
 });
 
-test("hold: under 10 minutes since a /plan edit", todo, async () => {
+test("hold: under 10 minutes since a /plan edit", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan(urgent, state({ last_edit_at: "2026-11-04T14:53:00Z" }), now), hold("editing")); // 9 min
   assert.equal(shouldReplan(urgent, state({ last_edit_at: "2026-11-04T14:52:00Z" }), now).fire, true); // 10 min
 });
 
-test("a /plan edit is not a change: an edit with no changes is nothing", todo, async () => {
+test("a /plan edit is not a change: an edit with no changes is nothing", async () => {
   const { shouldReplan } = await replan();
   assert.deepEqual(shouldReplan([], state({ last_edit_at: "2026-11-04T14:30:00Z" }), now), hold("nothing"));
   assert.deepEqual(shouldReplan([], state({ last_edit_at: "2026-11-04T15:00:00Z" }), now), hold("editing"));
 });
 
-test("hold: the holds are checked in the contract's order", todo, async () => {
+test("hold: the holds are checked in the contract's order", async () => {
   const { shouldReplan } = await replan();
   const off = { time_zone: TZ, replans_on: false, morning_on: false };
   const at759 = new Date("2026-11-04T12:59:00Z");
@@ -270,17 +270,17 @@ const WORDS = {
   handshake_change: "Handshake events changed",
 };
 
-test("REASON_WORDS: exactly the fourteen reason names", todo, async () => {
+test("REASON_WORDS: exactly the fourteen reason names", async () => {
   const { REASON_WORDS } = await replan();
   assert.deepEqual(Object.keys(REASON_WORDS).sort(), Object.keys(WORDS).sort());
 });
 
-test("reasonWords: each reason's words", todo, async () => {
+test("reasonWords: each reason's words", async () => {
   const { reasonWords } = await replan();
   for (const [reason, words] of Object.entries(WORDS)) assert.equal(reasonWords([reason]), words, reason);
 });
 
-test("reasonWords: several reasons joined with a comma, in the order given", todo, async () => {
+test("reasonWords: several reasons joined with a comma, in the order given", async () => {
   const { reasonWords } = await replan();
   assert.equal(reasonWords(["busy_overlap", "mail_new"]), "a busy time landed on a block, new mail");
   assert.equal(reasonWords(["mail_owed", "time_freed", "slack_new"]), "a known sender is waiting on a reply, time freed up, new Slack mentions");
@@ -324,7 +324,7 @@ const planButtons = [
 ];
 const at1006 = new Date("2026-11-04T15:06:00Z");
 
-test("replan message: the reasons in words, the blocks added and gone, and what couldn't fit", todo, async () => {
+test("replan message: the reasons in words, the blocks added and gone, and what couldn't fit", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot(), at1006), [{
     kind: "replan",
@@ -341,7 +341,7 @@ test("replan message: the reasons in words, the blocks added and gone, and what 
   }]);
 });
 
-test("replan message: after an approved revision every proposed block is new", todo, async () => {
+test("replan message: after an approved revision every proposed block is new", async () => {
   const { whatToSend } = await nudges();
   const snap = snapshot({
     previous: revision(1, { status: "approved", blocks: [GYM] }),
@@ -357,13 +357,13 @@ test("replan message: after an approved revision every proposed block is new", t
   ].join("\n"));
 });
 
-test("replan message: not sent when the blocks are the same set as the previous pending revision's", todo, async () => {
+test("replan message: not sent when the blocks are the same set as the previous pending revision's", async () => {
   const { whatToSend } = await nudges();
   // The same two blocks, listed the other way round.
   assert.deepEqual(whatToSend(snapshot({ previous: rev1({ blocks: [HW3, OS] }) }), at1006), []);
 });
 
-test("replan message: a block moved by 15 minutes is one gone and one added", todo, async () => {
+test("replan message: a block moved by 15 minutes is one gone and one added", async () => {
   const { whatToSend } = await nudges();
   const moved = span("t3", "2026-11-04T21:15:00Z", "2026-11-04T22:00:00Z"); // 4:15-5:00 pm
   const snap = snapshot({ previous: rev1({ blocks: [OS, HW3] }), proposal: rev2({ blocks: [OS, moved], couldnt_fit: [] }), blocks: [row(B(1), OS), row(B(3), moved)] });
@@ -371,19 +371,19 @@ test("replan message: a block moved by 15 minutes is one gone and one added", to
   assert.equal(m.text, "Replan: a busy time landed on a block, new mail.\n+ 4:15 pm · HW3 (45 min)\n− 4:00 pm · HW3");
 });
 
-test("replan message: at most 4 a day", todo, async () => {
+test("replan message: at most 4 a day", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot({ replanSent: 4 }), at1006), []);
   assert.deepEqual(whatToSend(snapshot({ replanSent: 3 }), at1006).map((m) => m.kind), ["replan"]);
 });
 
-test("replan message: once per revision", todo, async () => {
+test("replan message: once per revision", async () => {
   const { whatToSend } = await nudges();
   const sent = { block_id: null, kind: "replan", day: DAY, send_at: "2026-11-04T15:05:00.000Z", sent_at: "2026-11-04T15:05:30Z" };
   assert.deepEqual(whatToSend(snapshot({ log: [briefSent, sent], replanSent: 1 }), at1006), []);
 });
 
-test("replan message: not in quiet hours", todo, async () => {
+test("replan message: not in quiet hours", async () => {
   const { whatToSend } = await nudges();
   // Made at 11:10 pm, looked at a minute later.
   const late = snapshot({ proposal: rev2({ created_at: "2026-11-05T04:10:00Z" }) });
@@ -393,19 +393,19 @@ test("replan message: not in quiet hours", todo, async () => {
   assert.deepEqual(whatToSend(early, new Date("2026-11-04T12:45:00Z")), []);
 });
 
-test("replan message: outside the nudge budget", todo, async () => {
+test("replan message: outside the nudge budget", async () => {
   const { whatToSend } = await nudges();
   // Six nudges already went out today: the budget is spent.
   const used = [1, 2, 3, 4, 5, 6].map((n) => ({ block_id: `0c0c0c0c-0000-4000-8000-00000000000${n}`, kind: "start", day: DAY, send_at: `2026-11-04T13:0${n}:00.000Z`, sent_at: `2026-11-04T13:0${n}:01Z` }));
   assert.deepEqual(whatToSend(snapshot({ log: [briefSent, ...used] }), at1006).map((m) => m.kind), ["replan"]);
 });
 
-test("replan message: only for a pending revision", todo, async () => {
+test("replan message: only for a pending revision", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot({ proposal: rev2({ status: "approved" }), blocks: [row(B(1), OS, { proposed: false }), row(B(3), HW3, { proposed: false })] }), at1006), []);
 });
 
-test("replan message: at most 6 added lines, earliest first", todo, async () => {
+test("replan message: at most 6 added lines, earliest first", async () => {
   const { whatToSend } = await nudges();
   // Seven 15-minute blocks from 10:15 am, given latest first.
   const seven = ["15:15", "15:30", "15:45", "16:00", "16:15", "16:30", "16:45"].map((t) => {

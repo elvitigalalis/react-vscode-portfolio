@@ -1,8 +1,9 @@
 // Feed sync (docs/sheet-sources.md, "Contracts"): what the brightspace and campus Edge Functions
 // write, worked out from parsed feed events (src/sheet/ical.mjs). Pure: no network, so /plan's
 // tests cover it and the functions only fetch and write what it says.
-import { cutTitle, localNow } from "./logic.mjs";
+import { addDays, cutTitle, localNow } from "./logic.mjs";
 import { routine } from "./campus.mjs";
+import { changeRow } from "./replan.mjs";
 
 // --- Course tasks (Brightspace) -----------------------------------------------------------
 
@@ -63,8 +64,30 @@ export function courseTaskChanges(events, { tasks, seen, timeZone }) {
   return { insert, update, seen: added };
 }
 
+// v5 R1 (docs/sheet-v5.md, "replan.mjs"): the changes rows for one Brightspace fetch's inserts and
+// updates (courseTaskChanges' output), one per task, ref its UID. A due date today, tomorrow or the
+// day after is course_due_soon (weight 8); anything else course_change (3).
+export function courseChanges({ insert, update }, tasks, today) {
+  const soon = (due) => due >= today && due <= addDays(today, 2);
+  const uid = new Map(tasks.map((t) => [t.id, t.source_uid]));
+  return [...insert.map((r) => [r.due, r.source_uid]), ...update.map((u) => [u.due, uid.get(u.id)])]
+    .map(([due, ref]) => changeRow(soon(due) ? "course_due_soon" : "course_change", ref ?? null));
+}
+
 
 // --- Campus events (SB Engaged) ---------------------------------------------------------------
+
+// v5 R1: one campus_change row when the events left today (ending after `now`, starting before
+// local midnight) differ, as uids and times, between the rows before and after a write; else null.
+// The rest of the 14-day window doesn't touch today's plan, so it never starts a replan.
+export function campusChange(before, after, now, timeZone) {
+  const t = +new Date(now);
+  const { day } = localNow(new Date(t), timeZone);
+  const today = (rows) => new Set(rows.filter((r) => Date.parse(r.ends_at) > t && localNow(new Date(r.starts_at), timeZone).day <= day)
+    .map((r) => `${r.uid}|${Date.parse(r.starts_at)}|${Date.parse(r.ends_at)}`));
+  const a = today(before), b = today(after);
+  return a.size === b.size && [...a].every((k) => b.has(k)) ? null : changeRow("campus_change");
+}
 
 const DAY = 86_400_000;
 const WINDOW = 14 * DAY;
