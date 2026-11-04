@@ -111,3 +111,32 @@ export function checkAnswers(input, pending, timeZone) {
   });
   return { errors, answers };
 }
+
+// --- Reading (planner-mcp's read_planner) ----------------------------------------------------
+
+export const MAX_READ = 10;
+// A run starts within seconds of its fire; a fired message older than this that is still pending
+// was missed (or rate limited), and the next run of any kind answers it.
+const MESSAGE_FRESH = 10 * 60_000;
+
+// What read_planner adds to planSnapshot for messages, from the pending messages rows ({ id, at,
+// text, fired_at }) and the settings row: today (Lisul's date, which plan_day is not after 3 pm),
+// replans_on, and the pending messages, oldest first and at most 10, as { id, at, text }. A
+// message fired under 10 minutes ago and still pending makes a morning run a "message" run; a
+// replan stays a replan.
+export function withMessages(snapshot, rows, settings, now) {
+  const pending = list(rows).slice().sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const fresh = pending.some((m) => m.fired_at && now.getTime() - Date.parse(m.fired_at) < MESSAGE_FRESH);
+  const run = fresh && snapshot.run?.trigger === "morning" ? { ...snapshot.run, trigger: "message" } : snapshot.run;
+  return {
+    ...snapshot,
+    run,
+    today: localNow(now, snapshot.time_zone).day,
+    replans_on: Boolean(settings?.replans_on),
+    messages: pending.slice(0, MAX_READ).map((m) => ({ id: m.id, at: m.at, text: m.text })),
+  };
+}
+
+// The run_trigger a revision is recorded with: proposals hold morning or replan, and a revision
+// a message run goes on to submit is a replan of today.
+export const proposalTrigger = (trigger) => (trigger === "message" ? "replan" : trigger);

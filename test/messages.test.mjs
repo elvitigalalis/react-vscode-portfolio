@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldFire, checkAnswers } from "../src/sheet/messages.mjs";
+import { shouldFire, checkAnswers, withMessages, proposalTrigger } from "../src/sheet/messages.mjs";
 import { fireText } from "../src/sheet/routine-fire.mjs";
 
 const NOW = new Date("2026-11-04T15:00:00Z"); // 10:00 am EST
@@ -157,4 +157,35 @@ test("checkAnswers: at most 10 answers, 10 tasks and 5 events an answer, and a r
     reply: undefined,
   })] }, PENDING, TZ);
   assert.deepEqual(out.errors, ["answers[0].tasks: at most 10, got 11", "answers[0].events: at most 5, got 6", "answers[0].reply: must be text"]);
+});
+
+// ---------------------------------------------------------------- withMessages
+
+const snap = (trigger = "morning") => ({ version: 5, now: NOW.toISOString(), time_zone: TZ, plan_day: "2026-11-04", run: { trigger, reasons: [], changes: {} } });
+const row = (n, at, fired_at = null) => ({ id: `0b6f3c1e-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`, at, text: `message ${n}`, fired_at });
+
+test("withMessages: read_planner gains the pending messages, oldest first and at most 10, with today and replans_on", () => {
+  const rows = Array.from({ length: 12 }, (_, i) => row(12 - i, ago(100 + i)));
+  const out = withMessages(snap(), rows, { replans_on: true }, NOW);
+  assert.equal(out.today, "2026-11-04");
+  assert.equal(out.replans_on, true);
+  assert.equal(out.messages.length, 10);
+  assert.deepEqual(out.messages[0], { id: row(1).id, at: ago(111), text: "message 1" });
+  assert.deepEqual(out.messages.map((m) => m.text).slice(-1), ["message 10"]);
+  assert.equal(out.run.trigger, "morning");
+  assert.equal(out.plan_day, "2026-11-04");
+});
+
+test("withMessages: a message fired under 10 minutes ago and still pending makes the run a message run", () => {
+  assert.equal(withMessages(snap(), [row(1, ago(4), ago(4))], {}, NOW).run.trigger, "message");
+  assert.equal(withMessages(snap(), [row(1, ago(40), ago(40))], {}, NOW).run.trigger, "morning");
+  // A replan the server started stays a replan; it answers the messages as well.
+  assert.equal(withMessages(snap("replan"), [row(1, ago(4), ago(4))], {}, NOW).run.trigger, "replan");
+  assert.equal(withMessages(snap(), [], { replans_on: false }, NOW).replans_on, false);
+});
+
+test("proposalTrigger: a revision a message run submits is recorded as a replan", () => {
+  assert.equal(proposalTrigger("message"), "replan");
+  assert.equal(proposalTrigger("morning"), "morning");
+  assert.equal(proposalTrigger("replan"), "replan");
 });
