@@ -151,6 +151,13 @@ export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { met
 export const calendarAccount = async () => (await rest("calendar_account?select=email,connected_at,last_error"))[0] ?? null;
 export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", { method: "DELETE" });
 
+// Oura (docs/sheet-v5.md, "Oura"): the grant's row and the sleep periods oura-sync keeps, read
+// here; connecting goes through oura-connect. Deleting the row deletes its tokens and every sleep
+// row (a trigger). Before the Oura schema has run, there is no row and no sleep.
+export const ouraAccount = async () => (await rest("oura_account?select=connected_at,synced_at,last_error").catch(() => []))[0] ?? null;
+export const deleteOuraAccount = () => rest("oura_account?id=eq.true", { method: "DELETE" });
+export const listSleep = () => rest("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
+
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");

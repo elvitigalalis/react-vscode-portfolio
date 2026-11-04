@@ -4,7 +4,7 @@
 // sleep_nights' ({ oura_id, day, type, bedtime_start, bedtime_end }), which oura-sync keeps from
 // Oura's /v2/usercollection/sleep. Kept free of the network so node --test covers it; /plan,
 // planner-mcp and oura-sync import it.
-import { localNow } from "./logic.mjs";
+import { formatClock, localNow, plural } from "./logic.mjs";
 
 // How many nights of each kind the medians use, and the fewest they need.
 const NIGHTS = 14;
@@ -111,4 +111,15 @@ export function dayCap(base, day, approved = 0) {
     break_after_min: short ? 60 : 90,
     cap_reason: x === 1 ? null : `${said.join(", ")}: ${x < 1 ? "lighter" : "fuller"} day`,
   };
+}
+
+// Settings → Oura's status line, from the oura_account row ({ synced_at }) and a wakeProfile:
+// "Synced 5 min ago · usually up 9:40 am weekdays, 10:50 am weekends".
+export function ouraStatus(account, profile, now) {
+  if (!account) return "Not connected";
+  if (!account.synced_at) return "Not synced yet";
+  const min = Math.floor((now.getTime() - Date.parse(account.synced_at)) / 60_000);
+  const ago = min < 1 ? "just now" : min < 60 ? `${min} min ago` : min < 1440 ? `${plural(Math.floor(min / 60), "hour")} ago` : `${plural(Math.floor(min / 1440), "day")} ago`;
+  const usual = [[profile?.weekday, "weekdays"], [profile?.weekend, "weekends"]].filter(([m]) => m != null).map(([m, w]) => `${formatClock(m)} ${w}`);
+  return `Synced ${ago} · ${usual.length ? `usually up ${usual.join(", ")}` : "a few more nights to learn when you wake"}`;
 }

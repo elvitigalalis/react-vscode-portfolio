@@ -150,6 +150,15 @@ import "../../styles/sheet.css";
         <button type="button" class="sheet-link" data-act="cal-disconnect" hidden>Disconnect</button>
       </section>
 
+      <!-- Oura (docs/sheet-v5.md, "Oura"): src/sheet/oura-settings.mjs fills it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-oura-title">
+        <h3 id="sheet-oura-title">Oura</h3>
+        <p class="small">The plan starts 30 minutes after you wake, from your Oura ring's sleep times (kept 60 days, never shared). Your readiness and a short night can lighten the day.</p>
+        <p class="small"><span role="status" data-oura-status></span> <span class="sheet-mail-error" data-oura-error></span></p>
+        <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
+        <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
+      </section>
+
       <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-int-title">
         <h3 id="sheet-int-title">Interest profile</h3>
@@ -302,6 +311,6 @@ import "../../styles/sheet.css";
   import { setupMessages } from "../../sheet/message-box.mjs";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
-  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings]);
+  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings]);
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages], settings);
 </script>
