@@ -125,12 +125,14 @@ function brief(day) {
   const cal = academicLine(day.academic);
   if (cal) lines.push(cal);
   const send_at = zonedIso(today, BRIEF_AT, tz);
-  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan].join("\n"), buttons: planButtons(today, day.proposal?.rev) };
+  // v5 M1: who he's waiting on, after the plan's lines.
+  const waiting = awaitingLine(day.awaiting);
+  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan, waiting].filter(Boolean).join("\n"), buttons: planButtons(today, day.proposal?.rev) };
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
-  const text = todays.length || n || risky.length ? lines.join("\n")
-    : ["Nothing on today.", wx, cal, missed && empty].filter(Boolean).join("\n");
+  const text = (todays.length || n || risky.length ? [...lines, waiting]
+    : ["Nothing on today.", wx, cal, missed && empty, waiting]).filter(Boolean).join("\n");
   return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
 }
 
@@ -141,6 +143,17 @@ function academicLine(entries) {
   const titles = (entries ?? []).map((e) => String(e.title ?? "").replace(/\s+/g, " ").trim())
     .filter((t) => t && !linkish(t)).slice(0, MAX_ACADEMIC);
   return titles.length ? `Calendar: ${titles.join(", ")}.` : null;
+}
+
+// v5 M1: "Awaiting reply: 2 (Ana Ruiz, Prof. Kim).", or null with none. rows are the reply_state
+// rows with state awaiting; every one counts, and at most 3 names show, each cut to 30. `who` is a
+// display name from a mail header, so linkish runs on it, and a name it refuses is left out.
+const MAX_AWAITING = 3;
+function awaitingLine(rows) {
+  if (!rows?.length) return null;
+  const names = rows.map((r) => String(r.who ?? "").replace(/\s+/g, " ").trim().slice(0, 30).trim())
+    .filter((w) => w && !w.includes("@") && !linkish(w)).slice(0, MAX_AWAITING);
+  return `Awaiting reply: ${rows.length}${names.length ? ` (${names.join(", ")})` : ""}.`;
 }
 
 // Approve all and Skip carry the plan's day, and its revision when it has one (v5,
