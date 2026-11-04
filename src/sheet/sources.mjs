@@ -143,6 +143,14 @@ export function jiraTaskChanges(issues, { tasks, seen, site, today }) {
   return workTaskChanges(rows, { tasks, seen, today }, "jira", "Jira");
 }
 
+// /plan Settings' GitHub orgs: logins split on commas or spaces, lower case, once each. Anything
+// that isn't a GitHub login (letters, digits and inner hyphens, up to 39) is undefined, so nothing
+// is saved.
+export function githubOrgsFromInput(value) {
+  const orgs = [...new Set(String(value ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean))];
+  return orgs.every((o) => /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/.test(o)) ? orgs : undefined;
+}
+
 // --- Handshake, the academic calendar and enrollment (SRC3) ----------------------------------
 // Both feeds are iCal links (RFC 5545), read by parseIcs (ical.mjs); ical-sync fetches them.
 

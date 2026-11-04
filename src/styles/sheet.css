@@ -310,6 +310,10 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block[data-source="course"] { background: color-mix(in srgb, var(--stem) 18%, var(--bg)); border-left: 3px solid var(--stem); }
 .sheet-block.is-proposed[data-source="course"] { background: var(--bg); }
 .sheet-task[data-source="course"] .sheet-proposal { border-left: 3px solid var(--stem); }
+/* v5 SRC1: GitHub tasks take a --fg edge with the GitHub mark, Jira tasks a --muted edge with the
+   kanban, on rows and blocks alike. */
+.sheet-task[data-source="github"], .sheet-block[data-source="github"] { border-left: 3px solid var(--fg); padding-left: 0.35rem; }
+.sheet-task[data-source="jira"], .sheet-block[data-source="jira"] { border-left: 3px solid var(--muted); padding-left: 0.35rem; }
 .sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
 /* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
 .sheet-overdue { color: var(--danger); cursor: help; }
