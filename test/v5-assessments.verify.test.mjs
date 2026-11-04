@@ -145,40 +145,40 @@ function refused(result, ...patterns) {
   assert.ok(result.errors.some((e) => patterns.every((p) => p.test(e))), `no error matching ${patterns.join(" and ")}: ${JSON.stringify(result.errors)}`);
 }
 
-test("suggested: a suggestion for one of this submit's items passes through to rows", todo, async () => {
+test("suggested: a suggestion for one of this submit's items passes through to rows", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good(), snap());
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.deepEqual(r.rows.suggested, [{ account: SBU, message_id: M1, title: "Acme HackerRank assessment", due: "2026-11-07", kind: "assessment" }]);
 });
 
-test("suggested: an interview suggestion passes too", todo, async () => {
+test("suggested: an interview suggestion passes too", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(with1({ title: "Karat interview with Acme", kind: "interview" }), snap());
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.equal(r.rows.suggested[0].kind, "interview");
 });
 
-test("suggested: the title is free text, its spaces collapsed", todo, async () => {
+test("suggested: the title is free text, its spaces collapsed", async () => {
   const { checkProposal } = await proposal();
   assert.equal(checkProposal(with1({ title: "  Acme   HackerRank assessment " }), snap()).rows.suggested[0].title, "Acme HackerRank assessment");
 });
 
-test("suggested: a title of 80 characters passes, 81 is refused", todo, async () => {
+test("suggested: a title of 80 characters passes, 81 is refused", async () => {
   const { checkProposal } = await proposal();
   // "Acme online assessment " is 23 characters.
   assert.equal(checkProposal(with1({ title: `Acme online assessment ${"x".repeat(57)}` }), snap()).ok, true);
   refused(checkProposal(with1({ title: `Acme online assessment ${"x".repeat(58)}` }), snap()), /suggested\[0\]/);
 });
 
-test("suggested: a title that holds a link, or a line break, is refused", todo, async () => {
+test("suggested: a title that holds a link, or a line break, is refused", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(with1({ title: "Assessment at hackerrank.com/test/abc" }), snap()), /suggested\[0\]/);
   refused(checkProposal(with1({ title: "https://hr.example/x" }), snap()), /suggested\[0\]/);
   refused(checkProposal(with1({ title: "Acme\nassessment" }), snap()), /suggested\[0\]/);
 });
 
-test("suggested: due is required and must be a date", todo, async () => {
+test("suggested: due is required and must be a date", async () => {
   const { checkProposal } = await proposal();
   const { due, ...none } = hr();
   refused(checkProposal(good({ suggested: [none] }), snap()), /suggested\[0\]/);
@@ -187,13 +187,13 @@ test("suggested: due is required and must be a date", todo, async () => {
   refused(checkProposal(with1({ due: "2026-02-30" }), snap()), /suggested\[0\]/);
 });
 
-test("suggested: kind is assessment or interview", todo, async () => {
+test("suggested: kind is assessment or interview", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(with1({ kind: "deadline" }), snap()), /suggested\[0\]/);
   refused(checkProposal(with1({ kind: undefined }), snap()), /suggested\[0\]/);
 });
 
-test("suggested: the message must be one of this submit's Needs you items", todo, async () => {
+test("suggested: the message must be one of this submit's Needs you items", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(with1({ message_id: M(2) }), snap()), /suggested\[0\]/);
   // An item already open from an earlier run isn't enough.
@@ -203,14 +203,14 @@ test("suggested: the message must be one of this submit's Needs you items", todo
   refused(checkProposal(with1({ account: PERSONAL }), snap()), /suggested\[0\]/);
 });
 
-test("suggested: at most one suggestion per item", todo, async () => {
+test("suggested: at most one suggestion per item", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good({ suggested: [hr(), hr({ title: "Acme assessment again" })] }), snap());
   refused(r, /suggested\[1\]/);
   assert.equal(r.errors.some((e) => /suggested\[0\]/.test(e)), false, JSON.stringify(r.errors));
 });
 
-test("suggested: at most 5", todo, async () => {
+test("suggested: at most 5", async () => {
   const { checkProposal } = await proposal();
   const ids = [1, 2, 3, 4, 5, 6].map(M);
   const items = ids.map((id) => need(id));
@@ -219,7 +219,7 @@ test("suggested: at most 5", todo, async () => {
   refused(checkProposal(good({ needs_you: items, suggested: tasks }), snap()), /suggested/);
 });
 
-test("suggested: absent, the list is empty", todo, async () => {
+test("suggested: absent, the list is empty", async () => {
   const { checkProposal } = await proposal();
   const { suggested, ...none } = good();
   assert.deepEqual(checkProposal(none, snap()).rows.suggested, []);
