@@ -20,6 +20,7 @@ import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../..
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
+import { tapFeedback } from "../../../src/sheet/triage.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
@@ -216,6 +217,8 @@ async function tap(update: unknown, now: Date) {
     }
   }
   let { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
+  // v5 L1: the decision, logged once its changes are made (and not when a newer plan refused it).
+  let logged = tapFeedback(t, snap);
   for (const c of changes) {
     // A PostgREST rpc call: POST /rpc/<name> with the named arguments as the body
     // (docs.postgrest.org/en/stable/references/api/functions.html).
@@ -227,6 +230,7 @@ async function tap(update: unknown, now: Date) {
         // snapshot was read, and then nothing changed. Any other rpc failing is an error.
         if (c.rpc !== "approve_proposal" && c.rpc !== "skip_proposal") throw e;
         text = "A newer plan is out";
+        logged = null;
         break;
       }
     } else if (c.insert && !UPSERT[c.table!]) {
@@ -240,6 +244,7 @@ async function tap(update: unknown, now: Date) {
       await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
     }
   }
+  if (logged) await db("feedback", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(logged) });
   await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
   await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN }).catch(() => {});

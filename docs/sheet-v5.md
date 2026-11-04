@@ -468,6 +468,16 @@ weather_cache id boolean pk default true check (id), point text not null,
   - `awaiting` when it is `SENT` and `businessDays(date, now) >= 3`; `who` is the first To
     display name;
   - a display name is the part before `<`, unquoted; with none, the address's local part.
+  - **Decided (M1):** null when that newest message carries `CATEGORY_PROMOTIONS`,
+    `CATEGORY_UPDATES`, `CATEGORY_SOCIAL` or `CATEGORY_FORUMS` (`skippedCategory(labels)`), so
+    the categories spec 47 skips never reach Reply owed or Awaiting reply.
+- `mailChanges(added, owed)` (M1) gives the mail sync's `changes` rows, `added`'s first:
+  - `added`, the messages new since `history_id`, as `[{ id, labels, automated }]`: one
+    `mail_new` (weight 2, `ref` the id) per message that isn't `SENT`, `SPAM` or `TRASH`, isn't
+    automated and isn't in a skipped category;
+  - `owed`, the threads whose state turned `owed` this sync (not `owed` at the same message
+    before), as `[{ message_id, known }]`: one `mail_owed` (weight 8, `ref` the message id) per
+    known sender's thread; an unknown sender's adds nothing more.
 - `senderHash(address, salt)` returns the hex SHA-256 of `salt + address.trim().toLowerCase()`
   (async, `crypto.subtle`). The salt is the function secret `SHEET_SENDER_SALT`.
 - `assessmentSender(from)` returns `assessment` for hackerrank.com, codesignal.com,
@@ -506,19 +516,23 @@ weather_cache id boolean pk default true check (id), point text not null,
     `link` the same, list "GitHub", `public = false`;
   - title `"Review: <title>"` for a pull request, `"<title>"` for an issue, through `cutTitle`;
     `due` from the milestone's `due_on`, else null; never `body`;
-  - `close`: undone GitHub tasks whose uid isn't in `items`, to be marked done;
+  - `close`: the ids of undone GitHub tasks whose uid isn't in `items`, to be marked done;
+  - an item listed twice (in both searches) counts once; `seen` is `[{ source, uid }]` per insert;
   - `changes`: one row per insert, reason `github_due_soon` (weight 8) when due within 48 hours,
     else `github_change` (3), `ref` the uid.
 - `jiraTaskChanges(issues, { tasks, seen, site, today })` does the same for a JQL search
   (`assignee = currentUser() AND statusCategory != Done`): `source_uid` the key, `link`
   `https://<site>/browse/<key>`, title `"<KEY> <summary>"`, `due` from `fields.duedate`, list
-  "Jira".
+  "Jira". `issues` is the response's `issues` array; `fields.description` is never read.
 - `slackNeeds(matches, { known })` takes `search.messages` matches and returns `needs_you` rows:
   `{ source: 'slack', account: 'slack', message_id: '<channel id>:<ts>', link: permalink,
   sender: <username>, subject: '#<channel name>' or 'Direct message', why: 'Mentioned you' or
   'Sent you a direct message', kind: 'reply' }`. Never `text`. Permalinks must start with
   `https://` and hold `.slack.com/`, or the match is skipped. Rows in `known` (already there)
   are skipped.
+  - **Decided (SRC2):** a match is a direct message when `channel.is_im`; `known` is the slack
+    `needs_you` rows already saved, `[{ message_id }]`; a match listed twice (the mentions and
+    DM searches overlap) gives one row.
 - `handshakeBusy(events)` returns busy rows (`source = 'handshake'`) for parsed Handshake events
   whose summary starts with "Interview" or "Appointment" (case aside); other events are left out.
 - `academicEntries(events, day, timeZone)` returns `[{ title, all_day }]` for parsed academic
@@ -548,6 +562,13 @@ weather_cache id boolean pk default true check (id), point text not null,
   `triageLabels`) is not needed, unless a rule already covers the address (an `address` rule
   equal to it, or a `domain` rule matching it as the never-show rules do, either action). Rows
   with no `from_address` count for nothing.
+- **Decided (L1):** `tapFeedback(tap, snapshot)` gives the row a Telegram tap logs (Approve all or
+  Skip on the pending revision, each Finished? answer), or null; telegram inserts it after the
+  tap's changes, and not when a newer plan refused it. `needsFeedback(row, action)` gives /plan's
+  Needs you row. `ruleMatches` and `neverRule` are the match checkProposal drops by.
+  `tools/triage-score.mjs <run.json> [days]` scores a run file (a list of `{ account, message_id
+  }`, or a submit_proposal input) against the labels of the last 14 days' feedback; done
+  `needs_you` rows go hourly, so the live table can't give a past run's items.
 
 ### Edge Functions
 

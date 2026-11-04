@@ -6,6 +6,7 @@ import { localNow, zonedIso, minutesOn, planningDay, atRisk, addDays, formatCloc
 import { freeFood } from "./campus.mjs";
 import { weatherHours } from "./sources.mjs";
 import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
+import { messageKey, neverRule } from "./triage.mjs";
 import { dayLabel } from "./logic.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
@@ -108,6 +109,8 @@ export function planSnapshot(rows, now) {
     day_rules: dayRules(settings),
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
+    // v5 L1: the triage rules, which submit_proposal enforces for never.
+    triage_rules: list(rows.triage).map((r) => ({ match: r.match, pattern: r.pattern, action: r.action })),
     // v5 SRC3: plan_day's academic calendar entries (academic_days), [] without them.
     academic: (rows.academic ?? []).map((e) => ({ title: e.title, all_day: e.all_day })),
     // v5 P1.
@@ -327,7 +330,11 @@ function suggestedTasks(input, errors) {
 // revision it `replaces` (null for the day's first), and blocks must sit inside the plan window
 // and not be for a task turned down today. A replan may follow an approved revision. `rows`
 // gains apply_proposal's v5 arguments, and the result gains `dropped`.
-export function checkProposal(input, snapshot) {
+//
+// v5 L1: `senders` maps "<account> <message_id>" to the message's From address (planner-mcp
+// reads message_senders). A Needs you item from a sender a never-show rule covers is dropped,
+// not refused, and each row carries its from_address (null when unknown).
+export function checkProposal(input, snapshot, senders = {}) {
   const errors = [];
   const tz = snapshot.time_zone;
   const day = snapshot.plan_day;
@@ -450,11 +457,29 @@ export function checkProposal(input, snapshot) {
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
   const { trigger: run_trigger, reasons } = snapshot.run;
+  const kept = dropNeverShown(needs, suggested, snapshot, senders);
   return {
     ok: true, errors: [],
-    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs, picks, note, couldnt_fit: couldntFit, suggested, run_trigger, reasons },
-    dropped: [],
+    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons },
+    dropped: kept.dropped,
   };
+}
+
+// v5 L1, never-show rules: the needs rows (all valid, so in input order) gain from_address, and
+// those whose sender a `never` rule in snapshot.triage_rules covers go, with their suggestion.
+// `dropped` is [{ index, message_id, pattern }], index into the input's needs_you.
+function dropNeverShown(needs, suggested, snapshot, senders) {
+  const rules = list(snapshot.triage_rules);
+  const dropped = [];
+  const kept = [];
+  needs.forEach((n, index) => {
+    const from_address = senders?.[messageKey(n.account, n.message_id)] ?? null;
+    const rule = from_address && neverRule(rules, from_address);
+    if (rule) dropped.push({ index, message_id: n.message_id, pattern: rule.pattern });
+    else kept.push({ ...n, from_address });
+  });
+  const gone = new Set(dropped.map((d) => messageKey(needs[d.index].account, d.message_id)));
+  return { needs: kept, suggested: suggested.filter((x) => !gone.has(messageKey(x.account, x.message_id))), dropped };
 }
 
 // --- The brief -------------------------------------------------------------------------------

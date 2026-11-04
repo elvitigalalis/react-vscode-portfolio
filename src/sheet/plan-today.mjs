@@ -222,6 +222,8 @@ async function removeBlock(id) {
   // A habit block is only deleted: turning down is for tasks.
   if (b.proposed && b.task_id) {
     await api.turnDown(day, b.task_id);
+    // v5 L1: logged, ids only.
+    api.logFeedback({ item: "block", action: "turn_down", ref: { day, task_id: b.task_id } }).catch(console.error);
     const gone = new Set(proposedOn(state.blocks, day, SHEET.timeZone).filter((x) => x.task_id === b.task_id).map((x) => x.id));
     state.blocks = state.blocks.filter((x) => !gone.has(x.id));
     return;
@@ -245,7 +247,11 @@ async function saveBlock(b, times = {}) {
   Object.assign(b, await api.updateBlock(b.id, change));
 }
 
-const approveAll = async () => { for (const b of proposedOn(state.blocks, day, SHEET.timeZone)) await saveBlock(b); };
+const approveAll = async () => {
+  for (const b of proposedOn(state.blocks, day, SHEET.timeZone)) await saveBlock(b);
+  // v5 L1: Approve all is a decision on the revision shown.
+  if (rev != null) api.logFeedback({ item: "proposal", action: "approve", ref: { day, rev } }).catch(console.error);
+};
 
 // Dragging a block moves it and keeps its length.
 async function moveBlock(id, startMin) {
