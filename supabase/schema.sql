@@ -1325,14 +1325,15 @@ revoke execute on function oura_account_forget() from public, anon, authenticate
 -- Store a token pair: Vault secrets oura_refresh and oura_access, reused on every save. With
 -- `old_refresh` (a refresh), only while the stored refresh token is still that one, so two runs
 -- that rotate at once can't overwrite the newer token; it says whether it saved. Without it (a
--- connect), always, and the grant is no longer broken. Service key only.
+-- connect), always, and the grant is no longer broken. A retried save of the same pair (its first
+-- try saved but its reply was lost) saves again. Service key only.
 create or replace function oura_token_save(refresh text, access text, expires_at timestamptz, old_refresh text default null)
 returns boolean language plpgsql security definer set search_path = public as $$
-declare r uuid; a uuid;
+declare r uuid; a uuid; stored text;
 begin
   perform pg_advisory_xact_lock(hashtext('sheet.oura_token'));
-  if old_refresh is not null and old_refresh is distinct from
-    (select s.decrypted_secret from oura_account o join vault.decrypted_secrets s on s.id = o.refresh_secret_id) then
+  stored := (select s.decrypted_secret from oura_account o join vault.decrypted_secrets s on s.id = o.refresh_secret_id);
+  if old_refresh is not null and stored is distinct from old_refresh and stored is distinct from refresh then
     return false;
   end if;
   select id into r from vault.secrets where name = 'oura_refresh';

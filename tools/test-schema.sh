@@ -1344,6 +1344,7 @@ do $$ begin
   if not oura_token_save('r1', 'a1', '2030-01-01T00:00:00Z') then raise exception 'connect did not save'; end if;
   if not oura_token_save('r2', 'a2', '2030-01-02T00:00:00Z', 'r1') then raise exception 'rotation did not save'; end if;
   if oura_token_save('r3', 'a3', '2030-01-03T00:00:00Z', 'r1') then raise exception 'a stale rotation overwrote the newer token'; end if;
+  if not oura_token_save('r2', 'a2', '2030-01-02T00:00:00Z', 'r1') then raise exception 'a retried save was refused'; end if;
   if oura_tokens()->>'refresh' <> 'r2' or oura_tokens()->>'access' <> 'a2'
     or (select count(*) from vault.secrets where name in ('oura_refresh', 'oura_access')) <> 2
     then raise exception 'Oura tokens not rotated in place'; end if;
