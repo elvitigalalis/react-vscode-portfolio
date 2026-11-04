@@ -83,6 +83,8 @@ const ProposalInput = z.object({
   })).max(50).default([]),
   picks: z.array(z.object({ uid: z.string().max(500), why: line })).max(50).default([]),
   note: line.nullish(),
+  // v5 D2: the task ids of at-risk tasks that couldn't fit (checkProposal checks each).
+  couldnt_fit: z.array(z.string().max(64)).max(50).default([]),
 });
 type Proposal = z.infer<typeof ProposalInput>;
 
@@ -92,7 +94,8 @@ function plannerServer(db: Db) {
   server.registerTool("read_planner", {
     description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm), its shutdown time, its tasks " +
       "(with tasks at risk and course tasks due within 7 days), blocks, busy times, campus events, Lisul's " +
-      `interests, the day's proposal, the Needs you rows still open and the connected mail accounts. ${UNTRUSTED}`,
+      "interests, the day's proposal, the Needs you rows still open, the connected mail accounts and the day " +
+      `rules (workload cap, breaks, travel time). ${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
@@ -106,7 +109,9 @@ function plannerServer(db: Db) {
   server.registerTool("submit_proposal", {
     description: "Submit the morning plan for plan_day: blocks ({ task_id, start: \"HH:MM\", minutes }), Needs you " +
       "rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, kind, due? }), " +
-      "campus picks ({ uid, why }) and a one-line note on what didn't fit. It is checked against a fresh " +
+      "campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of at-risk tasks " +
+      "that couldn't fit. Blocks keep the day rules from read_planner's day_rules: the workload cap, a break after " +
+      "every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
       "{ ok: true } the proposal waits for Lisul to approve it; submitting again replaces it. " + UNTRUSTED,
     inputSchema: ProposalInput,

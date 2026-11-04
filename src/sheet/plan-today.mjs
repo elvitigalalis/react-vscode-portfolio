@@ -9,7 +9,7 @@ import {
   formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, DEFAULT_EST,
   blockMinutes, weekdayName, plural,
 } from "./logic.mjs";
-import { el, icon, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
+import { el, icon, state, render, taskRow, moveTask, dropTargets, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, workloadCap, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare, stripSegments } from "./glance.mjs";
 import { planNotes } from "./morning.mjs";
 
@@ -23,7 +23,7 @@ const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h *
 let dialog;
 let day;          // the day being planned
 let events = [];  // his Google events that day
-let notes = [];   // the day's proposal: "Didn't fit: …", "Campus pick: …"
+let notes = [];   // the day's proposal: "Didn't fit: …", "Couldn't fit: …", "Campus pick: …"
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
@@ -167,7 +167,7 @@ async function fetchNotes() {
   try {
     const p = await api.proposalOn(day);
     const campus = p?.picks?.length ? await api.campusByUid(p.picks.map((x) => x.uid)) : [];
-    notes = planNotes(p, campus, SHEET.timeZone);
+    notes = planNotes(p, campus, SHEET.timeZone, [...state.tasks.values()]);
   } catch (e) { console.error(e); }
 }
 
@@ -435,11 +435,11 @@ export function setupPlanToday(root) {
       const m = load(tasksOn(head.dataset.day), capacity);
       if (!m.total) continue;
       // When events leave less than the usual budget, the chip shows what's left: "2h45 / 3h10".
-      const short = capacity < SHEET.capacityMin;
+      const short = capacity < workloadCap();
       head.querySelector(".sheet-head").append(el("span", {
         className: `sheet-load-chip is-${m.level}`,
         textContent: short ? `${formatMinutes(m.total)} / ${formatMinutes(capacity)}` : formatMinutes(m.total),
-        title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(clock(SHEET.dayStartAt))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(SHEET.capacityMin)}.`,
+        title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(clock(SHEET.dayStartAt))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(workloadCap())}.`,
       }));
     }
   });

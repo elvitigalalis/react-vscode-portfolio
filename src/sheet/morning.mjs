@@ -1,7 +1,7 @@
 // /plan's side of the morning plan (docs/sheet-morning.md, "/plan"): the busy times it saves for
 // the morning task, and how the Needs you list is grouped and linked. Pure, so node --test covers
 // it; busy-sync.mjs and needs-you.mjs do the network and the drawing.
-import { pickedEvents, pickLine } from "./proposal.mjs";
+import { couldntFitLine, pickedEvents, pickLine } from "./proposal.mjs";
 
 // --- Busy times ----------------------------------------------------------------------------
 
@@ -50,10 +50,11 @@ export const gmailLink = (link) =>
 
 // --- Plan today ----------------------------------------------------------------------------
 
-// What the day's proposal says above Plan today's timeline: "Didn't fit: …", then a "Campus
-// pick: …" line for each pick found in `campus`. A skipped or lapsed proposal says nothing.
-export function planNotes(proposal, campus, tz) {
+// What the day's proposal says above Plan today's timeline: "Didn't fit: …", "Couldn't fit: …"
+// (titles from `tasks`), then a "Campus pick: …" line for each pick found in `campus`. A skipped or lapsed proposal says nothing.
+export function planNotes(proposal, campus, tz, tasks = []) {
   if (!proposal || proposal.status === "skipped" || proposal.status === "lapsed") return [];
   const picks = pickedEvents(proposal.picks, campus);
-  return [...(proposal.note ? [`Didn't fit: ${proposal.note}`] : []), ...picks.map((e) => pickLine(e, tz))];
+  const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
+  return [...(proposal.note ? [`Didn't fit: ${proposal.note}`] : []), ...(unfit ? [unfit] : []), ...picks.map((e) => pickLine(e, tz))];
 }
