@@ -226,21 +226,58 @@ vault_url() {
     || { SKIPPED+=("Vault URL $1 (docs/sheet-v5.md, Deploy step 7)"); warn "couldn't add $1; try again later"; }
 }
 
+# What's already set up, read once at the start (names and counts only, never a secret's value),
+# so the wizard shows only the steps left. Re-run it any time: finished steps stay hidden.
+SECRET_NAMES=""; STATE=""
+load_state() {
+  SECRET_NAMES=$(sb secrets list --project-ref "$REF" 2>/dev/null | grep -oE '"name":"[A-Z0-9_]+"' | cut -d'"' -f4 | tr '\n' ' ')
+  STATE=$(sql "select
+    (select count(*) from calendar_account) as cal,
+    (select count(*) from oura_account) as oura,
+    (select coalesce(array_length(github_orgs, 1), 0) from settings) as orgs,
+    (select replans_on from settings) as replans,
+    (select count(*) from habits) as habits,
+    (select string_agg(name, ' ') from vault.secrets where name like 'sheet_%_url') as vault")
+}
+has_secret() { [[ " $SECRET_NAMES " == *" $1 "* ]]; }
+in_vault() { [[ "$STATE" == *"$1"* ]]; }
+state_is() { grep -qE "\"$1\": *\"?$2" <<<"$STATE"; }
+# Which stages still need doing.
+need_google() { ! state_is cal '[1-9]'; }
+need_calendar() { ! state_is cal '[1-9]' || ! in_vault sheet_busy_url; }
+need_oura() { ! state_is oura '[1-9]' || ! in_vault sheet_oura_url; }
+need_salt() { ! has_secret SHEET_SENDER_SALT || ! in_vault sheet_mail_url; }
+need_github() { ! has_secret SHEET_GITHUB_TOKEN || ! state_is orgs '[1-9]'; }
+need_jira() { ! has_secret SHEET_JIRA_TOKEN || ! has_secret SHEET_JIRA_EMAIL || ! has_secret SHEET_JIRA_SITE; }
+need_work_url() { { has_secret SHEET_GITHUB_TOKEN || has_secret SHEET_JIRA_TOKEN; } && ! in_vault sheet_work_url; }
+need_slack() { ! has_secret SHEET_SLACK_TOKEN || ! in_vault sheet_slack_url; }
+need_ical() { ! { has_secret SHEET_HANDSHAKE_ICS || has_secret SHEET_ACADEMIC_ICS; } || ! in_vault sheet_ical_url; }
+need_replans() { ! state_is replans true; }
+need_settings() { ! state_is habits '[1-9]'; }
+
 run_wizard() {
 
-TOTAL_STAGES=15
+say "Checking what's already set up…"
+load_state
+WORK=0
+
+TOTAL_STAGES=0
+for g in need_google need_google need_google need_google need_calendar need_oura need_salt need_github need_jira need_slack need_ical need_replans need_replans need_settings true; do $g && TOTAL_STAGES=$((TOTAL_STAGES + 1)); done
 
 banner "The Sheet v5 setup"
 
 # ── 1 ────────────────────────────────────────────────────────────────────
+if need_google; then
 stage "Google Cloud: turn on the Calendar API"
 say "The busy-time sync asks Google Calendar when you're free. Signed in as elvitigalalis@gmail.com:"
 open_url "https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?$GCP"
 step "Check the project picker says \"The Sheet\" (the-sheet-512218)."
 step "Click Enable. If it says \"Manage\", it's on already."
 pause "Press Enter when it's enabled"
+fi
 
 # ── 2 ────────────────────────────────────────────────────────────────────
+if need_google; then
 stage "Google Cloud: add the calendar redirect"
 open_url "https://console.cloud.google.com/auth/clients?$GCP"
 step "Click the web client you use for mail (the one ending ...ja3maja4qom88...)."
@@ -248,8 +285,10 @@ step "Under Authorized redirect URIs, click Add URI and paste:"
 say "    $URL/functions/v1/calendar-connect/callback"
 step "Keep the mail-connect and Auth ones that are already there. Click Save."
 pause "Press Enter when it's saved"
+fi
 
 # ── 3 ────────────────────────────────────────────────────────────────────
+if need_google; then
 stage "Google Cloud: allow the free/busy scope"
 open_url "https://console.cloud.google.com/auth/scopes?$GCP"
 step "Click Add or remove scopes."
@@ -259,8 +298,10 @@ step "In the same list, check .../auth/calendar.events.readonly and .../auth/cal
 say "    are ticked too. /plan's sign-in added them, so they should be; tick any that isn't."
 step "Click Update, then Save at the bottom."
 pause "Press Enter when it's saved"
+fi
 
 # ── 4 ────────────────────────────────────────────────────────────────────
+if need_google; then
 stage "Google Cloud: publish the app"
 say "In Testing, Google throws your sign-ins away every 7 days. In production they last."
 open_url "https://console.cloud.google.com/auth/audience?$GCP"
@@ -269,8 +310,10 @@ note "It's still only for you. Google will show \"Google hasn't verified this ap
 note "connect: click Advanced → Go to The Sheet (unsafe). That's expected for a personal app."
 note "If it's already \"In production\", skip this."
 pause "Press Enter when it's published"
+fi
 
 # ── 5 ────────────────────────────────────────────────────────────────────
+if need_calendar; then
 stage "/plan: connect your calendar"
 open_url "$PLAN"
 step "Click ••• (top right) → Settings → Calendar → Connect (Reconnect if it's connected already:"
@@ -290,8 +333,10 @@ else
   warn "The calendar isn't connected yet, so the busy sync stays off. Re-run this script later."
 fi
 pause
+fi
 
 # ── 5b ───────────────────────────────────────────────────────────────────
+if need_oura; then
 stage "Oura (optional): plan from when you wake"
 say "The plan starts 30 minutes after your ring says you woke up, and goes lighter after a rough"
 say "night. Only sleep times, readiness and hours slept are kept, 60 days."
@@ -322,8 +367,10 @@ else
   SKIPPED+=("Oura (optional)")
 fi
 pause
+fi
 
 # ── 6 ────────────────────────────────────────────────────────────────────
+if need_salt; then
 stage "Supabase: the mail sync's salt"
 say "The mail sync remembers who you've written to as salted hashes, never addresses."
 say "The salt is one random value, set once and NEVER changed (changing it forgets everyone)."
@@ -339,10 +386,11 @@ else
   SKIPPED+=("SHEET_SENDER_SALT, then re-run for the mail sync")
 fi
 pause
+fi
 
 # ── 7 ────────────────────────────────────────────────────────────────────
+if need_github; then
 stage "GitHub (optional): your PRs and issues"
-WORK=0
 if confirm "Set up GitHub now?"; then
   open_url "https://github.com/settings/personal-access-tokens/new"
   step "Name it \"The Sheet\", expiry 1 year."
@@ -359,8 +407,10 @@ else
   note "Skipped. Re-run the script any time to add it."
 fi
 pause
+fi
 
 # ── 8 ────────────────────────────────────────────────────────────────────
+if need_jira; then
 stage "Jira (optional): your tickets"
 if confirm "Set up Jira now?"; then
   open_url "https://id.atlassian.com/manage-profile/security/api-tokens"
@@ -377,8 +427,11 @@ else
 fi
 (( WORK )) && vault_url sheet_work_url work-sync
 pause
+fi
+need_work_url && vault_url sheet_work_url work-sync
 
 # ── 9 ────────────────────────────────────────────────────────────────────
+if need_slack; then
 stage "Slack (optional): DMs and mentions"
 if confirm "Set up Slack now?"; then
   say "Slack needs a tiny app of your own that only can search."
@@ -395,8 +448,10 @@ else
   note "Skipped."
 fi
 pause
+fi
 
 # ── 10 ───────────────────────────────────────────────────────────────────
+if need_ical; then
 stage "Handshake and the academic calendar (optional)"
 ICAL=0
 if confirm "Set these up now?"; then
@@ -414,8 +469,10 @@ else
 fi
 (( ICAL )) && vault_url sheet_ical_url ical-sync
 pause
+fi
 
 # ── 11 ───────────────────────────────────────────────────────────────────
+if need_replans; then
 stage "Replans: one test fire"
 say "Replans let the server re-plan your day when something changes. First, one test run of"
 say "the morning task, from the server, with the token already stored there."
@@ -434,15 +491,19 @@ else
   SKIPPED+=("Routine test fire, then turn replans on")
 fi
 pause
+fi
 
 # ── 12 ───────────────────────────────────────────────────────────────────
+if need_replans; then
 stage "/plan: turn replans on"
 open_url "$PLAN"
 step "••• → Settings → Replans → turn them on."
 note "Leave them off if the test run in the last stage didn't show up."
 pause "Press Enter when done"
+fi
 
 # ── 13 ───────────────────────────────────────────────────────────────────
+if need_settings; then
 stage "/plan: your day's settings"
 step "Still in Settings:"
 step "Workload cap: hours of planned work a day (6 by default). Save."
@@ -452,14 +513,18 @@ step "Enrollment: when your SOLAR window opens, if you know it."
 step "Triage rules: an address or domain to always or never put in Needs you."
 note "All of these can change any time; the next plan uses them."
 pause "Press Enter when done"
+fi
 
 # ── 14 ───────────────────────────────────────────────────────────────────
+if true; then
 stage "The live check"
 say "Read-only. ✓ is good; ! is a source you haven't connected; ✗ is a problem."
 note "Jobs run on their schedule, so a fresh source shows \"no sync yet\" for up to an hour."
 pause "Press Enter to run it"
 bash tools/verify-sheet-v5.sh 2>&1 | grep -E '^(✗|!)|All checks' || true
 pause
+fi
+
 
 finish
 }
