@@ -598,6 +598,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 | `telegram` | as before | as before | plus the replan decision and fire, Finished?, replan messages, rpc changes |
 | `planner-mcp` | as before | as before | read_planner and submit_proposal with the v5 fields |
 | `mail-mcp` | as before | as before | search results gain `known` and `reply_state` |
+| `message` | /plan's message box | the owner's session, as `calendar-connect` | saves a message to Claude and fires the morning task ([sheet-messages.md](sheet-messages.md)) |
 
 - **Every sync** records itself in `feed_state` under its source name (`freebusy`, `gmail`,
   `github`, `jira`, `slack`, `handshake`, `academic`, `weather`), never with a URL or token in
