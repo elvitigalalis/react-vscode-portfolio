@@ -174,6 +174,8 @@ begin
   -- v5 M1: so are reply_state and message_senders.
   delete from reply_state where since < now() - interval '14 days';
   delete from message_senders where at < now() - interval '14 days';
+  -- Messages to Claude are kept 30 days.
+  delete from messages where at < now() - interval '30 days';
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -1137,3 +1139,56 @@ select cron.schedule('sheet-slack', '42 * * * *', $job$
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_slack_url')
 $job$);
+
+-- --- Messages to Claude (docs/sheet-messages.md) --------------------------------------------
+-- Plain lines Lisul types into /plan ("dentist Thu 3pm"). The message Edge Function inserts one
+-- and fires the morning task; the task answers it through planner-mcp's answer_messages, which
+-- calls answer_message below. events are the events Claude worked out ([{ title, starts_at,
+-- ends_at }]); /plan creates them in Google Calendar and sets created_in_calendar. Owner-only,
+-- in no public view; nightly_roll keeps 30 days.
+create table if not exists messages (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  text text not null check (char_length(text) between 1 and 500),
+  status text not null default 'pending' check (status in ('pending', 'done', 'failed')),
+  reply text check (char_length(reply) <= 280),
+  tasks_added int not null default 0,
+  events jsonb not null default '[]' check (jsonb_typeof(events) = 'array'),
+  created_in_calendar boolean not null default false,
+  fired_at timestamptz
+);
+create index if not exists messages_pending on messages (at) where status = 'pending';
+
+alter table messages enable row level security;
+drop policy if exists owner_all on messages;
+create policy owner_all on messages for all using (is_owner()) with check (is_owner());
+revoke all on messages from anon;
+
+-- Answer pending message m in one transaction: its tasks added (new_tasks, [{ title, day, list,
+-- due, at_time, est_min }]) at the end of their day or Someday list, with source 'message'; the
+-- message done with its reply and events, or failed when it added nothing (the reply says why).
+-- Security invoker, so RLS applies to the caller (planner-mcp's owner-scoped client). It refuses
+-- a message that isn't pending; checkAnswers (src/sheet/messages.mjs) checks the rest first.
+-- Returns the message's new status.
+create or replace function answer_message(m uuid, new_tasks jsonb, new_events jsonb, answer text) returns text
+language plpgsql security invoker set search_path = public as $$
+declare
+  t record;
+  n int := 0;
+  result text;
+begin
+  perform 1 from messages where id = m and status = 'pending' for update;
+  if not found then raise exception 'message % is not pending', m; end if;
+  for t in select * from jsonb_to_recordset(coalesce(new_tasks, '[]')) as x(title text, day date, list text, due date, at_time time, est_min int)
+  loop
+    insert into tasks (title, day, list, due, at_time, est_min, source, position)
+    values (t.title, t.day, t.list, t.due, t.at_time, t.est_min, 'message',
+      coalesce((select max(position) from tasks where day is not distinct from t.day and list is not distinct from t.list), 0) + 1);
+    n := n + 1;
+  end loop;
+  result := case when n > 0 or jsonb_array_length(coalesce(new_events, '[]')) > 0 then 'done' else 'failed' end;
+  update messages set status = result, reply = answer, tasks_added = n, events = coalesce(new_events, '[]')
+  where id = m;
+  return result;
+end $$;
+revoke execute on function answer_message(uuid, jsonb, jsonb, text) from public, anon;
