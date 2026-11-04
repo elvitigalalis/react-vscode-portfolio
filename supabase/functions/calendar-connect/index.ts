@@ -7,9 +7,15 @@
 // to /plan. The state, the consent URL, the ID token's email and the CORS rule are in
 // src/sheet/mailconnect.mjs, which the tests cover.
 //
-// It asks for openid, email and calendar.freebusy (CALENDAR_SCOPES), and keeps the grant only
-// when the ID token's verified email is settings.owner_email: the identity scopes are there only
-// to prove whose account it is. OAuth is Google's web server flow
+// It asks for openid, email, calendar.freebusy and /plan's calendar.events.readonly and
+// calendar.app.created (CALENDAR_SCOPES), and keeps the grant only when the ID token's verified
+// email is settings.owner_email: the identity scopes are there only to prove whose account it is.
+//
+// /token gives /plan a Google access token from that grant (src/sheet/calendartoken.mjs, which the
+// tests cover), since the one from /plan's sign-in lasts an hour and Supabase never refreshes it.
+// /plan POSTs its Supabase access token as /start does; only the owner gets an answer, and only
+// { access_token, expires_in }, with no-store. A grant without /plan's scopes answers
+// "needs-scopes" (Reconnect in Settings fixes it). OAuth is Google's web server flow
 // (developers.google.com/identity/protocols/oauth2/web-server). The callback URL,
 //   https://<project>.supabase.co/functions/v1/calendar-connect/callback
 // must be listed as an authorized redirect URI on the Google client.
@@ -22,6 +28,7 @@
 // mail-connect (a state names its grant, so one can't be spent on the other). Tokens are never
 // logged, and never put in a response or a redirect.
 import { signState, verifyState, googleAuthUrl, corsFor, idTokenEmail, CALENDAR_SCOPES, FREEBUSY } from "../../../src/sheet/mailconnect.mjs";
+import { serveToken } from "../../../src/sheet/calendartoken.mjs";
 import { ORIGIN } from "../../../src/site.mjs";
 import { db, env } from "../_shared/server.ts";
 import { googleToken } from "../_shared/google.ts";
@@ -38,6 +45,7 @@ const GRANT = "calendar";
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   if (url.pathname.endsWith("/start")) return start(req);
+  if (url.pathname.endsWith("/token")) return token(req);
   if (!url.pathname.endsWith("/callback")) return new Response("not found", { status: 404 });
   if (req.method !== "GET") return new Response("method not allowed", { status: 405 });
   if (!CLIENT_ID || !CLIENT_SECRET || !STATE_SECRET) return back("not-set-up");
@@ -79,15 +87,49 @@ async function start(req: Request) {
   }
 }
 
+// --- /token -------------------------------------------------------------------------------
+
+async function token(req: Request) {
+  const cors = corsFor(req.headers.get("origin"));
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+  if (req.method !== "POST") return new Response("method not allowed", { status: 405, headers: { ...cors, Allow: "POST" } });
+  // The answer holds a live token: no cache may keep it.
+  const headers = { ...cors, "Cache-Control": "no-store" };
+  if (!CLIENT_ID || !CLIENT_SECRET) return Response.json({ error: "not-set-up" }, { status: 503, headers });
+  try {
+    const bearer = /^Bearer (\S+)$/i.exec(req.headers.get("authorization") ?? "")?.[1] ?? "";
+    const out = await serveToken(bearer, {
+      userEmail,
+      ownerEmail,
+      refreshToken: () => db("rpc/calendar_refresh_token", { method: "POST", body: "{}" }),
+      refresh: (refresh_token: string) => googleToken({ refresh_token, grant_type: "refresh_token" }),
+    });
+    // As busy-sync: a refused grant shows in Settings, and Reconnect fixes it.
+    if (out.lastError) {
+      await db("calendar_account?id=eq.true", { method: "PATCH", body: JSON.stringify({ last_error: out.lastError }) }).catch(() => {});
+    }
+    return Response.json(out.body, { status: out.status, headers });
+  } catch (e) {
+    // The message names the failed call only; a token is never in it.
+    console.error("calendar-connect token:", e instanceof Error ? e.message : "failed");
+    return Response.json({ error: "failed" }, { status: 500, headers });
+  }
+}
+
 // The signed-in user's email when the access token is a live Supabase session of the owner.
 async function ownerOf(accessToken: string) {
+  const email = await userEmail(accessToken);
+  return email && email === (await ownerEmail()) ? email : null;
+}
+
+// The email of the live Supabase session this access token belongs to, or null.
+async function userEmail(accessToken: string) {
   if (!accessToken) return null;
   const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) return null;
-  const { email } = await res.json();
-  return email && email === (await ownerEmail()) ? email : null;
+  return ((await res.json())?.email ?? null) as string | null;
 }
 
 // --- /callback ----------------------------------------------------------------------------
