@@ -146,6 +146,9 @@ export const campusByUid = (uids) => (uids.length
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
+// v5 P1, pace (docs/sheet-v5.md): the actuals rows Telegram's Finished answer wrote. Read-only here.
+export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
+
 // Busy times (docs/sheet-morning.md, "/plan"): the rows overlapping [from, to) are replaced by
 // `rows`. The insert ignores rows already there, so two tabs saving at once don't fail on the
 // primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).

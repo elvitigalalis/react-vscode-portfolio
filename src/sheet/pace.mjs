@@ -66,3 +66,8 @@ export function plannedVsDone(blocks, tasks, day, timeZone) {
   }
   return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
 }
+
+// Settings (docs/sheet-v5.md, "/plan"): "Course ×1.4 (12)", or "Course: 3 of 5 needed".
+const KIND_NAMES = { course: "Course", campus: "Campus", github: "GitHub", jira: "Jira", other: "Other" };
+export const paceLine = (kind, { pace, n }) =>
+  pace == null ? `${KIND_NAMES[kind]}: ${Math.min(n, PACE_SAMPLES)} of ${PACE_SAMPLES} needed` : `${KIND_NAMES[kind]} ×${pace} (${n})`;
