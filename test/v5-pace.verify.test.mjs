@@ -111,34 +111,33 @@ test("More time asks again at the new end", async () => {
 
 const others = (n) => Array.from({ length: n }, (_, i) => sent(`x${i}`, "start", `2026-11-04T1${3 + i}:05:00.000Z`));
 
-test("budget: with all six slots used, Finished? isn't sent", async () => {
+// Fix (docs/sheet-v5.md, "The Finished? check"): Finished? has its own budget of 8 a day, so
+// start nudges using up theirs never starve it. These replace the three tests that had it share
+// the nudge budget.
+test("budget: with all six nudge slots used, Finished? is still sent", async () => {
   const { whatToSend } = await nudges();
   // OS homework's start and repeat, and four other nudges.
-  assert.deepEqual(whatToSend(snapshot({ log: [...nudged, ...others(4)] }), at("2026-11-04T15:15:00Z")), []);
+  assert.deepEqual(whatToSend(snapshot({ log: [...nudged, ...others(4)] }), at("2026-11-04T15:15:00Z")), [finishedAt("2026-11-04T15:15:00.000Z")]);
 });
 
-test("budget: Finished? takes only the slots left after the kept nudges still to go out", async () => {
+test("budget: Finished? stops at 8 a day", async () => {
   const { whatToSend } = await nudges();
-  // Gym's 2:00 pm block is one of the first six, so its nudge holds a slot.
-  const gymBlock = block(B(2), "t2", "2026-11-04T19:00:00Z", "2026-11-04T20:00:00Z");
-  const blocks = [b1, gymBlock];
-  // 5 used + 1 held: none left.
-  assert.deepEqual(whatToSend(snapshot({ blocks, log: [...nudged, ...others(3)] }), at("2026-11-04T15:15:00Z")), []);
-  // 4 used + 1 held: one left, for Finished?.
-  assert.deepEqual(whatToSend(snapshot({ blocks, log: [...nudged, ...others(2)] }), at("2026-11-04T15:15:00Z")), [finishedAt("2026-11-04T15:15:00.000Z")]);
+  const checks = (n) => Array.from({ length: n }, (_, i) => sent(`f${i}`, "finished", `2026-11-04T13:${10 + i}:00.000Z`));
+  assert.deepEqual(whatToSend(snapshot({ log: [...nudged, ...checks(8)] }), at("2026-11-04T15:15:00Z")), []);
+  assert.deepEqual(whatToSend(snapshot({ log: [...nudged, ...checks(7)] }), at("2026-11-04T15:15:00Z")), [finishedAt("2026-11-04T15:15:00.000Z")]);
 });
 
-test("budget: a Finished? that went out counts toward it", async () => {
+test("budget: a Finished? that went out takes no nudge slot", async () => {
   const { handleTap } = await nudges();
   const gymBlock = block(B(2), "t2", "2026-11-04T19:00:00Z", "2026-11-04T20:00:00Z");
   const base = [...nudged, ...others(2), sent(B(2), "start", "2026-11-04T19:00:00.000Z")]; // 5 used
   const snoozeAt = at("2026-11-04T19:05:00Z");
-  // With the Finished? logged, all six are used and a Snooze on Gym is refused.
-  const full = snapshot({ blocks: [b1, gymBlock], log: [...base, sent(B(1), "finished", "2026-11-04T15:15:00.000Z")] });
+  // With the Finished? logged, one nudge slot is still left for a Snooze on Gym.
+  const withCheck = snapshot({ blocks: [b1, gymBlock], log: [...base, sent(B(1), "finished", "2026-11-04T15:15:00.000Z")] });
+  assert.equal(handleTap({ action: "snooze", block_id: B(2) }, withCheck, snoozeAt).changes.length, 1);
+  // A sixth nudge uses it up.
+  const full = snapshot({ blocks: [b1, gymBlock], log: [...base, sent("x9", "start", "2026-11-04T18:00:00.000Z")] });
   assert.deepEqual(handleTap({ action: "snooze", block_id: B(2) }, full, snoozeAt), { changes: [], text: "No nudges left today · Gym" });
-  // Without it, one slot is left.
-  const open = snapshot({ blocks: [b1, gymBlock], log: base });
-  assert.equal(handleTap({ action: "snooze", block_id: B(2) }, open, snoozeAt).changes.length, 1);
 });
 
 // =============================================================================================

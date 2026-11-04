@@ -443,8 +443,9 @@ weather_cache id boolean pk default true check (id), point text not null,
     `starts_at`), its task isn't done, the day isn't shut down (`day.shutdown`), and `ends_at`
     is before 23:00;
   - sent up to 30 minutes late (`FINISHED_LATE`), once per `send_at`;
-  - it counts toward the nudge budget, like a repeat: it takes a slot only when
-    `used + held < BUDGET`;
+  - **Fix:** it has its own budget, `FINISHED_BUDGET` = 8 a day (Finished? rows in today's
+    log), and takes no slot of the nudge budget, so start nudges and snoozes using up theirs
+    never starve it;
   - text `"Finished? · OS homework"`, buttons **Finished** (`finished:<block id>`), **More
     time** (`more:<id>`), **Didn't start** (`nostart:<id>`) and **Tomorrow** (`tomorrow:<id>`).
   - `readTap` reads these four as `{ action, block_id, … }`, as "done:" and "snooze:" are.

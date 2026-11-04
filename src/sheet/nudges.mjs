@@ -19,6 +19,9 @@ export const BRIEF_AT = 8 * 60;
 export const CHECKIN_LATEST = QUIET_FROM - 5;
 // The nudge budget: nudges, repeats and snoozes a day, not counting the brief or the check-in.
 export const BUDGET = 6;
+// Finished? checks a day, a budget of their own (fix): start nudges using up theirs never starve
+// them, so every nudged block's end gets one.
+export const FINISHED_BUDGET = 8;
 // The repeat follows a nudge Lisul hasn't acted on by this long after.
 export const REPEAT_AFTER = 10 * 60_000;
 // A Snooze tap logs the nudge again for this long after the tap, unsent: { block_id,
@@ -60,7 +63,9 @@ export function whatToSend(snapshot, now) {
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
   let { kept, used, held } = budget(day);
+  let checks = day.log.filter((n) => n.kind === "finished").length;
   return due.filter((m) => {
+    if (m.kind === "finished") return checks++ < FINISHED_BUDGET;
     if (!BUDGETED.includes(m.kind) || m.kind === "snooze") return true;
     if (m.kind === "start" && kept.has(m.block_id)) held--;
     if (used + held >= BUDGET) return false;
@@ -84,7 +89,7 @@ function dayOf(snapshot, now) {
   return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, plan, today, minutes, tz, now: now.getTime() };
 }
 
-const BUDGETED = ["start", "repeat", "snooze", "finished"];
+const BUDGETED = ["start", "repeat", "snooze"];
 
 // The budget, kept predictable: the nudges at the start of the day's first six blocks that can
 // be nudged are kept for them, and repeats, snoozes and later blocks' nudges get only the slots
@@ -259,7 +264,8 @@ const finishedButtons = (id) => [
 
 // At the end of each of today's blocks that was nudged, asking how it went: while its task is
 // open, the day isn't shut down and the end is before quiet hours. Up to FINISHED_LATE late, once
-// per end (More time moves the end, so it asks again). It takes a budget slot, like a repeat.
+// per end (More time moves the end, so it asks again). Up to FINISHED_BUDGET a day, outside the
+// nudge budget.
 function finishedChecks(day) {
   if (day.day?.shutdown) return [];
   return day.blocks.flatMap((b) => {
