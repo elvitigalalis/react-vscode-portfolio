@@ -39,13 +39,17 @@ import "../../styles/sheet.css";
       <button type="button" data-act="sign-out">Sign out</button>
     </div>
     <!-- Messages to Claude (docs/sheet-messages.md): src/sheet/message-box.mjs sends them and
-         shows the replies. Hidden until the owner's settings load. -->
+         lists the newest 10 with what each added. Hidden until the owner's settings load. -->
     <form class="sheet-message" data-message-form hidden>
       <label class="visually-hidden" for="sheet-message">Message to Claude</label>
-      <input id="sheet-message" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" required placeholder="Tell Claude: dentist Thu 3pm, lab report due Fri…">
+      <textarea id="sheet-message" rows="1" maxlength="8000" autocomplete="off" required aria-describedby="sheet-message-hint" placeholder="Tell Claude, or paste a message…"></textarea>
       <button type="submit" class="sheet-btn primary">Send<span class="visually-hidden"> to Claude</span></button>
+      <p class="sheet-message-hint" id="sheet-message-hint"><span class="sheet-message-keys"><kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends. </span>Paste a class announcement and Claude adds its deadlines and dates. <span data-message-count></span></p>
     </form>
-    <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
+    <details class="sheet-message-recent" data-message-recent hidden>
+      <summary>Recent messages to Claude</summary>
+      <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
+    </details>
     <p class="sheet-status" data-status>Loading…</p>
     <p class="sheet-notice" data-notice hidden></p>
     <p class="sheet-notice" role="status" data-mail-notice hidden></p>
