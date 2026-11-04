@@ -522,3 +522,109 @@ language sql security definer set search_path = public as $$
   delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d;
   update proposals set status = 'lapsed' where day = d and status = 'pending';
 $$;
+
+-- === v5 S1, busy times saved by the server (docs/sheet-v5.md) ================================
+-- Each busy row says where it came from, so the calendar sync and the browser replace only
+-- their own ('calendar') rows and leave Handshake's alone. The key gains source; re-run safe.
+alter table busy add column if not exists source text not null default 'calendar'
+  check (source in ('calendar', 'handshake'));
+do $$ begin
+  if not exists (select 1 from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any (c.conkey)
+                 where c.conrelid = 'busy'::regclass and c.contype = 'p' and a.attname = 'source') then
+    alter table busy drop constraint if exists busy_pkey;
+    alter table busy alter column starts_at set not null, alter column ends_at set not null;
+    alter table busy add primary key (source, starts_at, ends_at);
+  end if;
+end $$;
+
+-- The one Google account whose free/busy busy-sync reads: connected apart from mail, scope
+-- calendar.freebusy only. Its refresh token lives in Vault; vault_secret_id points at it. The
+-- calendar-connect and busy-sync functions write the row with the service key; the browser can
+-- read it and delete it (Disconnect), nothing more.
+create table if not exists calendar_account (
+  id boolean primary key default true check (id),
+  email text not null,
+  vault_secret_id uuid,
+  connected_at timestamptz not null default now(),
+  last_error text                    -- the last refused refresh or failed read; null while it works
+);
+alter table calendar_account enable row level security;
+drop policy if exists owner_all on calendar_account;
+create policy owner_all on calendar_account for all using (is_owner()) with check (is_owner());
+revoke all on calendar_account from anon;
+revoke insert, update on calendar_account from authenticated;
+
+-- Disconnecting deletes the refresh token too (as mail_account_forget).
+create or replace function calendar_account_forget() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from vault.secrets where id = old.vault_secret_id;
+  return old;
+end $$;
+drop trigger if exists calendar_account_forget on calendar_account;
+create trigger calendar_account_forget after delete on calendar_account for each row execute function calendar_account_forget();
+revoke execute on function calendar_account_forget() from public, anon, authenticated;
+
+-- Store the calendar refresh token as calendar_refresh:<account>, reusing the secret on
+-- reconnect (as mail_account_save). Service key only.
+create or replace function calendar_account_save(account text, refresh text) returns void
+language plpgsql security definer set search_path = public as $$
+declare secret_id uuid;
+begin
+  select s.id into secret_id from vault.secrets s
+  where s.id = (select vault_secret_id from calendar_account)
+     or s.name = 'calendar_refresh:' || account
+  limit 1;
+  if secret_id is null then
+    secret_id := vault.create_secret(refresh, 'calendar_refresh:' || account, 'Google refresh token, calendar.freebusy');
+  else
+    perform vault.update_secret(secret_id, refresh);
+  end if;
+  insert into calendar_account (id, email, vault_secret_id, connected_at, last_error)
+  values (true, account, secret_id, now(), null)
+  on conflict (id) do update
+  set email = excluded.email, vault_secret_id = excluded.vault_secret_id, connected_at = now(), last_error = null;
+end $$;
+revoke execute on function calendar_account_save(text, text) from public, anon, authenticated;
+
+-- The calendar refresh token for busy-sync, or null when nothing is connected.
+create or replace function calendar_refresh_token() returns text
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return (select s.decrypted_secret from calendar_account a
+          join vault.decrypted_secrets s on s.id = a.vault_secret_id);
+end $$;
+revoke execute on function calendar_refresh_token() from public, anon, authenticated;
+
+-- busy-sync's write, in one transaction: the calendar busy rows overlapping from_at to to_at
+-- replaced by `rows` ([{ starts_at, ends_at }]), busy_as_of stamped from_at, and the busy change
+-- (busyChange in src/sheet/freebusy.mjs) inserted when there is one. The changes table comes
+-- with replans (R1); until it exists the change is dropped. Service key only.
+create or replace function busy_sync_save(from_at timestamptz, to_at timestamptz, rows jsonb, change jsonb default null)
+returns void language plpgsql security invoker set search_path = public as $$
+begin
+  delete from busy b where b.source = 'calendar' and b.starts_at < to_at and b.ends_at > from_at;
+  insert into busy (source, starts_at, ends_at)
+  select 'calendar', x.starts_at, x.ends_at
+  from jsonb_to_recordset(coalesce(busy_sync_save.rows, '[]')) as x(starts_at timestamptz, ends_at timestamptz)
+  on conflict do nothing;
+  update settings set busy_as_of = from_at;
+  if change is not null and to_regclass('public.changes') is not null then
+    execute 'insert into changes (kind, reason, weight, ref) values ($1, $2, $3, $4)'
+      using change->>'kind', change->>'reason', (change->>'weight')::int, change->>'ref';
+  end if;
+end $$;
+revoke execute on function busy_sync_save(timestamptz, timestamptz, jsonb, jsonb) from public, anon, authenticated;
+
+-- Every 10 minutes, call busy-sync. Like sheet-brightspace, its URL and the shared secret come
+-- from Vault; until both exist the job does nothing.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-busy';
+select cron.schedule('sheet-busy', '*/10 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_busy_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "busy"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_busy_url')
+$job$);
