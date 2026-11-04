@@ -1,6 +1,7 @@
-// Busy times for the morning task (docs/sheet-morning.md, "/plan"). The server has no Google
-// token, so each time /plan loads his events it saves the busy times from now through 7 days
-// ahead into `busy`, start and end only, and stamps settings.busy_as_of. It runs in the
+// Busy times for the morning task (docs/sheet-morning.md, "/plan"). Since v5 the server saves
+// them every 10 minutes (supabase/functions/busy-sync); this browser save stays as the fallback:
+// each time /plan loads his events it saves the busy times from now through 7 days ahead into
+// `busy` (source 'calendar'), start and end only, and stamps settings.busy_as_of. It runs in the
 // background (planner.mjs, eventHooks); a failure is logged and the page carries on.
 import * as api from "./api.mjs";
 import { state, eventHooks } from "./planner.mjs";
