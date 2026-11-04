@@ -134,7 +134,8 @@ export const ordered = (days) => [...days].sort((a, b) => a.week - b.week || a.p
 const finished = (sessions) => sessions.filter((s) => s.finished_at).sort((a, b) => a.finished_at.localeCompare(b.finished_at));
 
 // The day to open on: the one after the day of the last finished session, by sequence, not by
-// calendar (a missed day never breaks the program); after the last day, week 1 again.
+// calendar (a missed day never breaks the program); after the last day, the first again (with one
+// week, Legs #2 goes back to Push #1 of the same week).
 export function nextDay(days, sessions) {
   const list = ordered(days);
   if (!list.length) return null;
