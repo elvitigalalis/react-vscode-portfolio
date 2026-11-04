@@ -5,6 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { planSnapshot } from "../src/sheet/proposal.mjs";
+import { whatToSend } from "../src/sheet/nudges.mjs";
 import { weatherPeriods } from "../src/sheet/sources.mjs";
 
 const TZ = "America/New_York";
@@ -29,4 +30,30 @@ test("planSnapshot: no cache, or a cache for another day, gives no weather", () 
   assert.deepEqual(planSnapshot(rows({ weather: null }), sixOhSeven).weather, []);
   // At 3 pm plan_day is tomorrow, which the fixture covers only at midnight.
   assert.deepEqual(planSnapshot(rows({ weather: cache }), new Date("2026-11-04T20:00:00Z")).weather, []);
+});
+
+// --- The brief ---------------------------------------------------------------------------------
+
+const nudgeSettings = { time_zone: TZ, telegram_chat_id: 42, nudges_on: true };
+const snapshot = (extra = {}) => ({ settings: nudgeSettings, day: null, tasks: [], blocks: [], log: [], ...extra });
+const eight = new Date("2026-11-04T13:00:00Z");
+const briefText = (snap) => whatToSend(snap, eight).find((m) => m.kind === "brief").text;
+const LINE = "Weather: Rain 2–5 pm (70%), Rain 8–9 pm (40%), 41–54°F.";
+
+test("brief: the weather line follows the at-risk line", () => {
+  const tasks = [
+    { id: "t1", title: "OS homework", day: DAY, done: false, due: null, public: true },
+    { id: "t2", title: "Essay", day: null, done: false, due: "2026-11-05", public: true },
+  ];
+  assert.equal(briefText(snapshot({ tasks, weather: cache })),
+    `Today: 1 task, 0 blocks.\nAt risk: Essay (due Thu).\n${LINE}\nNothing planned yet: say "plan my day" to Claude.`);
+});
+
+test("brief: an empty day still gets the weather", () => {
+  assert.equal(briefText(snapshot({ weather: cache })), `Nothing on today.\n${LINE}`);
+});
+
+test("brief: no cache, or one with no periods, adds no line", () => {
+  assert.equal(briefText(snapshot()), "Nothing on today.");
+  assert.equal(briefText(snapshot({ weather: { ...cache, periods: [] } })), "Nothing on today.");
 });
