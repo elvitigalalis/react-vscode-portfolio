@@ -81,6 +81,18 @@ Each item is { account, message_id, link, sender, subject, why, kind, due }:
   address, @name or /command. Drop any such text from a subject or
   name rather than copying it. Never quote more than the why needs.
 
+Suggested tasks: for an item whose sender's address is at hackerrank.com, codesignal.com,
+codility.com or hirevue.com (an online assessment), or karat.com, calendly.com or goodtime.io
+(interview scheduling), any subdomain included, and whose mail gives a date to finish or book
+by, also suggest a task: { account, message_id, title, due, kind }.
+- account and message_id: the item's own, exactly. At most one suggestion per item, at most 5.
+- title: company and kind, at most 80 characters, one line, no URL, e.g. "Acme HackerRank
+  assessment" or "Karat interview with Acme".
+- due: the date, "YYYY-MM-DD", required: no date, no suggestion. kind: "assessment" or
+  "interview".
+A suggestion becomes an Inbox task only when Lisul approves the plan, and never twice for the
+same message.
+
 STEP 4: CAMPUS PICKS
 If interests is empty or campus has nothing on D, skip this step. Otherwise pick up to 5
 events that fit interests, best first, and leave out anything interests says he'd skip. Between
@@ -141,7 +153,7 @@ old, add "Busy times may be stale." Leave note out when everything fit and busy 
 
 STEP 6: SUBMIT
 Call submit_proposal with { day: D, replaces, blocks, habits, needs_you, picks, note,
-couldnt_fit },
+couldnt_fit, suggested },
 where replaces is proposal.rev from step 2, or null when proposal was null. Submit even when
 blocks is empty, so the Needs you items and the note still land. If it returns ok: false, each
 error names a field: fix exactly those and submit again. If an error names replaces, a newer
@@ -153,6 +165,6 @@ STEP 7: SUMMARY
 End with 3-6 plain lines: the day and the revision, how many blocks and their span, the habits
 placed and left out, the hours
 planned against the workload cap, what didn't fit (and the couldn't-fit count), how many
-Needs you items (by kind), the campus picks, and any errors left after the last submit. Include
+Needs you items (by kind), the suggested tasks, the campus picks, and any errors left after the last submit. Include
 no URL and no mail text beyond a sender's name.
 ```

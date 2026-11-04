@@ -89,6 +89,14 @@ const ProposalInput = z.object({
   couldnt_fit: z.array(z.string().max(64)).max(50).default([]),
   // v5 H1: habit blocks, each at a start within its ideal ± flex (checkProposal checks it).
   habits: z.array(z.object({ habit_id: z.string().max(64), start: z.string().max(5) })).max(50).default([]),
+  // v5 A1: tasks to add from assessment and interview mail, one per needs_you item.
+  suggested: z.array(z.object({
+    account: z.string().max(320),
+    message_id: z.string().max(64),
+    title: line,
+    due: z.string().max(10).nullish(),
+    kind: z.string().max(20),
+  })).max(50).default([]),
 });
 type Proposal = z.infer<typeof ProposalInput>;
 
@@ -120,10 +128,12 @@ function plannerServer(db: Db) {
       "there is none), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
-      "at-risk tasks that couldn't fit, and habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
-      "time ± flex_min and running its minutes; a habit that can't fit is left out. Blocks and habits keep the day " +
-      "rules from read_planner's day_rules: the workload cap, a break after every 90 minutes in a row and travel " +
-      "time around busy times. It is checked against a fresh " +
+      "at-risk tasks that couldn't fit, habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
+      "time ± flex_min and running its minutes (a habit that can't fit is left out), and suggested tasks ({ account, " +
+      "message_id, title, due, kind: assessment | interview }) for Needs you items from assessment or " +
+      "interview-scheduling senders, which become Inbox tasks only when Lisul approves. Blocks and habits keep the " +
+      "day rules from read_planner's day_rules: the workload cap, a break after every 90 minutes in a row and " +
+      "travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
       "{ ok: true, rev } the revision waits for Lisul to approve it; submitting again (replaces: that rev) " +
       "supersedes it. " + UNTRUSTED,
