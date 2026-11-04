@@ -306,7 +306,7 @@ declare
   t1 uuid := '00000000-0000-4000-8000-0000000000a1';
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     raise notice '- v5 revisions: skipped, apply_proposal(d, replaces, ...) is not there yet';
     return;
   end if;
@@ -410,7 +410,7 @@ do $$
 declare
   d date := sheet_today() + 6;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     return;
   end if;
   -- Shutting a day down lapses its pending revision, and the day takes no new one.
@@ -721,7 +721,7 @@ declare
   d date := sheet_today() + 8;
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     raise notice '- apply_proposal read_at: skipped, not there yet';
     return;
   end if;
@@ -1086,6 +1086,24 @@ do $$ begin
   raise notice '✓ v5: known_senders hashes only; reply tracking private and server-written; sheet-mail every 5 minutes';
 end $$;
 
+-- Reply owed's evidence: basis is thread, known, cc or null; draft defaults to false.
+do $$ begin
+  if to_regclass('public.reply_state') is null then return; end if;
+  insert into reply_state (account, thread_id, state, since, message_id, who, basis)
+    values ('owner@example.com', 'ro-1', 'owed', now(), '18f3a1c2d4e5f002', 'Ana Ruiz', 'thread');
+  insert into reply_state (account, thread_id, state, since, message_id, who)
+    values ('owner@example.com', 'ro-2', 'awaiting', now(), '18f3a1c2d4e5f003', 'Ana Ruiz');
+  if (select draft from reply_state where thread_id = 'ro-1') is distinct from false
+    or (select basis from reply_state where thread_id = 'ro-2') is not null
+    then raise exception 'reply_state basis and draft defaults wrong'; end if;
+  begin insert into reply_state (account, thread_id, state, since, message_id, who, basis)
+      values ('owner@example.com', 'ro-3', 'owed', now(), '18f3a1c2d4e5f004', 'Ana Ruiz', 'guess');
+    raise exception 'reply_state took basis guess';
+  exception when check_violation then null; end;
+  delete from reply_state where thread_id like 'ro-%';
+  raise notice '✓ reply_state keeps basis (thread, known, cc) and draft';
+end $$;
+
 -- Fix: no From address in plain text (docs/sheet-v5.md, "Sender hashes").
 do $$ begin
   if to_regclass('public.message_senders') is null then return; end if;
@@ -1264,7 +1282,11 @@ declare
 begin
   begin insert into messages (text) values (''); raise exception 'messages took empty text';
   exception when check_violation then null; end;
-  begin insert into messages (text) values (repeat('a', 501)); raise exception 'messages took 501 characters';
+  begin insert into messages (text) values (repeat('a', 8001)); raise exception 'messages took 8001 characters';
+  exception when check_violation then null; end;
+  insert into messages (text) values (repeat('a', 8000)) returning id into m;
+  delete from messages where id = m;
+  begin insert into messages (text, reply) values ('x', repeat('r', 501)); raise exception 'messages took a 501-character reply';
   exception when check_violation then null; end;
   insert into messages (text) values ('lab report due Friday, ~2h; dentist Thu 3pm') returning id into m;
   if (select status <> 'pending' or events <> '[]'::jsonb or created_in_calendar or tasks_added <> 0 from messages where id = m)
@@ -1304,6 +1326,112 @@ begin
     then raise exception 'deleting a message kept its busy time'; end if;
   raise notice '✓ messages: owner-only, answer_message adds tasks, events as busy times, and answers once';
 end $$;
+-- What a message added, item by item, and Undo on each (docs/sheet-messages.md).
+do $$
+declare
+  m uuid;
+  m2 uuid;
+  t1 uuid;
+  e1 uuid;
+  e2 uuid;
+  out jsonb;
+begin
+  insert into messages (text) values ('Project 2 due Nov 14 11:59pm; quiz Tue 9am; lab Wed 2pm') returning id into m;
+  perform answer_message(m,
+    '[{"title": "MSG Project 2 (due 11:59 pm)", "day": null, "list": "Inbox", "due": "2026-11-14", "at_time": null, "est_min": null},
+      {"title": "MSG Read ch. 5", "day": "2026-11-09", "list": null, "due": "2026-11-10", "at_time": null, "est_min": 60}]',
+    '[{"title": "Quiz ch. 5", "starts_at": "2026-11-10T14:00:00.000Z", "ends_at": "2026-11-10T15:00:00.000Z"},
+      {"title": "Lab", "starts_at": "2026-11-11T19:00:00.000Z", "ends_at": "2026-11-11T20:00:00.000Z"}]',
+    'Added 2 tasks and 2 events; skipped office hours (no day given).');
+  -- Each task is listed with its id, title and place; each event gets an id.
+  if (select jsonb_array_length(tasks) <> 2 or tasks -> 0 ->> 'title' <> 'MSG Project 2 (due 11:59 pm)'
+        or tasks -> 0 ->> 'list' <> 'Inbox' or tasks -> 0 ->> 'due' <> '2026-11-14' or tasks -> 1 ->> 'day' <> '2026-11-09'
+        from messages where id = m)
+    then raise exception 'answer_message did not list the tasks it added'; end if;
+  select (tasks -> 0 ->> 'id')::uuid, (events -> 0 ->> 'id')::uuid, (events -> 1 ->> 'id')::uuid into t1, e1, e2 from messages where id = m;
+  if not exists (select 1 from tasks where id = t1 and title = 'MSG Project 2 (due 11:59 pm)')
+    then raise exception 'a listed task id is not the task added'; end if;
+  if e1 is null or e2 is null or e1 = e2 then raise exception 'events did not get their own ids'; end if;
+
+  -- /plan records the Google event it made for an event.
+  perform message_event_created(m, e1, 'gcal-abc');
+  if (select events -> 0 ->> 'gcal_id' from messages where id = m) is distinct from 'gcal-abc'
+    then raise exception 'message_event_created did not keep the Google id'; end if;
+
+  -- Undo a task: the task goes, and so does its line.
+  out := undo_message_item(m, t1);
+  if out ->> 'kind' <> 'task' or out ->> 'title' <> 'MSG Project 2 (due 11:59 pm)' then raise exception 'undo of a task returned %', out; end if;
+  if exists (select 1 from tasks where id = t1) then raise exception 'undo kept the task'; end if;
+  if (select jsonb_array_length(tasks) <> 1 or tasks_added <> 1 or status <> 'done' from messages where id = m)
+    then raise exception 'undo did not take the task off the message'; end if;
+
+  -- Undo an event: its line and its busy time go; it comes back with its Google id, for /plan to delete.
+  out := undo_message_item(m, e1);
+  if out ->> 'kind' <> 'event' or out ->> 'gcal_id' <> 'gcal-abc' then raise exception 'undo of an event returned %', out; end if;
+  if (select jsonb_array_length(events) <> 1 or events -> 0 ->> 'title' <> 'Lab' from messages where id = m)
+    then raise exception 'undo did not take the event off the message'; end if;
+  if exists (select 1 from busy where message_id = m and starts_at = '2026-11-10T14:00:00Z')
+    then raise exception 'undo kept the event''s busy time'; end if;
+  if not exists (select 1 from busy where message_id = m and starts_at = '2026-11-11T19:00:00Z')
+    then raise exception 'undo took another event''s busy time'; end if;
+
+  -- An item undone already, or of another message, is nothing to undo.
+  if undo_message_item(m, e1) is not null then raise exception 'undo ran twice'; end if;
+
+  -- Two messages with an event at the same times share a busy row; undoing one keeps it busy.
+  insert into messages (text) values ('lab Wed 2pm') returning id into m2;
+  perform answer_message(m2, '[]', '[{"title": "Lab again", "starts_at": "2026-11-11T19:00:00.000Z", "ends_at": "2026-11-11T20:00:00.000Z"}]', 'Lab Wed 2-3 pm.');
+  perform undo_message_item(m, e2);
+  if not exists (select 1 from busy where source = 'message' and message_id = m2 and starts_at = '2026-11-11T19:00:00Z')
+    then raise exception 'undo left the other message''s event without its busy time'; end if;
+
+  -- A stranger can undo nothing.
+  perform pg_temp.as_user('authenticated', 'stranger@example.com');
+  if undo_message_item(m2, (select (events -> 0 ->> 'id')::uuid from messages where id = m2)) is not null
+    then raise exception 'a stranger undid an item'; end if;
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  if (select jsonb_array_length(events) from messages where id = m2) <> 1 then raise exception 'a stranger changed a message'; end if;
+
+  delete from tasks where title like 'MSG %';
+  delete from messages where id in (m, m2);
+  raise notice '✓ messages: each added item is listed, and undone one at a time';
+end $$;
+-- Claude's steps on a message, and its notes on each item (docs/sheet-messages.md).
+do $$
+declare
+  m uuid;
+  m2 uuid;
+begin
+  insert into messages (text, session_url) values ('quiz Tue 9am', 'https://claude.ai/code/session_x') returning id into m;
+  insert into messages (text) values ('done one') returning id into m2;
+  perform answer_message(m2, '[{"title": "MSG x", "day": null, "list": "Inbox", "due": null, "at_time": null, "est_min": null}]', '[]', 'Added x.');
+  perform add_message_step(array[m, m2], 'checking', 'Checking Tuesday on your calendar');
+  if (select jsonb_array_length(steps) <> 1 or steps -> 0 ->> 'kind' <> 'checking' or steps -> 0 ->> 'text' <> 'Checking Tuesday on your calendar'
+        or (steps -> 0 ->> 'at')::timestamptz > now() from messages where id = m)
+    then raise exception 'add_message_step did not add the step'; end if;
+  if (select jsonb_array_length(steps) from messages where id = m2) <> 0
+    then raise exception 'an answered message took a step'; end if;
+  for i in 1..15 loop perform add_message_step(array[m], 'adding', 'Adding ' || i); end loop;
+  if (select jsonb_array_length(steps) from messages where id = m) <> 12 then raise exception 'steps should stop at 12'; end if;
+  -- A stranger adds nothing.
+  perform pg_temp.as_user('authenticated', 'stranger@example.com');
+  perform add_message_step(array[m], 'adding', 'Stranger');
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  if exists (select 1 from messages where id = m and steps::text like '%Stranger%') then raise exception 'a stranger added a step'; end if;
+  update messages set steps = '[]' where id = m;
+  perform add_message_step(array[m], 'adding', 'Adding 1');
+  -- The answer keeps each item's why, and when it came.
+  perform answer_message(m,
+    '[{"title": "MSG Read ch. 5", "day": null, "list": "Inbox", "due": "2026-11-10", "at_time": null, "est_min": null, "why": "Before the quiz."}]',
+    '[{"title": "Quiz", "starts_at": "2026-11-10T14:00:00.000Z", "ends_at": "2026-11-10T15:00:00.000Z", "why": "A class quiz at a time."}]', 'Added.');
+  if (select tasks -> 0 ->> 'why' <> 'Before the quiz.' or events -> 0 ->> 'why' <> 'A class quiz at a time.' or answered_at is null
+        or jsonb_array_length(steps) <> 1 from messages where id = m)
+    then raise exception 'answer_message did not keep the whys and answered_at'; end if;
+  if (select answered_at from messages where id = m2) is null then raise exception 'answered_at missing'; end if;
+  delete from tasks where title like 'MSG %';
+  delete from messages where id in (m, m2);
+  raise notice '✓ messages: steps (at most 12, pending only, owner only), whys and answered_at';
+end $$;
 reset role;
 do $$ begin
   insert into messages (at, text) values (now() - interval '31 days', 'old one'), (now() - interval '29 days', 'new one');
@@ -1316,6 +1444,165 @@ do $$ begin
     then raise exception 'nightly_roll should keep 30 days of messages'; end if;
   delete from messages where text = 'new one';
   raise notice '✓ messages kept 30 days';
+end $$;
+-- --- Oura (docs/sheet-v5.md, "Oura") ---------------------------------------------------------
+reset role;
+do $$ begin
+  if exists (select 1 from pg_class where relname in ('oura_account', 'sleep_nights', 'sleep_days') and not relrowsecurity)
+    then raise exception 'RLS off on an Oura table'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('oura_account', 'sleep_nights', 'sleep_days'))
+    then raise exception 'a public view exposes Oura data'; end if;
+  if (select schedule from cron.job where jobname = 'sheet-oura') is distinct from '4-59/10 * * * *'
+    or (select count(*) from cron.job where jobname = 'sheet-oura') <> 1
+    then raise exception 'sheet-oura not scheduled once every 10 minutes'; end if;
+  if has_function_privilege('anon', 'oura_token_save(text, text, timestamptz, text)', 'execute')
+    or has_function_privilege('authenticated', 'oura_token_save(text, text, timestamptz, text)', 'execute')
+    or has_function_privilege('anon', 'oura_tokens()', 'execute')
+    or has_function_privilege('authenticated', 'oura_tokens()', 'execute')
+    or has_function_privilege('authenticated', 'oura_sync_save(jsonb, jsonb, jsonb)', 'execute')
+    or has_function_privilege('authenticated', 'oura_broken(text)', 'execute')
+    then raise exception 'Oura functions callable by anon or authenticated'; end if;
+  if not has_function_privilege('service_role', 'oura_token_save(text, text, timestamptz, text)', 'execute')
+    or not has_function_privilege('service_role', 'oura_tokens()', 'execute')
+    or not has_function_privilege('service_role', 'oura_sync_save(jsonb, jsonb, jsonb)', 'execute')
+    then raise exception 'service_role cannot call the Oura functions'; end if;
+
+  -- Connect, then rotate: the new pair is saved only over the token it replaced.
+  if not oura_token_save('r1', 'a1', '2030-01-01T00:00:00Z') then raise exception 'connect did not save'; end if;
+  if not oura_token_save('r2', 'a2', '2030-01-02T00:00:00Z', 'r1') then raise exception 'rotation did not save'; end if;
+  if oura_token_save('r3', 'a3', '2030-01-03T00:00:00Z', 'r1') then raise exception 'a stale rotation overwrote the newer token'; end if;
+  if not oura_token_save('r2', 'a2', '2030-01-02T00:00:00Z', 'r1') then raise exception 'a retried save was refused'; end if;
+  if oura_tokens()->>'refresh' <> 'r2' or oura_tokens()->>'access' <> 'a2'
+    or (select count(*) from vault.secrets where name in ('oura_refresh', 'oura_access')) <> 2
+    then raise exception 'Oura tokens not rotated in place'; end if;
+  perform oura_broken('token refresh refused: invalid_grant');
+  if (select last_error from oura_account) is null then raise exception 'oura_broken did not mark the grant'; end if;
+  perform oura_token_save('r4', 'a4', '2030-01-04T00:00:00Z');
+  if (select last_error from oura_account) is not null then raise exception 'reconnecting kept the old error'; end if;
+
+  -- The sync upserts by Oura id and logs a woke-late change once per wake.
+  perform oura_sync_save('[{"oura_id": "s1", "day": "2030-01-02", "type": "sleep", "bedtime_start": "2030-01-02T05:00:00Z", "bedtime_end": "2030-01-02T14:00:00Z"}]',
+    '[{"day": "2030-01-02", "readiness": 64, "sleep_s": 20400}]');
+  perform oura_sync_save('[{"oura_id": "s1", "day": "2030-01-02", "type": "long_sleep", "bedtime_start": "2030-01-02T05:00:00Z", "bedtime_end": "2030-01-02T15:20:00Z"}]',
+    '[{"day": "2030-01-02", "readiness": null, "sleep_s": 21000}]',
+    '{"kind": "sleep", "reason": "woke_late", "weight": 9, "ref": "2030-01-02T15:20:00Z"}');
+  perform oura_sync_save('[]', '[]', '{"kind": "sleep", "reason": "woke_late", "weight": 9, "ref": "2030-01-02T15:20:00Z"}');
+  if (select count(*) from sleep_nights) <> 1 or (select type from sleep_nights) <> 'long_sleep'
+    or (select bedtime_end from sleep_nights) <> '2030-01-02T15:20:00Z'
+    then raise exception 'oura_sync_save did not upsert by oura_id'; end if;
+  if (select readiness from sleep_days) <> 64 or (select sleep_s from sleep_days) <> 21000
+    then raise exception 'oura_sync_save lost a readiness or took the new sleep total'; end if;
+  if (select count(*) from changes where reason = 'woke_late') <> 1 then raise exception 'the woke-late change was not logged once'; end if;
+  if (select synced_at from oura_account) is null then raise exception 'oura_sync_save did not stamp synced_at'; end if;
+  delete from changes where reason = 'woke_late';
+  raise notice '✓ Oura: private, functions service-only, tokens rotate in place, sync upserts and logs woke-late once';
+end $$;
+
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from sleep_nights; raise exception 'anon read sleep_nights';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from oura_account; raise exception 'anon read oura_account';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  if (select count(*) from sleep_nights) + (select count(*) from sleep_days) + (select count(*) from oura_account) <> 0
+    then raise exception 'a non-owner sees Oura data'; end if;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if (select count(*) from sleep_nights) <> 1 or (select count(*) from oura_account) <> 1 then raise exception 'the owner cannot read Oura rows'; end if;
+  begin
+    insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end) values ('x', '2030-01-01', 'sleep', now(), now());
+    raise exception 'the browser wrote sleep_nights';
+  exception when insufficient_privilege then null; end;
+  begin update oura_account set last_error = null where id; raise exception 'the browser updated oura_account';
+  exception when insufficient_privilege then null; end;
+  -- Disconnect: the grant, both tokens and every sleep row go.
+  delete from oura_account where id;
+  if (select count(*) from oura_account) <> 0 then raise exception 'Disconnect left the grant'; end if;
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from vault.secrets where name in ('oura_refresh', 'oura_access'))
+    or exists (select 1 from sleep_nights) or exists (select 1 from sleep_days)
+    then raise exception 'Disconnect kept a token or sleep rows'; end if;
+  -- Kept 60 days.
+  insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end) values
+    ('old', current_date - 62, 'long_sleep', now() - interval '61 days 8 hours', now() - interval '61 days'),
+    ('new', current_date - 58, 'long_sleep', now() - interval '59 days 8 hours', now() - interval '59 days');
+  insert into sleep_days (day, readiness) values (current_date - 61, 70), (current_date - 59, 80);
+  perform nightly_roll();
+  if exists (select 1 from sleep_nights where oura_id = 'old') or not exists (select 1 from sleep_nights where oura_id = 'new')
+    or exists (select 1 from sleep_days where day = current_date - 61) or not exists (select 1 from sleep_days where day = current_date - 59)
+    then raise exception 'nightly_roll should keep 60 days of sleep'; end if;
+  delete from sleep_nights where true;
+  delete from sleep_days where true;
+  -- A woke-late change has kind sleep; revisions keep their window start.
+  insert into changes (kind, reason, weight) values ('sleep', 'woke_late', 9);
+  delete from changes where kind = 'sleep';
+  perform apply_proposal(d => '2030-01-04', replaces => null, blocks => '[]', window_from => '10:15');
+  if (select window_from from proposals where day = '2030-01-04') <> '10:15' then raise exception 'apply_proposal lost window_from'; end if;
+  delete from proposals where day = '2030-01-04';
+  begin
+    update proposals set window_from = '7:00' where false;
+    insert into proposals (day, rev, window_from) values ('2030-01-05', 1, '25:00');
+    raise exception 'window_from took a bad time';
+  exception when check_violation then null; end;
+  raise notice '✓ Oura: owner read-only, Disconnect deletes the grant, tokens and rows; kept 60 days';
+end $$;
+-- Event to-dos (docs/sheet-v5.md, "Event to-dos"): owner-only, set_event_titles writes only
+-- title_ai, and nightly_roll keeps 30 days.
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from event_todos; raise exception 'anon read event_todos';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  insert into event_todos (cal_event_key, day, done) values ('primary:stranger', '2026-11-04', true);
+  raise exception 'a stranger wrote event_todos';
+exception when insufficient_privilege then null;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  begin insert into event_todos (cal_event_key, day, title_ai) values ('primary:long', '2026-11-04', repeat('a', 81));
+    raise exception 'event_todos took an 81-character title';
+  exception when check_violation then null; end;
+  -- /plan checks an event off and hides another, as PostgREST's merge-duplicates upsert does.
+  insert into event_todos (cal_event_key, day, done) values ('primary:e1', '2026-11-04', true)
+    on conflict (cal_event_key) do update set done = excluded.done;
+  insert into event_todos (cal_event_key, day, hidden) values ('primary:e2', '2026-11-04', true)
+    on conflict (cal_event_key) do update set hidden = excluded.hidden;
+  -- Claude's titles: one for an event already checked, one new; done and hidden stay.
+  perform set_event_titles('2026-11-04', '[{"cal_event_key": "primary:e1", "title_ai": "Go to CSE 416 lecture"},
+    {"cal_event_key": "primary:e2", "title_ai": "Weekly sync"}, {"cal_event_key": "primary:e3", "title_ai": "Dentist"}]');
+  if (select not done or hidden or title_ai <> 'Go to CSE 416 lecture' from event_todos where cal_event_key = 'primary:e1')
+    then raise exception 'set_event_titles changed done or hidden'; end if;
+  if (select done or not hidden from event_todos where cal_event_key = 'primary:e2')
+    then raise exception 'set_event_titles unhid an event'; end if;
+  if (select done or hidden or title_ai <> 'Dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
+    then raise exception 'set_event_titles did not add a new title'; end if;
+  perform set_event_titles('2026-11-05', '[{"cal_event_key": "primary:e3", "title_ai": "See the dentist"}]');
+  if (select title_ai <> 'See the dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
+    then raise exception 'a second title should replace the first and keep the day'; end if;
+  raise notice '✓ event_todos: owner-only, and titles never touch done or hidden';
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from information_schema.role_table_grants where table_name = 'event_todos' and grantee = 'anon')
+    then raise exception 'anon has a grant on event_todos'; end if;
+  if exists (select 1 from pg_views where schemaname = 'public' and definition like '%event_todos%')
+    then raise exception 'a view reads event_todos'; end if;
+  delete from event_todos;
+  insert into event_todos (cal_event_key, day) values ('primary:old', sheet_today() - 31), ('primary:kept', sheet_today() - 30);
+  perform nightly_roll();
+  if exists (select 1 from event_todos where cal_event_key = 'primary:old') or not exists (select 1 from event_todos where cal_event_key = 'primary:kept')
+    then raise exception 'nightly_roll should keep event_todos 30 days after their day'; end if;
+  delete from event_todos;
+  raise notice '✓ event_todos kept 30 days';
 end $$;
 SQL
 # --- Gym (docs/sheet-gym.md) ---------------------------------------------------------------------

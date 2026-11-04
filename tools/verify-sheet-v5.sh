@@ -89,7 +89,7 @@ with want(tbl, cols) as (values
   ('triage_rules', array['id','match','pattern','action','created_at','label']),
   ('known_senders', array['hash','last_sent_at']),
   ('message_senders', array['account','message_id','thread_id','address_hash','domain_hashes','at']),
-  ('reply_state', array['account','thread_id','state','since','message_id','who','updated_at']),
+  ('reply_state', array['account','thread_id','state','since','message_id','who','updated_at','basis','draft']),
   ('academic_days', array['day','entries','fetched_at']),
   ('weather_cache', array['id','point','forecast_url','periods','alerts','fetched_at'])),
 cols as (
@@ -169,7 +169,7 @@ cross join lateral (select array_agg(a.attname::text order by a.attname::text) a
 # Telegram. The Vault ones are security definer and, like the sync writes, service key only.
 db_checks "
 with want(sig, definer, owner_may) as (values
-  ('apply_proposal(date,integer,jsonb,jsonb,jsonb,jsonb,text,uuid[],jsonb,text,text[],timestamp with time zone)', false, true),
+  ('apply_proposal(date,integer,jsonb,jsonb,jsonb,jsonb,text,uuid[],jsonb,text,text[],timestamp with time zone,text)', false, true),
   ('approve_proposal(date,integer)', false, true),
   ('skip_proposal(date,integer)', false, true),
   ('turn_down(date,uuid)', false, true),

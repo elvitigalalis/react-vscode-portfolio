@@ -160,3 +160,20 @@ test("shouldReplan: a day whose newest revision is skipped or lapsed holds as cl
     assert.equal(shouldReplan(urgent, replanState({ settings, day: null, proposals: rows(status), replans: [] }), now).fire, true);
   }
 });
+
+// --- The woke-late change (src/sheet/replan.mjs, routine-fire.mjs, nudges.mjs) ---------------
+
+test("woke_late: a sleep change heavy enough to start a replan, whose kind the fire text carries", async () => {
+  const { changeRow, shouldReplan } = await import("../src/sheet/replan.mjs");
+  const { fireText } = await import("../src/sheet/routine-fire.mjs");
+  const row = changeRow("woke_late", "2026-11-04T15:20:00.000Z");
+  assert.deepEqual(row, { kind: "sleep", reason: "woke_late", weight: 9, ref: "2026-11-04T15:20:00.000Z" });
+  const now = new Date("2026-11-04T15:30:00Z"); // 10:30 am
+  const state = { settings: { time_zone: "America/New_York", replans_on: true, morning_on: true }, day: null, shutdown: "17:00", plans_today: 1, last_plan_at: "2026-11-03T22:00:00Z", last_edit_at: null };
+  const r = shouldReplan([{ id: "c1", at: "2026-11-04T15:29:00Z", ...row }], state, now);
+  assert.equal(r.fire, true);
+  assert.deepEqual(r.counts, { sleep: 1 });
+  assert.equal(fireText("replan", r.counts), "trigger: replan\nreasons: sleep 1");
+  // Replans off: held, as any change.
+  assert.equal(shouldReplan([{ id: "c1", at: "2026-11-04T15:29:00Z", ...row }], { ...state, settings: { ...state.settings, replans_on: false } }, now).hold, "replans_off");
+});

@@ -40,13 +40,17 @@ import "../../styles/sheet.css";
       <button type="button" data-act="sign-out">Sign out</button>
     </div>
     <!-- Messages to Claude (docs/sheet-messages.md): src/sheet/message-box.mjs sends them and
-         shows the replies. Hidden until the owner's settings load. -->
+         lists the newest 10 with what each added. Hidden until the owner's settings load. -->
     <form class="sheet-message" data-message-form hidden>
       <label class="visually-hidden" for="sheet-message">Message to Claude</label>
-      <input id="sheet-message" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" required placeholder="Tell Claude: dentist Thu 3pm, lab report due Fri…">
+      <textarea id="sheet-message" rows="1" maxlength="8000" autocomplete="off" required aria-describedby="sheet-message-hint" placeholder="Tell Claude, or paste a message…"></textarea>
       <button type="submit" class="sheet-btn primary">Send<span class="visually-hidden"> to Claude</span></button>
+      <p class="sheet-message-hint" id="sheet-message-hint"><span class="sheet-message-keys"><kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends. </span>Paste a class announcement and Claude adds its deadlines and dates. <span data-message-count></span></p>
     </form>
-    <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
+    <details class="sheet-message-recent" data-message-recent hidden>
+      <summary>Recent messages to Claude</summary>
+      <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
+    </details>
     <p class="sheet-status" data-status>Loading…</p>
     <p class="sheet-notice" data-notice hidden></p>
     <p class="sheet-notice" role="status" data-mail-notice hidden></p>
@@ -65,6 +69,12 @@ import "../../styles/sheet.css";
       <button type="button" data-move="visibility">Make private</button>
       <button type="button" data-move="clear-due" hidden>Clear due date</button>
       <button type="button" data-move="delete">Delete</button>
+    </div>
+
+    <!-- Event to-dos (docs/sheet-v5.md, "Event to-dos"): a calendar event's row menu. -->
+    <div class="sheet-menu" data-evmenu popover>
+      <button type="button" data-act="evtodo-open">Open in Calendar</button>
+      <button type="button" data-act="evtodo-hide">Hide</button>
     </div>
 
     <div class="sheet-toast" role="status" data-toast hidden>
@@ -99,6 +109,7 @@ import "../../styles/sheet.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-clock"></use></svg><span class="visually-hidden">Clock</span></dt><dd>Fixed time</dd>
         <dt>⚠</dt><dd>At risk (amber), overdue (red), or clashes with an event</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-graduation-cap"></use></svg><span class="visually-hidden">Graduation cap</span></dt><dd>Course task from Brightspace</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-calendar"></use></svg><span class="visually-hidden">Calendar</span></dt><dd>An event on your calendar, as a to-do</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-ticket"></use></svg><span class="visually-hidden">Ticket</span></dt><dd>Campus event</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-github"></use></svg><span class="visually-hidden">GitHub</span></dt><dd>Review or issue from GitHub (opens it)</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-kanban"></use></svg><span class="visually-hidden">Kanban</span></dt><dd>Ticket from Jira (opens it)</dd>
@@ -149,6 +160,15 @@ import "../../styles/sheet.css";
         <p class="small"><span data-cal-account></span> <span class="sheet-mail-error" data-cal-error></span></p>
         <button type="button" class="sheet-btn" data-act="cal-connect">Connect</button>
         <button type="button" class="sheet-link" data-act="cal-disconnect" hidden>Disconnect</button>
+      </section>
+
+      <!-- Oura (docs/sheet-v5.md, "Oura"): src/sheet/oura-settings.mjs fills it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-oura-title">
+        <h3 id="sheet-oura-title">Oura</h3>
+        <p class="small">The plan starts 30 minutes after you wake, from your Oura ring's sleep times (kept 60 days, never shared). Your readiness and a short night can lighten the day.</p>
+        <p class="small"><span role="status" data-oura-status></span> <span class="sheet-mail-error" data-oura-error></span></p>
+        <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
+        <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
       </section>
 
       <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
@@ -286,6 +306,7 @@ import "../../styles/sheet.css";
       <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
       <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" /><path d="m2.5 21.5 1.4-1.4" /><path d="m20.1 3.9 1.4-1.4" /><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" /><path d="m9.6 14.4 4.8-4.8" /></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></symbol>
       <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
     </svg>
 
@@ -304,6 +325,6 @@ import "../../styles/sheet.css";
   import { setupMessages } from "../../sheet/message-box.mjs";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
-  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings]);
+  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings]);
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages], settings);
 </script>
