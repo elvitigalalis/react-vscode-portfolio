@@ -51,3 +51,22 @@ test("busy-sync checks the cron secret, reads the token by rpc, and writes in on
   assert.match(syncFn, /"freebusy"/);
   assert.match(syncFn, /not connected/);
 });
+
+// --- /plan Settings, Calendar (src/sheet/calendar-settings.mjs) -------------------------------
+
+const calSettings = readFileSync(new URL("../src/sheet/calendar-settings.mjs", import.meta.url), "utf8");
+const planPage = readFileSync(new URL("../src/pages/plan/index.astro", import.meta.url), "utf8");
+
+test("/plan: Settings shows when busy times were saved, with Connect or Reconnect and Disconnect", () => {
+  for (const hook of ["data-busy-saved", "data-cal-account", "data-cal-error", 'data-act="cal-connect"', 'data-act="cal-disconnect"']) {
+    assert.ok(planPage.includes(hook), hook);
+  }
+  assert.match(planPage, /setupCalendarSettings/);
+  assert.match(calSettings, /busySaved\(/);
+  assert.match(calSettings, /"Reconnect" : "Connect"/);
+  // The sign-in token rides in a header to /start, never in a URL.
+  assert.match(calSettings, /functions\/v1\/calendar-connect\/start`, \{\s*method: "POST",\s*headers: \{ authorization: `Bearer \$\{token\}` \}/);
+  // Disconnect asks first, then deletes the row (and with it the token).
+  assert.match(calSettings, /confirm\([\s\S]*?deleteCalendarAccount\(\)/);
+  assert.doesNotMatch(calSettings, /innerHTML/);
+});
