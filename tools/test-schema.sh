@@ -1179,16 +1179,32 @@ begin
   insert into messages (text) values ('asdf') returning id into m2;
   if answer_message(m2, '[]', '[]', 'Not sure what that means.') <> 'failed'
     then raise exception 'an answer that adds nothing should fail the message'; end if;
+  -- The event is a busy time the planner sees, source 'message', tied to its message.
+  if (select count(*) from busy where source = 'message' and message_id = m
+        and starts_at = '2026-11-05T20:00:00Z' and ends_at = '2026-11-05T21:00:00Z') <> 1
+    then raise exception 'answer_message did not save the event as a busy time'; end if;
+  -- busy-sync replaces only calendar rows, so the event's busy time stays.
+  reset role;
+  perform busy_sync_save('2026-11-05T00:00:00Z', '2026-11-06T00:00:00Z', '[]');
+  if not exists (select 1 from busy where message_id = m)
+    then raise exception 'busy_sync_save deleted a message busy time'; end if;
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
   -- /plan marks the events created in Google Calendar.
   update messages set created_in_calendar = true where id = m;
   delete from tasks where title in ('MSG lab report', 'MSG already in Inbox');
   delete from messages where id in (m, m2);
-  raise notice '✓ messages: owner-only, answer_message adds tasks and answers once';
+  if exists (select 1 from busy where source = 'message' and starts_at = '2026-11-05T20:00:00Z')
+    then raise exception 'deleting a message kept its busy time'; end if;
+  raise notice '✓ messages: owner-only, answer_message adds tasks, events as busy times, and answers once';
 end $$;
 reset role;
 do $$ begin
   insert into messages (at, text) values (now() - interval '31 days', 'old one'), (now() - interval '29 days', 'new one');
+  insert into busy (source, starts_at, ends_at, message_id)
+    select 'message', now() + interval '1 day', now() + interval '1 day 1 hour', id from messages where text = 'old one';
   perform nightly_roll();
+  if exists (select 1 from busy where source = 'message')
+    then raise exception 'an old message kept its busy time'; end if;
   if exists (select 1 from messages where text = 'old one') or not exists (select 1 from messages where text = 'new one')
     then raise exception 'nightly_roll should keep 30 days of messages'; end if;
   delete from messages where text = 'new one';

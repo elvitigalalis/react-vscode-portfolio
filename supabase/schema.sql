@@ -1164,9 +1164,17 @@ drop policy if exists owner_all on messages;
 create policy owner_all on messages for all using (is_owner()) with check (is_owner());
 revoke all on messages from anon;
 
+-- A message's events are busy times too, so the morning task and replans plan around them:
+-- busy-sync and /plan's busy save skip The Sheet's own calendar, and replace only 'calendar'
+-- rows. answer_message writes them with source 'message'; they go with their message (deleted,
+-- or past nightly_roll's 30 days) or once they end. Two events at the same times share one row.
+alter table busy drop constraint if exists busy_source_check;
+alter table busy add constraint busy_source_check check (source in ('calendar', 'handshake', 'message'));
+alter table busy add column if not exists message_id uuid references messages on delete cascade;
+
 -- Answer pending message m in one transaction: its tasks added (new_tasks, [{ title, day, list,
 -- due, at_time, est_min }]) at the end of their day or Someday list, with source 'message'; the
--- message done with its reply and events, or failed when it added nothing (the reply says why).
+-- message done with its reply and events (each also a busy time), or failed when it added nothing (the reply says why).
 -- Security invoker, so RLS applies to the caller (planner-mcp's owner-scoped client). It refuses
 -- a message that isn't pending; checkAnswers (src/sheet/messages.mjs) checks the rest first.
 -- Returns the message's new status.
@@ -1189,6 +1197,10 @@ begin
   result := case when n > 0 or jsonb_array_length(coalesce(new_events, '[]')) > 0 then 'done' else 'failed' end;
   update messages set status = result, reply = answer, tasks_added = n, events = coalesce(new_events, '[]')
   where id = m;
+  insert into busy (source, starts_at, ends_at, message_id)
+  select 'message', x.starts_at, x.ends_at, m
+  from jsonb_to_recordset(coalesce(new_events, '[]')) as x(starts_at timestamptz, ends_at timestamptz)
+  on conflict do nothing;
   return result;
 end $$;
 revoke execute on function answer_message(uuid, jsonb, jsonb, text) from public, anon;
