@@ -50,7 +50,7 @@ proposals  + rev int not null default 1 check (rev between 1 and 999)
 days       + turned_down uuid[] not null default '{}'    -- task ids turned down on this day
 blocks     + habit_id uuid references habits on delete cascade
              task_id drops not null; check ((task_id is null) <> (habit_id is null))
-busy       + source text not null default 'calendar' check (source in ('calendar','handshake'))
+busy       + source text not null default 'calendar' check (source in ('calendar','handshake','message'))  -- message: sheet-messages.md
              primary key (source, starts_at, ends_at)    -- was (starts_at, ends_at)
 tasks      + link text check (link is null or link ~ '^https://')   -- GitHub/Jira page; never public
 needs_you  + source text not null default 'mail' check (source in ('mail','slack'))

@@ -16,7 +16,10 @@ with `trigger: message`, and that run does the reading. Terms are as in
 - **`answer_message(m, new_tasks, new_events, answer)`**, security invoker: refuses a message that
   isn't pending; adds each task at the end of its day or Someday list with `source = 'message'`;
   sets the message `done` (or `failed` when it added nothing), with its reply, events and
-  `tasks_added`. Returns the new status.
+  `tasks_added`, and writes each event to `busy` with `source = 'message'` and `message_id`, so
+  read_planner shows it as a busy time. busy-sync and /plan replace only `calendar` rows, so these
+  stay until they end, or their message is deleted (nightly_roll's 30 days included). Returns the
+  new status.
 - **The `message` Edge Function:** POST `{ text }` with Lisul's Supabase access token. It checks
   the token's email is `settings.owner_email`, saves the message (`messageText`: one line, 1–500
   characters), and fires the task through routine-fire.mjs unless a pending message was fired in
@@ -69,7 +72,5 @@ table and the function can stay (`$SB functions delete message --project-ref $RE
 
 ## Limits
 
-- Events go into Time blocks, which neither busy-sync nor /plan's busy save reads, so the planner
-  doesn't see them as busy times. A task with `at_time` it does see.
 - Polling stops after 3 minutes; a later answer still adds its tasks and, on the next load, its
   events, but the reply isn't shown.
