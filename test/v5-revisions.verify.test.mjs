@@ -107,7 +107,7 @@ function refused(result, ...patterns) {
   assert.ok(result.errors.some((e) => patterns.every((p) => p.test(e))), `no error matching ${patterns.join(" and ")}: ${JSON.stringify(result.errors)}`);
 }
 
-test("checkProposal v5: a valid replan gives apply_proposal's named arguments", todo, async () => {
+test("checkProposal v5: a valid replan gives apply_proposal's named arguments", async () => {
   const { checkProposal } = await proposal();
   assert.deepEqual(checkProposal(good(), snap()), {
     ok: true,
@@ -133,7 +133,7 @@ test("checkProposal v5: a valid replan gives apply_proposal's named arguments", 
   });
 });
 
-test("checkProposal v5: a snapshot without version 5 is checked and shaped as in v4", todo, async () => {
+test("checkProposal v5: a snapshot without version 5 is checked and shaped as in v4", async () => {
   const { checkProposal } = await proposal();
   const { version, ...v4 } = snap();
   const r = checkProposal(good(), v4);
@@ -144,25 +144,25 @@ test("checkProposal v5: a snapshot without version 5 is checked and shaped as in
 
 // --- The plan window -------------------------------------------------------------------------
 
-test("window: a block starting before the window's start is refused, naming it", todo, async () => {
+test("window: a block starting before the window's start is refused, naming it", async () => {
   const { checkProposal } = await proposal();
   // 10:00 am is after 07:00 (v4's rule) but before 10:15, the replan's window.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "10:00" }) }), snap()), /blocks\[0\]/, /10:15/);
 });
 
-test("window: a block may start exactly at the window's start", todo, async () => {
+test("window: a block may start exactly at the window's start", async () => {
   const { checkProposal } = await proposal();
   assert.equal(checkProposal(good(), snap()).ok, true); // OS homework at 10:15
 });
 
-test("window: a block ending after the window's end is refused", todo, async () => {
+test("window: a block ending after the window's end is refused", async () => {
   const { checkProposal } = await proposal();
   // Shutdown moved to 4:00 pm: HW3 at 3:30-4:15 pm runs past it.
   const early = snap({ shutdown: "16:00", window: { from: "10:15", to: "16:00" } });
   refused(checkProposal(good(), early), /blocks\[2\]/, /16:00/);
 });
 
-test("window: a morning plan made at 6:07 am may use the whole day from 07:00", todo, async () => {
+test("window: a morning plan made at 6:07 am may use the whole day from 07:00", async () => {
   const { checkProposal } = await proposal();
   const morning = snap({
     now: "2026-11-04T11:07:00.000Z",
@@ -180,13 +180,13 @@ test("window: a morning plan made at 6:07 am may use the whole day from 07:00", 
 
 // --- Locked blocks ---------------------------------------------------------------------------
 
-test("locked: a block over an approved block is refused, naming the block and the approved block", todo, async () => {
+test("locked: a block over an approved block is refused, naming the block and the approved block", async () => {
   const { checkProposal } = await proposal();
   // OS homework at 11:45 am-12:30 pm, over Gym's approved 11:30 am-12:30 pm.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "11:45" }) }), snap()), /blocks\[0\]/, /approved block/, /11:30 am/);
 });
 
-test("locked: a block over the pending revision's own proposed blocks is allowed, since it replaces them", todo, async () => {
+test("locked: a block over the pending revision's own proposed blocks is allowed, since it replaces them", async () => {
   const { checkProposal } = await proposal();
   // HW3 at 3:30-4:15 pm sits exactly on revision 1's proposed OS homework block.
   const r = checkProposal(good(), snap());
@@ -196,13 +196,13 @@ test("locked: a block over the pending revision's own proposed blocks is allowed
 
 // --- Turned down -----------------------------------------------------------------------------
 
-test("turned down: a block for a task turned down today is refused", todo, async () => {
+test("turned down: a block for a task turned down today is refused", async () => {
   const { checkProposal } = await proposal();
   const blocks = [...good().blocks, { task_id: T6, start: "16:15", minutes: 45 }];
   refused(checkProposal(good({ blocks }), snap()), /blocks\[3\]/, /turned down/);
 });
 
-test("turned down: the check holds even if the task is still in the task list", todo, async () => {
+test("turned down: the check holds even if the task is still in the task list", async () => {
   const { checkProposal } = await proposal();
   const s = snap({ tasks: [...snap().tasks, task(T6, "Laundry", 45, 45)] });
   const blocks = [...good().blocks, { task_id: T6, start: "16:15", minutes: 45 }];
@@ -211,7 +211,7 @@ test("turned down: the check holds even if the task is still in the task list", 
 
 // --- Revisions -------------------------------------------------------------------------------
 
-test("replaces: it must name the newest revision", todo, async () => {
+test("replaces: it must name the newest revision", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good({ replaces: 2 }), snap()), /replaces/);
   refused(checkProposal(good({ replaces: 0 }), snap()), /replaces/);
@@ -220,7 +220,7 @@ test("replaces: it must name the newest revision", todo, async () => {
   refused(checkProposal(missing, snap()), /replaces/);
 });
 
-test("replaces: with no revision yet it is null, and rows say so", todo, async () => {
+test("replaces: with no revision yet it is null, and rows say so", async () => {
   const { checkProposal } = await proposal();
   const first = snap({ proposal: null, blocks: snap().blocks.slice(0, 2) });
   const r = checkProposal(good({ replaces: null }), first);
@@ -228,7 +228,7 @@ test("replaces: with no revision yet it is null, and rows say so", todo, async (
   assert.equal(r.rows.replaces, null);
 });
 
-test("replaces: a replan after the newest revision was approved is accepted", todo, async () => {
+test("replaces: a replan after the newest revision was approved is accepted", async () => {
   const { checkProposal } = await proposal();
   // Revision 2 was approved; its blocks are the approved ones.
   const approved = snap({ proposal: { rev: 2, status: "approved", created_at: "2026-11-04T13:30:00Z", run_trigger: "replan" }, blocks: snap().blocks.slice(0, 2) });
@@ -237,7 +237,7 @@ test("replaces: a replan after the newest revision was approved is accepted", to
   assert.equal(r.rows.replaces, 2);
 });
 
-test("replaces: a day whose newest revision was skipped or has lapsed is refused", todo, async () => {
+test("replaces: a day whose newest revision was skipped or has lapsed is refused", async () => {
   const { checkProposal } = await proposal();
   const skipped = snap({ proposal: { rev: 1, status: "skipped", created_at: "2026-11-04T11:09:00Z", run_trigger: "morning" } });
   refused(checkProposal(good(), skipped), /day/, /skipped/);
