@@ -306,7 +306,7 @@ declare
   t1 uuid := '00000000-0000-4000-8000-0000000000a1';
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[])') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
     raise notice '- v5 revisions: skipped, apply_proposal(d, replaces, ...) is not there yet';
     return;
   end if;
@@ -410,7 +410,7 @@ do $$
 declare
   d date := sheet_today() + 6;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[])') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
     return;
   end if;
   -- Shutting a day down lapses its pending revision, and the day takes no new one.
@@ -713,6 +713,35 @@ begin
   delete from changes where true;
   delete from replans where true;
   raise notice '✓ claim_replan: one claim per hold, ties only open changes, service role only';
+end $$;
+
+-- --- Fix: a revision consumes only the changes its run read (apply_proposal's read_at) ----------
+do $$
+declare
+  d date := sheet_today() + 8;
+  r int;
+begin
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+    raise notice '- apply_proposal read_at: skipped, not there yet';
+    return;
+  end if;
+  delete from changes where true;
+  -- One change before the run read the day, one while it ran.
+  insert into changes (at, kind, reason, weight) values
+    (now() - interval '10 minutes', 'mail', 'mail_new', 2), (now() - interval '2 minutes', 'busy', 'busy_overlap', 10);
+  r := apply_proposal(d => d, replaces => null, blocks => '[]', read_at => now() - interval '5 minutes');
+  if (select count(*) from changes where consumed_rev = r and consumed_day = d) <> 1
+    or exists (select 1 from changes where reason = 'busy_overlap' and consumed_rev is not null)
+    then raise exception 'a revision should consume only the changes at or before its read_at'; end if;
+  if (select read_at from proposals where day = d and rev = r) is distinct from now() - interval '5 minutes'
+    then raise exception 'the revision should keep its read_at'; end if;
+  -- Without read_at, everything up to now, as before.
+  r := apply_proposal(d => d, replaces => r, blocks => '[]');
+  if exists (select 1 from changes where consumed_rev is null) then raise exception 'without read_at a revision should consume every change so far'; end if;
+  if (select read_at from proposals where day = d and rev = r) is null then raise exception 'a revision without read_at should keep its own time'; end if;
+  delete from changes where true;
+  delete from proposals where day = d;
+  raise notice '✓ apply_proposal: consumes the changes up to read_at, or now without it';
 end $$;
 
 -- --- H1, habits ---------------------------------------------------------------------------------

@@ -42,7 +42,7 @@ memory. End with one line: "Morning plan not submitted: <tool> is missing (recon
 <planner|mail> connector)."
 
 STEP 2: READ THE PLANNER
-Call read_planner. It returns now, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
+Call read_planner. It returns now, read_at, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
 to }, "HH:MM"), tasks, blocks, busy, busy_as_of, interests, campus, proposal, turned_down,
 needs_you_open, accounts, day_rules (workload_cap_min, travel_min, break_after_min,
 break_min) and habits.
@@ -185,9 +185,10 @@ travel time included, and any habit left out), e.g. "Read ch. 4
 old, add "Busy times may be stale." Leave note out when everything fit and busy times are fresh.
 
 STEP 6: SUBMIT
-Call submit_proposal with { day: D, replaces, blocks, habits, needs_you, picks, note,
+Call submit_proposal with { day: D, replaces, read_at, blocks, habits, needs_you, picks, note,
 couldnt_fit, suggested },
-where replaces is proposal.rev from step 2, or null when proposal was null. Submit even when
+where replaces is proposal.rev from step 2, or null when proposal was null, and read_at is
+read_planner's read_at from step 2, exactly as given. Submit even when
 blocks is empty, so the Needs you items and the note still land. If it returns ok: false, each
 error names a field: fix exactly those and submit again. If an error names replaces, a newer
 plan came in while you worked: submit nothing more and say so in the summary. On ok: true, rev

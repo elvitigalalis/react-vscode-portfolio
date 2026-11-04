@@ -99,7 +99,7 @@ async function replanTick(now: Date) {
   const { day: today } = localNow(now, settings.time_zone);
   const [[day = null], proposals, replans, changes] = await Promise.all([
     db(`days?select=*&day=eq.${today}`),
-    db(`proposals?select=rev,status,run_trigger,created_at&day=eq.${today}`),
+    db(`proposals?select=rev,status,run_trigger,created_at,read_at&day=eq.${today}`),
     db(`replans?select=at,result,retry_after&day=eq.${today}`),
     db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
   ]);

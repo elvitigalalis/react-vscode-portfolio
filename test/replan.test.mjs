@@ -62,6 +62,7 @@ test("replanState: plans today, the last plan and the shutdown line from today's
     shutdown: "18:30",
     plans_today: 3,
     last_plan_at: "2026-11-04T17:00:00.000Z",
+    seen_until: "2026-11-04T15:05:00.000Z",
     last_edit_at: "2026-11-04T14:00:00Z",
   });
   const none = replanState({ settings: { ...settings, plan_edited_at: null }, day: null, proposals: [], replans: [] });
@@ -123,4 +124,19 @@ test("fireOutcome: started keeps the changes tied; a 429, a failure or a throw u
   // A throw (fireRoutine refusing its input, say) is a failure too, its message cut to 300.
   assert.deepEqual(fireOutcome(null, new Error("fire: bad routine id")), { patch: { result: "failed", error: "fire: bad routine id" }, untie: true });
   assert.equal(fireOutcome(null, new Error("x".repeat(400))).patch.error.length, 300);
+});
+
+test("shouldReplan: a change logged after the run read the day, but before its revision went in, still counts", async () => {
+  const { shouldReplan, replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  // The replan run read the day at 9:00 and submitted at 9:04; the mail came in at 9:02.
+  const proposals = [{ rev: 2, status: "pending", run_trigger: "replan", created_at: "2026-11-04T14:04:00Z", read_at: "2026-11-04T14:00:00Z" }];
+  const state = replanState({ settings, day: null, proposals, replans: [] });
+  assert.equal(state.seen_until, "2026-11-04T14:00:00.000Z");
+  const mail = [{ id: "c1", at: "2026-11-04T14:02:00Z", kind: "mail", reason: "mail_owed", weight: 8 }];
+  assert.equal(shouldReplan(mail, state, new Date("2026-11-04T15:05:00Z")).fire, true);
+  // A revision without read_at (an older one) sees up to its created_at, as before.
+  const old = replanState({ settings, day: null, proposals: [{ ...proposals[0], read_at: null }], replans: [] });
+  assert.equal(old.seen_until, "2026-11-04T14:04:00.000Z");
+  assert.deepEqual(shouldReplan(mail, old, new Date("2026-11-04T15:05:00Z")), { fire: false, hold: "nothing" });
 });
