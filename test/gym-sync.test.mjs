@@ -90,6 +90,20 @@ test("outbox: a baseline is keyed by its exercise, and two flushes at once send 
   assert.deepEqual(send.calls, [{ op: "upsert", table: "gym_baselines", rows: [{ exercise_id: "wp", weight_lb: 105, confirmed: true }] }]);
 });
 
+test("outbox: a flush asked for while a failing one runs tries again after it", async () => {
+  const box = outbox(memory());
+  box.put("gym_sets", aSet("a", 5));
+  const calls = [];
+  let fail = true;
+  const send = async (call) => { await null; if (fail) { fail = false; throw new Error("offline"); } calls.push(call); };
+  const first = box.flush(send);
+  const second = box.flush(send);
+  assert.equal(await first, false);
+  assert.equal(await second, true);
+  assert.equal(calls.length, 1);
+  assert.equal(box.pending(), 0);
+});
+
 test("outbox: storage that throws (a private window) still queues in memory", async () => {
   const broken = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } };
   const box = outbox(broken);
