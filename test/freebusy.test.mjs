@@ -3,7 +3,7 @@
 // "freebusy.mjs"). Wednesday 2026-11-04 in New York, EST (UTC-5); the sync runs at 10:02 am.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { busyChange } from "../src/sheet/freebusy.mjs";
+import { busyChange, busySaved } from "../src/sheet/freebusy.mjs";
 
 const TZ = "America/New_York";
 const now = new Date("2026-11-04T15:02:00Z");
@@ -44,4 +44,16 @@ test("busyChange: an hour or more freed before midnight is time_freed, weight 4"
   assert.equal(busyChange([lecture, twin], [lecture], [], now, TZ).reason, "busy_change");
   // Tomorrow's time doesn't count: freeing Thursday's 2 hours is a plain change.
   assert.equal(busyChange([span("2026-11-05T15:00:00.000Z", "2026-11-05T17:00:00.000Z")], [], [], now, TZ).reason, "busy_change");
+});
+
+// --- busySaved, Settings' "Busy times saved 4 min ago" ----------------------------------------
+
+test("busySaved: how long ago busy times were saved, from busy_as_of", () => {
+  assert.equal(busySaved(null, now), "Busy times not saved yet");
+  assert.equal(busySaved("2026-11-04T15:01:40.000Z", now), "Busy times saved just now");
+  assert.equal(busySaved("2026-11-04T14:58:00.000Z", now), "Busy times saved 4 min ago");
+  assert.equal(busySaved("2026-11-04T14:02:30.000Z", now), "Busy times saved 59 min ago");
+  assert.equal(busySaved("2026-11-04T14:02:00.000Z", now), "Busy times saved 1 hour ago");
+  assert.equal(busySaved("2026-11-04T05:00:00.000Z", now), "Busy times saved 10 hours ago");
+  assert.equal(busySaved("2026-11-01T15:00:00.000Z", now), "Busy times saved 3 days ago");
 });
