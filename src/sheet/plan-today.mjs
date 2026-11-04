@@ -7,7 +7,7 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep } from "./logic.mjs";
-import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, workloadCap } from "./planner.mjs";
+import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap } from "./planner.mjs";
 import { loadShare, stripSegments } from "./glance.mjs";
 
 const START = 7 * 60;
@@ -121,7 +121,7 @@ export function setupPlanToday(root) {
       head.querySelector(".sheet-head").append(el("span", {
         className: `sheet-load-chip is-${m.level}`,
         textContent: short ? `${formatMinutes(m.total)} / ${formatMinutes(capacity)}` : formatMinutes(m.total),
-        title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(clock(SHEET.dayStartAt))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(workloadCap())}.`,
+        title: `${formatMinutes(m.total)} planned. ${formatMinutes(free)} free around your calendar between ${formatClock(dayStart(head.dataset.day))} and ${formatClock(clock(SHEET.dayEndAt))}; tasks get up to ${formatMinutes(workloadCap())}.`,
       }));
     }
   });

@@ -9,6 +9,7 @@ import {
 } from "./logic.mjs";
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
+import { wakeProfile, windowStart } from "./sleep.mjs";
 import { lightDismiss } from "./dismiss.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
@@ -56,6 +57,7 @@ export const state = {
   parked: 0,
   calendars: [],    // extra Google calendar IDs, from settings
   settings: null,   // the settings row
+  sleep: [],        // Oura: the sleep_nights rows, for when each day starts
   events: [],       // the week's Google events, never saved
   eventsStale: false,
 };
@@ -75,10 +77,16 @@ const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h *
 // before settings load.
 export const workloadCap = () => state.settings?.workload_cap_min ?? SHEET.capacityMin;
 
+// Oura: when a day starts, 30 minutes after his wake (sleep.mjs, windowStart), on today never
+// before now; without sleep rows, 9:30 am.
+export const dayStart = (day) => (state.sleep.length
+  ? windowStart(day, new Date(), SHEET.timeZone, wakeProfile(state.sleep, new Date(), SHEET.timeZone), clock(SHEET.dayStartAt))
+  : clock(SHEET.dayStartAt));
+
 // Time for tasks on a day: the workload cap, or less when his events leave less free time
-// between 9:30 am and 10 pm (on today, between now and 10 pm).
+// between the day's start (9:30 am, or after his wake) and 10 pm (on today, from now).
 export function dayCapacity(day) {
-  const from = Math.max(clock(SHEET.dayStartAt), day === state.today ? now().minutes : 0);
+  const from = Math.max(dayStart(day), day === state.today ? now().minutes : 0);
   const free = freeMinutes(eventsOn(day), from, clock(SHEET.dayEndAt));
   return { free, capacity: Math.min(workloadCap(), free) };
 }
@@ -402,14 +410,16 @@ export const renderHooks = [];
 
 export async function load() {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayRows, parked, settings] = await Promise.all([
+  const [tasks, blocks, dayRows, parked, settings, sleep] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
     api.parkedOn(state.today),
     api.settings(),
+    api.listSleep(),
   ]);
   state.settings = settings;
+  state.sleep = sleep;
   state.calendars = settings?.calendars ?? [];
   await loadEvents(days);
   state.tasks = new Map(tasks.map((t) => [t.id, t]));
