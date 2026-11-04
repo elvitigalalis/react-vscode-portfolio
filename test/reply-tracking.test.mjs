@@ -12,16 +12,22 @@ const rows = (extra = {}) => ({ settings, tasks: [], blocks: [], busy: [], days:
 const sixOhSeven = new Date("2026-11-04T11:07:00Z");
 const row = (state, who, since) => ({ account: "owner@example.com", thread_id: `t-${who}`, state, since, message_id: `m-${who}`, who, updated_at: since });
 
-test("planSnapshot: reply_state splits the rows into owed and awaiting, oldest first, without message ids", () => {
+test("planSnapshot: reply_state splits the rows into owed and awaiting, oldest first; owed rows carry what an item needs", () => {
+  const owedRow = (who, since, thread_id, message_id, basis, draft = false) => ({ ...row("owed", who, since), thread_id, message_id, basis, draft });
   const replyState = [
-    row("owed", "Ana Ruiz", "2026-10-30T15:00:00Z"),
+    owedRow("Ana Ruiz", "2026-11-03T20:00:00Z", "18f3a1c2d4e5f100", "18f3a1c2d4e5f109", "thread", true),
     row("awaiting", "Prof. Kim", "2026-10-29T15:00:00Z"),
-    row("owed", "Dana Lee", "2026-10-28T15:00:00Z"),
+    owedRow("Dana Lee", "2026-10-28T15:00:00Z", "javascript:alert(1)", "18f3a1c2d4e5f209", "known"),
   ];
   assert.deepEqual(planSnapshot(rows({ replyState }), sixOhSeven).reply_state, {
     owed: [
-      { account: "owner@example.com", thread_id: "t-Dana Lee", who: "Dana Lee", since: "2026-10-28T15:00:00Z" },
-      { account: "owner@example.com", thread_id: "t-Ana Ruiz", who: "Ana Ruiz", since: "2026-10-30T15:00:00Z" },
+      // Wed Oct 28 → Wed Nov 4 is 5 business days: overdue. A thread id that isn't hex gets no link.
+      { account: "owner@example.com", thread_id: "javascript:alert(1)", who: "Dana Lee", since: "2026-10-28T15:00:00Z",
+        message_id: "18f3a1c2d4e5f209", basis: "known", draft: false, overdue: true, link: null },
+      // Tue → Wed is 1: not overdue yet.
+      { account: "owner@example.com", thread_id: "18f3a1c2d4e5f100", who: "Ana Ruiz", since: "2026-11-03T20:00:00Z",
+        message_id: "18f3a1c2d4e5f109", basis: "thread", draft: true, overdue: false,
+        link: "https://mail.google.com/mail/?authuser=owner%40example.com#all/18f3a1c2d4e5f100" },
     ],
     awaiting: [{ account: "owner@example.com", thread_id: "t-Prof. Kim", who: "Prof. Kim", since: "2026-10-29T15:00:00Z" }],
   });
@@ -44,12 +50,14 @@ test("brief: an address-like name is left out, the thread still counted", () => 
 
 // --- The mail sync's reads ---------------------------------------------------------------------
 
-test("metadataQuery: metadata with the six headers and named fields, never a body or snippet", async () => {
+test("metadataQuery: metadata with the sender and automation headers and named fields, never a body or snippet", async () => {
   const { metadataQuery } = await import("../src/sheet/mail.mjs");
   for (const thread of [false, true]) {
     const q = new URLSearchParams(metadataQuery(thread));
     assert.equal(q.get("format"), "metadata");
-    assert.deepEqual(q.getAll("metadataHeaders"), ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"]);
+    assert.deepEqual(q.getAll("metadataHeaders"), ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence",
+      "Cc", "Sender", "Reply-To", "List-Unsubscribe-Post", "X-Auto-Response-Suppress", "Feedback-ID", "Return-Path"]);
+    assert.ok(!q.getAll("metadataHeaders").includes("Subject"));
     assert.doesNotMatch(q.get("fields"), /snippet|raw|body|parts|sizeEstimate/);
   }
   assert.equal(new URLSearchParams(metadataQuery()).get("fields"), "id,threadId,labelIds,internalDate,payload/headers");
@@ -61,19 +69,31 @@ const gmailMessage = (id, ms, labels, from, extra = []) => ({
   payload: { headers: [{ name: "From", value: from }, { name: "To", value: "Sample Owner <owner@example.com>" }, ...extra] },
 });
 
-test("syncThread: messages as replyState reads them, drafts left out", async () => {
+test("syncThread: messages as replyState reads them; a draft is left out but flagged", async () => {
   const { syncThread } = await import("../src/sheet/mail.mjs");
   const t = syncThread({ id: "18f3a1c2d4e5f000", messages: [
     gmailMessage("18f3a1c2d4e5f001", Date.parse("2026-11-06T20:00:00Z"), ["INBOX"], "Ana Ruiz <Ana.Ruiz@example.edu>"),
     gmailMessage("18f3a1c2d4e5f002", Date.parse("2026-11-06T21:00:00Z"), ["INBOX"], "News <news@example.com>", [{ name: "List-Id", value: "<news.example.com>" }]),
     gmailMessage("18f3a1c2d4e5f003", Date.parse("2026-11-07T21:00:00Z"), ["DRAFT"], "Sample Owner <owner@example.com>"),
   ] }, "owner@example.com");
-  assert.deepEqual(t, { account: "owner@example.com", thread_id: "18f3a1c2d4e5f000", messages: [
-    { id: "18f3a1c2d4e5f001", thread_id: "18f3a1c2d4e5f000", date: "2026-11-06T20:00:00.000Z", labels: ["INBOX"],
-      from: "Ana Ruiz <Ana.Ruiz@example.edu>", to: "Sample Owner <owner@example.com>", from_address: "ana.ruiz@example.edu", automated: false },
-    { id: "18f3a1c2d4e5f002", thread_id: "18f3a1c2d4e5f000", date: "2026-11-06T21:00:00.000Z", labels: ["INBOX"],
-      from: "News <news@example.com>", to: "Sample Owner <owner@example.com>", from_address: "news@example.com", automated: true },
+  const common = { thread_id: "18f3a1c2d4e5f000", labels: ["INBOX"], to: "Sample Owner <owner@example.com>", cc: "", addressed: "to", demerit: false };
+  assert.deepEqual(t, { account: "owner@example.com", thread_id: "18f3a1c2d4e5f000", draft: true, messages: [
+    { id: "18f3a1c2d4e5f001", date: "2026-11-06T20:00:00.000Z", ...common,
+      from: "Ana Ruiz <Ana.Ruiz@example.edu>", from_address: "ana.ruiz@example.edu", automated: false },
+    { id: "18f3a1c2d4e5f002", date: "2026-11-06T21:00:00.000Z", ...common,
+      from: "News <news@example.com>", from_address: "news@example.com", automated: true },
   ] });
+  assert.equal(syncThread({ id: "18f3a1c2d4e5f000", messages: [] }, "owner@example.com").draft, false);
+});
+
+test("syncMessage: addressed is to, cc or none for the account, worked out in memory", async () => {
+  const { syncMessage } = await import("../src/sheet/mail.mjs");
+  const m = (to, cc) => ({ ...gmailMessage("18f3a1c2d4e5f001", 0, ["INBOX"], "Ana Ruiz <ana.ruiz@example.edu>"),
+    payload: { headers: [{ name: "From", value: "Ana Ruiz <ana.ruiz@example.edu>" }, { name: "To", value: to }, { name: "Cc", value: cc }] } });
+  assert.equal(syncMessage(m("Sample Owner <Owner@Example.com>", ""), "owner@example.com").addressed, "to");
+  assert.equal(syncMessage(m("team@example.edu", "owner@example.com, b@example.edu"), "owner@example.com").addressed, "cc");
+  assert.equal(syncMessage(m("team@example.edu", ""), "owner@example.com").addressed, "none");
+  assert.equal(syncMessage(m("owner@example.com", "")).addressed, "none");
 });
 
 test("historyChanges: the threads touched and messages added, each once", async () => {
@@ -116,7 +136,7 @@ test("replyDiff: upserts, deletes, and owed only when it turns owed at a new mes
       { account: "owner@example.com", thread_id: "t4", ...owed("m4", "Dana Lee") },
     ],
     deletes: ["t3"],
-    owed: [{ message_id: "m2b", known: true }, { message_id: "m4", known: false }],
+    owed: [{ message_id: "m2b", known: true, basis: null }, { message_id: "m4", known: false, basis: null }],
   });
 });
 
@@ -138,6 +158,9 @@ test("mail-sync: never asks Gmail for a body, a snippet or a raw message", async
   assert.doesNotMatch(code, /format=(full|raw)|messageBody|snippet|\/attachments/);
   assert.match(code, /metadataQuery\(true\)/);
   assert.match(code, /fields: "messages\(id,threadId\)"/);
+  // The sent list for participation asks for thread ids only, and replyState gets it and known.
+  assert.match(code, /q: "in:sent newer_than:30d", maxResults: "500", fields: "messages\(threadId\)"/);
+  assert.match(code, /replyState\(t, tz, now, \{ participated: sentThreads\.has\(t\.thread_id\), known \}\)/);
 });
 
 test("threadLink: Gmail's thread link for an Awaiting reply row, only for a hex thread id", async () => {
@@ -169,4 +192,196 @@ test("senderHashes: the salted hash of the address, and of its domain and every 
     domain_hashes: [sha("mail.acme.com"), sha("acme.com"), sha("com")],
   });
   assert.equal(await senderHashes("not an address", "pepper"), null);
+});
+
+// --- Reply owed from positive evidence ---------------------------------------------------------
+// Owed needs evidence of a conversation: he wrote in the thread, or he has written to the sender.
+// Machine mail (list, auto-reply and ESP headers, no-reply style addresses) never counts. The
+// fixtures are anonymised versions of real misses: a reply in his own thread a day old, a bank's
+// no.reply.alerts mail and a one-time passcode from a careers address.
+
+const hdrs = (from, extra = []) => [
+  { name: "From", value: from }, { name: "To", value: "Sample Owner <owner@example.com>" },
+  ...extra.map(([name, value]) => ({ name, value })),
+];
+
+test("automatedSender: a bank's no.reply.alerts address is a machine", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  assert.equal(automatedSender(hdrs("Bank <no.reply.alerts@bank.example.com>")), true);
+});
+
+test("automatedSender: no-reply addresses however they're spelled", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  for (const from of ["alerts-noreply@x.example.com", "do.not.reply@x.example.com", "donotreply@x.example.com",
+    "notifications+abc@code.example.com", "x_no-reply_y@x.example.com", "Alerts <alerts@x.example.com>"]) {
+    assert.equal(automatedSender(hdrs(from)), true, from);
+  }
+});
+
+test("automatedSender: a person is not; a person-like info.* prefix is (an accepted false positive)", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  assert.equal(automatedSender(hdrs("Ana Ruiz <ana.ruiz@example.edu>")), false);
+  assert.equal(automatedSender(hdrs("Ana <info.ana@x.example.com>")), true);
+});
+
+test("automatedSender: a machine Sender behind a person's From", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  assert.equal(automatedSender(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Sender", "Google Calendar <calendar-notification@google.com>"]])), true);
+  assert.equal(automatedSender(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Sender", "ana.ruiz@example.edu"]])), false);
+});
+
+test("automatedSender: one-click unsubscribe, Feedback-ID and Auto-Submitted", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  const ana = "Ana Ruiz <ana.ruiz@example.edu>";
+  assert.equal(automatedSender(hdrs(ana, [["List-Unsubscribe-Post", "List-Unsubscribe=One-Click"]])), true);
+  assert.equal(automatedSender(hdrs(ana, [["Feedback-ID", "1:2:acme"]])), true);
+  assert.equal(automatedSender(hdrs(ana, [["Auto-Submitted", "no"]])), false);
+  assert.equal(automatedSender(hdrs(ana, [["Auto-Submitted", "auto-replied"]])), true);
+});
+
+test("automationDemerit: X-Auto-Response-Suppress counts against, without making it automated", async () => {
+  const { automatedSender, automationDemerit } = await import("../src/sheet/mail.mjs");
+  const h = hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["X-Auto-Response-Suppress", "All"]]);
+  assert.equal(automatedSender(h), false);
+  assert.equal(automationDemerit(h), true);
+  assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>")), false);
+  assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Return-Path", "<bounce-123@mail.example.com>"]])), true);
+  assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Return-Path", "<ana.ruiz@example.edu>"]])), false);
+});
+
+// replyState. Mon Nov 2 to Thu Nov 5, 2026, New York (EST).
+const ME = "Sample Owner <owner@example.com>";
+const PAT = "Pat Kim <pat.kim@example.org>";
+const m = (id, date, labels, from, to, more = {}) => ({ id, date, labels, from, to, from_address: from.match(/<([^>]+)>|(\S+@\S+)/).slice(1).find(Boolean).toLowerCase(),
+  automated: false, demerit: false, addressed: labels.includes("SENT") ? "none" : "to", ...more });
+const th = (messages, more = {}) => ({ account: "owner@example.com", thread_id: "18f3a1c2d4e5f700", messages, ...more });
+const wed0607 = new Date("2026-11-04T11:07:00Z");
+// He wrote Monday 10 am; Pat answered Tuesday 3 pm ("let me know what works for you").
+const hisThread = [
+  m("18f3a1c2d4e5f701", "2026-11-02T15:00:00.000Z", ["SENT"], ME, PAT),
+  m("18f3a1c2d4e5f702", "2026-11-03T20:00:00.000Z", ["INBOX", "CATEGORY_PERSONAL"], PAT, ME),
+];
+
+test("replyState: a reply in a thread he started is owed at once (basis thread)", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  assert.deepEqual(replyState(th(hisThread), TZ, wed0607), {
+    state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f702", who: "Pat Kim", basis: "thread", draft: false,
+  });
+});
+
+test("replyState: his unsent draft is not a reply; the thread stays owed, marked draft", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const s = replyState(th(hisThread, { draft: true }), TZ, wed0607);
+  assert.equal(s.state, "owed");
+  assert.equal(s.draft, true);
+});
+
+test("replyState: an out-of-office reply doesn't count as them answering", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const oof = [hisThread[0], m("18f3a1c2d4e5f703", "2026-11-03T20:00:00.000Z", ["INBOX"], PAT, ME, { automated: true })];
+  assert.equal(replyState(th(oof), TZ, wed0607), null); // Monday → Wednesday is 2
+  assert.deepEqual(replyState(th(oof), TZ, new Date("2026-11-05T14:00:00Z")), {
+    state: "awaiting", since: "2026-11-02T15:00:00.000Z", message_id: "18f3a1c2d4e5f701", who: "Pat Kim",
+  });
+});
+
+test("replyState: Updates doesn't hide a reply in his own thread", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const updates = [hisThread[0], { ...hisThread[1], labels: ["INBOX", "CATEGORY_UPDATES"], demerit: true }];
+  assert.equal(replyState(th(updates), TZ, wed0607).basis, "thread");
+});
+
+test("replyState: a one-time passcode from a careers address is never owed", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const otp = m("18f3a1c2d4e5f711", "2026-11-02T15:00:00.000Z", ["IMPORTANT", "CATEGORY_PERSONAL", "INBOX"],
+    "Careers <careers@recruitment.example.com>", ME);
+  assert.equal(replyState(th([otp]), TZ, wed0607), null);
+});
+
+test("replyState: a bank's alert stream is never owed", async () => {
+  const { replyState, syncMessage } = await import("../src/sheet/mail.mjs");
+  const alert = (i) => syncMessage({ id: `18f3a1c2d4e5f72${i}`, threadId: "18f3a1c2d4e5f700", labelIds: ["INBOX", i % 2 ? "CATEGORY_PERSONAL" : "CATEGORY_UPDATES"],
+    internalDate: String(Date.parse("2026-10-28T15:00:00Z") + i * 3_600_000),
+    payload: { headers: [{ name: "From", value: "Bank <no.reply.alerts@bank.example.com>" }, { name: "To", value: ME }] } }, "owner@example.com");
+  const known = new Set(["no.reply.alerts@bank.example.com"]);
+  assert.equal(replyState(th([0, 1, 2, 3, 4, 5].map(alert)), TZ, wed0607, { known }), null);
+});
+
+test("replyState: someone he has written to is owed at once when it's to him, at 2 business days when he's copied", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const known = new Set(["pat.kim@example.org"]);
+  const to = m("18f3a1c2d4e5f731", "2026-11-04T10:00:00.000Z", ["INBOX"], PAT, ME);
+  assert.deepEqual(replyState(th([to]), TZ, wed0607, { known }), {
+    state: "owed", since: "2026-11-04T10:00:00.000Z", message_id: "18f3a1c2d4e5f731", who: "Pat Kim", basis: "known", draft: false,
+  });
+  const cc = { ...m("18f3a1c2d4e5f732", "2026-11-03T15:00:00.000Z", ["INBOX"], PAT, "team@example.org"), addressed: "cc" };
+  assert.equal(replyState(th([cc]), TZ, wed0607, { known }), null); // Tuesday → Wednesday is 1
+  assert.equal(replyState(th([cc]), TZ, new Date("2026-11-05T14:00:00Z"), { known }).basis, "cc");
+  // Updates or an Exchange auto-response flag keeps a known sender's mail from being owed.
+  assert.equal(replyState(th([{ ...to, labels: ["INBOX", "CATEGORY_UPDATES"] }]), TZ, wed0607, { known }), null);
+  assert.equal(replyState(th([{ ...to, demerit: true }]), TZ, wed0607, { known }), null);
+  // Promotions, Social and Forums never count.
+  assert.equal(replyState(th([{ ...to, labels: ["INBOX", "CATEGORY_SOCIAL"] }]), TZ, wed0607, { known }), null);
+});
+
+test("replyState: an unknown person writing to him is left to the planner, however old", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const cold = m("18f3a1c2d4e5f741", "2026-10-28T15:00:00.000Z", ["INBOX", "CATEGORY_PERSONAL"], PAT, ME);
+  assert.equal(replyState(th([cold]), TZ, wed0607), null); // 5 business days
+});
+
+test("replyState: a known sender's list mail is never owed", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const list = m("18f3a1c2d4e5f751", "2026-11-04T10:00:00.000Z", ["INBOX"], PAT, ME, { automated: true });
+  assert.equal(replyState(th([list]), TZ, wed0607, { known: new Set(["pat.kim@example.org"]) }), null);
+});
+
+test("replyState: the sweep's single newest message, with participation from his sent list", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  assert.equal(replyState(th([hisThread[1]]), TZ, wed0607), null);
+  assert.equal(replyState(th([hisThread[1]]), TZ, wed0607, { participated: true }).basis, "thread");
+});
+
+test("replyState: when he wrote last, awaiting only from 3 business days", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const sent = [m("18f3a1c2d4e5f761", "2026-11-02T15:00:00.000Z", ["SENT"], ME, PAT)];
+  assert.equal(replyState(th(sent), TZ, wed0607), null);
+  assert.equal(replyState(th(sent), TZ, new Date("2026-11-05T14:00:00Z")).state, "awaiting");
+});
+
+test("mailChanges: a thread turning owed because they answered him replans, known or not", async () => {
+  const { replyDiff, mailChanges } = await import("../src/sheet/mail.mjs");
+  const state = { state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f702", who: "Pat Kim", basis: "thread", draft: false };
+  const diff = replyDiff("owner@example.com", [], [{ thread_id: "18f3a1c2d4e5f700", state, from_address: "pat.kim@example.org" }], new Set());
+  assert.deepEqual(diff.owed, [{ message_id: "18f3a1c2d4e5f702", known: false, basis: "thread" }]);
+  assert.deepEqual(mailChanges([], diff.owed), [{ kind: "mail", reason: "mail_owed", weight: 8, ref: "18f3a1c2d4e5f702" }]);
+});
+
+test("replyDiff: an owed thread read again at the same message doesn't fire again, overdue or not", async () => {
+  const { replyDiff } = await import("../src/sheet/mail.mjs");
+  const state = { state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f702", who: "Pat Kim", basis: "thread", draft: false };
+  const before = [{ thread_id: "18f3a1c2d4e5f700", state: "owed", message_id: "18f3a1c2d4e5f702" }];
+  assert.deepEqual(replyDiff("owner@example.com", before, [{ thread_id: "18f3a1c2d4e5f700", state, from_address: null }], new Set()).owed, []);
+});
+
+test("searchMarks: reply_state, owed_basis and overdue by account and thread, never across accounts", async () => {
+  const { searchMarks } = await import("../src/sheet/mail.mjs");
+  const s = (account) => ({ account, id: "18f3a1c2d4e5f702", thread_id: "18f3a1c2d4e5f700", from: PAT });
+  const states = [
+    { account: "owner@example.com", thread_id: "18f3a1c2d4e5f700", state: "owed", basis: "thread", since: "2026-10-28T15:00:00Z" },
+    { account: "school@example.edu", thread_id: "18f3a1c2d4e5f700", state: "awaiting", basis: null, since: "2026-11-03T15:00:00Z" },
+  ];
+  const out = searchMarks([s("owner@example.com"), s("school@example.edu"), s("third@example.com")], new Set(), states, TZ, wed0607);
+  assert.deepEqual(out.map((r) => [r.reply_state, r.owed_basis, r.overdue]),
+    [["owed", "thread", true], ["awaiting", null, false], [null, null, false]]);
+});
+
+test("summarySignals: a bank alert is automated; addressed is to, cc or none for the account", async () => {
+  const { summarySignals } = await import("../src/sheet/mail.mjs");
+  const g = (from, to, cc = "") => ({ id: "18f3a1c2d4e5f702", threadId: "18f3a1c2d4e5f700", labelIds: ["INBOX"], internalDate: "0",
+    payload: { headers: [{ name: "From", value: from }, { name: "To", value: to }, { name: "Cc", value: cc }] } });
+  assert.deepEqual(summarySignals(g("Bank <no.reply.alerts@bank.example.com>", ME), "owner@example.com"), { automated: true, addressed: "to" });
+  assert.deepEqual(summarySignals(g(PAT, ME), "owner@example.com"), { automated: false, addressed: "to" });
+  assert.deepEqual(summarySignals(g(PAT, "team@example.org", ME), "owner@example.com"), { automated: false, addressed: "cc" });
+  assert.deepEqual(summarySignals(g(PAT, "team@example.org"), "owner@example.com"), { automated: false, addressed: "none" });
 });

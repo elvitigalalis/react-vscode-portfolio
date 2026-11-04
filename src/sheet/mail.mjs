@@ -197,18 +197,37 @@ export function parseAddresses(value) {
   }).filter((a) => a.address.includes("@"));
 }
 
-// Local parts that only machines write from.
-const AUTOMATED_LOCAL = /^(?:no-?reply|do-?not-?reply|notifications?|mailer-daemon|bounces?)(?:[-+._].*)?$/i;
+// Local parts that only machines write from: a known prefix, or "noreply" anywhere in it
+// (alerts-noreply, no.reply.alerts).
+const AUTOMATED_LOCAL = /^(?:no[-._]?reply|do[-._]?not[-._]?reply|donotreply|mailer[-._]?daemon|postmaster|bounces?|notifications?|notify|alerts?|updates?|news(?:letter)?|info|marketing|billing|receipts?|security|verify|verification|accounts?|auto(?:mated)?|system|calendar-notification)(?:[-+._].*)?$/i;
+const NOREPLY_ANYWHERE = /no[-._]?reply/i;
+const machineAddress = (value) => {
+  const a = parseAddresses(value)[0];
+  const local = a ? a.address.split("@")[0] : "";
+  return Boolean(local) && (AUTOMATED_LOCAL.test(local) || NOREPLY_ANYWHERE.test(local));
+};
 
-// True for mail no person wrote: a no-reply style From address, or a mailing list or
-// auto-reply header (RFC 2369 List-*, RFC 2919 List-Id, RFC 3834 Auto-Submitted, Precedence).
+// True for mail no person wrote: a machine From or Sender address (Sender is who actually sent
+// it, e.g. Google Calendar for a person's invite), a mailing list or bulk header (RFC 2369
+// List-*, RFC 2919 List-Id, RFC 8058 List-Unsubscribe-Post, Precedence), an ESP stream's
+// Feedback-ID (support.google.com/mail/answer/6254652) or an RFC 3834 Auto-Submitted other than
+// "no". Transactional mail (passcodes, alerts) carries no list headers (support.google.com/a/
+// answer/14229414), so the address check carries most of that.
 export function automatedSender(headers) {
-  const from = parseAddresses(headerOf(headers, "From"))[0];
-  if (from && AUTOMATED_LOCAL.test(from.address.split("@")[0])) return true;
-  if (headerOf(headers, "List-Id") || headerOf(headers, "List-Unsubscribe")) return true;
+  if (machineAddress(headerOf(headers, "From")) || machineAddress(headerOf(headers, "Sender"))) return true;
+  for (const h of ["List-Id", "List-Unsubscribe", "List-Unsubscribe-Post", "Feedback-ID"]) if (headerOf(headers, h)) return true;
   const auto = headerOf(headers, "Auto-Submitted").trim().toLowerCase();
   if (auto && auto !== "no") return true;
   return /^(bulk|list|junk)$/i.test(headerOf(headers, "Precedence").trim());
+}
+
+// Signs that count against a person having written it, without ruling it out: Exchange's
+// X-Auto-Response-Suppress (MS-OXCMAIL; a person's Outlook mail can carry it too) or a bounce
+// or VERP Return-Path. They keep a thread from being owed unless he wrote in it.
+export function automationDemerit(headers) {
+  if (headerOf(headers, "X-Auto-Response-Suppress")) return true;
+  const local = parseAddresses(headerOf(headers, "Return-Path"))[0]?.address.split("@")[0] ?? "";
+  return /^bounces?/i.test(local) || /[+=]/.test(local);
 }
 
 // The Gmail categories spec 47 leaves out of reply tracking.
@@ -224,32 +243,54 @@ function displayName(value) {
   return name.slice(0, WHO_MAX);
 }
 
-// A thread's reply state, { state, since, message_id, who } or null, from its newest message
-// that isn't spam or trash. thread: { account, thread_id, messages: [{ id, date, labels, from,
-// to, automated }] }. Owed: from a person, not him, 2+ business days old. Awaiting: his, 3+.
-export function replyState(thread, timeZone, now) {
-  const kept = (thread.messages ?? []).filter((m) => !m.labels.includes("SPAM") && !m.labels.includes("TRASH"));
-  if (!kept.length) return null;
-  const newest = kept.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
-  if (skippedCategory(newest.labels)) return null;
+// Gmail categories that never make a reply owed; CATEGORY_UPDATES only counts against (Gmail
+// files some people's replies there, and one sender's mail moves between tabs).
+const NEVER_OWED = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"];
+
+// A thread's reply state, or null. thread: { account, thread_id, draft?, messages: [{ id, date,
+// labels, from, to, from_address, automated, demerit, addressed }] }. opts.participated: he wrote
+// in the thread (the sweep's sent list; any SENT message in it counts too); opts.known: the From
+// addresses (lowercased, in memory) he has written to.
+// The deciding message is the newest that isn't spam, trash or a draft, and is his or a person's
+// (an auto-reply or a ticket acknowledgement doesn't answer him). Owed needs evidence of a
+// conversation, never just the lack of bulk headers:
+//   basis "thread": he wrote in the thread and they answered, at once;
+//   basis "known":  someone he has written to wrote To him, at once, with no Updates or demerit;
+//   basis "cc":     the same with him only in Cc, from 2 business days.
+// Anyone else is left to the planner, which reads the snippet. Awaiting: his, 3+ business days.
+// Owed is { state, since, message_id, who, basis, draft }: draft, the thread has his unsent draft.
+export function replyState(thread, timeZone, now, { participated = false, known = new Set() } = {}) {
+  const kept = (thread.messages ?? []).filter((m) => !["SPAM", "TRASH", "DRAFT"].some((l) => m.labels.includes(l)));
+  const deciding = kept.filter((m) => m.labels.includes("SENT") || !m.automated);
+  if (!deciding.length) return null;
+  const newest = deciding.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
   const days = businessDays(newest.date, now.toISOString(), timeZone);
-  const sent = newest.labels.includes("SENT");
-  if (sent ? days < 3 : newest.automated || days < 2) return null;
-  const who = displayName(sent ? newest.to : newest.from);
-  if (!who) return null;
-  return { state: sent ? "awaiting" : "owed", since: newest.date, message_id: newest.id, who };
+  if (newest.labels.includes("SENT")) {
+    const who = days >= 3 && displayName(newest.to);
+    return who ? { state: "awaiting", since: newest.date, message_id: newest.id, who } : null;
+  }
+  if (newest.labels.some((l) => NEVER_OWED.includes(l))) return null;
+  const wrote = participated || kept.some((m) => m.labels.includes("SENT"));
+  const demerit = newest.demerit || newest.labels.includes("CATEGORY_UPDATES");
+  const knownSender = Boolean(newest.from_address && known.has(newest.from_address));
+  const basis = wrote ? "thread"
+    : knownSender && !demerit && newest.addressed === "to" ? "known"
+    : knownSender && !demerit && newest.addressed === "cc" && days >= 2 ? "cc"
+    : null;
+  const who = basis && displayName(newest.from);
+  return who ? { state: "owed", since: newest.date, message_id: newest.id, who, basis, draft: Boolean(thread.draft) } : null;
 }
 
 // The mail sync's changes rows (replan.mjs's REASON_WORDS). added: the messages new since the
 // last sync, [{ id, labels, automated }], each from a person and not skipped giving mail_new
-// (weight 2). owed: the threads that turned owed this sync, [{ message_id, known }], each from
-// a known sender giving mail_owed (weight 8).
+// (weight 2). owed: the threads that turned owed this sync, [{ message_id, known, basis }], each
+// from a known sender or answering his own thread (basis "thread") giving mail_owed (weight 8).
 export function mailChanges(added, owed) {
-  const quiet = ["SENT", "SPAM", "TRASH"];
+  const quiet = ["SENT", "SPAM", "TRASH", "DRAFT"];
   return [
     ...added.filter((m) => !m.automated && !skippedCategory(m.labels) && !m.labels.some((l) => quiet.includes(l)))
       .map((m) => changeRow("mail_new", m.id)),
-    ...owed.filter((t) => t.known).map((t) => changeRow("mail_owed", t.message_id)),
+    ...owed.filter((t) => t.known || t.basis === "thread").map((t) => changeRow("mail_owed", t.message_id)),
   ];
 }
 
@@ -284,7 +325,8 @@ export async function senderHashes(address, salt) {
 // developers.google.com/workspace/gmail/api/guides/performance#partial), which leaves the snippet,
 // the size and any body out of the reply altogether. metadataHeaders ("When given and format is
 // METADATA, only include headers specified", …/users.messages/get) keeps the headers to these.
-export const SYNC_HEADERS = ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"];
+export const SYNC_HEADERS = ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence",
+  "Cc", "Sender", "Reply-To", "List-Unsubscribe-Post", "X-Auto-Response-Suppress", "Feedback-ID", "Return-Path"];
 const MESSAGE_FIELDS = "id,threadId,labelIds,internalDate,payload/headers";
 
 // The query for users.messages.get (`thread: false`) or users.threads.get (`thread: true`).
@@ -295,9 +337,18 @@ export function metadataQuery(thread = false) {
   return q.toString();
 }
 
-// A metadata message as replyState reads it, plus its thread and From address. Drafts aren't
-// mail anyone has seen, so syncThread leaves them out.
-export function syncMessage(message) {
+// Whether the account (its email address) is in a message's To ("to"), else its Cc ("cc"),
+// else "none" (Bcc, a list). Compared in memory; only the word is ever kept.
+export function addressedTo(headers, account) {
+  const me = String(account ?? "").trim().toLowerCase();
+  if (!me) return "none";
+  const has = (name) => parseAddresses(headerOf(headers, name)).some((a) => a.address === me);
+  return has("To") ? "to" : has("Cc") ? "cc" : "none";
+}
+
+// A metadata message as replyState reads it, plus its thread and From address. `account` is the
+// mailbox it was read from, for `addressed`.
+export function syncMessage(message, account) {
   const headers = message.payload?.headers ?? [];
   const from = headerOf(headers, "From");
   return {
@@ -307,15 +358,20 @@ export function syncMessage(message) {
     labels: message.labelIds ?? [],
     from,
     to: headerOf(headers, "To"),
+    cc: headerOf(headers, "Cc"),
     from_address: parseAddresses(from)[0]?.address ?? null,
     automated: automatedSender(headers),
+    demerit: automationDemerit(headers),
+    addressed: addressedTo(headers, account),
   };
 }
 
-// A users.threads.get reply (metadata) as replyState's thread.
+// A users.threads.get reply (metadata) as replyState's thread. A draft isn't mail anyone has
+// seen, so it is left out, but `draft` says the thread has one: his reply may be sitting unsent.
 export function syncThread(thread, account) {
-  const messages = (thread.messages ?? []).map(syncMessage).filter((m) => !m.labels.includes("DRAFT"));
-  return { account, thread_id: thread.id, messages };
+  const all = (thread.messages ?? []).map((m) => syncMessage(m, account));
+  const messages = all.filter((m) => !m.labels.includes("DRAFT"));
+  return { account, thread_id: thread.id, draft: messages.length < all.length, messages };
 }
 
 // What users.history.list pages say changed: the threads touched and the messages added, each
@@ -364,20 +420,34 @@ export function replyDiff(account, before, after, known) {
     if (!state) { if (prev) deletes.push(thread_id); continue; }
     upserts.push({ account, thread_id, ...state });
     if (state.state === "owed" && !(prev?.state === "owed" && prev.message_id === state.message_id)) {
-      owed.push({ message_id: state.message_id, known: Boolean(from_address && known.has(from_address)) });
+      owed.push({ message_id: state.message_id, known: Boolean(from_address && known.has(from_address)), basis: state.basis ?? null });
     }
   }
   return { upserts, deletes, owed };
 }
 
-// search_mail's summaries with `known` (he has sent mail to the From address) and the thread's
-// `reply_state` ('owed' | 'awaiting' | null). known: lowercased addresses; states: reply_state
-// rows, matched on account and thread.
-export function searchMarks(summaries, known, states) {
-  const state = new Map(states.map((r) => [`${r.account} ${r.thread_id}`, r.state]));
-  return summaries.map((s) => ({
-    ...s,
-    known: known.has(parseAddresses(s.from)[0]?.address ?? ""),
-    reply_state: state.get(`${s.account} ${s.thread_id}`) ?? null,
-  }));
+// search_mail's summaries with `known` (he has sent mail to the From address), the thread's
+// `reply_state` ('owed' | 'awaiting' | null), `owed_basis` (thread, known, cc or null) and
+// `overdue` (owed 2+ business days). known: lowercased addresses; states: reply_state rows
+// ({ account, thread_id, state, basis, since }), matched on account and thread.
+export function searchMarks(summaries, known, states, timeZone, now) {
+  const state = new Map(states.map((r) => [`${r.account} ${r.thread_id}`, r]));
+  return summaries.map((s) => {
+    const r = state.get(`${s.account} ${s.thread_id}`);
+    const owed = r?.state === "owed";
+    return {
+      ...s,
+      known: known.has(parseAddresses(s.from)[0]?.address ?? ""),
+      reply_state: r?.state ?? null,
+      owed_basis: owed ? r.basis ?? null : null,
+      overdue: Boolean(owed && now && r.since && businessDays(r.since, now.toISOString(), timeZone) >= 2),
+    };
+  });
+}
+
+// What search_mail adds to a summary from the message's headers, never the headers themselves:
+// `automated` (automatedSender) and `addressed` ("to", "cc" or "none" for the account).
+export function summarySignals(message, account) {
+  const headers = message.payload?.headers ?? [];
+  return { automated: automatedSender(headers), addressed: addressedTo(headers, account) };
 }

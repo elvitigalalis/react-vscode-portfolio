@@ -8,6 +8,8 @@ import { weatherHours } from "./sources.mjs";
 import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
 import { messageKey, neverRule } from "./triage.mjs";
 import { dayLabel } from "./logic.mjs";
+import { businessDays } from "./mail.mjs";
+import { threadLink } from "./morning.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
 
@@ -64,11 +66,18 @@ export function planDayOf(now, timeZone, replan, proposal, message = null) {
 }
 
 // v5 M1: the reply_state rows by state, oldest first, as { account, thread_id, who, since }.
-function replyStateOf(rows) {
+// Owed rows also carry what a Needs you item needs: message_id, basis, draft (his reply is an
+// unsent draft), overdue (2+ business days, worked out now, not at sync) and the thread's link.
+function replyStateOf(rows, timeZone, now) {
   const sorted = list(rows).slice().sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
   const of = (state) => sorted.filter((r) => r.state === state)
     .map((r) => ({ account: r.account, thread_id: r.thread_id, who: r.who, since: r.since }));
-  return { owed: of("owed"), awaiting: of("awaiting") };
+  const owed = sorted.filter((r) => r.state === "owed").map((r) => ({
+    account: r.account, thread_id: r.thread_id, who: r.who, since: r.since,
+    message_id: r.message_id, basis: r.basis ?? null, draft: Boolean(r.draft),
+    overdue: businessDays(r.since, now.toISOString(), timeZone) >= 2, link: threadLink(r.account, r.thread_id),
+  }));
+  return { owed, awaiting: of("awaiting") };
 }
 
 // What read_planner returns, from the rows planner-mcp reads:
@@ -144,7 +153,7 @@ export function planSnapshot(rows, now) {
     // v5 L1: the triage rules, which submit_proposal enforces for never.
     triage_rules: list(rows.triage).map((r) => ({ match: r.match, pattern: r.pattern, action: r.action })),
     // v5 M1: Reply owed and Awaiting reply from the mail sync's reply_state rows, oldest first.
-    reply_state: replyStateOf(rows.replyState),
+    reply_state: replyStateOf(rows.replyState, tz, now),
     // v5 SRC3: plan_day's academic calendar entries (academic_days), [] without them.
     academic: (rows.academic ?? []).map((e) => ({ title: e.title, all_day: e.all_day })),
     // v5 P1.

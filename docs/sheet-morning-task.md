@@ -74,10 +74,12 @@ break_min) and habits.
   itself, so ignore it.
 - weather is D's hourly forecast from 07:00 to 23:00, [{ at, temp_f, pop, short }]: pop is the
   chance of precipitation in percent. It may be empty; then plan as if it were dry.
-- reply_state is what the mail sync worked out from his mail's labels and dates: { owed,
-  awaiting }, each [{ account, thread_id, who, since }]. owed threads wait for a reply from him
-  (someone wrote 2 or more business days ago); awaiting threads wait on someone else (he wrote
-  last, 3 or more business days ago). Use owed in step 3.
+- reply_state is what the mail sync worked out from his mail's labels, dates and headers:
+  { owed, awaiting }, each [{ account, thread_id, who, since }]; owed rows also have
+  message_id, link, basis, draft and overdue. owed threads wait for a reply from him: someone
+  answered a thread he wrote in, or someone he has written to wrote to him; overdue means 2 or
+  more business days; draft means his reply sits unsent as a Gmail draft. awaiting threads
+  wait on someone else (he wrote last, 3 or more business days ago). Use owed in step 3.
 - messages are Lisul's own pending messages to you, [{ id, at, text }], oldest first. today is
   his date in time_zone (plan_day is tomorrow from 3 pm), and replans_on whether replans are on.
   run.trigger "message" means one of them started this run. If messages is non-empty, do step
@@ -113,20 +115,35 @@ on today (a task with day today, or an event starting today). Then go on with st
 replan of today. On any other run, go on with step 3.
 
 STEP 3: INBOX SWEEP (Needs you)
-Run these search_mail queries with no account (that covers every account) and max 25:
-  a. is:unread newer_than:14d
-  b. newer_than:3d
-  c. in:inbox -from:me older_than:2d newer_than:14d
-Merge a-c, dropping duplicates (same account and id) and anything already in needs_you_open
-(same account and message_id). Decide from the from, subject and snippet; call read_message
-only when those can't tell you what a message wants, and never more than 15 times.
+First, reply_state.owed from read_planner: each row is a thread where someone is waiting on
+Lisul (basis "thread": they answered a thread he wrote in; "known": someone he has written to;
+"cc": he was copied). Every owed row with basis "thread" or "known", or overdue true, becomes
+a kind "reply" item using the row's account, message_id and link, and who as sender, unless it
+is already in needs_you_open. When draft is true, the why is "Your reply is still a draft"
+(a draft is not a reply: the thread stays owed). Take the subject from a search summary for
+that thread, or read_message when none has it; read the body only if the why needs it.
+
+Then, for EACH account in accounts, run these search_mail queries with that account and max 25
+(a busy account must not crowd out another):
+  a. in:inbox -from:me newer_than:3d -category:promotions -category:social -category:forums
+  b. is:unread in:inbox newer_than:14d -category:promotions -category:social
+  c. in:inbox -from:me older_than:3d newer_than:14d is:important
+Merge, dropping duplicates (same account and id), anything in needs_you_open (same account and
+message_id), and threads already taken from reply_state.owed.
+- A summary with automated true is never kind "reply". It may still be a deadline or admin
+  item if the snippet gives Lisul something to do by a date (a one-time passcode, a payment
+  received, a receipt or a login alert is never an item).
+- A summary with reply_state null, automated false and addressed "to" is a reply item only
+  when the snippet asks him something or waits on him ("let me know", "can you", "are you
+  free", a question mark aimed at him). Decide this yourself; the server can't read text.
+- reply_state "awaiting" never goes in.
+Decide from the from, subject and snippet. Call read_message only when those can't tell, at
+most 15 times; spend them on owed threads and addressed "to" mail first.
 
 An item goes in when the mail needs something from Lisul:
-- kind "reply": someone asked him something or is waiting on an answer. Reply owed is
-  reply_state.owed, already worked out; don't work it out yourself. A summary whose
-  reply_state is "owed" is one of those threads (same account and thread_id); one with known
-  true is from someone he has written to, so weigh it higher. Awaiting reply threads
-  (reply_state "awaiting") are his to wait on, not to act on: they never go in.
+- kind "reply": someone asked him something or is waiting on an answer (the owed threads
+  above, and the addressed "to" mail that asks him something). One with known true is from
+  someone he has written to, so weigh it higher.
 - kind "deadline": a due date, form, payment or application with a date.
 - kind "meeting": a time to be somewhere, an interview, an RSVP.
 - kind "admin": school or account business he must act on, with no fixed date.
