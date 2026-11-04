@@ -35,7 +35,7 @@
 // known-sender hashes' salt; without it no sender is known). Refresh tokens come from Vault
 // (mail_refresh_token) and are never logged or written anywhere.
 import {
-  accountPatch, gmailError, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
+  accountPatch, gmailError, gmailJson, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
   replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead, unsentOwn,
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
@@ -106,7 +106,8 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
     const gmail = async (path: string) => {
       const res = await fetch(`${GMAIL}/${path}`, { headers: { authorization: `Bearer ${token}` } });
       if (!res.ok) throw new GmailError(res.status, gmailError(res.status, await res.text()));
-      return res.json();
+      // An empty body (a 204, say) reads as {}, never as a JSON.parse error.
+      return gmailJson(await res.text());
     };
 
     // What changed since the last run, or a full sync when there is no position or it is too old.

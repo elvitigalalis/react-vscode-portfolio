@@ -130,6 +130,13 @@ export function gmailError(status, body) {
   return message ? `Gmail ${status}: ${message.slice(0, 200)}` : `Gmail ${status}`;
 }
 
+// A Gmail reply's body as JSON. An empty body (a 204, or nothing at all) is {}; a cut or
+// garbled one throws a plain error instead of JSON.parse's "Unexpected end of JSON input".
+export function gmailJson(text) {
+  if (!String(text ?? "").trim()) return {};
+  try { return JSON.parse(text); } catch { throw new Error("Gmail sent a reply that isn't JSON"); }
+}
+
 // What an account's mail_accounts row records after mail-mcp used it, or null for no change.
 // `outcome` is { ok } or { ok: false, status?, error }: a refused token refresh has no status,
 // a Gmail API error has Gmail's. A good use clears last_error. A 400 (a bad search) or 404 (a

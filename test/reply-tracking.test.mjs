@@ -421,3 +421,18 @@ test("replyState: a message from his own address that isn't SENT (scheduled, or 
     messages: [m("18f3a1c2d4e5f803", "2026-11-04T01:07:00.000Z", ["INBOX"], ME, PAT, { from_address: "owner@example.com" })] };
   assert.equal(replyState(lone, TZ, wed0607, { participated: true }), null);
 });
+
+test("gmailJson: an empty reply is an empty object; a cut one says so", async () => {
+  const { gmailJson } = await import("../src/sheet/mail.mjs");
+  assert.deepEqual(gmailJson(""), {});
+  assert.deepEqual(gmailJson("  \n"), {});
+  assert.deepEqual(gmailJson('{"messages":[]}'), { messages: [] });
+  assert.throws(() => gmailJson('{"messages":['), /Gmail sent a reply that isn't JSON/);
+});
+
+test("mail-sync: reads every Gmail reply through gmailJson", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../supabase/functions/mail-sync/index.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /res\.json\(\)/);
+  assert.match(src, /gmailJson\(await res\.text\(\)\)/);
+});
