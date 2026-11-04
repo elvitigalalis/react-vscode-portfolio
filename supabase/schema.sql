@@ -171,6 +171,9 @@ begin
   -- v5 R1: changes and replans are kept 14 days.
   delete from changes where at < now() - interval '14 days';
   delete from replans where at < now() - interval '14 days';
+  -- v5 M1: so are reply_state and message_senders.
+  delete from reply_state where since < now() - interval '14 days';
+  delete from message_senders where at < now() - interval '14 days';
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -1048,4 +1051,65 @@ select cron.schedule('sheet-work', '40 * * * *', $job$
     body := '{"job": "work"}'::jsonb)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_work_url')
+$job$);
+
+-- --- v5 M1, mail checked every 5 minutes, and reply tracking (docs/sheet-v5.md; ADR 0004) -------
+-- The mail-sync Edge Function reads Gmail history with labels, dates and a few headers only, never
+-- mail text, and keeps three things, all owner-only and written only by the server:
+--   known_senders    salted SHA-256 hashes (senderHash, src/sheet/mail.mjs) of the addresses he
+--                    has sent mail to, never an address;
+--   message_senders  each received message's From address, lowercased, for submit_proposal's
+--                    never-show rules (L1); 14 days, like Needs you;
+--   reply_state      per thread, Reply owed or Awaiting reply (replyState), with a display name.
+-- mail_accounts.history_id is where each account's next history read starts.
+alter table mail_accounts add column if not exists history_id text;
+
+create table if not exists known_senders (
+  hash text primary key check (hash ~ '^[0-9a-f]{64}$'),
+  last_sent_at timestamptz not null
+);
+
+create table if not exists message_senders (
+  account text,
+  message_id text,
+  thread_id text not null,
+  from_address text not null,
+  at timestamptz not null,
+  primary key (account, message_id)
+);
+
+create table if not exists reply_state (
+  account text,
+  thread_id text,
+  state text not null check (state in ('owed', 'awaiting')),
+  since timestamptz not null,                     -- the newest message's date
+  message_id text not null,                       -- the newest message
+  who text not null check (char_length(who) <= 80),   -- display name only, never an address
+  updated_at timestamptz not null default now(),
+  primary key (account, thread_id)
+);
+
+alter table known_senders enable row level security;
+alter table message_senders enable row level security;
+alter table reply_state enable row level security;
+drop policy if exists owner_all on known_senders;
+create policy owner_all on known_senders for all using (is_owner()) with check (is_owner());
+drop policy if exists owner_all on message_senders;
+create policy owner_all on message_senders for all using (is_owner()) with check (is_owner());
+drop policy if exists owner_all on reply_state;
+create policy owner_all on reply_state for all using (is_owner()) with check (is_owner());
+revoke all on known_senders, message_senders, reply_state from anon;
+revoke insert, update, delete on known_senders, message_senders, reply_state from authenticated;
+
+-- Every 5 minutes from :02, call mail-sync. Like sheet-brightspace, it does nothing until its URL
+-- and the shared secret are in Vault.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-mail';
+select cron.schedule('sheet-mail', '2-59/5 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_mail_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "mail"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_mail_url')
 $job$);

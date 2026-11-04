@@ -48,6 +48,11 @@ export function needsGroups(rows) {
 export const gmailLink = (link) =>
   typeof link === "string" && link.startsWith("https://mail.google.com/") ? link : null;
 
+// v5 M1: a thread's Open in Gmail link, as messageSummary builds it, for an Awaiting reply row;
+// null unless the thread id is hex, as Gmail's are.
+export const threadLink = (account, thread) => (/^[0-9a-f]{6,32}$/.test(thread)
+  ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${thread}` : null);
+
 // --- Plan today ----------------------------------------------------------------------------
 
 // What the day's proposal says above Plan today's timeline: "Didn't fit: …", "Couldn't fit: …"

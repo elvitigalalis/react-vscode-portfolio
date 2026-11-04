@@ -25,7 +25,7 @@ const TZ = "America/New_York";
 // businessDays
 // =============================================================================================
 
-test("businessDays: Mondays to Fridays after the first date, up to and including the second", todo, async () => {
+test("businessDays: Mondays to Fridays after the first date, up to and including the second", async () => {
   const { businessDays } = await mail();
   assert.equal(businessDays("2026-11-04T13:00:00Z", "2026-11-04T22:00:00Z", TZ), 0); // same Wednesday
   assert.equal(businessDays("2026-11-04T15:00:00Z", "2026-11-05T15:00:00Z", TZ), 1); // Wed → Thu
@@ -33,7 +33,7 @@ test("businessDays: Mondays to Fridays after the first date, up to and including
   assert.equal(businessDays("2026-11-02T15:00:00Z", "2026-11-16T15:00:00Z", TZ), 10); // two weeks
 });
 
-test("businessDays: weekends don't count", todo, async () => {
+test("businessDays: weekends don't count", async () => {
   const { businessDays } = await mail();
   assert.equal(businessDays("2026-11-06T20:00:00Z", "2026-11-07T20:00:00Z", TZ), 0); // Fri → Sat
   assert.equal(businessDays("2026-11-06T20:00:00Z", "2026-11-08T20:00:00Z", TZ), 0); // Fri → Sun
@@ -42,7 +42,7 @@ test("businessDays: weekends don't count", todo, async () => {
   assert.equal(businessDays("2026-11-07T15:00:00Z", "2026-11-09T15:00:00Z", TZ), 1); // Sat → Mon
 });
 
-test("businessDays: both dates are read in the owner's time zone", todo, async () => {
+test("businessDays: both dates are read in the owner's time zone", async () => {
   const { businessDays } = await mail();
   // 10 pm Thursday in New York is 03:00 Friday UTC: Friday and Monday count (UTC dates would give 1).
   assert.equal(businessDays("2026-11-06T03:00:00Z", "2026-11-09T17:00:00Z", TZ), 2);
@@ -61,7 +61,7 @@ const headers = (from, extra = []) => [
   ...extra.map(([name, value]) => ({ name, value })),
 ];
 
-test("automatedSender: a person writing directly is not automated", todo, async () => {
+test("automatedSender: a person writing directly is not automated", async () => {
   const { automatedSender } = await mail();
   assert.equal(automatedSender(headers("Ana Ruiz <ana.ruiz@example.edu>")), false);
   assert.equal(automatedSender(headers("kim@cs.example.edu")), false);
@@ -69,7 +69,7 @@ test("automatedSender: a person writing directly is not automated", todo, async 
   assert.equal(automatedSender(headers("Ana Ruiz <ana.ruiz@example.edu>", [["Auto-Submitted", "no"]])), false);
 });
 
-test("automatedSender: no-reply style local parts", todo, async () => {
+test("automatedSender: no-reply style local parts", async () => {
   const { automatedSender } = await mail();
   for (const from of [
     "GitHub <noreply@github.com>",
@@ -82,7 +82,7 @@ test("automatedSender: no-reply style local parts", todo, async () => {
   ]) assert.equal(automatedSender(headers(from)), true, from);
 });
 
-test("automatedSender: list and auto-reply headers", todo, async () => {
+test("automatedSender: list and auto-reply headers", async () => {
   const { automatedSender } = await mail();
   const person = "Ana Ruiz <ana.ruiz@example.edu>";
   assert.equal(automatedSender(headers(person, [["List-Id", "CS Department <cs-all.example.edu>"]])), true);
@@ -118,7 +118,7 @@ const mon = new Date("2026-11-09T14:00:00Z"); // 9 am Monday
 const tue = new Date("2026-11-10T14:00:00Z");
 const wed = new Date("2026-11-11T14:00:00Z");
 
-test("replyState: Reply owed after 2 business days from a person", todo, async () => {
+test("replyState: Reply owed after 2 business days from a person", async () => {
   const { replyState } = await mail();
   assert.equal(replyState(owedThread, TZ, mon), null); // Friday → Monday is 1
   assert.deepEqual(replyState(owedThread, TZ, tue), {
@@ -126,7 +126,7 @@ test("replyState: Reply owed after 2 business days from a person", todo, async (
   });
 });
 
-test("replyState: Awaiting reply after 3 business days, with the first To name", todo, async () => {
+test("replyState: Awaiting reply after 3 business days, with the first To name", async () => {
   const { replyState } = await mail();
   assert.equal(replyState(awaitingThread, TZ, mon), null); // Thursday → Monday is 2
   assert.deepEqual(replyState(awaitingThread, TZ, tue), {
@@ -134,7 +134,7 @@ test("replyState: Awaiting reply after 3 business days, with the first To name",
   });
 });
 
-test("replyState: a weekend doesn't move the count", todo, async () => {
+test("replyState: a weekend doesn't move the count", async () => {
   const { replyState } = await mail();
   // Sent on Friday Nov 6: Monday and Tuesday are 2, Wednesday makes 3.
   const sentFriday = thread(msg("18f3a1c2d4e5f021", "2026-11-06T16:00:00.000Z", ["SENT"], OWNER, "Dana Lee <dana.lee@example.com>"));
@@ -144,13 +144,13 @@ test("replyState: a weekend doesn't move the count", todo, async () => {
   assert.equal(replyState(sentFriday, TZ, wed).who, "Dana Lee");
 });
 
-test("replyState: the newest message decides, by date", todo, async () => {
+test("replyState: the newest message decides, by date", async () => {
   const { replyState } = await mail();
   const shuffled = { ...owedThread, messages: [...owedThread.messages].reverse() };
   assert.equal(replyState(shuffled, TZ, tue).message_id, "18f3a1c2d4e5f002");
 });
 
-test("replyState: the state clears when the thread moves", todo, async () => {
+test("replyState: the state clears when the thread moves", async () => {
   const { replyState } = await mail();
   // He answers Ana on Tuesday morning: nothing owed, and too soon to be awaiting.
   const answered = { ...owedThread, messages: [...owedThread.messages, msg("18f3a1c2d4e5f003", "2026-11-10T13:30:00.000Z", ["SENT"], OWNER, ANA)] };
@@ -163,13 +163,13 @@ test("replyState: the state clears when the thread moves", todo, async () => {
   });
 });
 
-test("replyState: automated senders never make a reply owed", todo, async () => {
+test("replyState: automated senders never make a reply owed", async () => {
   const { replyState } = await mail();
   const t = thread(msg("18f3a1c2d4e5f031", "2026-11-02T15:00:00.000Z", ["INBOX"], "GitHub <notifications@github.com>", OWNER, true));
   assert.equal(replyState(t, TZ, wed), null);
 });
 
-test("replyState: Promotions, Updates, Social and Forums are skipped", todo, async () => {
+test("replyState: Promotions, Updates, Social and Forums are skipped", async () => {
   const { replyState } = await mail();
   for (const category of ["CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"]) {
     const t = thread(msg("18f3a1c2d4e5f041", "2026-11-02T15:00:00.000Z", ["INBOX", category], ANA, OWNER));
@@ -179,7 +179,7 @@ test("replyState: Promotions, Updates, Social and Forums are skipped", todo, asy
   assert.equal(replyState(personal, TZ, wed).state, "owed");
 });
 
-test("replyState: spam and trash are passed over", todo, async () => {
+test("replyState: spam and trash are passed over", async () => {
   const { replyState } = await mail();
   // His reply went to the trash: Ana's message is the newest that counts.
   const trashed = { ...owedThread, messages: [...owedThread.messages, msg("18f3a1c2d4e5f004", "2026-11-10T13:00:00.000Z", ["SENT", "TRASH"], OWNER, ANA)] };
@@ -188,7 +188,7 @@ test("replyState: spam and trash are passed over", todo, async () => {
   assert.equal(replyState(thread(), TZ, wed), null);
 });
 
-test("replyState: who is a display name, unquoted, or else the local part", todo, async () => {
+test("replyState: who is a display name, unquoted, or else the local part", async () => {
   const { replyState } = await mail();
   const owedFrom = (from) => replyState(thread(msg("18f3a1c2d4e5f061", "2026-11-02T15:00:00.000Z", ["INBOX"], from, OWNER)), TZ, wed).who;
   assert.equal(owedFrom('"Ruiz, Ana" <ana.ruiz@example.edu>'), "Ruiz, Ana");
@@ -201,7 +201,7 @@ test("replyState: who is a display name, unquoted, or else the local part", todo
   assert.ok(long.length <= 80 && long.startsWith("AAAA") && !long.includes("@"));
 });
 
-test("skippedCategory: the four Gmail categories spec 47 skips", todo, async () => {
+test("skippedCategory: the four Gmail categories spec 47 skips", async () => {
   const { skippedCategory } = await mail();
   assert.equal(skippedCategory(["INBOX", "CATEGORY_PROMOTIONS"]), true);
   assert.equal(skippedCategory(["CATEGORY_UPDATES"]), true);
@@ -217,13 +217,13 @@ test("skippedCategory: the four Gmail categories spec 47 skips", todo, async () 
 
 const SALT = "test-salt-0001";
 
-test("senderHash: hex SHA-256 of the salt and the address", todo, async () => {
+test("senderHash: hex SHA-256 of the salt and the address", async () => {
   const { senderHash } = await mail();
   assert.equal(await senderHash("ana.ruiz@example.edu", SALT), "b2d1910ecb638f419ce06372f8393efff2ab1f90e03954509117859182151af9");
   assert.equal(await senderHash("kim@cs.example.edu", SALT), "1e10efc4fc43e6d00faaeb662af18129323f4edeb39dc8aa1d0e4c8f18590164");
 });
 
-test("senderHash: the same address gives the same hash, whatever its case or spaces", todo, async () => {
+test("senderHash: the same address gives the same hash, whatever its case or spaces", async () => {
   const { senderHash } = await mail();
   const h = await senderHash("ana.ruiz@example.edu", SALT);
   assert.equal(await senderHash("Ana.Ruiz@Example.EDU", SALT), h);
@@ -231,7 +231,7 @@ test("senderHash: the same address gives the same hash, whatever its case or spa
   assert.match(h, /^[0-9a-f]{64}$/);
 });
 
-test("senderHash: the salt matters", todo, async () => {
+test("senderHash: the salt matters", async () => {
   const { senderHash } = await mail();
   assert.equal(await senderHash("ana.ruiz@example.edu", "other-salt"), "ed30bbe393cd2abc0240fa98f20c411c8399b1a855288650e1e261dd4184990c");
   assert.notEqual(await senderHash("ana.ruiz@example.edu", "other-salt"), await senderHash("ana.ruiz@example.edu", SALT));
@@ -241,7 +241,7 @@ test("senderHash: the salt matters", todo, async () => {
 // mailChanges
 // =============================================================================================
 
-test("mailChanges: weight 2 per new message from a person; 8 when a known sender's reply turns owed", todo, async () => {
+test("mailChanges: weight 2 per new message from a person; 8 when a known sender's reply turns owed", async () => {
   const { mailChanges } = await mail();
   const added = [
     { id: "18f3a1c2d4e5f101", labels: ["INBOX", "UNREAD", "CATEGORY_PERSONAL"], automated: false },
@@ -260,7 +260,7 @@ test("mailChanges: weight 2 per new message from a person; 8 when a known sender
   ]);
 });
 
-test("mailChanges: nothing new, no changes", todo, async () => {
+test("mailChanges: nothing new, no changes", async () => {
   const { mailChanges } = await mail();
   assert.deepEqual(mailChanges([], []), []);
   assert.deepEqual(mailChanges([{ id: "18f3a1c2d4e5f102", labels: ["SENT"], automated: false }], [{ message_id: "18f3a1c2d4e5f009", known: false }]), []);
@@ -286,7 +286,7 @@ const ROWS = [
   awaiting("Sam Ortiz", "2026-10-30T16:00:00Z"),
 ];
 
-test("brief: Awaiting reply names who he's waiting on", todo, async () => {
+test("brief: Awaiting reply names who he's waiting on", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ awaiting: ROWS.slice(0, 2) }), at8)).text, [
     "Today: 1 task, 1 block.",
@@ -294,7 +294,7 @@ test("brief: Awaiting reply names who he's waiting on", todo, async () => {
   ].join("\n"));
 });
 
-test("brief: at most 3 names, every thread counted", todo, async () => {
+test("brief: at most 3 names, every thread counted", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ awaiting: ROWS }), at8)).text, [
     "Today: 1 task, 1 block.",
@@ -302,13 +302,13 @@ test("brief: at most 3 names, every thread counted", todo, async () => {
   ].join("\n"));
 });
 
-test("brief: no awaiting rows, no line", todo, async () => {
+test("brief: no awaiting rows, no line", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ awaiting: [] }), at8)).text, "Today: 1 task, 1 block.");
   assert.equal(briefOf(whatToSend(snapshot(), at8)).text, "Today: 1 task, 1 block.");
 });
 
-test("brief: names cut to 30, names only, nothing link-like", todo, async () => {
+test("brief: names cut to 30, names only, nothing link-like", async () => {
   const { whatToSend } = await nudges();
   const long = "Alexandria Montgomery-Fitzwilliam the Third"; // 43 characters
   const text = briefOf(whatToSend(snapshot({ awaiting: [awaiting(long, "2026-10-28T15:00:00Z"), awaiting("www.example.com", "2026-10-29T15:00:00Z")] }), at8)).text;
@@ -320,7 +320,7 @@ test("brief: names cut to 30, names only, nothing link-like", todo, async () => 
   for (const name of line.replace(/^Awaiting reply: \d+ \(|\)\.$/g, "").split(", ")) assert.ok(name.length <= 30, name);
 });
 
-test("brief: the Awaiting reply line comes after the plan's lines", todo, async () => {
+test("brief: the Awaiting reply line comes after the plan's lines", async () => {
   const { whatToSend } = await nudges();
   const proposed = { ...approved, id: "0b0b0b0b-0000-4000-8000-000000000002", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true };
   const proposal = { day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], run_trigger: "morning", reasons: [], blocks: [] };
