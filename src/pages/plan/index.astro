@@ -95,6 +95,7 @@ import "../../styles/sheet.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-check"></use></svg><span class="visually-hidden">Check</span></dt><dd>Complete the task</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg><span class="visually-hidden">More</span></dt><dd>Menu for the task, or Calendars, Settings, Help and Sign out</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span class="visually-hidden">Sparkles</span></dt><dd>Proposed by Claude, until you approve it</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-repeat"></use></svg><span class="visually-hidden">Repeat</span></dt><dd>A habit's block, from Settings</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell"></use></svg><span class="visually-hidden">Bell</span></dt><dd>Nudges: Telegram reminds you of blocks (crossed out when off)</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="visually-hidden">Alert</span></dt><dd>A feed failed: open Settings to see which</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="visually-hidden">Mail</span></dt><dd>Needs you: mail waiting on you</dd>
@@ -153,6 +154,22 @@ import "../../styles/sheet.css";
         <h3 id="sheet-cap-title">Workload cap</h3>
         <p class="small">The most hours of blocks Claude plans in a day, and the load bar's full mark.</p>
         <p class="sheet-dialog-end"><label for="sheet-cap">Hours a day</label> <input id="sheet-cap" class="sheet-cap" type="number" min="1" max="16" step="0.5" inputmode="decimal"> <span class="small" role="status" data-cap-note></span> <button type="button" class="sheet-btn primary" data-act="save-cap">Save</button></p>
+      </section>
+
+      <!-- Habits (docs/sheet-v5.md, "/plan"): src/sheet/habit-settings.mjs fills and saves them. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-habits-title">
+        <h3 id="sheet-habits-title">Habits</h3>
+        <p class="small">Claude places these around your tasks on their days, starting within the ideal time ± flex. Firm ones go in before tasks, flexible ones after hard deadlines; one that can't fit is left out that day. They never show on /now.</p>
+        <ul class="sheet-mail" data-habits></ul>
+        <form class="sheet-habit-form" data-habit-form>
+          <label>Name <input name="name" maxlength="40" required placeholder="Gym"></label>
+          <fieldset><legend>Days</legend> <label><input type="checkbox" name="days" value="1"> Mon</label> <label><input type="checkbox" name="days" value="2"> Tue</label> <label><input type="checkbox" name="days" value="3"> Wed</label> <label><input type="checkbox" name="days" value="4"> Thu</label> <label><input type="checkbox" name="days" value="5"> Fri</label> <label><input type="checkbox" name="days" value="6"> Sat</label> <label><input type="checkbox" name="days" value="7"> Sun</label></fieldset>
+          <label>Ideal time <input name="ideal" type="time" value="12:00" required></label>
+          <label>Minutes <input name="minutes" class="sheet-cap" type="number" min="15" max="240" step="5" value="30"></label>
+          <label>Flex ± <input name="flex_min" class="sheet-cap" type="number" min="0" max="240" step="5" value="30"></label>
+          <label>Defence <select name="defence"><option value="flexible">Flexible</option><option value="firm">Firm</option></select></label>
+          <p class="sheet-dialog-end"><span class="small" role="status" data-habit-note></span> <button type="submit" class="sheet-btn primary">Add habit</button></p>
+        </form>
       </section>
 
       <!-- Feeds status (docs/sheet-sources.md, "/plan"): src/sheet/feed-status.mjs fills the list. -->
@@ -223,6 +240,7 @@ import "../../styles/sheet.css";
       <symbol id="i-more-horizontal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></symbol>
       <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+      <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
     </svg>
 
   </section>
@@ -240,5 +258,6 @@ import "../../styles/sheet.css";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings]);
+  import { setupHabitSettings } from "../../sheet/habit-settings.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupHabitSettings]);
 </script>

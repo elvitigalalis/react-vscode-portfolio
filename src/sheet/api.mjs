@@ -94,7 +94,9 @@ export const publicNow = async () => (await rest("public_now", { anon: true }))[
 
 // Owner tables.
 export const listTasks = (from, to) => rest(`tasks?or=(day.is.null,and(day.gte.${from},day.lte.${to}))&order=position`);
-export const listBlocks = (from, to) => rest(`blocks?starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
+// v5 H1: a habit block brings its habit's name (an embedded many-to-one row,
+// https://docs.postgrest.org/en/stable/references/api/resource_embedding.html).
+export const listBlocks = (from, to) => rest(`blocks?select=*,habit:habits(name)&starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
 // The approved blocks with a Google event that start at or after `from`.
 export const eventBlocksFrom = (from) => rest(`blocks?starts_at=gte.${from}&proposed=is.false&gcal_id=not.is.null`);
 // Approved blocks with no Google event that end after `from`, with their task's title and
@@ -155,6 +157,11 @@ export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,
 
 // v5 P1, pace (docs/sheet-v5.md): the actuals rows Telegram's Finished answer wrote. Read-only here.
 export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
+
+// v5 H1, habits (Settings).
+export const listHabits = () => rest("habits?select=id,name,days,ideal,minutes,flex_min,defence,position&order=position,created_at");
+export const insertHabit = async (habit) => one(await rest("habits", { method: "POST", body: habit, prefer: "return=representation" }));
+export const deleteHabit = (id) => rest(`habits?id=eq.${id}`, { method: "DELETE" });
 
 // Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are
 // replaced by `rows`; Handshake's (source 'handshake', docs/sheet-v5.md) are left alone, and the
