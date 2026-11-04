@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { slackNeeds } from "../src/sheet/sources.mjs";
 import { slackLink } from "../src/sheet/morning.mjs";
+import { readFileSync as fsRead } from "node:fs";
 
 const match = (over = {}) => ({
   channel: { id: "C0EXAMPLE1", is_im: false, name: "team-backend" }, user: "U0DANA", username: "dana.lee",
@@ -32,7 +33,7 @@ test("slackLink: only https:// permalinks on a .slack.com address", () => {
     assert.equal(slackLink(bad), null, String(bad));
 });
 
-const fn = (await import("node:fs")).readFileSync(new URL("../supabase/functions/slack-sync/index.ts", import.meta.url), "utf8");
+const fn = fsRead(new URL("../supabase/functions/slack-sync/index.ts", import.meta.url), "utf8");
 
 test("slack-sync: only auth.test and search.messages, the token from env, text never stored or logged", () => {
   assert.deepEqual([...new Set(fn.match(/slack\("[\w.]+"/g))].sort(), ['slack("auth.test"', 'slack("search.messages"']);
@@ -42,3 +43,13 @@ test("slack-sync: only auth.test and search.messages, the token from env, text n
   assert.match(fn, /slackNeeds\(matches, \{ known, self \}\)/);
   assert.match(fn, /not connected/);
 });
+
+test("/plan: the sprite has the Slack icon, and Needs you draws it on Slack rows", () => {
+  const page = read("../src/pages/plan/index.astro");
+  assert.match(page, /<symbol id="i-slack" viewBox="0 0 24 24">/);
+  const needs = read("../src/sheet/needs-you.mjs");
+  assert.match(needs, /sourceIcon\("slack"\)/);
+  assert.match(needs, /slack \? slackLink\(r\.link\) : gmailLink\(r\.link\)/);
+});
+
+function read(path) { return fsRead(new URL(path, import.meta.url), "utf8"); }
