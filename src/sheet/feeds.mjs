@@ -11,6 +11,9 @@ import { changeRow } from "./replan.mjs";
 // on the local date of its start (Brightspace due items start and end at the due time).
 const dueDay = (e, timeZone) => (e.allDay ? String(e.start).slice(0, 10) : localNow(new Date(e.start), timeZone).day);
 
+// An item the feed marks STATUS:CANCELLED (RFC 5545 3.8.1.11) is off: it becomes no task.
+const cancelled = (e) => e?.status === "CANCELLED";
+
 // D2L names each calendar item after its activity and the date's role: "Quiz 6 - Due",
 // "Quiz 6 - Availability Starts", "Quiz 6 - Availability Ends", and "- Start Date" / "- End Date"
 // for discussions. The roles are the Calendar API's event types (DueDate, AvailabilityStarts,
@@ -24,7 +27,7 @@ const ROLE = /^(.*\S)\s+-\s+(Due|Availability Ends|End Date|Availability Starts|
 // date stands in only when no "- Due" item has the same base title; start dates and items with no
 // role are not.
 function dueItems(events) {
-  const read = events.map((e) => {
+  const read = events.filter((e) => !cancelled(e)).map((e) => {
     const m = ROLE.exec(String(e?.summary ?? "").trim());
     return { e, base: m?.[1], role: m?.[2] };
   });
@@ -67,11 +70,100 @@ export function courseTaskChanges(events, { tasks, seen, timeZone }) {
 // v5 R1 (docs/sheet-v5.md, "replan.mjs"): the changes rows for one Brightspace fetch's inserts and
 // updates (courseTaskChanges' output), one per task, ref its UID. A due date today, tomorrow or the
 // day after is course_due_soon (weight 8); anything else course_change (3).
-export function courseChanges({ insert, update }, tasks, today) {
-  const soon = (due) => due >= today && due <= addDays(today, 2);
+// An event task (courseEventChanges) counts by its day; a removal (courseRemovals) is a course_change.
+export function courseChanges({ insert, update, removed = [] }, tasks, today) {
+  const soon = (due) => due != null && due >= today && due <= addDays(today, 2);
   const uid = new Map(tasks.map((t) => [t.id, t.source_uid]));
-  return [...insert.map((r) => [r.due, r.source_uid]), ...update.map((u) => [u.due, uid.get(u.id)])]
+  return [...insert.map((r) => [r.due ?? r.day, r.source_uid]), ...update.map((u) => [u.due ?? u.day, uid.get(u.id)]),
+    ...removed.map((r) => [null, r.uid])]
     .map(([due, ref]) => changeRow(soon(due) ? "course_due_soon" : "course_change", ref ?? null));
+}
+
+// --- Course events (Brightspace) ----------------------------------------------------------
+
+// The rest of the feed: items with no D2L role suffix, which are the instructor's calendar events
+// (exams, in-class quizzes, review sessions) and the school's (holidays). D2L puts them in the
+// same subscription as the due dates ("subscribe to a calendar feed for individual or all your
+// courses ... D2L Brightspace class events", PCC's D2L help, "Subscribing to a D2L Class
+// Calendar"); LOCATION carries the course offering's name ("AMS 261.01 - Fall 2026").
+
+// "AMS 261.01 - Fall 2026" -> "AMS 261"; a location with no course code (the school's) -> null.
+const courseCode = (location) => {
+  const m = /^\s*([A-Z]{2,4})\s?(\d{3})\b/.exec(String(location ?? ""));
+  return m ? `${m[1]} ${m[2]}` : null;
+};
+
+// "AMS 261 Exam 2": the course code first, unless the title already names it ("AMS261 review").
+function eventTitle(e) {
+  const summary = cutTitle(e.summary);
+  const code = courseCode(e.location);
+  if (!summary || !code) return summary;
+  const bare = (s) => s.replace(/\s+/g, "").toUpperCase();
+  return bare(summary).includes(bare(code)) ? summary : cutTitle(`${code} ${summary}`);
+}
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+// An event's day, fixed time and estimate in the owner's zone. All day: its first date, no time.
+// Timed: the local day and clock time of its start, and its length in minutes as the estimate
+// (at most 4 hours, like campus.mjs's eventToTask; none for a zero-length item).
+function eventSlot(e, timeZone) {
+  if (e.allDay) return { day: String(e.start).slice(0, 10), at_time: null, est_min: null };
+  const s = Date.parse(e.start), len = Math.round((Date.parse(e.end) - s) / 60_000);
+  if (!Number.isFinite(s)) throw new Error("bad start");
+  const { day, minutes } = localNow(new Date(s), timeZone);
+  return { day, at_time: `${pad2(Math.floor(minutes / 60))}:${pad2(minutes % 60)}`, est_min: len > 0 ? Math.min(240, len) : null };
+}
+
+// The changes the feed's events make to the planner, beside courseTaskChanges' due dates. Returns
+// { insert, update, seen } like it:
+// - an item with no role suffix, not cancelled, on today or later, is an event;
+// - a UID never seen becomes a private task on the event's day at its time ({ day, at_time,
+//   est_min }), titled with its course; at_time keeps it on its day (it never rolls) and a plan
+//   must start its block then (proposal.mjs), so plans work around it;
+// - a seen UID whose task is still undone follows the feed's title, day, time and length;
+// - a done task, a deleted one (seen, no task) and past events are left alone.
+export function courseEventChanges(events, { tasks, seen, timeZone, today }) {
+  const mine = new Map(tasks.filter((t) => t.source === "brightspace" && t.source_uid).map((t) => [t.source_uid, t]));
+  const known = new Set([...seen.map((s) => (typeof s === "string" ? s : s.uid)), ...mine.keys()]);
+  const insert = [], update = [], added = [];
+  const done = new Set();
+  for (const e of events) {
+    if (!e || cancelled(e) || ROLE.exec(String(e.summary ?? "").trim())) continue;
+    const uid = e.uid, title = eventTitle(e);
+    if (!uid || !title || done.has(uid)) continue;
+    let slot;
+    try { slot = eventSlot(e, timeZone); } catch { continue; } // a bad date or zone
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(slot.day) || slot.day < today) continue;
+    done.add(uid);
+    if (!known.has(uid)) {
+      insert.push({ title, ...slot, list: null, due: null, public: false, source: "brightspace", source_uid: uid });
+      added.push({ source: "brightspace", uid });
+      continue;
+    }
+    const t = mine.get(uid);
+    if (!t || t.done) continue;
+    const at = t.at_time ? String(t.at_time).slice(0, 5) : null;
+    if (t.title !== title || t.day !== slot.day || t.list != null || at !== slot.at_time || (t.est_min ?? null) !== slot.est_min) {
+      update.push({ id: t.id, title, ...slot, list: null });
+    }
+  }
+  return { insert, update, seen: added };
+}
+
+// The undone Brightspace tasks whose item is cancelled or gone from the feed, as { id, uid }, so
+// the function deletes them and forgets their UID (a reinstated item comes back as new). Only a
+// task dated (due, else day) from today to `until`, the far edge of the window the feed was read
+// for, counts: earlier ones have simply dropped out of the window. An empty feed removes nothing,
+// in case Brightspace sends a blank calendar by mistake.
+export function courseRemovals(events, { tasks, today, until }) {
+  const listed = events.filter(Boolean);
+  if (!listed.length) return [];
+  const live = new Set(listed.filter((e) => !cancelled(e)).map((e) => e.uid));
+  return tasks.filter((t) => {
+    const date = t.due ?? t.day;
+    return t.source === "brightspace" && t.source_uid && !t.done && !live.has(t.source_uid) && date && date >= today && date <= until;
+  }).map((t) => ({ id: t.id, uid: t.source_uid }));
 }
 
 
