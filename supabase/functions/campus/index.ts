@@ -67,7 +67,7 @@ async function sync(now: Date) {
   await db(`campus_events?ends_at=lte.${at}`, { method: "DELETE" });
   if (before) {
     const [settings] = await db("settings?select=time_zone");
-    const change = campusChange(before, await todays(now), now, settings?.time_zone ?? "America/New_York");
+    const change = campusChange(before, await todays(now), now, settings.time_zone);
     if (change) await db("changes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(change) });
   }
   await saveFeedState(SOURCE, { fetched_at: now.toISOString(), ok: true, error: null, ...fresh });

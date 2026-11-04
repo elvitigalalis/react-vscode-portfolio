@@ -79,7 +79,7 @@ async function sync(refresh: string, now: Date) {
     `&starts_at=lt.${encodeURIComponent(new Date(+now + 2 * 86_400_000).toISOString())}`);
   // PostgREST hands timestamps back in its own format; freeBusyRows' are toISOString().
   const iso = (r: { starts_at: string; ends_at: string }) => ({ starts_at: new Date(r.starts_at).toISOString(), ends_at: new Date(r.ends_at).toISOString() });
-  const change = busyChange(before.map(iso), rows, blocks, now, settings.time_zone ?? "America/New_York");
+  const change = busyChange(before.map(iso), rows, blocks, now, settings.time_zone);
 
   await db("rpc/busy_sync_save", {
     method: "POST",
