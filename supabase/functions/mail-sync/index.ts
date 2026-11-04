@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, skipped: "not connected" });
     }
     const [settings] = await db("settings?select=time_zone");
-    const tz = settings?.time_zone ?? "America/New_York";
+    const tz = settings.time_zone;
     // The sweep runs on the first good run of each local day, and again after a failed run.
     const [prev] = await db(`feed_state?select=fetched_at,ok&source=eq.${SOURCE}`);
     const sweep = !prev || prev.ok !== true || !prev.fetched_at

@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
   }
   const now = new Date();
   const [settings] = await db("settings?select=time_zone,github_orgs");
-  const today = localNow(now, settings?.time_zone ?? "America/New_York").day;
+  const today = localNow(now, settings.time_zone).day;
   const orgs: string[] = settings?.github_orgs ?? [];
   const out = {
     github: await source("github", Boolean(GITHUB_TOKEN), [GITHUB_TOKEN], now, async () => {

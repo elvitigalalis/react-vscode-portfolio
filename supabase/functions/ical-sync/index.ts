@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
   }
   const now = new Date();
   const [settings] = await db("settings?select=time_zone,enrollment_at");
-  const tz = settings?.time_zone ?? "America/New_York";
+  const tz = settings.time_zone;
   const out = {
     handshake: await feed("handshake", HANDSHAKE, now, (events) => saveHandshake(events, now)),
     academic: await feed("academic", ACADEMIC, now, (events) => saveAcademic(events, now, tz)),
