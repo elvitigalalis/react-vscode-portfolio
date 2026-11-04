@@ -34,6 +34,12 @@ JavaScript must stay at or under 40 KB gzipped (`check/budget.mjs`, run by `npm 
   slot's lower rest bound, or 60 s after a warm-up) and opens the RPE chips (6–10 in half steps,
   set to the target by default). The banner shows the most important PR the set made: e1RM, then
   heaviest weight, then reps at a weight.
+- ✓ saves what the fields hold at that tap, typed or not, in one tap. A blank weight takes the
+  row's prefill; with none it asks for a weight inline. A weight is never saved as 0 unless the
+  exercise is marked bodyweight (`gym_exercises.bodyweight`).
+- ✕ on a row removes a planned set for this session, or deletes a logged one (by id, from the
+  outbox or the server), each with Undo for 5 s; records, PRs and the summary come from the sets
+  left. A set deleted before it synced is never sent.
 - The rest bar keeps counting past zero (+0:20). At zero the screen flashes and a beep sounds.
   The wake lock is held while a session is open and is taken again on `visibilitychange`.
 - ⇄ swaps the exercise. The choices are the original (marked Original), the two substitutes, any
