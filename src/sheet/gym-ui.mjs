@@ -67,9 +67,29 @@ async function sync() {
   syncFailed = !(await box.flush(send));
   note();
 }
+// The status line says where his sets are: "Saved on phone · will sync" while writes wait (offline,
+// a failed send, or a send taking over 2 s), then "Saved" for 3 s once they all went up.
+let queuedShown = false;
+let queuedTimer = null;
+let savedUntil = 0;
 function note() {
   const n = $("[data-gym-offline]");
-  if (n) n.hidden = !(box.pending() && (syncFailed || !navigator.onLine));
+  if (!n) return;
+  const show = (text) => { n.textContent = text; n.hidden = false; };
+  if (box.pending()) {
+    savedUntil = 0;
+    if (syncFailed || !navigator.onLine) { queuedShown = true; show("Saved on phone · will sync"); }
+    else if (!queuedShown && !queuedTimer) queuedTimer = setTimeout(() => { queuedTimer = null; if (box.pending()) { queuedShown = true; show("Saved on phone · will sync"); } }, 2000);
+    return;
+  }
+  clearTimeout(queuedTimer);
+  queuedTimer = null;
+  if (queuedShown) {
+    queuedShown = false;
+    savedUntil = Date.now() + 3000;
+    show("Saved");
+    setTimeout(note, 3100);
+  } else if (Date.now() >= savedUntil) n.hidden = true;
 }
 
 // --- Loading -----------------------------------------------------------------------------------
@@ -342,7 +362,7 @@ function logSet({ rx, exId, name, spec, done, values }) {
   if (!done) {
     startRest(spec.warmup ? 60 : rx.rest_min_s ?? 120);
     S.rpeFor = spec.warmup ? null : row.id;
-    offerUndo(`Saved ${lb(row.weight_lb)} × ${row.reps}`, () => drop("gym_sets", row.id));
+    offerUndo(`Logged ${lb(row.weight_lb)} × ${row.reps}`, () => drop("gym_sets", row.id));
   }
   if (prs.length) banner(name, prs[0]);
   render();

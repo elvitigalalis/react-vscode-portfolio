@@ -79,8 +79,9 @@ has a where, and pg-safeupdate is loaded for PostgREST's role (checked by `tools
 
 The outbox flushes after each write, when the phone comes back online, when the page becomes
 visible, and every 30 s while writes are waiting. An entry leaves the outbox only after the server
-takes that exact version. "Saved on phone, syncing" shows while writes are waiting and the phone
-is offline. The page also keeps a copy of the rows, so it can reload with a bad signal.
+takes that exact version. The status line says "Saved on phone · will sync" while writes wait (offline,
+a failed send, or one taking over 2 s), then "Saved" for 3 s once all went up; the ✓ toast only
+says "Logged". The page also keeps a copy of the rows, so it can reload with a bad signal.
 
 ## Home screen
 
