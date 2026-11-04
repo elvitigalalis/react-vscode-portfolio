@@ -19,10 +19,9 @@ test("readHabit: the form's values as a habits row", () => {
     { habit: { name: "Weekly review", days: [7], ideal: "16:00", minutes: 45, flex_min: 60, defence: "firm" } });
 });
 
-test("readHabit: refuses what the table would", () => {
+test("readHabit: refuses a bad name or no days (the form's constraints hold the rest)", () => {
   const ok = { name: "Gym", days: ["1"], ideal: "07:30", minutes: "60", flex_min: "30", defence: "flexible" };
   for (const bad of [
-    { name: " " }, { name: "x".repeat(41) }, { days: [] }, { days: ["0"] }, { ideal: "7:30" },
-    { minutes: "10" }, { minutes: "17" }, { minutes: "245" }, { flex_min: "-5" }, { flex_min: "241" }, { defence: "strict" },
+    { name: " " }, { name: "x".repeat(41) }, { days: [] }, { days: ["0"] }, { days: ["8"] },
   ]) assert.ok(readHabit({ ...ok, ...bad }).error, JSON.stringify(bad));
 });

@@ -165,8 +165,8 @@ import "../../styles/sheet.css";
           <label>Name <input name="name" type="text" maxlength="40" required placeholder="Gym"></label>
           <fieldset><legend>Days</legend> <label><input type="checkbox" name="days[]" value="1"> Mon</label> <label><input type="checkbox" name="days[]" value="2"> Tue</label> <label><input type="checkbox" name="days[]" value="3"> Wed</label> <label><input type="checkbox" name="days[]" value="4"> Thu</label> <label><input type="checkbox" name="days[]" value="5"> Fri</label> <label><input type="checkbox" name="days[]" value="6"> Sat</label> <label><input type="checkbox" name="days[]" value="7"> Sun</label></fieldset>
           <label>Ideal time <input name="ideal" type="time" value="12:00" required></label>
-          <label>Minutes <input name="minutes" class="sheet-cap" type="number" min="15" max="240" step="5" value="30"></label>
-          <label>Flex ± <input name="flex_min" class="sheet-cap" type="number" min="0" max="240" step="5" value="30"></label>
+          <label>Minutes <input name="minutes" class="sheet-cap" type="number" min="15" max="240" step="5" value="30" required></label>
+          <label>Flex ± <input name="flex_min" class="sheet-cap" type="number" min="0" max="240" step="5" value="30" required></label>
           <label>Defence <select name="defence"><option value="flexible">Flexible</option><option value="firm">Firm</option></select></label>
           <p class="sheet-dialog-end"><span class="small" role="status" data-habit-note></span> <button type="submit" class="sheet-btn primary">Add habit</button></p>
         </form>
