@@ -184,6 +184,19 @@ test("strip: a new pass starts clean, so last pass's sessions aren't shown as do
   assert.ok(later[1].every((d) => d.state === ""));
 });
 
+test("a one-week program (only Week 4): cycles Push #1 to Legs #2 and back, with one six-day strip", () => {
+  const NAMES = ["Push #1", "Pull #1", "Legs #1", "Push #2", "Pull #2", "Legs #2"];
+  const week4 = KEYS.map((day_key, i) => ({ id: `w4-${day_key}`, phase: 3, week: 4, day_key, name: NAMES[i], position: i + 1 }));
+  assert.equal(nextDay(week4, []), "w4-push1");
+  assert.equal(nextDay(week4, [done("w4-push1", "2026-01-01")]), "w4-pull1");
+  assert.equal(nextDay(week4, [done("w4-pull2", "2026-01-05"), done("w4-legs2", "2026-01-06")]), "w4-push1");
+  const pass = KEYS.map((k, i) => done(`w4-${k}`, `2026-01-0${i + 1}`));
+  const rows = strip(week4, pass, "w4-push1");
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].map((d) => d.state), ["today", "next", "", "", "", ""]);
+  assert.deepEqual(strip(week4, [...pass, done("w4-push1", "2026-01-08")], "w4-pull1")[0].map((d) => d.state), ["done", "today", "next", "", "", ""]);
+});
+
 // --- Plates -----------------------------------------------------------------------------------
 
 test("plates: per side on a 45 lb bar, heaviest first", () => {

@@ -485,13 +485,15 @@ const twins = (rx) => {
   const key = dayKeys()[rx.program_day_id];
   return D.rxs.filter((r) => dayKeys()[r.program_day_id] === key && r.position === rx.position && r.exercise_id === rx.exercise_id);
 };
+// "in every week" only when the program has more than one week.
+const everyWeek = () => (new Set(D.days.map((d) => d.week)).size > 1 ? " in every week" : "");
 const editRx = (rx, patch) => { for (const r of twins(rx)) put("gym_prescriptions", { ...r, ...patch }); render(); };
 
 function drawEdit(main) {
   const day = byId(D.days, S.dayId);
   if (S.session) { main.append(el("p", { className: "sheet-status", textContent: "Finish today's workout to edit the program: changes apply from the next session." })); return; }
   if (!day) return;
-  main.append(el("p", { className: "gym-day", textContent: `${day.name}, every week` }),
+  main.append(el("p", { className: "gym-day", textContent: new Set(D.days.map((d) => d.week)).size > 1 ? `${day.name}, every week` : dayLabel(day) }),
     el("p", { className: "small", textContent: "Changes apply from the next session. Logged sets keep their exercise." }));
   const list = rxsOf(day.id);
   const field = (id, label, value, onChange, props = {}) => {
@@ -519,7 +521,7 @@ function drawEdit(main) {
     const remove = btn("Remove", { className: "sheet-link", ariaLabel: `Remove ${ex?.name} from ${day.name}` });
     up.addEventListener("click", () => move(-1));
     down.addEventListener("click", () => move(1));
-    remove.addEventListener("click", () => { if (confirm(`Remove ${ex?.name} from ${day.name} in every week?`)) { for (const r of twins(rx)) drop("gym_prescriptions", r.id); render(); } });
+    remove.addEventListener("click", () => { if (confirm(`Remove ${ex?.name} from ${day.name}${everyWeek()}?`)) { for (const r of twins(rx)) drop("gym_prescriptions", r.id); render(); } });
     main.append(el("section", { className: "gym-card gym-edit", ariaLabel: ex?.name ?? "Exercise" },
       field(`${id}-n`, "Name", ex?.name, (v) => { if (v && ex) { put("gym_exercises", { ...ex, name: v }); render(); } }, { maxLength: 80 }),
       el("div", { className: "gym-fields" },

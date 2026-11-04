@@ -20,9 +20,10 @@ JavaScript must stay at or under 40 KB gzipped (`check/budget.mjs`, run by `npm 
 ## Today
 
 - The page opens on the session after the last finished one, in program order, not by calendar
-  date. After Week 4 Legs #2 it goes back to Week 1. A picker chooses another day. The picker is
+  date. After the program's last day (Legs #2 of its last week) it goes back to its first; a
+  program of one week (Lisul runs only Week 4) cycles Push #1 → … → Legs #2 → Push #1. A picker chooses another day. The picker is
   locked once a set is logged.
-- The 4 × 6 strip shows the days done in this pass, today's day and the next one.
+- The strip (one row of six days per week in the program) shows the days done in this pass, today's day and the next one.
 - Each exercise gets a card with: the prescription line, last time (the same program day first),
   today's suggestion and its reason, and an e1RM sparkline.
 - Below that come the set rows. Warm-up rows (W) come first, prefilled from about 50% to 85% of
