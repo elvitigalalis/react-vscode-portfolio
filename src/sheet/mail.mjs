@@ -180,3 +180,36 @@ export function businessDays(fromIso, toIso, timeZone) {
   }
   return n;
 }
+
+// A header's value from Gmail's `payload.headers` ([{ name, value }]), any case, or "".
+const headerOf = (headers, name) => (headers ?? []).find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+// An address list ("Ana <a@x.edu>, b@y.com") as [{ name, address }]: commas inside quotes don't
+// split, a quoted name loses its quotes, and `name` is "" without one.
+export function parseAddresses(value) {
+  const parts = String(value ?? "").match(/(?:"[^"]*"|[^,])+/g) ?? [];
+  return parts.map((part) => {
+    const angle = part.match(/<([^>]*)>/);
+    const address = (angle ? angle[1] : part).trim().toLowerCase();
+    const name = angle ? part.slice(0, angle.index).trim().replace(/^"(.*)"$/, "$1").trim() : "";
+    return { name, address };
+  }).filter((a) => a.address.includes("@"));
+}
+
+// Local parts that only machines write from.
+const AUTOMATED_LOCAL = /^(?:no-?reply|do-?not-?reply|notifications?|mailer-daemon|bounces?)(?:[-+._].*)?$/i;
+
+// True for mail no person wrote: a no-reply style From address, or a mailing list or
+// auto-reply header (RFC 2369 List-*, RFC 2919 List-Id, RFC 3834 Auto-Submitted, Precedence).
+export function automatedSender(headers) {
+  const from = parseAddresses(headerOf(headers, "From"))[0];
+  if (from && AUTOMATED_LOCAL.test(from.address.split("@")[0])) return true;
+  if (headerOf(headers, "List-Id") || headerOf(headers, "List-Unsubscribe")) return true;
+  const auto = headerOf(headers, "Auto-Submitted").trim().toLowerCase();
+  if (auto && auto !== "no") return true;
+  return /^(bulk|list|junk)$/i.test(headerOf(headers, "Precedence").trim());
+}
+
+// The Gmail categories spec 47 leaves out of reply tracking.
+export const SKIPPED_CATEGORIES = ["CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"];
+export const skippedCategory = (labels) => (labels ?? []).some((l) => SKIPPED_CATEGORIES.includes(l));
