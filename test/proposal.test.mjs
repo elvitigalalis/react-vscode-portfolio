@@ -201,3 +201,23 @@ test("planSnapshot v5: a replan run at 4 pm plans today from now, not tomorrow",
   // A replans row of another day never makes a replan run.
   assert.equal(planSnapshot(v5Rows({ replan: { ...replan, day: "2026-11-03" } }), new Date("2026-11-04T14:20:00Z")).run.trigger, "morning");
 });
+
+// --- Fix: changes logged during a run stay for the next replan ------------------------------------
+
+test("planSnapshot v5: read_at is when the snapshot was read; checkProposal passes it on to apply_proposal", async () => {
+  const { planSnapshot, checkProposal } = await import("../src/sheet/proposal.mjs");
+  const read = new Date("2026-11-04T14:07:00Z");
+  const s = planSnapshot(v5Rows(), read);
+  assert.equal(s.read_at, "2026-11-04T14:07:00.000Z");
+  // Submitted four minutes later, against a fresh snapshot.
+  const fresh = planSnapshot(v5Rows(), new Date("2026-11-04T14:11:00Z"));
+  const input = { day: DAY, replaces: 2, blocks: [], read_at: s.read_at };
+  const r = checkProposal(input, fresh);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(r.rows.read_at, "2026-11-04T14:07:00.000Z");
+  // Without it, apply_proposal keeps its own clock (rows have no read_at).
+  assert.equal("read_at" in checkProposal({ ...input, read_at: undefined }, fresh).rows, false);
+  // Not a time, or after the fresh read: refused.
+  assert.match(checkProposal({ ...input, read_at: "soon" }, fresh).errors.join(" "), /^read_at/);
+  assert.match(checkProposal({ ...input, read_at: "2026-11-04T14:12:00.000Z" }, fresh).errors.join(" "), /^read_at/);
+});

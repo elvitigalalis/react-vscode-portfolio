@@ -72,6 +72,8 @@ const ProposalInput = z.object({
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   // v5: the revision this one replaces, null for the day's first (checkProposal checks it).
   replaces: z.number().int().nullish(),
+  // read_planner's read_at: the revision consumes only the changes logged by then.
+  read_at: z.string().max(40).nullish(),
   blocks: z.array(z.object({ task_id: z.string().max(64), start: z.string().max(5), minutes: z.number().int() })).max(50).default([]),
   needs_you: z.array(z.object({
     account: z.string().max(320),
@@ -131,7 +133,7 @@ function plannerServer(db: Db) {
 
   server.registerTool("submit_proposal", {
     description: "Submit a plan revision for plan_day: replaces (the proposal's rev from read_planner, or null when " +
-      "there is none), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
+      "there is none), read_at (read_planner's read_at, as given), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
       "at-risk tasks that couldn't fit, habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +

@@ -104,6 +104,9 @@ export function planSnapshot(rows, now) {
   return {
     version: 5,
     now: now.toISOString(),
+    // When this snapshot was read: submit_proposal passes it back, so the revision consumes only
+    // the changes logged by then (apply_proposal's read_at).
+    read_at: now.toISOString(),
     time_zone: tz,
     plan_day: day,
     shutdown,
@@ -475,6 +478,7 @@ export function checkProposal(input, snapshot, senders = {}) {
   const note = input?.note == null ? null : text(input.note, "note", 280, errors);
   const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
   const suggested = v5 ? suggestedTasks(input, errors) : null;
+  const readAt = v5 ? readAtOf(input, snapshot, errors) : null;
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
@@ -482,9 +486,18 @@ export function checkProposal(input, snapshot, senders = {}) {
   const kept = dropNeverShown(needs, suggested, snapshot, senders);
   return {
     ok: true, errors: [],
-    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons },
+    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons, ...(readAt ? { read_at: readAt } : {}) },
     dropped: kept.dropped,
   };
+}
+
+// read_at, the read_planner snapshot's time the run submits against: optional (without it
+// apply_proposal uses its own clock), and never after this submit's fresh snapshot.
+function readAtOf(input, snapshot, errors) {
+  if (input?.read_at == null) return null;
+  const at = typeof input.read_at === "string" ? Date.parse(input.read_at) : NaN;
+  if (Number.isNaN(at) || at > Date.parse(snapshot.now)) return errors.push("read_at: must be the read_at read_planner gave"), null;
+  return new Date(at).toISOString();
 }
 
 // v5 L1, never-show rules: the needs rows (all valid, so in input order) gain from_address, and

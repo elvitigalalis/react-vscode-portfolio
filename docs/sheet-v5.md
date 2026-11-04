@@ -163,7 +163,10 @@ weather_cache id boolean pk default true check (id), point text not null,
       is skipped.
       **Decided (SRC2):** only `source = 'mail'` items are replaced; Slack items stay until done.
     - It sets `consumed_day = d, consumed_rev = <new rev>` on every `changes` row with both null
-      and `at <= now()`.
+      and `at <= read_at`. **Fix:** `apply_proposal` takes a last argument `read_at timestamptz
+      default null`, read_planner's `read_at` passed back by submit_proposal; null (an older
+      prompt) means `now()`, as before, and a time after now reads as now. The revision keeps it
+      in `proposals.read_at`, so a change logged while the run worked waits for the next replan.
     - The v4 `apply_proposal(date, jsonb, jsonb, jsonb, text)` is dropped, and V1 moves the v4
       apply_proposal checks in tools/test-schema.sh to this signature.
   - `approve_proposal(d date, rev int) returns int` refuses `'revision % of % is not the pending
@@ -251,8 +254,9 @@ weather_cache id boolean pk default true check (id), point text not null,
 - `shouldReplan(changes, state, now)` returns `{ fire: true, reasons, counts, ids }` or
   `{ fire: false, hold }`.
   - `changes` are the rows with `replan_id` and `consumed_rev` null. Rows with `at` after `now`,
-    or at or before `state.last_plan_at`, are ignored (the plan already saw them, and the run's
-    own proposal never counts).
+    or at or before `state.seen_until`, are ignored (the plan already saw them, and the run's
+    own proposal never counts). **Fix:** `seen_until` is the newest revision's `read_at`, or its
+    `created_at` without one; a state without `seen_until` reads `last_plan_at` instead.
   - `state` is `{ settings: { time_zone, replans_on, morning_on }, day: today's days row | null,
     shutdown: "HH:MM", plans_today, last_plan_at, last_edit_at }`:
     - `plans_today`: 1 when today has a `morning` revision, plus today's `replans` rows that
@@ -260,6 +264,7 @@ weather_cache id boolean pk default true check (id), point text not null,
       ran and counts for nothing;
     - `last_plan_at`: the later of the newest revision's `created_at` and the newest such
       `replans.at`, today, or null;
+    - `seen_until`: today's newest revision's `read_at ?? created_at`, or null;
     - `last_edit_at`: `settings.plan_edited_at`.
   - The holds, checked in this order, give `hold`:
     `replans_off`, `morning_off`, `quiet` (before 8:00 or from 23:00), `shut_down`
@@ -381,6 +386,9 @@ weather_cache id boolean pk default true check (id), point text not null,
     parent of it, so `mail.example.com` matches `example.com`) is dropped, not an error.
     `dropped` lists `[{ index, message_id, pattern }]`, and a suggestion for a dropped item is
     dropped with it. An `always` rule never drops anything.
+  - **read_at** (fix): optional; `planSnapshot` returns `read_at` (its `now`), and a submitted
+    `read_at` must be a time no later than the fresh snapshot's, or the error names `read_at`.
+    When given, `rows.read_at` carries it (ISO, UTC); without it `rows` has no `read_at`.
   - **rows**, when ok, are `apply_proposal`'s named arguments: `{ d, replaces, blocks,
     habit_blocks, needs, picks, note, couldnt_fit, suggested, run_trigger, reasons }`, where
     `run_trigger` and `reasons` are `snapshot.run`'s, `needs` carries `from_address` from
@@ -649,7 +657,7 @@ weather_cache id boolean pk default true check (id), point text not null,
   null), so they are weighed again. No replan fires before `retry_after`, and a request is never
   retried without a new `replans` row. The token lives only in the function's env.
 - **`read_planner()`** returns `planSnapshot` as above.
-- **`submit_proposal({ day, replaces, blocks, habits, needs_you, picks, note, couldnt_fit,
+- **`submit_proposal({ day, replaces, read_at, blocks, habits, needs_you, picks, note, couldnt_fit,
   suggested })`** reads `message_senders` for the submitted items, runs `checkProposal`, and on
   success calls `apply_proposal` and returns `{ ok: true, rev, blocks: n, habits: n,
   needs_you: n, dropped: [message_id] }`.
