@@ -65,6 +65,15 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
         from someone I know.
       </p>
 
+      <h2>What it reads from Slack</h2>
+      <p>
+        Once an hour its server searches my Slack for messages that mention me and direct messages
+        to me, with a token of my own that can only search and read. For each one, Needs you keeps
+        the channel, the sender's username and a link to the message, never the message text, until
+        I mark it done or for up to 14 days; after that only the message's id is kept, so it
+        isn't shown again. It can't post, react or change anything in Slack.
+      </p>
+
       <h2>Google's rules</h2>
       <p>
         The Sheet's use and transfer to any other app of information received from Google APIs
@@ -76,6 +85,10 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
       <p>
         Remove a mail account in the planner's Settings, which deletes its key, or revoke The Sheet
         at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>.
+      </p>
+      <p>
+        Slack: removing the token from the server, or revoking it in Slack, stops the search at
+        once.
       </p>
 
       <h2>Contact</h2>

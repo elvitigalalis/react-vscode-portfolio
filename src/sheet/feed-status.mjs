@@ -8,7 +8,7 @@ import { actHooks, el, failed, icon, settingsHooks, state } from "./planner.mjs"
 import { feedAlert } from "./glance.mjs";
 import { githubOrgsFromInput } from "./sources.mjs";
 
-const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack" };
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // "Brightspace: ok, 12 items, Nov 3, 2:20 PM", or the error. A row with no fetch yet says so.
