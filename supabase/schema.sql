@@ -166,6 +166,9 @@ begin
   delete from needs_you where done or coalesce(created_at, day::timestamptz) < now() - interval '14 days';
   -- v5 P1: actuals are kept 120 days.
   delete from actuals where at < now() - interval '120 days';
+  -- v5 R1: changes and replans are kept 14 days.
+  delete from changes where at < now() - interval '14 days';
+  delete from replans where at < now() - interval '14 days';
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -874,6 +877,51 @@ alter table blocks alter column task_id drop not null;
 alter table blocks drop constraint if exists blocks_task_or_habit;
 alter table blocks add constraint blocks_task_or_habit check ((task_id is null) <> (habit_id is null));
 create index if not exists blocks_habit on blocks (habit_id);
+
+-- --- v5 R1, replans during the day (docs/sheet-v5.md) -----------------------------------------
+-- Syncs log each change they find, with a weight (REASON_WORDS in src/sheet/replan.mjs); the
+-- telegram minute tick decides from them when a replan is worth a run (shouldReplan) and logs
+-- each one it starts in replans. Only the server writes either. apply_proposal runs as the owner
+-- and marks the changes a revision read, so the owner keeps update on those two columns only.
+-- nightly_roll keeps 14 days of both.
+alter table settings add column if not exists replans_on boolean not null default false;
+alter table settings add column if not exists plan_edited_at timestamptz;   -- /plan's last write
+
+create table if not exists replans (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  day date not null,
+  reasons text[] not null,
+  counts jsonb not null,                         -- { kind: n }
+  result text check (result in ('started', 'failed', 'rate_limited')),   -- null while sending
+  retry_after timestamptz,
+  session_id text,
+  error text check (char_length(error) <= 300)
+);
+create index if not exists replans_day_at on replans (day, at desc);
+
+create table if not exists changes (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  kind text not null check (kind in ('mail', 'busy', 'course', 'campus', 'github', 'jira', 'slack', 'handshake')),
+  reason text not null,
+  weight int not null check (weight between 1 and 10),
+  ref text check (char_length(ref) <= 200),      -- an id in the source; never a title
+  replan_id uuid references replans on delete set null,
+  consumed_day date,
+  consumed_rev int
+);
+create index if not exists changes_open on changes (at) where consumed_rev is null;
+
+alter table changes enable row level security;
+alter table replans enable row level security;
+drop policy if exists owner_all on changes;
+create policy owner_all on changes for all using (is_owner()) with check (is_owner());
+drop policy if exists owner_all on replans;
+create policy owner_all on replans for all using (is_owner()) with check (is_owner());
+revoke all on changes, replans from anon;
+revoke insert, update, delete on changes, replans from authenticated;
+grant update (consumed_day, consumed_rev) on changes to authenticated;
 
 -- --- v5 SRC3, Handshake, the academic calendar and enrollment (docs/sheet-v5.md) ---------------
 -- When spring enrollment opens, entered once in /plan Settings; ical-sync turns it into one task

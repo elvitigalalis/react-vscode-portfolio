@@ -82,9 +82,22 @@ async function rest(path, { method = "GET", body, prefer, anon = false } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new SheetError(`${method} ${path.split("?")[0]}: ${res.status}`);
+  if (!anon && stampsEdit(method, path)) stampEdit();
   // Writes without return=representation answer 201 or 204 with an empty body.
   const text = await res.text();
   return text ? JSON.parse(text) : null;
+}
+
+// v5 R1 (docs/sheet-v5.md, "/plan"): a write to tasks or blocks (a × on a proposed block too)
+// stamps settings.plan_edited_at, at most once a minute, so no replan starts while he edits.
+const EDIT_STAMP_MS = 60_000;
+let editStampedAt = 0;
+export const stampsEdit = (method, path) => method !== "GET" && /^(tasks|blocks|rpc\/turn_down)(\?|$)/.test(path);
+function stampEdit() {
+  if (Date.now() - editStampedAt < EDIT_STAMP_MS) return;
+  editStampedAt = Date.now();
+  rest("settings?id=eq.true", { method: "PATCH", body: { plan_edited_at: new Date(editStampedAt).toISOString() } })
+    .catch(() => { editStampedAt = 0; });
 }
 
 // Public views, readable by anyone.
