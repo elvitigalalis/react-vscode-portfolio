@@ -52,6 +52,7 @@ function runOf(rows, now) {
 //   actuals    v5 P1: the actuals rows (pace)
 //   past       v5 P1: the approved blocks of the 14 days before plan_day, each with its task's
 //              done as `task: { done }` (paceQueries, proposal-io.mjs)
+//   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -105,6 +106,8 @@ export function planSnapshot(rows, now) {
     day_rules: dayRules(settings),
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
+    // v5 SRC3: plan_day's academic calendar entries (academic_days), [] without them.
+    academic: (rows.academic ?? []).map((e) => ({ title: e.title, all_day: e.all_day })),
     // v5 P1.
     pace,
     planned_vs_done: plannedVsDone(past, past.map((b) => ({ id: b.task_id, done: Boolean(b.task?.done) })), day, tz),

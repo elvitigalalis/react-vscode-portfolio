@@ -1,6 +1,6 @@
 // Read-only sources for the planner (docs/sheet-v5.md, "sources.mjs"): what the sync functions
 // turn each outside feed into. Pure, so node --test covers it; the Edge Functions import it.
-import { formatSpan, minutesOn, cutTitle } from "./logic.mjs";
+import { formatSpan, minutesOn, cutTitle, localNow, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
@@ -74,4 +74,61 @@ export function weatherLine(periods, alerts, day, timeZone) {
     .map((a) => cutTitle(String(a.event ?? "").replace(/\s+/g, " "))))].filter((e) => e && !linkish(e)).slice(0, MAX_ALERTS);
   if (events.length) line += ` Alert: ${events.join(", ")}.`;
   return line;
+}
+
+// --- Handshake, the academic calendar and enrollment (SRC3) ----------------------------------
+// Both feeds are iCal links (RFC 5545), read by parseIcs (ical.mjs); ical-sync fetches them.
+
+// Handshake's interviews and appointments, which count as busy; its events (fairs, info sessions)
+// don't. The summary has to start with the word, so "Info Session: … interview tips" is left out.
+const HANDSHAKE_BUSY = /^(interview|appointment)/i;
+
+// Parsed Handshake events to busy rows, in feed order.
+export const handshakeBusy = (events) => events
+  .filter((e) => !e.allDay && HANDSHAKE_BUSY.test(e.summary.trim()))
+  .map((e) => ({ source: "handshake", starts_at: e.start, ends_at: e.end }));
+
+const ACADEMIC_TITLE = 80;
+
+// Whether a parsed event is on `day`: an all-day one from its start date to before its end date,
+// a timed one (UTC from parseIcs) when it overlaps the day in `timeZone`; a zero-length one when
+// it starts on the day.
+function onDay(e, day, timeZone) {
+  if (e.allDay) return e.start <= day && day < e.end;
+  const s = minutesOn(e.start, day, timeZone), t = minutesOn(e.end, day, timeZone);
+  return s < 1440 && (t > 0 || (s === t && s >= 0));
+}
+
+// The brief's and read_planner's academic calendar entries on `day`: [{ title, all_day }], in
+// feed order, one-line titles cut to 80, leaving out any that read as a link.
+export const academicEntries = (events, day, timeZone) => events
+  .filter((e) => onDay(e, day, timeZone) && !linkish(e.summary))
+  .map((e) => ({ title: cutTitle(String(e.summary ?? "").replace(/\s+/g, " ")).slice(0, ACADEMIC_TITLE).trim(), all_day: e.allDay }))
+  .filter((e) => e.title);
+
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+// The one task for settings.enrollment_at, on its local day at its local time, or null when it
+// isn't set. ical-sync upserts it on (source, source_uid), so moving the time moves the task.
+export function enrollmentTask(enrollmentAt, timeZone) {
+  if (!enrollmentAt) return null;
+  const { day, minutes } = localNow(new Date(enrollmentAt), timeZone);
+  return { title: "Enrollment opens", day, at_time: hhmm(minutes), est_min: 15, public: false, list: null, source: "enrollment", source_uid: "enrollment" };
+}
+
+// /plan Settings' enrollment time: settings.enrollment_at as a datetime-local value
+// ("2026-11-12T07:00", local to `timeZone`), and back to an ISO instant. Blank is null; a value
+// that isn't a date and time is undefined, so nothing is saved.
+export function enrollmentInput(enrollmentAt, timeZone) {
+  if (!enrollmentAt) return "";
+  const { day, minutes } = localNow(new Date(enrollmentAt), timeZone);
+  return `${day}T${hhmm(minutes)}`;
+}
+
+export function enrollmentFromInput(value, timeZone) {
+  const v = String(value ?? "").trim();
+  if (!v) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)$/.exec(v);
+  if (!m || Number.isNaN(Date.parse(`${m[1]}T00:00:00Z`))) return undefined;
+  return zonedIso(m[1], Number(m[2]) * 60 + Number(m[3]), timeZone);
 }
