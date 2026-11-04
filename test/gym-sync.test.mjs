@@ -52,15 +52,16 @@ test("outbox: offline keeps every set on the phone, and the next flush sends the
   assert.equal(outbox(storage).pending(), 0);
 });
 
-test("outbox: a set changed while it was being sent stays queued with its new values", async () => {
+test("outbox: a set saved or changed while a flush runs goes up in that flush, with its new values", async () => {
   const box = outbox(memory());
   box.put("gym_sets", aSet("a", 5));
   const calls = [];
-  const slow = async (call) => { calls.push(structuredClone(call)); if (calls.length === 1) box.put("gym_sets", aSet("a", 7)); };
-  await box.flush(slow);
-  assert.equal(box.pending(), 1);
-  await box.flush(slow);
-  assert.deepEqual(calls.map((c) => c.rows[0].reps), [5, 7]);
+  const slow = async (call) => {
+    calls.push(structuredClone(call));
+    if (calls.length === 1) { box.put("gym_sets", aSet("a", 7)); box.put("gym_sets", aSet("b", 4)); }
+  };
+  assert.equal(await box.flush(slow), true);
+  assert.deepEqual(calls.map((c) => c.rows.map((r) => `${r.id}${r.reps}`)), [["a5"], ["a7", "b4"]]);
   assert.equal(box.pending(), 0);
 });
 
