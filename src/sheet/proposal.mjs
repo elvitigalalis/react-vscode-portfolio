@@ -35,13 +35,23 @@ function windowFrom(now, day, tz) {
 // minutes old. Otherwise this is the morning run. The changes since the newest revision go in as
 // kinds and counts only.
 const REPLAN_FRESH = 30 * 60_000;
-function runOf(rows, now) {
+const freshReplan = (r, proposal, now) => Boolean(r && r.result === "started"
+  && Date.parse(r.at) > (proposal ? Date.parse(proposal.created_at) : -Infinity) && now - Date.parse(r.at) < REPLAN_FRESH);
+function runOf(rows, now, day) {
   const r = rows.replan;
-  const after = rows.proposal ? Date.parse(rows.proposal.created_at) : -Infinity;
-  const replan = r && r.result === "started" && Date.parse(r.at) > after && now - Date.parse(r.at) < REPLAN_FRESH;
+  // A replans row is for its own day (one without `day` reads as plan_day's).
+  const replan = freshReplan(r, rows.proposal, now) && (r.day == null || r.day === day);
   const changes = {};
   for (const c of list(rows.changes)) changes[c.kind] = (changes[c.kind] ?? 0) + 1;
   return { trigger: replan ? "replan" : "morning", reasons: replan ? [...r.reasons] : [], changes };
+}
+
+// The day a run plans: today when a replan started this run (`replan`, today's newest replans
+// row, fresh and after `proposal`, today's newest revision), since a replan plans the rest of
+// today even from 3 pm; otherwise the 3 pm rule's planningDay.
+export function planDayOf(now, timeZone, replan, proposal) {
+  const here = localNow(now, timeZone);
+  return replan?.day === here.day && freshReplan(replan, proposal, now) ? here.day : planningDay(here);
 }
 
 // v5 M1: the reply_state rows by state, oldest first, as { account, thread_id, who, since }.
@@ -69,7 +79,8 @@ function replyStateOf(rows) {
 export function planSnapshot(rows, now) {
   const { settings } = rows;
   const tz = settings.time_zone;
-  const day = planningDay(localNow(now, tz));
+  // A replan run's plan_day comes in as rows.plan_day (planDayOf); otherwise the 3 pm rule.
+  const day = rows.plan_day ?? planningDay(localNow(now, tz));
   const line = rows.days.find((d) => d.day === day)?.shutdown_at;
   const risky = (t) => atRisk(t, rows.blocks, day, tz);
   const undone = rows.tasks.filter((t) => !t.done);
@@ -96,7 +107,7 @@ export function planSnapshot(rows, now) {
     time_zone: tz,
     plan_day: day,
     shutdown,
-    run: runOf(rows, now),
+    run: runOf(rows, now, day),
     window: { from: windowFrom(now, day, tz), to: shutdown },
     turned_down: turnedDown,
     tasks,

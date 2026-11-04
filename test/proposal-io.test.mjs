@@ -99,8 +99,23 @@ test("replanQueries: plan_day's newest replan and the changes since the newest r
   const { replanQueries } = await import("../src/sheet/proposal-io.mjs");
   const at1002 = new Date("2026-11-04T15:02:00Z");
   const q = replanQueries(at1002, TZ, { created_at: "2026-11-04T11:09:00Z" });
-  assert.equal(queryPath(q.replan), "replans?select=at,reasons,result&day=eq.2026-11-04&order=at.desc");
+  assert.equal(queryPath(q.replan), "replans?select=day,at,reasons,result&day=eq.2026-11-04&order=at.desc");
   assert.equal(queryPath(q.changes), "changes?select=at,kind&at=gt.2026-11-04T11:09:00Z&at=lte.2026-11-04T15:02:00.000Z&order=at");
   // No revision yet: from plan_day's midnight.
   assert.equal(queryPath(replanQueries(at1002, TZ, null).changes), "changes?select=at,kind&at=gt.2026-11-04T05:00:00.000Z&at=lte.2026-11-04T15:02:00.000Z&order=at");
+});
+
+test("snapshotQueries and replanQueries: a replan's plan_day (today, after 3 pm) is read instead of the 3 pm rule's", async () => {
+  const { replanQueries, paceQueries, todayReplanQueries } = await import("../src/sheet/proposal-io.mjs");
+  const four = new Date("2026-11-04T21:00:00Z"); // 4:00 pm
+  assert.equal(snapshotQueries(four, TZ).plan_day, "2026-11-05");
+  const q = snapshotQueries(four, TZ, "2026-11-04");
+  assert.equal(q.plan_day, "2026-11-04");
+  assert.equal(queryPath(q.queries.days), "days?select=*&day=eq.2026-11-04");
+  assert.equal(queryPath(replanQueries(four, TZ, null, "2026-11-04").replan), "replans?select=day,at,reasons,result&day=eq.2026-11-04&order=at.desc");
+  assert.match(queryPath(paceQueries(four, TZ, "2026-11-04").past), /starts_at=lt\.2026-11-04T05:00:00\.000Z/);
+  // What decides plan_day: today's newest replan and today's newest revision.
+  const t = todayReplanQueries(four, TZ);
+  assert.equal(queryPath(t.replan), "replans?select=day,at,reasons,result&day=eq.2026-11-04&order=at.desc");
+  assert.equal(queryPath(t.proposal), "proposals?select=created_at&day=eq.2026-11-04&order=rev.desc");
 });
