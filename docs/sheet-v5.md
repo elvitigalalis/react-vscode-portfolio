@@ -121,7 +121,9 @@ weather_cache id boolean pk default true check (id), point text not null,
   `{ account, message_id, from_address }`; finished `{ block_id, task_id }`.
 - **Writers.** Server functions (service key) write `calendar_account`, `changes`, `replans`,
   `known_senders`, `message_senders`, `reply_state` and `weather_cache`; the browser may read
-  them, and delete `calendar_account`. /plan writes `habits` and `triage_rules`. Telegram and
+  them, and delete `calendar_account`. `apply_proposal` runs as the owner (`security invoker`),
+  so `changes` keeps `grant update (consumed_day, consumed_rev) … to authenticated` for it to
+  mark the changes a revision read. /plan writes `habits` and `triage_rules`. Telegram and
   /plan insert `feedback`; nobody updates or deletes it but `nightly_roll`. Telegram inserts
   `actuals`.
 - **Vault, the calendar grant** (as `mail_account_save` and `mail_refresh_token`, revoked from
@@ -300,7 +302,8 @@ weather_cache id boolean pk default true check (id), point text not null,
   pace: paceByKind(actuals),
   planned_vs_done: plannedVsDone(...),
   turned_down: [task_id],              -- and those tasks leave `tasks`
-  habits: [{ id, name, ideal: "HH:MM", minutes, flex_min, defence }],   -- plan_day's weekday
+  habits: [{ id, name, ideal: "HH:MM", minutes, flex_min, defence }],   -- plan_day's weekday;
+                                       -- firm ones first, then flexible, each by ideal, then position
   triage_rules: [{ match, pattern, action }],
   reply_state: { owed: [{ account, thread_id, who, since }], awaiting: [ … ] },
   weather: weatherHours(...),          -- [] without a cache
@@ -370,7 +373,8 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **The snapshot** gains `busy` (today's busy rows), `weather` (the `weather_cache` row),
   `academic` (today's entries), `awaiting` (the `reply_state` rows with state `awaiting`) and
   `replanSent` (how many `replan` nudges went out today). `proposal` is today's newest revision,
-  with `rev`; for a plan tap, the tapped day's newest.
+  with `rev` and its `blocks`; for a plan tap, the tapped day's newest. `previous` (R1) is the
+  revision before it that day, with `status` and `blocks`, or null.
 - **Plan buttons** carry the revision when the proposal has one: `pa:<day>:<rev>` and
   `ps:<day>:<rev>`.
 - **Taps.** `readTap` reads `pa:<day>:<rev>` and `ps:<day>:<rev>`, with a revision 1–999 without
@@ -392,7 +396,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **The replan message** (`kind: "replan"`, `block_id: null`, `send_at` = the revision's
   `created_at`): for a pending `replan` revision whose proposed blocks differ, as a set of
   `{ task_id | habit_id, starts_at, ends_at }`, from the previous revision's when that one was
-  pending (or from none when it was approved). At most 4 a day (`replanSent`), 8 am to 11 pm,
+  pending (its status is `superseded` by then), or from none when it was approved or there is none. At most 4 a day (`replanSent`), 8 am to 11 pm,
   outside the budget. Its text:
   ```
   Replan: a busy time landed on a block, new mail.
@@ -505,8 +509,33 @@ weather_cache id boolean pk default true check (id), point text not null,
   are skipped.
 - `handshakeBusy(events)` returns busy rows (`source = 'handshake'`) for parsed Handshake events
   whose summary starts with "Interview" or "Appointment" (case aside); other events are left out.
-- `academicEntries(events, day)` returns `[{ title, all_day }]` for parsed academic calendar
-  events on `day`, titles cut to 80 and skipped when `linkish`.
+- `academicEntries(events, day, timeZone)` returns `[{ title, all_day }]` for parsed academic
+  calendar events on `day`, in feed order, titles cut to 80 and skipped when `linkish`. An all-day
+  event is on the days from its `start` to before its `end` (parseIcs gives both as dates); a
+  timed one when it overlaps `day` in `timeZone` (parseIcs gives UTC). **Decided:** the zone is
+  needed for timed events, which parseIcs returns as UTC instants.
+- `enrollmentTask(enrollmentAt, timeZone)` (SRC3) returns the task for `settings.enrollment_at`,
+  or null when it is null: `{ title: "Enrollment opens", day, at_time: "HH:MM", est_min: 15,
+  public: false, list: null, source: 'enrollment', source_uid: 'enrollment' }`, `day` and
+  `at_time` local. ical-sync upserts it on `(source, source_uid)`, so there is one such task, and
+  leaves it alone once done.
+
+#### `triage.mjs`, new (L1)
+
+- `triageLabels(feedback)` turns `needs_you` feedback rows into labels `[{ account, message_id,
+  needed }]`: per `(ref.account, ref.message_id)`, the newest row by `at` decides: `done` is
+  `needed: true`, `not_needed` is `needed: false`, `undo` leaves no label. In order of each
+  message's first row.
+- `scoreTriage(items, labels)` compares a run's Needs you items (`[{ account, message_id }]`) with
+  labels and returns `{ caught, missed, wrongly_shown }`, each a list of `"<account> <message_id>"`
+  keys, once each: `caught` the items labelled needed, `missed` the labels needed that no item
+  matches (label order), `wrongly_shown` the items labelled not needed (item order). Unlabelled
+  items are in none. A small CLI (`tools/triage-score.mjs`) runs it on the live tables read-only.
+- `neverOffers(feedback, rules)` returns the From addresses /plan offers "Never show mail from
+  <address>" for, sorted: those with at least two different messages whose label (as
+  `triageLabels`) is not needed, unless a rule already covers the address (an `address` rule
+  equal to it, or a `domain` rule matching it as the never-show rules do, either action). Rows
+  with no `from_address` count for nothing.
 
 ### Edge Functions
 

@@ -189,27 +189,28 @@ do $$ begin
 end $$;
 
 -- The owner, as planner-mcp calls it: a first proposal, then a resubmission that replaces it.
+-- The blocks sit at fixed times today, so a run late in the evening doesn't push them into tomorrow.
 -- Since v5 (V1) each submission is a revision, named by the one it replaces.
 select pg_temp.as_user('authenticated', 'owner@example.com');
 create temp table v4_first as select now() as at;
 select apply_proposal(d => sheet_today(), replaces => null, blocks =>
   jsonb_build_array(
-    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '2 hours', 'ends_at', now() + interval '3 hours'),
-    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '4 hours', 'ends_at', now() + interval '5 hours')),
+    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', (sheet_today() + time '09:00') at time zone (select time_zone from settings), 'ends_at', (sheet_today() + time '10:00') at time zone (select time_zone from settings)),
+    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', (sheet_today() + time '11:00') at time zone (select time_zone from settings), 'ends_at', (sheet_today() + time '12:00') at time zone (select time_zone from settings))),
   needs => '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
      "sender": "Ana", "subject": "Demo moved", "why": "Reply by Thursday.", "kind": "reply", "due": "2026-11-05"}]',
   picks => '[{"uid": "e1", "why": "Bagels."}]', note => 'Gym did not fit.');
 update proposals set created_at = created_at - interval '1 hour';  -- so the resubmission's is newer
 update needs_you set done = true;
 select apply_proposal(d => sheet_today(), replaces => 1, blocks =>
-  jsonb_build_array(jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '6 hours', 'ends_at', now() + interval '7 hours')),
+  jsonb_build_array(jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', (sheet_today() + time '13:00') at time zone (select time_zone from settings), 'ends_at', (sheet_today() + time '14:00') at time zone (select time_zone from settings))),
   needs => '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
      "sender": "Ana", "subject": "Demo moved", "why": "Reply by Thursday.", "kind": "reply"},
     {"account": "a@example.com", "message_id": "def456", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/def456",
      "sender": "Bursar", "subject": "Spring bill", "why": "Pay it.", "kind": "admin"}]');
 do $$ begin
   if (select count(*) from blocks where proposed) <> 1
-    or not exists (select 1 from blocks where proposed and starts_at > now() + interval '5 hours')
+    or not exists (select 1 from blocks where proposed and starts_at = (sheet_today() + time '13:00') at time zone (select time_zone from settings))
     then raise exception 'resubmission did not replace the proposed blocks'; end if;
   if (select count(*) from blocks where not proposed) <> 1 then raise exception 'apply_proposal touched an approved block'; end if;
   if (select count(*) from proposals where status = 'pending') <> 1
@@ -590,6 +591,285 @@ begin
   if (select udt_name from information_schema.columns where table_name = 'proposals' and column_name = 'couldnt_fit') is distinct from '_uuid'
     then raise exception 'proposals.couldnt_fit should be uuid[]'; end if;
   raise notice '✓ v5: the workload cap defaults to 6 hours and stays within 1 to 16; proposals has couldnt_fit';
+end $$;
+SQL
+psql_as postgres >/dev/null <<'SQL'
+-- --- v5 wave 2: R1, H1, L1, A1 and SRC3 (docs/sheet-v5.md, "Schema") --------------------------
+-- Each block skips itself until the tables, columns or functions it checks exist, so these pass
+-- before their tickets land. This is a new session, so it needs its own as_user.
+\set QUIET on
+\pset tuples_only on
+create function pg_temp.as_user(r text, email text) returns void language sql as $$
+  select set_config('role', r, false),
+         set_config('request.jwt.claims', coalesce(json_build_object('email', email)::text, ''), false) $$;
+
+-- --- R1, changes and replans ------------------------------------------------------------------
+do $$
+declare
+  r1 uuid := gen_random_uuid();
+  r2 uuid := gen_random_uuid();
+begin
+  if to_regclass('public.changes') is null or to_regclass('public.replans') is null then
+    raise notice '- v5 changes and replans: skipped, not there yet';
+    return;
+  end if;
+  if (select bool_and(relrowsecurity) from pg_class where oid in ('changes'::regclass, 'replans'::regclass)) is not true
+    then raise exception 'RLS off on changes or replans'; end if;
+  if has_table_privilege('anon', 'changes', 'select') or has_table_privilege('anon', 'replans', 'select')
+    then raise exception 'anon can read changes or replans'; end if;
+  if has_table_privilege('authenticated', 'changes', 'insert') or has_table_privilege('authenticated', 'changes', 'update')
+    or has_table_privilege('authenticated', 'changes', 'delete') or has_table_privilege('authenticated', 'replans', 'insert')
+    or has_table_privilege('authenticated', 'replans', 'update') or has_table_privilege('authenticated', 'replans', 'delete')
+    then raise exception 'the browser can write changes or replans'; end if;
+  if not has_table_privilege('authenticated', 'changes', 'select') or not has_table_privilege('authenticated', 'replans', 'select')
+    then raise exception 'the owner cannot read changes or replans'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('changes', 'replans'))
+    then raise exception 'a public view exposes changes or replans'; end if;
+  begin insert into changes (kind, reason, weight) values ('weather', 'mail_new', 2);
+    raise exception 'changes took kind weather';
+  exception when check_violation then null; end;
+  begin insert into changes (kind, reason, weight) values ('mail', 'mail_new', 11);
+    raise exception 'changes took weight 11';
+  exception when check_violation then null; end;
+  begin insert into changes (kind, reason, weight, ref) values ('mail', 'mail_new', 2, repeat('x', 201));
+    raise exception 'changes took a 201-character ref';
+  exception when check_violation then null; end;
+  begin insert into replans (day, reasons, counts, result) values (sheet_today(), '{}', '{}', 'done');
+    raise exception 'replans took result done';
+  exception when check_violation then null; end;
+  if (select replans_on from settings) is not false then raise exception 'settings.replans_on should default to false'; end if;
+  if (select data_type from information_schema.columns where table_name = 'settings' and column_name = 'plan_edited_at')
+     is distinct from 'timestamp with time zone' then raise exception 'settings.plan_edited_at missing'; end if;
+
+  -- busy_sync_save writes its change once the table exists.
+  perform busy_sync_save('2030-02-01 12:00+00', '2030-02-08 12:00+00', '[]',
+    '{"kind": "busy", "reason": "busy_change", "weight": 2, "ref": null}');
+  if not exists (select 1 from changes where kind = 'busy' and reason = 'busy_change' and weight = 2)
+    then raise exception 'busy_sync_save wrote no change'; end if;
+  delete from changes;
+
+  -- nightly_roll keeps 14 days; deleting a replan unlinks its changes.
+  insert into replans (id, at, day, reasons, counts, result) values
+    (r1, now() - interval '15 days', sheet_today() - 15, '{busy_overlap}', '{"busy": 1}', 'started'),
+    (r2, now() - interval '13 days', sheet_today() - 13, '{mail_new}', '{"mail": 1}', 'failed');
+  insert into changes (at, kind, reason, weight, replan_id) values
+    (now() - interval '15 days', 'busy', 'busy_overlap', 10, r1),
+    (now() - interval '13 days', 'mail', 'mail_new', 2, r2);
+  perform nightly_roll();
+  if exists (select 1 from replans where id = r1) or not exists (select 1 from replans where id = r2)
+    or exists (select 1 from changes where reason = 'busy_overlap') or not exists (select 1 from changes where replan_id = r2)
+    then raise exception 'nightly_roll should keep changes and replans for 14 days, no longer'; end if;
+  delete from replans where id = r2;
+  if not exists (select 1 from changes where reason = 'mail_new' and replan_id is null)
+    then raise exception 'deleting a replan should leave its changes, unlinked'; end if;
+  delete from changes;
+  delete from replans;
+  raise notice '✓ v5: changes and replans private, server-written, kept 14 days';
+end $$;
+
+-- --- H1, habits ---------------------------------------------------------------------------------
+do $$
+declare
+  h uuid;
+  t uuid := gen_random_uuid();
+begin
+  if to_regclass('public.habits') is null then
+    raise notice '- v5 habits: skipped, not there yet';
+    return;
+  end if;
+  if (select relrowsecurity from pg_class where oid = 'habits'::regclass) is not true then raise exception 'RLS off on habits'; end if;
+  if has_table_privilege('anon', 'habits', 'select') then raise exception 'anon can read habits'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name = 'habits')
+    then raise exception 'a public view reads habits'; end if;
+  begin insert into habits (name, days, ideal, minutes) values ('Gym', '{0}', '07:30', 60);
+    raise exception 'habits took day 0';
+  exception when check_violation then null; end;
+  begin insert into habits (name, days, ideal, minutes) values ('Gym', '{}', '07:30', 60);
+    raise exception 'habits took no days';
+  exception when check_violation then null; end;
+  begin insert into habits (name, days, ideal, minutes) values ('Gym', '{1}', '07:30', 17);
+    raise exception 'habits took 17 minutes';
+  exception when check_violation then null; end;
+  begin insert into habits (name, days, ideal, minutes) values ('Gym', '{1}', '07:30', 10);
+    raise exception 'habits took 10 minutes';
+  exception when check_violation then null; end;
+  begin insert into habits (name, days, ideal, minutes, defence) values ('Gym', '{1}', '07:30', 60, 'strict');
+    raise exception 'habits took defence strict';
+  exception when check_violation then null; end;
+  begin insert into habits (name, days, ideal, minutes) values ('', '{1}', '07:30', 60);
+    raise exception 'habits took an empty name';
+  exception when check_violation then null; end;
+  insert into habits (name, days, ideal, minutes) values ('Gym', '{1,3,5}', '07:30', 60) returning id into h;
+  if (select (flex_min, defence) from habits where id = h) is distinct from (30, 'flexible'::text)
+    then raise exception 'a habit should default to 30 minutes of flex, flexible'; end if;
+
+  -- A block is a task's or a habit's, never both or neither.
+  insert into tasks (id, title, day, public) values (t, 'H1 public task', sheet_today(), true);
+  begin insert into blocks (starts_at, ends_at) values (now(), now() + interval '30 minutes');
+    raise exception 'a block with neither a task nor a habit';
+  exception when check_violation or not_null_violation then null; end;
+  begin insert into blocks (task_id, habit_id, starts_at, ends_at) values (t, h, now(), now() + interval '30 minutes');
+    raise exception 'a block with both a task and a habit';
+  exception when check_violation then null; end;
+
+  -- /now never shows a habit: alone, a habit block running now shows nothing; beside a public
+  -- task's block, the task shows.
+  delete from blocks where not proposed and starts_at <= now() and ends_at > now();
+  insert into blocks (habit_id, starts_at, ends_at) values (h, now() - interval '30 minutes', now() + interval '30 minutes');
+  if (select title is not null or public is not null from public_now) then raise exception 'public_now showed a habit block'; end if;
+  insert into blocks (task_id, starts_at, ends_at) values (t, now() - interval '10 minutes', now() + interval '20 minutes');
+  if (select title from public_now) is distinct from 'H1 public task' then raise exception 'a habit block hid the task running now'; end if;
+
+  delete from habits where id = h;
+  if exists (select 1 from blocks where habit_id = h) then raise exception 'a habit block outlived its habit'; end if;
+  delete from tasks where id = t;
+  raise notice '✓ v5: habits checked and private; a block is a task''s or a habit''s; habits never reach public_now';
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  if to_regclass('public.habits') is null then return; end if;
+  begin insert into habits (name, days, ideal, minutes) values ('Lunch', '{1}', '12:30', 30);
+    raise exception 'a stranger added a habit';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if to_regclass('public.habits') is null then return; end if;
+  insert into habits (name, days, ideal, minutes) values ('Lunch', '{1,2,3,4,5}', '12:30', 30);
+  delete from habits where name = 'Lunch';
+  raise notice '✓ v5: the owner writes habits, a stranger can''t';
+end $$;
+reset role;
+
+-- --- L1, feedback and triage rules ----------------------------------------------------------------
+do $$ begin
+  if to_regclass('public.feedback') is null or to_regclass('public.triage_rules') is null then
+    raise notice '- v5 feedback and triage rules: skipped, not there yet';
+    return;
+  end if;
+  if (select bool_and(relrowsecurity) from pg_class where oid in ('feedback'::regclass, 'triage_rules'::regclass)) is not true
+    then raise exception 'RLS off on feedback or triage_rules'; end if;
+  if has_table_privilege('anon', 'feedback', 'select') or has_table_privilege('anon', 'triage_rules', 'select')
+    then raise exception 'anon can read feedback or triage_rules'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('feedback', 'triage_rules'))
+    then raise exception 'a public view reads feedback or triage_rules'; end if;
+  if has_table_privilege('authenticated', 'feedback', 'update') or has_table_privilege('authenticated', 'feedback', 'delete')
+    then raise exception 'feedback is not append-only for the browser'; end if;
+  begin insert into feedback (item, action, ref) values ('mail', 'done', '{}');
+    raise exception 'feedback took item mail';
+  exception when check_violation then null; end;
+  begin insert into feedback (item, action, ref) values ('needs_you', 'maybe', '{}');
+    raise exception 'feedback took action maybe';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action) values ('domain', 'Acme.com', 'never');
+    raise exception 'triage_rules took an uppercase pattern';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action) values ('domain', 'ab', 'never');
+    raise exception 'triage_rules took a 2-character pattern';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action) values ('name', 'acme.com', 'never');
+    raise exception 'triage_rules took match name';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action) values ('domain', 'acme.com', 'sometimes');
+    raise exception 'triage_rules took action sometimes';
+  exception when check_violation then null; end;
+  insert into triage_rules (match, pattern, action) values ('domain', 'acme.com', 'never');
+  begin insert into triage_rules (match, pattern, action) values ('domain', 'acme.com', 'always');
+    raise exception 'triage_rules took the same pattern twice';
+  exception when unique_violation then null; end;
+  delete from triage_rules;
+  if (select column_default from information_schema.columns where table_name = 'needs_you' and column_name = 'not_needed')
+     is distinct from 'false' then raise exception 'needs_you.not_needed should default to false'; end if;
+
+  -- nightly_roll keeps feedback 120 days.
+  insert into feedback (at, item, action, ref) values
+    (now() - interval '121 days', 'proposal', 'approve', '{"day": "2026-01-01", "rev": 1}'),
+    (now() - interval '119 days', 'needs_you', 'not_needed', '{"account": "owner@example.com", "message_id": "18f2a3b4c5d6e7f1", "from_address": "jobs@acme.com"}');
+  perform nightly_roll();
+  if exists (select 1 from feedback where item = 'proposal') or not exists (select 1 from feedback where item = 'needs_you')
+    then raise exception 'nightly_roll should keep feedback for 120 days, no longer'; end if;
+  raise notice '✓ v5: feedback and triage_rules checked, private, feedback kept 120 days';
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if to_regclass('public.feedback') is null or to_regclass('public.triage_rules') is null then return; end if;
+  insert into feedback (item, action, ref) values ('block', 'turn_down', '{"day": "2026-11-04", "task_id": "00000000-0000-4000-8000-0000000000a1"}');
+  begin update feedback set action = 'undo';
+    raise exception 'the owner updated feedback';
+  exception when insufficient_privilege then null; end;
+  begin delete from feedback;
+    raise exception 'the owner deleted feedback';
+  exception when insufficient_privilege then null; end;
+  insert into triage_rules (match, pattern, action) values ('address', 'jobs@acme.com', 'never');
+  delete from triage_rules;
+  raise notice '✓ v5: the owner appends feedback and edits triage rules';
+end $$;
+reset role;
+do $$ begin
+  if to_regclass('public.feedback') is not null then delete from feedback; end if;
+end $$;
+
+-- --- A1, suggested tasks ----------------------------------------------------------------------
+do $$
+declare
+  d date := sheet_today() + 9;
+  u text := 'owner@example.com:18f2a3b4c5d6e7f1';
+  s jsonb := '[{"account": "owner@example.com", "message_id": "18f2a3b4c5d6e7f1", "title": "Acme assessment", "due": "2026-11-07", "kind": "assessment"}]';
+begin
+  if to_regprocedure('approve_proposal(date, integer)') is null
+     or (select prosrc from pg_proc where oid = to_regprocedure('approve_proposal(date, integer)')) not like '%suggested%' then
+    raise notice '- v5 suggested tasks: skipped, approve_proposal does not read them yet';
+    return;
+  end if;
+  perform apply_proposal(d => d, replaces => null, blocks => '[]', suggested => s);
+  perform approve_proposal(d, 1);
+  if (select count(*) from tasks where source = 'mail' and source_uid = u) <> 1
+    then raise exception 'approving a suggestion should make one task'; end if;
+  if (select (title, list, day, public, due) from tasks where source = 'mail' and source_uid = u)
+     is distinct from ('Acme assessment'::text, 'Inbox'::text, null::date, false, '2026-11-07'::date)
+    then raise exception 'a suggested task should be private, in Inbox, due as suggested'; end if;
+  if not exists (select 1 from feed_seen f where f.source = 'mail' and f.uid = u)
+    then raise exception 'a suggested task should be recorded in feed_seen'; end if;
+  -- Deleted, then suggested again by a later revision: no second task.
+  delete from tasks where source = 'mail' and source_uid = u;
+  perform apply_proposal(d => d, replaces => 1, blocks => '[]', suggested => s);
+  perform approve_proposal(d, 2);
+  if exists (select 1 from tasks where source = 'mail' and source_uid = u)
+    then raise exception 'one message made a second task'; end if;
+  delete from proposals where day = d;
+  delete from feed_seen f where f.source = 'mail' and f.uid = u;
+  raise notice '✓ v5: approve_proposal makes each suggested task once, ever';
+end $$;
+
+-- --- SRC3, Handshake, the academic calendar and enrollment ---------------------------------------
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name = 'settings' and column_name = 'enrollment_at') then
+    raise notice '- v5 enrollment and sheet-ical: skipped, not there yet';
+    return;
+  end if;
+  if (select data_type from information_schema.columns where table_name = 'settings' and column_name = 'enrollment_at')
+     <> 'timestamp with time zone' then raise exception 'settings.enrollment_at should be timestamptz'; end if;
+  if (select count(*) from cron.job where jobname = 'sheet-ical') <> 1
+    or (select schedule from cron.job where jobname = 'sheet-ical') <> '25 * * * *'
+    then raise exception 'sheet-ical not scheduled once at minute 25'; end if;
+  -- The feed links are function secrets, never settings columns the browser could read.
+  if exists (select 1 from information_schema.columns where table_name = 'settings' and column_name ~ '(handshake|academic)')
+    then raise exception 'a settings column holds a feed link'; end if;
+  -- One enrollment task: ical-sync upserts it on (source, source_uid).
+  insert into tasks (title, day, at_time, est_min, public, source, source_uid)
+  values ('Enrollment opens', sheet_today() + 8, '07:00', 15, false, 'enrollment', 'enrollment')
+  on conflict (source, source_uid) do update set day = excluded.day, at_time = excluded.at_time;
+  insert into tasks (title, day, at_time, est_min, public, source, source_uid)
+  values ('Enrollment opens', sheet_today() + 8, '09:30', 15, false, 'enrollment', 'enrollment')
+  on conflict (source, source_uid) do update set day = excluded.day, at_time = excluded.at_time;
+  if (select count(*) from tasks where source = 'enrollment') <> 1
+    or (select at_time from tasks where source = 'enrollment') <> '09:30'
+    then raise exception 'the enrollment task should be one task, moved in place'; end if;
+  delete from tasks where source = 'enrollment';
+  raise notice '✓ v5: enrollment_at, sheet-ical at :25, and one enrollment task';
 end $$;
 SQL
 echo "✓ all schema checks passed"
