@@ -272,6 +272,19 @@ export async function createEvent(title, isPublic, starts_at, ends_at) {
   return ev.id;
 }
 
+// A message's event (docs/sheet-messages.md) in the same calendar, unlike a block: it keeps its
+// title, with visibility "private" so only the owner sees it and anyone else sees only busy, and
+// keeps Google's default alerts, since Telegram nudges only blocks. visibility and reminders are
+// the event resource's own fields (developers.google.com/workspace/calendar/api/v3/reference/events).
+export const messageEventBody = (title, starts_at, ends_at) => ({
+  summary: title, visibility: "private", ...eventTimes(starts_at, ends_at), reminders: { useDefault: true },
+});
+export async function createMessageEvent(title, starts_at, ends_at) {
+  const cal = await blocksCalendar();
+  const ev = await google(`calendars/${encodeURIComponent(cal)}/events`, { method: "POST", body: messageEventBody(title, starts_at, ends_at) });
+  return ev.id;
+}
+
 export async function patchEvent(id, patch) {
   await google(`calendars/${encodeURIComponent(await blocksCalendar())}/events/${id}`, { method: "PATCH", body: patch });
 }
@@ -298,3 +311,30 @@ export async function listCampus(fromIso, toIso) {
     throw e;
   }
 }
+
+// --- Messages to Claude (docs/sheet-messages.md) -------------------------------------------
+
+// Send one message through the message Edge Function, which checks the sign-in token, saves it and
+// fires the morning task: { id, at, status, fired, why? }, or a throw. The token goes in a header.
+export async function sendMessage(text) {
+  const token = await accessToken();
+  if (!token) throw new SheetError("message: signed out");
+  const res = await fetch(`${SHEET.supabaseUrl}/functions/v1/message`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || !out.id) throw new SheetError(`message: ${res.status} ${out.error ?? ""}`.trim());
+  return out;
+}
+const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,events,created_in_calendar";
+export const getMessage = async (id) => (await rest(`messages?select=${MESSAGE_COLUMNS}&id=eq.${id}`))[0] ?? null;
+// Answered messages whose events aren't in Google Calendar yet. Until the table exists PostgREST
+// answers 404, which reads as none.
+export const uncreatedMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&status=eq.done&created_in_calendar=is.false&order=at`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
+// Claim a message's events before creating them, so two tabs never create them twice: true when
+// this call flipped created_in_calendar. unclaimEvents puts it back after a failed create.
+export const claimEvents = async (id) => (await rest(`messages?id=eq.${id}&created_in_calendar=is.false`, { method: "PATCH", body: { created_in_calendar: true }, prefer: "return=representation" })).length > 0;
+export const unclaimEvents = (id) => rest(`messages?id=eq.${id}`, { method: "PATCH", body: { created_in_calendar: false } });

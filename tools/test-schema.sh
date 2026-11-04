@@ -1130,4 +1130,85 @@ begin
   raise notice '✓ v5: a revision replaces open mail rows and keeps Slack ones';
 end $$;
 SQL
+psql_as postgres >/dev/null <<'SQL'
+-- --- Messages to Claude (docs/sheet-messages.md) ------------------------------------------------
+-- A new session, so it needs its own as_user.
+\set QUIET on
+\pset tuples_only on
+create function pg_temp.as_user(r text, email text) returns void language sql as $$
+  select set_config('role', r, false),
+         set_config('request.jwt.claims', coalesce(json_build_object('email', email)::text, ''), false) $$;
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from messages; raise exception 'anon read messages';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  begin insert into messages (text) values ('dentist Thu 3pm'); raise exception 'a stranger added a message';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$
+declare
+  m uuid;
+  m2 uuid;
+  before double precision;
+begin
+  begin insert into messages (text) values (''); raise exception 'messages took empty text';
+  exception when check_violation then null; end;
+  begin insert into messages (text) values (repeat('a', 501)); raise exception 'messages took 501 characters';
+  exception when check_violation then null; end;
+  insert into messages (text) values ('lab report due Friday, ~2h; dentist Thu 3pm') returning id into m;
+  if (select status <> 'pending' or events <> '[]'::jsonb or created_in_calendar or tasks_added <> 0 from messages where id = m)
+    then raise exception 'a new message is not pending and empty'; end if;
+  insert into tasks (title, list, position) values ('MSG already in Inbox', 'Inbox', 41);
+  select max(position) into before from tasks where list = 'Inbox' and day is null;
+  if answer_message(m, '[{"title": "MSG lab report", "day": null, "list": "Inbox", "due": "2026-11-06", "at_time": null, "est_min": 120}]',
+       '[{"title": "Dentist", "starts_at": "2026-11-05T20:00:00.000Z", "ends_at": "2026-11-05T21:00:00.000Z"}]',
+       'Lab report is in your Inbox, due Fri; dentist Thu 3:00 pm.') <> 'done'
+    then raise exception 'answer_message did not say done'; end if;
+  if (select status <> 'done' or tasks_added <> 1 or events -> 0 ->> 'title' <> 'Dentist' or reply not like 'Lab report%' from messages where id = m)
+    then raise exception 'answer_message did not write the message'; end if;
+  if (select source <> 'message' or position <> before + 1 or due <> '2026-11-06' or est_min <> 120 from tasks where title = 'MSG lab report')
+    then raise exception 'answer_message did not add the task at the end of Inbox'; end if;
+  begin perform answer_message(m, '[]', '[]', 'again'); raise exception 'answer_message answered a message twice';
+  exception when raise_exception then
+    if sqlerrm not like '%not pending%' then raise; end if;
+  end;
+  insert into messages (text) values ('asdf') returning id into m2;
+  if answer_message(m2, '[]', '[]', 'Not sure what that means.') <> 'failed'
+    then raise exception 'an answer that adds nothing should fail the message'; end if;
+  -- The event is a busy time the planner sees, source 'message', tied to its message.
+  if (select count(*) from busy where source = 'message' and message_id = m
+        and starts_at = '2026-11-05T20:00:00Z' and ends_at = '2026-11-05T21:00:00Z') <> 1
+    then raise exception 'answer_message did not save the event as a busy time'; end if;
+  -- busy-sync replaces only calendar rows, so the event's busy time stays.
+  reset role;
+  perform busy_sync_save('2026-11-05T00:00:00Z', '2026-11-06T00:00:00Z', '[]');
+  if not exists (select 1 from busy where message_id = m)
+    then raise exception 'busy_sync_save deleted a message busy time'; end if;
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  -- /plan marks the events created in Google Calendar.
+  update messages set created_in_calendar = true where id = m;
+  delete from tasks where title in ('MSG lab report', 'MSG already in Inbox');
+  delete from messages where id in (m, m2);
+  if exists (select 1 from busy where source = 'message' and starts_at = '2026-11-05T20:00:00Z')
+    then raise exception 'deleting a message kept its busy time'; end if;
+  raise notice '✓ messages: owner-only, answer_message adds tasks, events as busy times, and answers once';
+end $$;
+reset role;
+do $$ begin
+  insert into messages (at, text) values (now() - interval '31 days', 'old one'), (now() - interval '29 days', 'new one');
+  insert into busy (source, starts_at, ends_at, message_id)
+    select 'message', now() + interval '1 day', now() + interval '1 day 1 hour', id from messages where text = 'old one';
+  perform nightly_roll();
+  if exists (select 1 from busy where source = 'message')
+    then raise exception 'an old message kept its busy time'; end if;
+  if exists (select 1 from messages where text = 'old one') or not exists (select 1 from messages where text = 'new one')
+    then raise exception 'nightly_roll should keep 30 days of messages'; end if;
+  delete from messages where text = 'new one';
+  raise notice '✓ messages kept 30 days';
+end $$;
+SQL
 echo "✓ all schema checks passed"
