@@ -239,3 +239,103 @@ test("automationDemerit: X-Auto-Response-Suppress counts against, without making
   assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Return-Path", "<bounce-123@mail.example.com>"]])), true);
   assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Return-Path", "<ana.ruiz@example.edu>"]])), false);
 });
+
+// replyState. Mon Nov 2 to Thu Nov 5, 2026, New York (EST).
+const ME = "Sample Owner <owner@example.com>";
+const PAT = "Pat Kim <pat.kim@example.org>";
+const m = (id, date, labels, from, to, more = {}) => ({ id, date, labels, from, to, from_address: from.match(/<([^>]+)>|(\S+@\S+)/).slice(1).find(Boolean).toLowerCase(),
+  automated: false, demerit: false, addressed: labels.includes("SENT") ? "none" : "to", ...more });
+const th = (messages, more = {}) => ({ account: "owner@example.com", thread_id: "18f3a1c2d4e5f700", messages, ...more });
+const wed0607 = new Date("2026-11-04T11:07:00Z");
+// He wrote Monday 10 am; Pat answered Tuesday 3 pm ("let me know what works for you").
+const hisThread = [
+  m("18f3a1c2d4e5f701", "2026-11-02T15:00:00.000Z", ["SENT"], ME, PAT),
+  m("18f3a1c2d4e5f702", "2026-11-03T20:00:00.000Z", ["INBOX", "CATEGORY_PERSONAL"], PAT, ME),
+];
+
+test("replyState: a reply in a thread he started is owed at once (basis thread)", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  assert.deepEqual(replyState(th(hisThread), TZ, wed0607), {
+    state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f702", who: "Pat Kim", basis: "thread", draft: false,
+  });
+});
+
+test("replyState: his unsent draft is not a reply; the thread stays owed, marked draft", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const s = replyState(th(hisThread, { draft: true }), TZ, wed0607);
+  assert.equal(s.state, "owed");
+  assert.equal(s.draft, true);
+});
+
+test("replyState: an out-of-office reply doesn't count as them answering", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const oof = [hisThread[0], m("18f3a1c2d4e5f703", "2026-11-03T20:00:00.000Z", ["INBOX"], PAT, ME, { automated: true })];
+  assert.equal(replyState(th(oof), TZ, wed0607), null); // Monday → Wednesday is 2
+  assert.deepEqual(replyState(th(oof), TZ, new Date("2026-11-05T14:00:00Z")), {
+    state: "awaiting", since: "2026-11-02T15:00:00.000Z", message_id: "18f3a1c2d4e5f701", who: "Pat Kim",
+  });
+});
+
+test("replyState: Updates doesn't hide a reply in his own thread", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const updates = [hisThread[0], { ...hisThread[1], labels: ["INBOX", "CATEGORY_UPDATES"], demerit: true }];
+  assert.equal(replyState(th(updates), TZ, wed0607).basis, "thread");
+});
+
+test("replyState: a one-time passcode from a careers address is never owed", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const otp = m("18f3a1c2d4e5f711", "2026-11-02T15:00:00.000Z", ["IMPORTANT", "CATEGORY_PERSONAL", "INBOX"],
+    "Careers <careers@recruitment.example.com>", ME);
+  assert.equal(replyState(th([otp]), TZ, wed0607), null);
+});
+
+test("replyState: a bank's alert stream is never owed", async () => {
+  const { replyState, syncMessage } = await import("../src/sheet/mail.mjs");
+  const alert = (i) => syncMessage({ id: `18f3a1c2d4e5f72${i}`, threadId: "18f3a1c2d4e5f700", labelIds: ["INBOX", i % 2 ? "CATEGORY_PERSONAL" : "CATEGORY_UPDATES"],
+    internalDate: String(Date.parse("2026-10-28T15:00:00Z") + i * 3_600_000),
+    payload: { headers: [{ name: "From", value: "Bank <no.reply.alerts@bank.example.com>" }, { name: "To", value: ME }] } }, "owner@example.com");
+  const known = new Set(["no.reply.alerts@bank.example.com"]);
+  assert.equal(replyState(th([0, 1, 2, 3, 4, 5].map(alert)), TZ, wed0607, { known }), null);
+});
+
+test("replyState: someone he has written to is owed at once when it's to him, at 2 business days when he's copied", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const known = new Set(["pat.kim@example.org"]);
+  const to = m("18f3a1c2d4e5f731", "2026-11-04T10:00:00.000Z", ["INBOX"], PAT, ME);
+  assert.deepEqual(replyState(th([to]), TZ, wed0607, { known }), {
+    state: "owed", since: "2026-11-04T10:00:00.000Z", message_id: "18f3a1c2d4e5f731", who: "Pat Kim", basis: "known", draft: false,
+  });
+  const cc = { ...m("18f3a1c2d4e5f732", "2026-11-03T15:00:00.000Z", ["INBOX"], PAT, "team@example.org"), addressed: "cc" };
+  assert.equal(replyState(th([cc]), TZ, wed0607, { known }), null); // Tuesday → Wednesday is 1
+  assert.equal(replyState(th([cc]), TZ, new Date("2026-11-05T14:00:00Z"), { known }).basis, "cc");
+  // Updates or an Exchange auto-response flag keeps a known sender's mail from being owed.
+  assert.equal(replyState(th([{ ...to, labels: ["INBOX", "CATEGORY_UPDATES"] }]), TZ, wed0607, { known }), null);
+  assert.equal(replyState(th([{ ...to, demerit: true }]), TZ, wed0607, { known }), null);
+  // Promotions, Social and Forums never count.
+  assert.equal(replyState(th([{ ...to, labels: ["INBOX", "CATEGORY_SOCIAL"] }]), TZ, wed0607, { known }), null);
+});
+
+test("replyState: an unknown person writing to him is left to the planner, however old", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const cold = m("18f3a1c2d4e5f741", "2026-10-28T15:00:00.000Z", ["INBOX", "CATEGORY_PERSONAL"], PAT, ME);
+  assert.equal(replyState(th([cold]), TZ, wed0607), null); // 5 business days
+});
+
+test("replyState: a known sender's list mail is never owed", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const list = m("18f3a1c2d4e5f751", "2026-11-04T10:00:00.000Z", ["INBOX"], PAT, ME, { automated: true });
+  assert.equal(replyState(th([list]), TZ, wed0607, { known: new Set(["pat.kim@example.org"]) }), null);
+});
+
+test("replyState: the sweep's single newest message, with participation from his sent list", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  assert.equal(replyState(th([hisThread[1]]), TZ, wed0607), null);
+  assert.equal(replyState(th([hisThread[1]]), TZ, wed0607, { participated: true }).basis, "thread");
+});
+
+test("replyState: when he wrote last, awaiting only from 3 business days", async () => {
+  const { replyState } = await import("../src/sheet/mail.mjs");
+  const sent = [m("18f3a1c2d4e5f761", "2026-11-02T15:00:00.000Z", ["SENT"], ME, PAT)];
+  assert.equal(replyState(th(sent), TZ, wed0607), null);
+  assert.equal(replyState(th(sent), TZ, new Date("2026-11-05T14:00:00Z")).state, "awaiting");
+});
