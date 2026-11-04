@@ -282,9 +282,10 @@ function detailsOf(t, clash, level, span) {
 // task and event rows. Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
 const whenLabel = (start, end) => el("span", { className: "sheet-when", ariaHidden: "true", textContent: formatSpan(start, end) });
 const spoken = (start, end) => `${formatSpan(start, end).replace("–", " to ")}, `;
-// With a time, the title and its details go in one body beside it, so they wrap under the title.
-const withWhen = (start, end, kids) => (start == null ? kids
-  : [whenLabel(start, end), el("span", { className: "sheet-body" }, ...kids.filter(Boolean))]);
+// Every row has one layout: its time (when it has one), then a body holding the title and, on a
+// line of its own under it, the details (source or calendar icon, length, due date, private).
+const withWhen = (start, end, kids) => [start == null ? null : whenLabel(start, end),
+  el("span", { className: "sheet-body" }, ...kids.filter(Boolean))].filter(Boolean);
 
 // A task on a day with a time (taskSpan) reads like an event row: "7–7:20 pm  Register for classes".
 export const spanOf = (t) => (t.day ? taskSpan(t, t.day, SHEET.timeZone, state.blocks) : null);
@@ -328,8 +329,8 @@ function addRow(where, label, placeholder = "+ Add a task") {
 // (event-todos.mjs). The calendar itself shows on Plan today's timeline.
 const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
 
-// An event row looks like a timed task row, with its time first and the calendar icon after the
-// title: "9–10:15 am  Dentist".
+// An event row looks like a timed task row: its time first, the title, and the calendar icon on
+// the details line under it, where a task shows its source.
 function eventTodoRow(r) {
   const li = el("li", { className: `sheet-row sheet-evtodo${r.done ? " is-done" : ""}` });
   li.dataset.key = r.key;
@@ -341,7 +342,7 @@ function eventTodoRow(r) {
     r.allDay ? null : el("span", { className: "visually-hidden", textContent: spoken(r.start, r.end) }),
     ...withWhen(r.allDay ? null : r.start, r.end, [
       el("span", { className: "sheet-title", textContent: r.title, title: r.raw }),
-      el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar"))]),
+      el("span", { className: "sheet-details" }, el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar")))]),
     check, more].filter(Boolean));
   return li;
 }
