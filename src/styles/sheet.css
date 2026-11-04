@@ -424,3 +424,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-needs-item > .sheet-needs-acts { margin-top: 0.25rem; }
 .sheet-needs-acts .sheet-btn { display: inline-flex; align-items: center; gap: 0.25rem; }
 .sheet-plan-notes { list-style: none; padding: 0; margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted); }
+
+/* v5 D2: Settings' workload cap, a short hours field. */
+.sheet-cap {
+  width: 5rem; font: inherit; font-size: 0.9375rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.35rem 0.5rem;
+}

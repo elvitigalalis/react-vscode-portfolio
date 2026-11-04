@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
   rowCount, positionBetween, load, planningDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
-  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders,
+  eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
 test("dates: weeks start on Monday and cross month ends", () => {
@@ -287,4 +287,13 @@ test("due dates: shown as a weekday within the coming week, a date otherwise", (
   assert.equal(dueLabel("2026-10-26", "2026-10-26"), "due Mon");
   assert.equal(dueLabel("2026-11-02", "2026-10-26"), "due Nov 2");
   assert.equal(dueLabel("2026-10-25", "2026-10-26"), "due Oct 25");
+});
+
+// v5 D2: Settings takes the workload cap in hours, 1 to 16 in half hours.
+test("capMinutes: hours from Settings as the cap's minutes, or null", () => {
+  assert.equal(capMinutes("6"), 360);
+  assert.equal(capMinutes(" 7.5 "), 450);
+  assert.equal(capMinutes("1"), 60);
+  assert.equal(capMinutes("16"), 960);
+  for (const bad of ["", "0.5", "16.5", "6.25", "six", "6h"]) assert.equal(capMinutes(bad), null, bad);
 });
