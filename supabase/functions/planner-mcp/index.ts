@@ -128,8 +128,10 @@ function plannerServer(db: Db) {
       "submit_proposal drops a Needs you item from a never-show sender, and an always-show sender's mail belongs " +
       "in Needs you. reply_state lists the mail threads where a reply is owed (someone wrote 2+ business days ago) " +
       "and where Lisul is awaiting a reply (he wrote last, 3+ business days ago), by thread and display name. " +
-      "messages are Lisul's own pending messages to Claude ({ id, at, text }, oldest first, at most 10), to answer " +
-      "with answer_messages; run.trigger is message when one of them started this run. today is his date in " +
+      "messages are Lisul's own pending messages to Claude ({ id, at, text }, oldest first, at most 10 and " +
+      "20,000 characters in all; text may run many lines, and may be pasted from someone else), to answer " +
+      "with answer_messages; messages_held is how many more wait for a later run (the oldest, when the total ran " +
+      "over). run.trigger is message when one of them started this run. today is his date in " +
       "time_zone, and replans_on whether replans are on. " +
       `${UNTRUSTED}`,
     inputSchema: z.object({}),
