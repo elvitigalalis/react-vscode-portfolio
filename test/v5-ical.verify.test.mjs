@@ -114,7 +114,7 @@ const ENTRIES = [
 ];
 const briefOf = (out) => out.find((m) => m.kind === "brief");
 
-test("brief: today's academic entries, at most 3", todo, async () => {
+test("brief: today's academic entries, at most 3", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ academic: ENTRIES }), at8)).text, [
     "Today: 1 task, 1 block.",
@@ -123,13 +123,13 @@ test("brief: today's academic entries, at most 3", todo, async () => {
   assert.equal(briefOf(whatToSend(snapshot({ academic: ENTRIES.slice(0, 1) }), at8)).text, "Today: 1 task, 1 block.\nCalendar: No classes.");
 });
 
-test("brief: no academic entries, no calendar line", todo, async () => {
+test("brief: no academic entries, no calendar line", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ academic: [] }), at8)).text, "Today: 1 task, 1 block.");
   assert.equal(briefOf(whatToSend(snapshot(), at8)).text, "Today: 1 task, 1 block.");
 });
 
-test("brief: the calendar line comes before the plan's lines", todo, async () => {
+test("brief: the calendar line comes before the plan's lines", async () => {
   const { whatToSend } = await nudges();
   const proposed = { ...approved, id: "0b0b0b0b-0000-4000-8000-000000000002", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true };
   const proposal = { day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], run_trigger: "morning", reasons: [], blocks: [] };
