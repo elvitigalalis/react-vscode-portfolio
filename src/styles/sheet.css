@@ -446,3 +446,18 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.3rem 0.45rem;
 }
 .sheet-habit-form .sheet-dialog-end { flex-basis: 100%; margin: 0; }
+
+/* Messages to Claude (docs/sheet-messages.md): one line and Send at the top of /plan, and the
+   messages sent from this tab under it, newest first, each with its status and Claude's reply. */
+.sheet-message { display: flex; gap: 0.5rem; margin: 0 0 0.5rem; }
+.sheet-message[hidden] { display: none; }
+.sheet-message input {
+  flex: 1; min-width: 0; font: inherit; font-size: 1rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.35rem 0.6rem; min-height: 2.25rem;
+}
+.sheet-message input::placeholder { color: var(--muted); }
+.sheet-message-log { list-style: none; margin: 0 0 0.5rem; padding: 0; font-size: 0.875rem; }
+.sheet-message-log:empty { display: none; }
+.sheet-message-log li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.sheet-message-status { color: var(--muted); }
+.sheet-message-reply { display: block; }

@@ -7,8 +7,12 @@ import { readFileSync } from "node:fs";
 const fn = readFileSync(new URL("../supabase/functions/work-sync/index.ts", import.meta.url), "utf8");
 
 test("work-sync: read-only searches, Jira fields summary and duedate only", () => {
-  assert.match(fn, /is:open review-requested:@me/);
-  assert.match(fn, /is:open assignee:@me/);
+  // By login, looked up with GET /user (a token an org owns can't search by @me).
+  assert.match(fn, /githubGet\("\/user"\)/);
+  assert.match(fn, /`is:open is:pull-request review-requested:\$\{login\}`/);
+  assert.match(fn, /`is:open is:pull-request assignee:\$\{login\}`/);
+  assert.match(fn, /`is:open is:issue assignee:\$\{login\}`/);
+  assert.doesNotMatch(fn, /:@me/);
   assert.match(fn, /assignee = currentUser\(\) AND statusCategory != Done/);
   assert.match(fn, /fields: \["summary", "duedate"\]/);
   assert.doesNotMatch(fn, /description|"body"|\bbody\.body\b/);
