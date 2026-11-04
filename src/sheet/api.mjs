@@ -272,6 +272,19 @@ export async function createEvent(title, isPublic, starts_at, ends_at) {
   return ev.id;
 }
 
+// A message's event (docs/sheet-messages.md) in the same calendar, unlike a block: it keeps its
+// title, with visibility "private" so only the owner sees it and anyone else sees only busy, and
+// keeps Google's default alerts, since Telegram nudges only blocks. visibility and reminders are
+// the event resource's own fields (developers.google.com/workspace/calendar/api/v3/reference/events).
+export const messageEventBody = (title, starts_at, ends_at) => ({
+  summary: title, visibility: "private", ...eventTimes(starts_at, ends_at), reminders: { useDefault: true },
+});
+export async function createMessageEvent(title, starts_at, ends_at) {
+  const cal = await blocksCalendar();
+  const ev = await google(`calendars/${encodeURIComponent(cal)}/events`, { method: "POST", body: messageEventBody(title, starts_at, ends_at) });
+  return ev.id;
+}
+
 export async function patchEvent(id, patch) {
   await google(`calendars/${encodeURIComponent(await blocksCalendar())}/events/${id}`, { method: "PATCH", body: patch });
 }

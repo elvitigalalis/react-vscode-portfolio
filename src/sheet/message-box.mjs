@@ -80,7 +80,8 @@ async function answered(m, li, status) {
   if (m.tasks_added) await load().catch(failed);
 }
 
-// The message's events in the Time blocks calendar, as private ("Busy") events, once: the claim
+// The message's events in the Time blocks calendar, with their titles and Google's private
+// visibility (createMessageEvent), once: the claim
 // flips created_in_calendar first, so a second tab finds nothing to do. Without Google access
 // they wait for a load that has it. A create that fails before any event is made gives the claim
 // back; after one, the rest are dropped rather than risk a copy.
@@ -91,7 +92,7 @@ async function createEvents(m) {
   } catch (e) { return console.error(e); }
   let made = 0;
   try {
-    for (const e of m.events) { await api.createEvent(e.title, false, e.starts_at, e.ends_at); made++; }
+    for (const e of m.events) { await api.createMessageEvent(e.title, e.starts_at, e.ends_at); made++; }
   } catch (e) {
     console.error(e);
     if (!made) await api.unclaimEvents(m.id).catch(() => {});
