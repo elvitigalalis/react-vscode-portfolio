@@ -87,3 +87,21 @@ const HANDSHAKE_BUSY = /^(interview|appointment)/i;
 export const handshakeBusy = (events) => events
   .filter((e) => !e.allDay && HANDSHAKE_BUSY.test(e.summary.trim()))
   .map((e) => ({ source: "handshake", starts_at: e.start, ends_at: e.end }));
+
+const ACADEMIC_TITLE = 80;
+
+// Whether a parsed event is on `day`: an all-day one from its start date to before its end date,
+// a timed one (UTC from parseIcs) when it overlaps the day in `timeZone`; a zero-length one when
+// it starts on the day.
+function onDay(e, day, timeZone) {
+  if (e.allDay) return e.start <= day && day < e.end;
+  const s = minutesOn(e.start, day, timeZone), t = minutesOn(e.end, day, timeZone);
+  return s < 1440 && (t > 0 || (s === t && s >= 0));
+}
+
+// The brief's and read_planner's academic calendar entries on `day`: [{ title, all_day }], in
+// feed order, one-line titles cut to 80, leaving out any that read as a link.
+export const academicEntries = (events, day, timeZone) => events
+  .filter((e) => onDay(e, day, timeZone) && !linkish(e.summary))
+  .map((e) => ({ title: cutTitle(String(e.summary ?? "").replace(/\s+/g, " ")).slice(0, ACADEMIC_TITLE).trim(), all_day: e.allDay }))
+  .filter((e) => e.title);

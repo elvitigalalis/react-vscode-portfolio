@@ -65,7 +65,7 @@ test("handshakeBusy: the summary must start with Interview or Appointment", asyn
 // The academic calendar
 // =============================================================================================
 
-test("academicEntries: a day's entries, all-day and timed, by New York time", todo, async () => {
+test("academicEntries: a day's entries, all-day and timed, by New York time", async () => {
   const { academicEntries } = await sources();
   assert.deepEqual(academicEntries(await fixture("academic.ics"), "2026-11-04", TZ), [
     { title: "No classes", all_day: true },
@@ -76,13 +76,13 @@ test("academicEntries: a day's entries, all-day and timed, by New York time", to
   ]);
 });
 
-test("academicEntries: a timed entry late in the evening belongs to its New York day", todo, async () => {
+test("academicEntries: a timed entry late in the evening belongs to its New York day", async () => {
   const { academicEntries } = await sources();
   // Late registration closes at 10 pm on Nov 3 (03:00 UTC on Nov 4).
   assert.deepEqual(academicEntries(await fixture("academic.ics"), "2026-11-03", TZ), [{ title: "Late registration closes", all_day: false }]);
 });
 
-test("academicEntries: a several-day entry is on each of its days, up to its end", todo, async () => {
+test("academicEntries: a several-day entry is on each of its days, up to its end", async () => {
   const { academicEntries } = await sources();
   const events = await fixture("academic.ics");
   const thanksgiving = [{ title: "Thanksgiving break", all_day: true }];
@@ -92,7 +92,7 @@ test("academicEntries: a several-day entry is on each of its days, up to its end
   assert.deepEqual(academicEntries(events, "2026-11-24", TZ), []);
 });
 
-test("academicEntries: the next day has its own entries only", todo, async () => {
+test("academicEntries: the next day has its own entries only", async () => {
   const { academicEntries } = await sources();
   assert.deepEqual(academicEntries(await fixture("academic.ics"), "2026-11-05", TZ), [{ title: "Advising week begins", all_day: true }]);
 });
