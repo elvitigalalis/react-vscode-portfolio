@@ -1,6 +1,6 @@
 // Read-only sources for the planner (docs/sheet-v5.md, "sources.mjs"): what the sync functions
 // turn each outside feed into. Pure, so node --test covers it; the Edge Functions import it.
-import { formatSpan, minutesOn, cutTitle, localNow } from "./logic.mjs";
+import { formatSpan, minutesOn, cutTitle, localNow, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
@@ -114,4 +114,21 @@ export function enrollmentTask(enrollmentAt, timeZone) {
   if (!enrollmentAt) return null;
   const { day, minutes } = localNow(new Date(enrollmentAt), timeZone);
   return { title: "Enrollment opens", day, at_time: hhmm(minutes), est_min: 15, public: false, list: null, source: "enrollment", source_uid: "enrollment" };
+}
+
+// /plan Settings' enrollment time: settings.enrollment_at as a datetime-local value
+// ("2026-11-12T07:00", local to `timeZone`), and back to an ISO instant. Blank is null; a value
+// that isn't a date and time is undefined, so nothing is saved.
+export function enrollmentInput(enrollmentAt, timeZone) {
+  if (!enrollmentAt) return "";
+  const { day, minutes } = localNow(new Date(enrollmentAt), timeZone);
+  return `${day}T${hhmm(minutes)}`;
+}
+
+export function enrollmentFromInput(value, timeZone) {
+  const v = String(value ?? "").trim();
+  if (!v) return null;
+  const m = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)$/.exec(v);
+  if (!m || Number.isNaN(Date.parse(`${m[1]}T00:00:00Z`))) return undefined;
+  return zonedIso(m[1], Number(m[2]) * 60 + Number(m[3]), timeZone);
 }

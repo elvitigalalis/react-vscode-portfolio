@@ -22,3 +22,16 @@ test("brief: an empty day still gets the calendar line", () => {
   const brief = whatToSend(snap, new Date("2026-11-04T13:00:00Z")).find((m) => m.kind === "brief");
   assert.equal(brief.text, "Nothing on today.\nCalendar: No classes.");
 });
+
+// --- /plan Settings, the enrollment time ------------------------------------------------------
+
+test("enrollment input: the stored instant as local date and time, and back", async () => {
+  const { enrollmentInput, enrollmentFromInput } = await import("../src/sheet/sources.mjs");
+  assert.equal(enrollmentInput("2026-11-13T03:30:00Z", TZ), "2026-11-12T22:30");
+  assert.equal(enrollmentInput(null, TZ), "");
+  assert.equal(enrollmentFromInput("2026-11-12T22:30", TZ), "2026-11-13T03:30:00.000Z");
+  assert.equal(enrollmentFromInput("2027-04-06T09:00", TZ), "2027-04-06T13:00:00.000Z"); // EDT
+  assert.equal(enrollmentFromInput("  ", TZ), null);
+  assert.equal(enrollmentFromInput("2026-13-01T09:00", TZ), undefined);
+  assert.equal(enrollmentFromInput("tomorrow", TZ), undefined);
+});
