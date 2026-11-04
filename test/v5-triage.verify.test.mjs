@@ -263,7 +263,7 @@ const row = (message_id, from_address) => ({
   account: SBU, message_id, link: LINK(message_id), sender: "Acme Recruiting", subject: "Next steps", why: "Asks for your availability", kind: "reply", due: null, from_address,
 });
 
-test("never-show: an item whose sender's domain has a never rule is dropped, not refused", todo, async () => {
+test("never-show: an item whose sender's domain has a never rule is dropped, not refused", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good([need(M2), need(M1)]), rules(["domain", "acme.com", "never"]), senders);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
@@ -271,7 +271,7 @@ test("never-show: an item whose sender's domain has a never rule is dropped, not
   assert.deepEqual(r.dropped, [{ index: 1, message_id: M1, pattern: "acme.com" }]);
 });
 
-test("never-show: a domain rule matches the domain itself and its parents only", todo, async () => {
+test("never-show: a domain rule matches the domain itself and its parents only", async () => {
   const { checkProposal } = await proposal();
   const dropped = (rule) => checkProposal(good([need(M1)]), rules(rule), senders).dropped.map((d) => d.message_id);
   assert.deepEqual(dropped(["domain", "mail.acme.com", "never"]), [M1]);
@@ -281,7 +281,7 @@ test("never-show: a domain rule matches the domain itself and its parents only",
   assert.deepEqual(dropped(["domain", "stonybrook.edu", "never"]), []);
 });
 
-test("never-show: an address rule matches that address only", todo, async () => {
+test("never-show: an address rule matches that address only", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good([need(M1), need(M2)]), rules(["address", "jobs@mail.acme.com", "never"]), senders);
   assert.deepEqual(r.dropped, [{ index: 0, message_id: M1, pattern: "jobs@mail.acme.com" }]);
@@ -290,14 +290,14 @@ test("never-show: an address rule matches that address only", todo, async () => 
   assert.deepEqual(other.dropped, []);
 });
 
-test("never-show: an always rule drops nothing", todo, async () => {
+test("never-show: an always rule drops nothing", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good([need(M1)]), rules(["domain", "acme.com", "always"]), senders);
   assert.deepEqual(r.dropped, []);
   assert.deepEqual(r.rows.needs, [row(M1, "jobs@mail.acme.com")]);
 });
 
-test("never-show: an item with no known sender is kept, with from_address null", todo, async () => {
+test("never-show: an item with no known sender is kept, with from_address null", async () => {
   const { checkProposal } = await proposal();
   const r = checkProposal(good([need(M3)]), rules(["domain", "acme.com", "never"]), senders);
   assert.deepEqual(r.dropped, []);
