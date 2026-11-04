@@ -33,7 +33,7 @@ test("dayRows: all-day events first, then events and timed tasks by time, then u
   assert.equal(dentist.done, false);
 });
 
-test("dayRows: The Sheet's own block events are left out, and a task with an approved block sorts by the block's start", () => {
+test("dayRows: The Sheet's own block events are left out, and a task sorts by its approved block, else its pending block", () => {
   const rows = dayRows({
     day: DAY, timeZone: TZ, todos: [],
     tasks: [task("read ch. 4", 1), task("proposed only", 2)],
@@ -47,8 +47,8 @@ test("dayRows: The Sheet's own block events are left out, and a task with an app
       ev("e0", "Standup", "2026-11-04T15:30:00Z", "2026-11-04T15:45:00Z"), // 10:30 am
     ],
   });
-  // A proposed block isn't the plan yet, so that task stays untimed.
-  assert.deepEqual(shape(rows), ["ev:Standup", "read ch. 4", "ev:Gym", "proposed only"]);
+  // A task with only a pending (proposed) block sorts by that block too: 8:00 am comes first.
+  assert.deepEqual(shape(rows), ["proposed only", "ev:Standup", "read ch. 4", "ev:Gym"]);
 });
 
 test("dayRows: done and hidden come from event_todos; title_ai replaces the raw title, which is trimmed", () => {
@@ -145,4 +145,18 @@ test("checkEventTodos: refuses a long, multi-line or link-like title and a bad I
   ]);
   assert.deepEqual(checkEventTodos("nope").errors, ["event_todos: must be a list"]);
   assert.match(checkEventTodos(Array.from({ length: 81 }, (_, i) => ({ ...ok, event_id: `e${i}` }))).errors[0], /^event_todos: at most 80/);
+});
+
+test("dayRows: an approved block wins over a pending one for the same task", () => {
+  const rows = dayRows({
+    day: DAY, timeZone: TZ, todos: [],
+    tasks: [task("lab", 1), task("essay", 2)],
+    blocks: [
+      { id: "b1", task_id: "lab", starts_at: "2026-11-04T20:00:00Z", ends_at: "2026-11-04T21:00:00Z", proposed: false, gcal_id: null }, // 3:00 pm approved
+      { id: "b2", task_id: "lab", starts_at: "2026-11-04T14:00:00Z", ends_at: "2026-11-04T15:00:00Z", proposed: true, gcal_id: null }, // 9:00 am pending
+      { id: "b3", task_id: "essay", starts_at: "2026-11-04T17:00:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: true, gcal_id: null }, // noon pending
+    ],
+    events: [],
+  });
+  assert.deepEqual(shape(rows), ["essay", "lab"]);
 });
