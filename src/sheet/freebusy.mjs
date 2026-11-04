@@ -3,7 +3,7 @@
 // are as in https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query.
 // No network, so node --test covers it; supabase/functions/busy-sync does the calls.
 
-import { addDays, localNow, zonedIso } from "./logic.mjs";
+import { addDays, localNow, plural, zonedIso } from "./logic.mjs";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -79,4 +79,15 @@ function busyMinutes(spans, from, to) {
     reach = Math.max(reach, b);
   }
   return total / 60_000;
+}
+
+// Settings' line on when busy times were last saved (settings.busy_as_of), by the server or
+// /plan: "Busy times saved 4 min ago".
+export function busySaved(busyAsOf, now) {
+  if (!busyAsOf) return "Busy times not saved yet";
+  const min = Math.floor((now.getTime() - Date.parse(busyAsOf)) / 60_000);
+  if (min < 1) return "Busy times saved just now";
+  if (min < 60) return `Busy times saved ${min} min ago`;
+  const ago = min < 1440 ? plural(Math.floor(min / 60), "hour") : plural(Math.floor(min / 1440), "day");
+  return `Busy times saved ${ago} ago`;
 }
