@@ -426,14 +426,28 @@ export function replyDiff(account, before, after, known) {
   return { upserts, deletes, owed };
 }
 
-// search_mail's summaries with `known` (he has sent mail to the From address) and the thread's
-// `reply_state` ('owed' | 'awaiting' | null). known: lowercased addresses; states: reply_state
-// rows, matched on account and thread.
-export function searchMarks(summaries, known, states) {
-  const state = new Map(states.map((r) => [`${r.account} ${r.thread_id}`, r.state]));
-  return summaries.map((s) => ({
-    ...s,
-    known: known.has(parseAddresses(s.from)[0]?.address ?? ""),
-    reply_state: state.get(`${s.account} ${s.thread_id}`) ?? null,
-  }));
+// search_mail's summaries with `known` (he has sent mail to the From address), the thread's
+// `reply_state` ('owed' | 'awaiting' | null), `owed_basis` (thread, known, cc or null) and
+// `overdue` (owed 2+ business days). known: lowercased addresses; states: reply_state rows
+// ({ account, thread_id, state, basis, since }), matched on account and thread.
+export function searchMarks(summaries, known, states, timeZone, now) {
+  const state = new Map(states.map((r) => [`${r.account} ${r.thread_id}`, r]));
+  return summaries.map((s) => {
+    const r = state.get(`${s.account} ${s.thread_id}`);
+    const owed = r?.state === "owed";
+    return {
+      ...s,
+      known: known.has(parseAddresses(s.from)[0]?.address ?? ""),
+      reply_state: r?.state ?? null,
+      owed_basis: owed ? r.basis ?? null : null,
+      overdue: Boolean(owed && now && r.since && businessDays(r.since, now.toISOString(), timeZone) >= 2),
+    };
+  });
+}
+
+// What search_mail adds to a summary from the message's headers, never the headers themselves:
+// `automated` (automatedSender) and `addressed` ("to", "cc" or "none" for the account).
+export function summarySignals(message, account) {
+  const headers = message.payload?.headers ?? [];
+  return { automated: automatedSender(headers), addressed: addressedTo(headers, account) };
 }

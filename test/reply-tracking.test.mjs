@@ -363,3 +363,25 @@ test("replyDiff: an owed thread read again at the same message doesn't fire agai
   const before = [{ thread_id: "18f3a1c2d4e5f700", state: "owed", message_id: "18f3a1c2d4e5f702" }];
   assert.deepEqual(replyDiff("owner@example.com", before, [{ thread_id: "18f3a1c2d4e5f700", state, from_address: null }], new Set()).owed, []);
 });
+
+test("searchMarks: reply_state, owed_basis and overdue by account and thread, never across accounts", async () => {
+  const { searchMarks } = await import("../src/sheet/mail.mjs");
+  const s = (account) => ({ account, id: "18f3a1c2d4e5f702", thread_id: "18f3a1c2d4e5f700", from: PAT });
+  const states = [
+    { account: "owner@example.com", thread_id: "18f3a1c2d4e5f700", state: "owed", basis: "thread", since: "2026-10-28T15:00:00Z" },
+    { account: "school@example.edu", thread_id: "18f3a1c2d4e5f700", state: "awaiting", basis: null, since: "2026-11-03T15:00:00Z" },
+  ];
+  const out = searchMarks([s("owner@example.com"), s("school@example.edu"), s("third@example.com")], new Set(), states, TZ, wed0607);
+  assert.deepEqual(out.map((r) => [r.reply_state, r.owed_basis, r.overdue]),
+    [["owed", "thread", true], ["awaiting", null, false], [null, null, false]]);
+});
+
+test("summarySignals: a bank alert is automated; addressed is to, cc or none for the account", async () => {
+  const { summarySignals } = await import("../src/sheet/mail.mjs");
+  const g = (from, to, cc = "") => ({ id: "18f3a1c2d4e5f702", threadId: "18f3a1c2d4e5f700", labelIds: ["INBOX"], internalDate: "0",
+    payload: { headers: [{ name: "From", value: from }, { name: "To", value: to }, { name: "Cc", value: cc }] } });
+  assert.deepEqual(summarySignals(g("Bank <no.reply.alerts@bank.example.com>", ME), "owner@example.com"), { automated: true, addressed: "to" });
+  assert.deepEqual(summarySignals(g(PAT, ME), "owner@example.com"), { automated: false, addressed: "to" });
+  assert.deepEqual(summarySignals(g(PAT, "team@example.org", ME), "owner@example.com"), { automated: false, addressed: "cc" });
+  assert.deepEqual(summarySignals(g(PAT, "team@example.org"), "owner@example.com"), { automated: false, addressed: "none" });
+});
