@@ -121,7 +121,9 @@ weather_cache id boolean pk default true check (id), point text not null,
   `{ account, message_id, from_address }`; finished `{ block_id, task_id }`.
 - **Writers.** Server functions (service key) write `calendar_account`, `changes`, `replans`,
   `known_senders`, `message_senders`, `reply_state` and `weather_cache`; the browser may read
-  them, and delete `calendar_account`. /plan writes `habits` and `triage_rules`. Telegram and
+  them, and delete `calendar_account`. `apply_proposal` runs as the owner (`security invoker`),
+  so `changes` keeps `grant update (consumed_day, consumed_rev) … to authenticated` for it to
+  mark the changes a revision read. /plan writes `habits` and `triage_rules`. Telegram and
   /plan insert `feedback`; nobody updates or deletes it but `nightly_roll`. Telegram inserts
   `actuals`.
 - **Vault, the calendar grant** (as `mail_account_save` and `mail_refresh_token`, revoked from
