@@ -114,7 +114,9 @@ function plannerServer(db: Db) {
       "morning or replan, the replan's reason names, and the changes since the newest revision as kinds and counts. " +
       "triage_rules are Lisul's always-show and never-show rules by sender address or domain: " +
       "submit_proposal drops a Needs you item from a never-show sender, and an always-show sender's mail belongs " +
-      `in Needs you. ${UNTRUSTED}`,
+      "in Needs you. reply_state lists the mail threads where a reply is owed (someone wrote 2+ business days ago) " +
+      "and where Lisul is awaiting a reply (he wrote last, 3+ business days ago), by thread and display name. " +
+      `${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
