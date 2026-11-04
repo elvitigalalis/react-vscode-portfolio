@@ -9,6 +9,7 @@ import {
 } from "./logic.mjs";
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
+import { lightDismiss } from "./dismiss.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -692,6 +693,8 @@ function typing(e) {
 }
 
 function wire() {
+  // Every dialog on /plan closes on a backdrop click, as its Close button does (dismiss.mjs).
+  for (const d of root.querySelectorAll("dialog")) lightDismiss(d);
   root.addEventListener("click", async (e) => {
     if (Date.now() - wasDrag.at < 300) return;
     const act = e.target.closest("[data-act]")?.dataset.act;
