@@ -10,8 +10,9 @@ import { lint } from "./lint.mjs";
 import { length } from "./writeup.mjs";
 import { tags } from "./tags.mjs";
 import { html, links, lighthouse, a11y } from "./tools.mjs";
+import { budget } from "./budget.mjs";
 
-const gates = { schema, mirror, lint, length, tags, routing, html, links, a11y, lighthouse };
+const gates = { schema, mirror, lint, length, tags, routing, budget, html, links, a11y, lighthouse };
 
 const { values, positionals } = parseArgs({ options: { dist: { type: "string", default: "dist" } }, allowPositionals: true });
 const root = new URL("..", import.meta.url).pathname;
