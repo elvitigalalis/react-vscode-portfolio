@@ -727,6 +727,29 @@ begin
   delete from tasks where id = t;
   raise notice '✓ v5: habits checked and private; a block is a task''s or a habit''s; habits never reach public_now';
 end $$;
+-- apply_proposal writes habit blocks as proposed blocks and keeps them in the revision; approving
+-- the revision locks them, as task blocks. A day of its own, 31 days out.
+do $$
+declare
+  tz text := (select time_zone from settings);
+  d date := sheet_today() + 31;
+  h uuid;
+begin
+  if to_regclass('public.habits') is null then return; end if;
+  insert into habits (name, days, ideal, minutes) values ('H1 lunch', '{1,2,3,4,5,6,7}', '12:30', 30) returning id into h;
+  perform apply_proposal(d => d, replaces => null, blocks => '[]', habit_blocks => jsonb_build_array(jsonb_build_object(
+    'habit_id', h, 'starts_at', (d + time '12:30') at time zone tz, 'ends_at', (d + time '13:00') at time zone tz)));
+  if (select count(*) from blocks where habit_id = h and proposed and task_id is null) <> 1
+    then raise exception 'apply_proposal wrote no proposed habit block'; end if;
+  if (select blocks -> 0 ->> 'habit_id' from proposals where day = d and rev = 1) is distinct from h::text
+    then raise exception 'the revision does not hold its habit block'; end if;
+  perform approve_proposal(d, 1);
+  if (select count(*) from blocks where habit_id = h and not proposed) <> 1
+    then raise exception 'approving did not lock the habit block'; end if;
+  delete from habits where id = h;
+  delete from proposals where day = d;
+  raise notice '✓ v5: apply_proposal writes habit blocks, approve_proposal locks them';
+end $$;
 select pg_temp.as_user('authenticated', 'stranger@example.com');
 do $$ begin
   if to_regclass('public.habits') is null then return; end if;
