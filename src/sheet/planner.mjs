@@ -278,7 +278,12 @@ function detailsOf(t, clash, level, span) {
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
 }
 
-// A task on a day with a time (taskSpan) reads like an event row: "7–7:20 pm · Register for classes".
+// A timed row's time, its own label before the title in a fixed column ("7–7:20 pm"), the same on
+// task and event rows. Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
+const whenLabel = (start, end) => el("span", { className: "sheet-when", ariaHidden: "true", textContent: formatSpan(start, end) });
+const spoken = (start, end) => `${formatSpan(start, end).replace("–", " to ")}, `;
+
+// A task on a day with a time (taskSpan) reads like an event row: "7–7:20 pm  Register for classes".
 export const spanOf = (t) => (t.day ? taskSpan(t, t.day, SHEET.timeZone, state.blocks) : null);
 
 export function taskRow(t, span = spanOf(t)) {
@@ -286,12 +291,13 @@ export function taskRow(t, span = spanOf(t)) {
   li.dataset.id = t.id;
   if (sourceOf(t)) li.dataset.source = sourceOf(t);
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
-  const when = span ? `${formatSpan(span.start, span.end)} · ` : "";
-  const title = el("button", { type: "button", className: "sheet-title", textContent: `${when}${t.title}`, title: t.title });
+  const when = span ? spoken(span.start, span.end) : "";
+  const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
   const level = dueLevel(t, state.blocks, state.today, SHEET.timeZone);
   title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
+    span ? whenLabel(span.start, span.end) : null,
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
     // The details, kept together so they move under the title as one line when they don't fit.
@@ -319,19 +325,21 @@ function addRow(where, label, placeholder = "+ Add a task") {
 // (event-todos.mjs). The calendar itself shows on Plan today's timeline.
 const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
 
-// An event row looks like a task row, with the calendar icon and its time: "9–10:15 am · Dentist".
+// An event row looks like a timed task row, with its time first and the calendar icon after the
+// title: "9–10:15 am  Dentist".
 function eventTodoRow(r) {
   const li = el("li", { className: `sheet-row sheet-evtodo${r.done ? " is-done" : ""}` });
   li.dataset.key = r.key;
-  const text = r.allDay ? r.title : `${formatSpan(r.start, r.end)} · ${r.title}`;
   const check = el("button", { type: "button", className: "sheet-check", ariaLabel: r.done ? `Reopen ${r.title}` : `Complete ${r.title}` }, r.done ? "↺" : icon("check"));
   check.dataset.act = "evtodo-done";
   const more = el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${r.title}` }, icon("more-horizontal"));
   more.dataset.act = "evtodo-more";
-  li.append(
+  li.append(...[
+    r.allDay ? null : whenLabel(r.start, r.end),
+    r.allDay ? null : el("span", { className: "visually-hidden", textContent: spoken(r.start, r.end) }),
+    el("span", { className: "sheet-title", textContent: r.title, title: r.raw }),
     el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar")),
-    el("span", { className: "sheet-title", textContent: text, title: r.raw }),
-    check, more);
+    check, more].filter(Boolean));
   return li;
 }
 

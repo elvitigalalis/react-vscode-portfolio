@@ -96,6 +96,14 @@
   flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
   padding: 0; cursor: text; overflow-wrap: anywhere;
 }
+/* A timed row's time: its own fixed column, so titles line up down the day; a long span wraps
+   inside it at the dash. Done rows dim and strike it with the title. */
+.sheet-when {
+  flex: none; width: 5.25rem; font-size: 0.8125rem; font-weight: 500;
+  font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1.35;
+}
+.sheet-row:has(> .sheet-when) { align-items: baseline; }
+@media (min-width: 48.0625rem) { .sheet-when { width: 4.5rem; font-size: 0.75rem; } }
 .sheet-meta { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .sheet-clash { color: var(--warn); font-size: 0.8125rem; cursor: help; }
 .sheet-risk { color: var(--warn); cursor: help; }
