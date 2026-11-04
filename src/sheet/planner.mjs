@@ -282,6 +282,9 @@ function detailsOf(t, clash, level, span) {
 // task and event rows. Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
 const whenLabel = (start, end) => el("span", { className: "sheet-when", ariaHidden: "true", textContent: formatSpan(start, end) });
 const spoken = (start, end) => `${formatSpan(start, end).replace("–", " to ")}, `;
+// With a time, the title and its details go in one body beside it, so they wrap under the title.
+const withWhen = (start, end, kids) => (start == null ? kids
+  : [whenLabel(start, end), el("span", { className: "sheet-body" }, ...kids.filter(Boolean))]);
 
 // A task on a day with a time (taskSpan) reads like an event row: "7–7:20 pm  Register for classes".
 export const spanOf = (t) => (t.day ? taskSpan(t, t.day, SHEET.timeZone, state.blocks) : null);
@@ -297,11 +300,11 @@ export function taskRow(t, span = spanOf(t)) {
   const level = dueLevel(t, state.blocks, state.today, SHEET.timeZone);
   title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
-    span ? whenLabel(span.start, span.end) : null,
-    rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
-    title,
-    // The details, kept together so they move under the title as one line when they don't fit.
-    detailsOf(t, clash, level, span),
+    ...withWhen(span?.start, span?.end, [
+      rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
+      title,
+      // The details, kept together so they move under the title as one line when they don't fit.
+      detailsOf(t, clash, level, span)]),
     el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
@@ -335,10 +338,10 @@ function eventTodoRow(r) {
   const more = el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${r.title}` }, icon("more-horizontal"));
   more.dataset.act = "evtodo-more";
   li.append(...[
-    r.allDay ? null : whenLabel(r.start, r.end),
     r.allDay ? null : el("span", { className: "visually-hidden", textContent: spoken(r.start, r.end) }),
-    el("span", { className: "sheet-title", textContent: r.title, title: r.raw }),
-    el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar")),
+    ...withWhen(r.allDay ? null : r.start, r.end, [
+      el("span", { className: "sheet-title", textContent: r.title, title: r.raw }),
+      el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar"))]),
     check, more].filter(Boolean));
   return li;
 }
