@@ -130,3 +130,12 @@ test("searchMarks: known by From address, reply_state by account and thread", as
   );
   assert.deepEqual(out.map((r) => [r.known, r.reply_state]), [[true, "owed"], [false, null], [false, null]]);
 });
+
+test("mail-sync: never asks Gmail for a body, a snippet or a raw message", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("../supabase/functions/mail-sync/index.ts", import.meta.url), "utf8");
+  const code = src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+  assert.doesNotMatch(code, /format=(full|raw)|messageBody|snippet|\/attachments/);
+  assert.match(code, /metadataQuery\(true\)/);
+  assert.match(code, /fields: "messages\(id,threadId\)"/);
+});
