@@ -1268,6 +1268,8 @@ begin
   exception when check_violation then null; end;
   insert into messages (text) values (repeat('a', 8000)) returning id into m;
   delete from messages where id = m;
+  begin insert into messages (text, reply) values ('x', repeat('r', 501)); raise exception 'messages took a 501-character reply';
+  exception when check_violation then null; end;
   insert into messages (text) values ('lab report due Friday, ~2h; dentist Thu 3pm') returning id into m;
   if (select status <> 'pending' or events <> '[]'::jsonb or created_in_calendar or tasks_added <> 0 from messages where id = m)
     then raise exception 'a new message is not pending and empty'; end if;

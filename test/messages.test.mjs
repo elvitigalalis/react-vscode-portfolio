@@ -104,17 +104,17 @@ test("checkAnswers: an id that isn't a pending message fails that answer only", 
   assert.deepEqual(out.answers, [{ id: M2, tasks: [], events: [], reply: "Done." }]);
 });
 
-test("checkAnswers: titles over 120 characters, replies over 280, links and line breaks are refused", () => {
+test("checkAnswers: titles over 120 characters, replies over 500, links and line breaks are refused", () => {
   const out = checkAnswers({ answers: [answer({
     tasks: [{ title: "x".repeat(121), day: null, due: null, at_time: null, est_min: null }],
     events: [{ title: "Call\nnow", start: "2026-11-05T15:00", minutes: 30 }],
     reply: "See www.example.com",
-  }), answer({ id: M2, reply: "y".repeat(281) })] }, PENDING, TZ);
+  }), answer({ id: M2, reply: "y".repeat(501) })] }, PENDING, TZ);
   assert.deepEqual(out.errors, [
     "answers[0].tasks[0].title: at most 120 characters, got 121",
     "answers[0].events[0].title: must be one line, with no line breaks or control characters",
     "answers[0].reply: must not hold a link or web address",
-    "answers[1].reply: at most 280 characters, got 281",
+    "answers[1].reply: at most 500 characters, got 501",
   ]);
   assert.deepEqual(out.answers, []);
 });
@@ -158,15 +158,26 @@ test("checkAnswers: past dates are fine (he may log what already happened); miss
   assert.equal(out.answers[0].events[0].starts_at, "2026-10-01T14:00:00.000Z");
 });
 
-test("checkAnswers: at most 10 answers, 10 tasks and 5 events an answer, and a reply is required", () => {
+test("checkAnswers: at most 10 answers, 20 tasks and 10 events an answer (a long pasted message), and a reply is required", () => {
   const many = (n, f) => Array.from({ length: n }, f);
   assert.deepEqual(checkAnswers({ answers: many(11, () => answer()) }, PENDING, TZ).errors, ["answers: at most 10, got 11"]);
+  const full = checkAnswers({ answers: [answer({
+    tasks: many(20, (_, i) => ({ title: `T${i}` })),
+    events: many(10, () => ({ title: "E", start: "2026-11-05T15:00", minutes: 30 })),
+  })] }, PENDING, TZ);
+  assert.deepEqual(full.errors, []);
+  assert.equal(full.answers[0].tasks.length, 20);
   const out = checkAnswers({ answers: [answer({
-    tasks: many(11, () => ({ title: "T" })),
-    events: many(6, () => ({ title: "E", start: "2026-11-05T15:00", minutes: 30 })),
+    tasks: many(21, () => ({ title: "T" })),
+    events: many(11, () => ({ title: "E", start: "2026-11-05T15:00", minutes: 30 })),
     reply: undefined,
   })] }, PENDING, TZ);
-  assert.deepEqual(out.errors, ["answers[0].tasks: at most 10, got 11", "answers[0].events: at most 5, got 6", "answers[0].reply: must be text"]);
+  assert.deepEqual(out.errors, ["answers[0].tasks: at most 20, got 21", "answers[0].events: at most 10, got 11", "answers[0].reply: must be text"]);
+});
+
+test("checkAnswers: a reply may run to 500 characters, so it can list what was skipped and why", () => {
+  assert.deepEqual(checkAnswers({ answers: [answer({ reply: "y".repeat(500) })] }, PENDING, TZ).errors, []);
+  assert.deepEqual(checkAnswers({ answers: [answer({ reply: "y".repeat(501) })] }, PENDING, TZ).errors, ["answers[0].reply: at most 500 characters, got 501"]);
 });
 
 // ---------------------------------------------------------------- withMessages
