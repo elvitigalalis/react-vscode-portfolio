@@ -2,7 +2,7 @@
 // suggestion, the session order, plate math. Every exercise and number here is made up.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { e1rm, records, prsFor, historyFor, suggest, nextDay, strip, plates, plateText, rxLine, warmups, activeExercise } from "../src/sheet/gym.mjs";
+import { e1rm, records, prsFor, historyFor, suggest, nextDay, strip, plates, plateText, rxLine, warmups, activeExercise, readNum, setToSave } from "../src/sheet/gym.mjs";
 
 // A made-up exercise, "Widget Press", and its sets.
 const set = (weight_lb, reps, more = {}) => ({ exercise_id: "wp", weight_lb, reps, warmup: false, done_at: "2026-01-05T15:00:00Z", ...more });
@@ -43,6 +43,18 @@ test("records: sheet baselines count only once confirmed", () => {
   const confirmed = [{ ...baselines[0], confirmed: true }];
   assert.equal(records([set(100, 5)], confirmed).get("wp").heaviest.weight_lb, 150);
   assert.equal(records([], confirmed).get("wp").heaviest.weight_lb, 150);
+});
+
+test("records: deleting a set recomputes the records from the sets left", () => {
+  const sets = [set(100, 5, { id: "a" }), set(120, 5, { id: "b" }), set(110, 8, { id: "c" })];
+  assert.equal(records(sets).get("wp").heaviest.id, "b");
+  const left = sets.filter((s) => s.id !== "b");
+  const r = records(left).get("wp");
+  assert.equal(r.heaviest.id, "c");
+  assert.equal(r.e1rm.set.id, "c");
+  // The PR the deleted set had stolen is back for the next set at that weight.
+  assert.deepEqual(prsFor(set(115, 5), left).map((p) => p.type), ["weight"]);
+  assert.equal(records([]).size, 0);
 });
 
 test("prsFor: heavier is a weight PR, and the e1RM PR comes first", () => {
@@ -195,6 +207,26 @@ test("a one-week program (only Week 4): cycles Push #1 to Legs #2 and back, with
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0].map((d) => d.state), ["today", "next", "", "", "", ""]);
   assert.deepEqual(strip(week4, [...pass, done("w4-push1", "2026-01-08")], "w4-pull1")[0].map((d) => d.state), ["done", "today", "next", "", "", ""]);
+});
+
+test("readNum: a typed weight or reps, or null when blank or not a number", () => {
+  assert.equal(readNum("150"), 150);
+  assert.equal(readNum("62,5"), 62.5);
+  assert.equal(readNum(" "), null);
+  assert.equal(readNum("abc"), null);
+  assert.equal(readNum("-5"), null);
+  assert.equal(readNum("6.7", true), 6);
+});
+
+test("setToSave: a blank weight falls back to the prefill, never to 0, unless the exercise is bodyweight", () => {
+  const prefill = { weight_lb: 135, reps: 6 };
+  assert.deepEqual(setToSave({ weight_lb: 150, reps: 5 }, prefill, false), { weight_lb: 150, reps: 5 });
+  assert.deepEqual(setToSave({ weight_lb: null, reps: null }, prefill, false), { weight_lb: 135, reps: 6 });
+  assert.deepEqual(setToSave({}, { weight_lb: null, reps: 8 }, false), { error: "weight" });
+  assert.deepEqual(setToSave({ weight_lb: 0 }, { weight_lb: null, reps: 8 }, false), { error: "weight" });
+  assert.deepEqual(setToSave({}, { weight_lb: null, reps: 8 }, true), { weight_lb: 0, reps: 8 });
+  assert.deepEqual(setToSave({ weight_lb: 0, reps: 10 }, prefill, true), { weight_lb: 0, reps: 10 });
+  assert.deepEqual(setToSave({ weight_lb: 100, reps: 0 }, { weight_lb: 100, reps: null }, false), { error: "reps" });
 });
 
 // --- Plates -----------------------------------------------------------------------------------

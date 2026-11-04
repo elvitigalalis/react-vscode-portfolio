@@ -68,6 +68,26 @@ export function prsFor(s, before, baselines = []) {
   return prs;
 }
 
+// --- Logging a set ----------------------------------------------------------------------------
+
+// A typed number ("62,5" too), or null when blank, negative or not a number. Reps are whole.
+export function readNum(text, whole = false) {
+  const t = String(text ?? "").trim().replace(",", ".");
+  const v = whole ? parseInt(t, 10) : parseFloat(t);
+  return t && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+// What ✓ saves: the typed values, else the row's prefill (suggestion, last time or warm-up). A
+// weight is never saved as 0 unless the exercise is marked bodyweight, where a blank is 0; reps
+// are at least 1. { error: "weight" | "reps" } when there is nothing to save.
+export function setToSave(typed, prefill, bodyweight) {
+  const weight = typed.weight_lb ?? prefill.weight_lb ?? (bodyweight ? 0 : null);
+  if (weight == null || (weight === 0 && !bodyweight)) return { error: "weight" };
+  const reps = typed.reps ?? prefill.reps;
+  if (!(reps >= 1)) return { error: "reps" };
+  return { weight_lb: weight, reps };
+}
+
 // --- The suggestion -------------------------------------------------------------------------
 
 export const range = (text) => String(text ?? "").replace(/-/g, "–");

@@ -73,6 +73,7 @@
 }
 .gym-check.is-done { background: var(--accent); color: var(--on-btn); }
 .gym-set.is-done .gym-num { color: var(--muted); }
+.gym-set-err { grid-column: 1 / -1; margin: 0; color: var(--warn); font-size: 0.875rem; }
 .gym-more { display: inline-block; margin-top: 0.5rem; min-height: 2.75rem; }
 
 .gym-rpe { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0 0.5rem 2.5rem; }

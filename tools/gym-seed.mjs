@@ -22,6 +22,9 @@ export { parseSlot };
 export const barFor = (name) =>
   /\b(barbell|bench press|deadlift|pendlay row|squat)\b/i.test(name) && !/\b(db|dumbbell|smith|machine|hack|cable|leg press)\b/i.test(name) ? 45 : null;
 
+// Bodyweight moves may log 0 lb added (gym_exercises.bodyweight). He can change it in the table.
+export const bodyFor = (name) => /\b((?:pull|chin|push)[- ]?ups?|dips?|hanging leg raises?|planks?)\b/i.test(name);
+
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const lit = (v, type) => `${v == null || v === "" ? "null" : type === "text" ? q(v) : Number(v)}::${type}`;
 
@@ -48,7 +51,7 @@ export function seedSql(program, baselines = {}) {
     .map(([name, b]) => `(${lit(name, "text")}, ${lit(b.best_weight_lb, "numeric")}, ${lit(String(b.note_on_meaning ?? "").slice(0, 500), "text")})`);
 
   const out = ["begin;"];
-  out.push(`insert into gym_exercises (name, bar_lb) values\n  ${[...names].map((n) => `(${q(n)}, ${barFor(n) ?? "null"})`).join(",\n  ")}\non conflict (name) do nothing;`);
+  out.push(`insert into gym_exercises (name, bar_lb, bodyweight) values\n  ${[...names].map((n) => `(${q(n)}, ${barFor(n) ?? "null"}, ${bodyFor(n)})`).join(",\n  ")}\non conflict (name) do nothing;`);
   out.push(`insert into gym_program_days (phase, week, day_key, name, position) values\n  ${days.join(",\n  ")}\non conflict (phase, week, day_key) do update set name = excluded.name, position = excluded.position;`);
   if (slots.length) out.push(`insert into gym_prescriptions (program_day_id, position, exercise_id, warmup_sets, working_sets, reps, rep_min, rep_max, rpe, rpe_target, rest_min_s, rest_max_s, sub1_exercise_id, sub2_exercise_id)
 select d.id, x.position, e.id, x.warmup_sets, x.working_sets, x.reps, x.rep_min, x.rep_max, x.rpe, x.rpe_target, x.rest_min_s, x.rest_max_s, s1.id, s2.id
