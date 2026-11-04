@@ -57,3 +57,23 @@ test("brief: no cache, or one with no periods, adds no line", () => {
   assert.equal(briefText(snapshot()), "Nothing on today.");
   assert.equal(briefText(snapshot({ weather: { ...cache, periods: [] } })), "Nothing on today.");
 });
+
+// --- The weather function ------------------------------------------------------------------------
+
+test("weather function: a generic User-Agent on every NWS request, with no email", () => {
+  const src = readFileSync(new URL("../supabase/functions/weather/index.ts", import.meta.url), "utf8");
+  const ua = src.match(/"User-Agent": "([^"]+)"/)?.[1];
+  assert.ok(ua, "sets a User-Agent");
+  assert.doesNotMatch(ua, /@|lisul|elvitigala/i);
+  // Every fetch goes through getJson, which sends the headers.
+  assert.equal(src.match(/\bfetch\(/g).length, 1);
+  assert.match(src, /fetch\(url, \{ headers: HEADERS \}\)/);
+});
+
+test("schema: weather_cache is owner-only and written only by the server", () => {
+  const sql = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "utf8");
+  assert.match(sql, /create table if not exists weather_cache/);
+  assert.match(sql, /revoke all on weather_cache from anon;/);
+  assert.match(sql, /revoke insert, update, delete on weather_cache from authenticated;/);
+  assert.match(sql, /cron\.schedule\('sheet-weather', '50 \* \* \* \*'/);
+});
