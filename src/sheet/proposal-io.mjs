@@ -47,7 +47,7 @@ export function snapshotQueries(now, timeZone) {
     // Task ids are uuids from the tasks read, so they go into in.() as they are.
     blocks: (taskIds) => ({
       table: "blocks",
-      select: "task_id,starts_at,ends_at,proposed",
+      select: "task_id,habit_id,starts_at,ends_at,proposed",
       or: [`and(starts_at.lt.${to},ends_at.gt.${from})`, ...(taskIds.length ? [`task_id.in.(${taskIds.join(",")})`] : [])].join(","),
       order: "starts_at",
     }),
@@ -69,3 +69,7 @@ export function paceQueries(now, timeZone) {
     },
   };
 }
+
+// v5 H1, habits (docs/sheet-v5.md, "planSnapshot"): every habits row; planSnapshot keeps
+// plan_day's weekday's and orders them.
+export const habitsQuery = () => ({ table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence,position", order: "position" });

@@ -71,7 +71,8 @@ export function planSnapshot(rows, now) {
   const seen = new Set(turnedDown);
   // v5 P1: pace per kind, and each task's paced estimate.
   const pace = paceByKind(rows.actuals ?? []);
-  const past = rows.past ?? [];
+  // v5 H1: habit blocks aren't tasks, so they stay out of planned versus done.
+  const past = (rows.past ?? []).filter((b) => b.task_id);
   const tasks = groups.flat().filter((t) => !seen.has(t.id) && seen.add(t.id)).map((t) => ({
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
     source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
