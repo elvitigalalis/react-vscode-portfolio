@@ -306,7 +306,7 @@ test("never-show: an item with no known sender is kept, with from_address null",
   assert.deepEqual(checkProposal(good([need(M3)]), snap()).rows.needs, [row(M3, null)]);
 });
 
-test("never-show: a suggestion for a dropped item is dropped with it", todo, async () => {
+test("never-show: a suggestion for a dropped item is dropped with it", async () => {
   const { checkProposal } = await proposal();
   const suggestion = (id) => ({ account: SBU, message_id: id, title: "Acme assessment", due: "2026-11-07", kind: "assessment" });
   const r = checkProposal(good([need(M1), need(M2)], { suggested: [suggestion(M1), suggestion(M2)] }), rules(["domain", "acme.com", "never"]), senders);
