@@ -67,7 +67,7 @@
 }
 .gym-stepper .gym-step:first-child { border-radius: 0.5rem 0 0 0.5rem; }
 .gym-stepper .gym-step:last-child { border-radius: 0 0.5rem 0.5rem 0; }
-.gym-num-wrap { flex: 1; min-width: 2.5rem; position: relative; display: flex; }
+.gym-num-wrap { flex: 1; min-width: 2.75rem; position: relative; display: flex; }
 .gym-num {
   width: 100%; min-width: 0; text-align: center; font: inherit; font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums;
   color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-inline: 0; border-radius: 0; padding: 0.6rem 0 0;
@@ -80,7 +80,9 @@
 .gym-check.is-done { background: var(--accent); color: var(--on-btn); }
 .gym-set.is-done .gym-num { color: var(--muted); }
 .gym-set-err { grid-column: 1 / -1; margin: 0; color: var(--warn); font-size: 0.875rem; }
-.gym-more { display: inline-block; margin-top: 0.5rem; min-height: 2.75rem; }
+.gym-more { display: inline-block; margin-top: 0.5rem; min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.5rem; }
+/* Undo: a 44 px target inside the toast. */
+.gym-toast .sheet-link { min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.5rem; }
 
 .gym-rpe { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0 0.5rem 2.5rem; }
 .gym-chip {

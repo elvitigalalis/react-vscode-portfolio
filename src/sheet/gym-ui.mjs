@@ -575,7 +575,7 @@ function drawEdit(main) {
       for (const r of b) put("gym_prescriptions", { ...r, position: rx.position });
       render();
     };
-    const replace = el("select", { id: `${id}-x`, className: "gym-select" }, el("option", { value: "", textContent: "Replace with…" }),
+    const replace = el("select", { id: `${id}-x`, className: "gym-select", ariaLabel: `Replace ${ex?.name ?? "this exercise"} with` }, el("option", { value: "", textContent: "Replace with…" }),
       ...[...D.exercises].sort((a, b) => a.name.localeCompare(b.name)).filter((e) => e.id !== rx.exercise_id).map((e) => el("option", { value: e.id, textContent: e.name })));
     replace.addEventListener("change", () => replace.value && editRx(rx, { exercise_id: replace.value }));
     const up = btn("↑", { className: "gym-icon-btn", ariaLabel: `Move ${ex?.name} up`, disabled: i === 0 });
