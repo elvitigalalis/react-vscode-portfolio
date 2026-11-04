@@ -226,7 +226,8 @@ async function google(path, { method = "GET", body } = {}) {
 // Only his browser reads them; they are never saved, except as busy times (start and end only,
 // busy-sync.mjs). An extra calendar that fails is skipped.
 // "busy" is false for events Google marks as free; those don't take time from the day.
-// "calendar" is the ID it was read from ("primary" for his main one).
+// "calendar" is the ID it was read from ("primary" for his main one), and "id" Google's event ID
+// (with calendar, an event to-do's key).
 export async function calendarEvents(fromIso, toIso, extra = []) {
   const q = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime" });
   const lists = await Promise.all(["primary", ...extra].map(async (id) => {
@@ -248,6 +249,7 @@ export async function calendarEvents(fromIso, toIso, extra = []) {
     ends_at: e.end.dateTime ?? e.end.date,
     link: e.htmlLink ?? null,
     calendar: e.calendar,
+    id: e.id,
   }));
 }
 
@@ -346,3 +348,13 @@ export const uncreatedMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&
 // this call flipped created_in_calendar. unclaimEvents puts it back after a failed create.
 export const claimEvents = async (id) => (await rest(`messages?id=eq.${id}&created_in_calendar=is.false`, { method: "PATCH", body: { created_in_calendar: true }, prefer: "return=representation" })).length > 0;
 export const unclaimEvents = (id) => rest(`messages?id=eq.${id}`, { method: "PATCH", body: { created_in_calendar: false } });
+
+// --- Event to-dos (docs/sheet-v5.md, "Event to-dos") ---------------------------------------
+
+// The event to-dos of days from..to: done, hidden and Claude's concise title, by event key. Until
+// the table exists PostgREST answers 404, which reads as none.
+export const listEventTodos = (from, to) => rest(`event_todos?select=cal_event_key,title_ai,done,hidden&day=gte.${from}&day=lte.${to}`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
+// Checking an event off or hiding it: an upsert by key that writes only the fields given, so
+// Claude's title stays (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+export const saveEventTodo = (row) => rest("event_todos?on_conflict=cal_event_key", { method: "POST", body: row, prefer: "resolution=merge-duplicates,return=minimal" });
