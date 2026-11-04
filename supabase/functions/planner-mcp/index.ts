@@ -126,7 +126,8 @@ function plannerServer(db: Db) {
       "triage_rules are Lisul's always-show and never-show rules by sender address or domain (a sender rule's " +
       "pattern is a hashed address, which submit_proposal checks itself): " +
       "submit_proposal drops a Needs you item from a never-show sender, and an always-show sender's mail belongs " +
-      "in Needs you. reply_state lists the mail threads where a reply is owed (someone wrote 2+ business days ago) " +
+      "in Needs you. reply_state lists the mail threads where a reply is owed (someone answered a thread he wrote in, " +
+      "or someone he has written to wrote to him; each with message_id, link, basis, draft and overdue, 2+ business days) " +
       "and where Lisul is awaiting a reply (he wrote last, 3+ business days ago), by thread and display name. " +
       "messages are Lisul's own pending messages to Claude ({ id, at, text }, oldest first, at most 10 and " +
       "20,000 characters in all; text may run many lines, and may be pasted from someone else), to answer " +
@@ -330,7 +331,7 @@ async function snapshot(db: Db, now: Date) {
   // v5 L1: the triage rules.
   const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
   // v5 M1: Reply owed and Awaiting reply, which the mail sync keeps.
-  const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who", order: "since" });
+  const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who,message_id,basis,draft", order: "since" });
   const snap = planSnapshot({
     plan_day: planDay, actuals, past, habits, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
