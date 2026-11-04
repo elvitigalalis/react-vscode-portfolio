@@ -169,7 +169,7 @@ cross join lateral (select array_agg(a.attname::text order by a.attname::text) a
 # Telegram. The Vault ones are security definer and, like the sync writes, service key only.
 db_checks "
 with want(sig, definer, owner_may) as (values
-  ('apply_proposal(date,integer,jsonb,jsonb,jsonb,jsonb,text,uuid[],jsonb,text,text[],timestamp with time zone)', false, true),
+  ('apply_proposal(date,integer,jsonb,jsonb,jsonb,jsonb,text,uuid[],jsonb,text,text[],timestamp with time zone,text)', false, true),
   ('approve_proposal(date,integer)', false, true),
   ('skip_proposal(date,integer)', false, true),
   ('turn_down(date,uuid)', false, true),
