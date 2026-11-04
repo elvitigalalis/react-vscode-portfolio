@@ -36,6 +36,12 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
           scheduled Claude task that runs on my own Claude account. It can't send, change,
           label or delete mail.
         </li>
+        <li>
+          <strong>Gmail, checked every 5 minutes:</strong> the planner's server reads each new
+          message's labels, date and a few headers (who it's from and to, and whether it's from a
+          mailing list or an auto-reply), never its text, to tell which threads wait on a reply
+          from me and which I'm waiting on.
+        </li>
       </ul>
 
       <h2>Where it's kept</h2>
@@ -50,6 +56,13 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
         and a one-line note for up to 14 days, then deletes it. The busy times it plans around
         are saved from my calendar as start and end only, never titles, and deleted once they
         end.
+      </p>
+      <p>
+        From that 5-minute check it keeps, for up to 14 days, each received message's sender
+        address (so I can hide a sender from Needs you) and, for each thread waiting on a reply,
+        the other person's name and the date. The people I've sent mail to are kept only as
+        salted hashes, never as addresses, so the planner can tell a reply
+        from someone I know.
       </p>
 
       <h2>Google's rules</h2>
