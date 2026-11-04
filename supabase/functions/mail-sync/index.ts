@@ -37,7 +37,7 @@ import {
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
-import { googleToken } from "../_shared/google.ts";
+import { googleToken, refusedWhy } from "../_shared/google.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const SALT = env("SHEET_SENDER_SALT");
@@ -201,8 +201,7 @@ async function accessToken(email: string) {
   const refresh = await db("rpc/mail_refresh_token", { method: "POST", body: JSON.stringify({ account_email: email }) });
   if (!refresh) throw new Error("not a connected mail account");
   const { ok, status, grant } = await googleToken({ refresh_token: refresh, grant_type: "refresh_token" });
-  // Google's error code (invalid_grant, say) never holds a token; its description is left out.
-  if (!ok) throw new Error(`token refresh refused: ${/^[\w-]{1,40}$/.test(grant.error ?? "") ? grant.error : `HTTP ${status}`}`);
+  if (!ok) throw new Error(refusedWhy(status, grant));
   return grant.access_token as string;
 }
 
