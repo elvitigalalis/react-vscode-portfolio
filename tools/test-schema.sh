@@ -871,5 +871,47 @@ do $$ begin
   delete from tasks where source = 'enrollment';
   raise notice '✓ v5: enrollment_at, sheet-ical at :25, and one enrollment task';
 end $$;
+
+-- handshake_sync_save replaces only handshake rows in its window, and academic_days is owner-only
+-- and written by the server alone. Fixed times, as for busy_sync_save.
+do $$ begin
+  if to_regclass('public.academic_days') is null then
+    raise notice '- v5 handshake_sync_save and academic_days: skipped, not there yet';
+    return;
+  end if;
+  if not (select relrowsecurity from pg_class where oid = 'academic_days'::regclass)
+    or has_table_privilege('anon', 'academic_days', 'select')
+    or has_table_privilege('authenticated', 'academic_days', 'insert')
+    or has_table_privilege('authenticated', 'academic_days', 'update')
+    then raise exception 'academic_days should be owner-only and server-written'; end if;
+  if has_function_privilege('anon', 'handshake_sync_save(timestamptz, timestamptz, jsonb)', 'execute')
+    or has_function_privilege('authenticated', 'handshake_sync_save(timestamptz, timestamptz, jsonb)', 'execute')
+    or not has_function_privilege('service_role', 'handshake_sync_save(timestamptz, timestamptz, jsonb)', 'execute')
+    then raise exception 'handshake_sync_save should be service-only'; end if;
+  insert into busy (source, starts_at, ends_at) values
+    ('calendar', '2031-01-01 13:00+00', '2031-01-01 14:00+00'),
+    ('handshake', '2031-01-01 13:00+00', '2031-01-01 14:00+00'),
+    ('handshake', '2031-01-09 13:00+00', '2031-01-09 14:00+00');
+  perform handshake_sync_save('2031-01-01 12:00+00', '2031-01-08 12:00+00',
+    '[{"starts_at": "2031-01-02T15:00:00Z", "ends_at": "2031-01-02T15:45:00Z"}]');
+  if not exists (select 1 from busy where source = 'calendar' and starts_at = '2031-01-01 13:00+00')
+    or exists (select 1 from busy where source = 'handshake' and starts_at = '2031-01-01 13:00+00')
+    or not exists (select 1 from busy where source = 'handshake' and starts_at = '2031-01-02 15:00+00')
+    or not exists (select 1 from busy where source = 'handshake' and starts_at = '2031-01-09 13:00+00')
+    then raise exception 'handshake_sync_save replaced the wrong rows'; end if;
+  if to_regclass('public.changes') is not null then
+    delete from changes where kind = 'handshake';
+    perform handshake_sync_save('2031-01-01 12:00+00', '2031-01-08 12:00+00',
+      '[{"starts_at": "2031-01-02T15:00:00Z", "ends_at": "2031-01-02T15:45:00Z"}]');
+    if exists (select 1 from changes where kind = 'handshake')
+      then raise exception 'an unchanged Handshake feed wrote a change'; end if;
+    perform handshake_sync_save('2031-01-01 12:00+00', '2031-01-08 12:00+00', '[]');
+    if (select count(*) from changes where kind = 'handshake' and reason = 'handshake_change' and weight = 3) <> 1
+      then raise exception 'a changed Handshake feed should write one change'; end if;
+    delete from changes where kind = 'handshake';
+  end if;
+  delete from busy where starts_at >= '2031-01-01';
+  raise notice '✓ v5: handshake_sync_save replaces Handshake rows only; academic_days owner-only';
+end $$;
 SQL
 echo "✓ all schema checks passed"

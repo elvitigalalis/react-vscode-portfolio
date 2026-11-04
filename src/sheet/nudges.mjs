@@ -6,7 +6,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { proposalLines } from "./proposal.mjs";
+import { linkish, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
 import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
@@ -115,14 +115,26 @@ function brief(day) {
   // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
   if (wx) lines.push(wx);
+  // v5 SRC3: today's academic calendar entries (snapshot.academic, from academicEntries), at most 3.
+  const cal = academicLine(day.academic);
+  if (cal) lines.push(cal);
   const send_at = zonedIso(today, BRIEF_AT, tz);
   if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan].join("\n"), buttons: planButtons(today, day.proposal?.rev) };
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
   const text = todays.length || n || risky.length ? lines.join("\n")
-    : ["Nothing on today.", wx, missed && empty].filter(Boolean).join("\n");
+    : ["Nothing on today.", wx, cal, missed && empty].filter(Boolean).join("\n");
   return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
+}
+
+// "Calendar: No classes, Last day to withdraw.", or null with no entries. The titles were cut and
+// checked by academicEntries; linkish runs again, as for any outside text bound for Telegram.
+const MAX_ACADEMIC = 3;
+function academicLine(entries) {
+  const titles = (entries ?? []).map((e) => String(e.title ?? "").replace(/\s+/g, " ").trim())
+    .filter((t) => t && !linkish(t)).slice(0, MAX_ACADEMIC);
+  return titles.length ? `Calendar: ${titles.join(", ")}.` : null;
 }
 
 // Approve all and Skip carry the plan's day, and its revision when it has one (v5,
