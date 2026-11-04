@@ -101,7 +101,9 @@ function plannerServer(db: Db) {
       "the connected mail accounts, the day rules (workload cap, breaks, travel time) and the hourly weather " +
       "(7 am to 11 pm: °F, chance of precipitation %, short forecast). Each task has paced_min, the minutes its " +
       "block must run (its estimate times Lisul's pace for its kind); pace gives each kind's pace, and " +
-      `planned_vs_done the last 14 days of planned versus done minutes. ${UNTRUSTED}`,
+      "planned_vs_done the last 14 days of planned versus done minutes. triage_rules are Lisul's always-show and " +
+      "never-show rules by sender address or domain: submit_proposal drops a Needs you item from a never-show " +
+      `sender, and an always-show sender's mail belongs in Needs you. ${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
@@ -117,7 +119,8 @@ function plannerServer(db: Db) {
       "there is none), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
-      "at-risk tasks that couldn't fit. Blocks keep the day rules from read_planner's day_rules: the workload cap, " +
+      "at-risk tasks that couldn't fit. Needs you items from a never-show sender are dropped, and dropped lists " +
+      "their message ids. Blocks keep the day rules from read_planner's day_rules: the workload cap, " +
       "a break after every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
       "{ ok: true, rev } the revision waits for Lisul to approve it; submitting again (replaces: that rev) " +
@@ -126,7 +129,7 @@ function plannerServer(db: Db) {
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async (input: Proposal) => {
     try {
-      const check = checkProposal(input, await snapshot(db, new Date()));
+      const check = checkProposal(input, await snapshot(db, new Date()), await senders(db, input.needs_you));
       const rows = check.rows;
       if (!check.ok || !rows) return { content: [text({ ok: false, errors: check.errors })], isError: true };
       // apply_proposal (supabase/schema.sql) is security invoker and does it all in one
@@ -161,11 +164,32 @@ async function snapshot(db: Db, now: Date) {
   // v5 P1: what pace and planned versus done are worked out from.
   const p = paceQueries(now, settings.time_zone);
   const [actuals, past] = await Promise.all([read(db, p.actuals), read(db, p.past)]);
+  // v5 L1: the triage rules.
+  const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
   return planSnapshot({
-    actuals, past,
+    actuals, past, triage,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
   }, now);
+}
+
+// v5 L1: the From address of each submitted Needs you item, "<account> <message_id>" → address,
+// from message_senders (written by mail-sync, M1). Message ids are hex (checkProposal refuses any
+// other), so only hex ones go into the in.() filter. A missing table (mail-sync not deployed yet)
+// reads as no senders, so every item is kept. .in() is supabase-js's in.() filter
+// (https://supabase.com/docs/reference/javascript/in).
+async function senders(db: Db, needs: Proposal["needs_you"]) {
+  const ids = [...new Set(needs.map((n) => n.message_id).filter((id) => /^[0-9a-f]{6,32}$/.test(id)))];
+  if (!ids.length) return {};
+  const { data, error } = await db.from("message_senders").select("account,message_id,from_address").in("message_id", ids);
+  if (error) {
+    // PostgREST's code for a table not in its schema cache
+    // (https://docs.postgrest.org/en/stable/references/errors.html).
+    if (error.code === "PGRST205" || error.code === "42P01") return {};
+    throw new Error(`message_senders: ${error.message}`);
+  }
+  return Object.fromEntries(data.map((r: { account: string; message_id: string; from_address: string }) =>
+    [`${r.account} ${r.message_id}`, r.from_address.toLowerCase()]));
 }
 
 // One query through supabase-js: .filter(column, operator, value) and .or() take PostgREST's own
