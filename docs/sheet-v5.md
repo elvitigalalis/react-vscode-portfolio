@@ -255,9 +255,11 @@ weather_cache id boolean pk default true check (id), point text not null,
     own proposal never counts).
   - `state` is `{ settings: { time_zone, replans_on, morning_on }, day: today's days row | null,
     shutdown: "HH:MM", plans_today, last_plan_at, last_edit_at }`:
-    - `plans_today`: 1 when today has a `morning` revision, plus today's `replans` rows;
-    - `last_plan_at`: the later of the newest revision's `created_at` and the newest `replans.at`,
-      today, or null;
+    - `plans_today`: 1 when today has a `morning` revision, plus today's `replans` rows that
+      fired (result `started`, or null while sending); a `failed` or `rate_limited` row never
+      ran and counts for nothing;
+    - `last_plan_at`: the later of the newest revision's `created_at` and the newest such
+      `replans.at`, today, or null;
     - `last_edit_at`: `settings.plan_edited_at`.
   - The holds, checked in this order, give `hold`:
     `replans_off`, `morning_off`, `quiet` (before 8:00 or from 23:00), `shut_down`
@@ -635,11 +637,17 @@ weather_cache id boolean pk default true check (id), point text not null,
   mail.mjs adds `parseAddresses`, `metadataQuery`, `syncMessage`, `syncThread`,
   `historyChanges`, `newestPerThread`, `replyDiff` and `searchMarks` for it and mail-mcp.
 - **The replan tick** in `telegram`'s send job: it reads the state, runs `shouldReplan`, and on
-  fire inserts the `replans` row first (result null), sets `replan_id` on `ids`, then calls
-  routine-fire.mjs's `fireRoutine(fetch, { routineId: SHEET_ROUTINE_ID, token:
-  SHEET_ROUTINE_TOKEN, trigger: "replan", counts }, now)`. It records `started` and the session
-  id, `failed` and the error type, or `rate_limited` with `retry_after` set to `retry_at`. No replan fires before `retry_after`, and a request is never retried without a
-  new `replans` row. The token lives only in the function's env.
+  fire claims the replan with `claim_replan(d, reasons, counts, ids) returns uuid` (service key
+  only), which in one transaction inserts the `replans` row (result null) and sets `replan_id` on
+  the open changes in `ids`, or returns null when another claim holds: a row for d still sending
+  or `started` under 60 minutes ago, or a `retry_after` still ahead. On null the tick holds
+  (`claimed`). Then it calls routine-fire.mjs's `fireRoutine(fetch, { routineId:
+  SHEET_ROUTINE_ID, token: SHEET_ROUTINE_TOKEN, trigger: "replan", counts }, now)` and writes
+  `fireOutcome(out, thrown)` (replan.mjs): `started` and the session id, `failed` and the error
+  type (a throw is `failed` with its message, cut to 300), or `rate_limited` with `retry_after`
+  set to `retry_at`. On `failed` or `rate_limited` it unties the row's changes (`replan_id`
+  null), so they are weighed again. No replan fires before `retry_after`, and a request is never
+  retried without a new `replans` row. The token lives only in the function's env.
 - **`read_planner()`** returns `planSnapshot` as above.
 - **`submit_proposal({ day, replaces, blocks, habits, needs_you, picks, note, couldnt_fit,
   suggested })`** reads `message_senders` for the submitted items, runs `checkProposal`, and on

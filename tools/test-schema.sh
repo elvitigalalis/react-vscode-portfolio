@@ -668,6 +668,53 @@ begin
   raise notice '✓ v5: changes and replans private, server-written, kept 14 days';
 end $$;
 
+-- --- Fix: claim_replan claims a replan once (docs/sheet-v5.md, "The replan tick") ---------------
+do $$
+declare
+  c1 uuid := gen_random_uuid();
+  c2 uuid := gen_random_uuid();
+  c3 uuid := gen_random_uuid();
+  a uuid;
+  b uuid;
+begin
+  if to_regprocedure('claim_replan(date, text[], jsonb, uuid[])') is null then
+    raise notice '- claim_replan: skipped, not there yet';
+    return;
+  end if;
+  if has_function_privilege('authenticated', 'claim_replan(date, text[], jsonb, uuid[])', 'execute')
+    or has_function_privilege('anon', 'claim_replan(date, text[], jsonb, uuid[])', 'execute')
+    or not has_function_privilege('service_role', 'claim_replan(date, text[], jsonb, uuid[])', 'execute')
+    then raise exception 'claim_replan should be the service role''s only'; end if;
+  delete from changes where true;
+  delete from replans where true;
+  insert into changes (id, kind, reason, weight) values (c1, 'busy', 'busy_overlap', 10), (c2, 'mail', 'mail_new', 2);
+  insert into changes (id, kind, reason, weight, consumed_day, consumed_rev) values (c3, 'mail', 'mail_new', 2, sheet_today(), 1);
+  a := claim_replan(sheet_today(), '{busy_overlap,mail_new}', '{"busy": 1, "mail": 1}', array[c1, c2, c3]);
+  if a is null or (select count(*) from replans) <> 1 then raise exception 'the first claim should insert one replans row'; end if;
+  if (select count(*) from changes where replan_id = a) <> 2 or exists (select 1 from changes where id = c3 and replan_id is not null)
+    then raise exception 'the claim should tie the open changes it names, and no consumed one'; end if;
+  -- A second tick a moment later gets nothing, and writes nothing.
+  b := claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]);
+  if b is not null or (select count(*) from replans) <> 1 then raise exception 'a second claim within the hold should get nothing'; end if;
+  -- A replan that failed holds nothing; a 429 holds until its retry_after; a started one 60 minutes.
+  update replans set result = 'failed' where id = a;
+  update changes set replan_id = null where replan_id = a;
+  b := claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]);
+  if b is null then raise exception 'a failed replan should not hold the next claim'; end if;
+  update replans set result = 'rate_limited', retry_after = now() + interval '5 minutes' where id = b;
+  if claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]) is not null
+    then raise exception 'a 429 should hold claims until its retry_after'; end if;
+  update replans set retry_after = now() - interval '1 minute' where id = b;
+  a := claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]);
+  if a is null then raise exception 'a passed retry_after should not hold'; end if;
+  update replans set result = 'started', at = now() - interval '61 minutes' where id = a;
+  if claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]) is null
+    then raise exception 'a started replan over 60 minutes old should not hold'; end if;
+  delete from changes where true;
+  delete from replans where true;
+  raise notice '✓ claim_replan: one claim per hold, ties only open changes, service role only';
+end $$;
+
 -- --- H1, habits ---------------------------------------------------------------------------------
 do $$
 declare

@@ -930,6 +930,28 @@ revoke all on changes, replans from anon;
 revoke insert, update, delete on changes, replans from authenticated;
 grant update (consumed_day, consumed_rev) on changes to authenticated;
 
+-- The telegram tick's claim on a replan (fix), in one transaction: it inserts the replans row and
+-- ties the open changes `ids` to it, or returns null when another claim holds: one still sending
+-- or started under 60 minutes ago (replan.mjs's PLAN_GAP), or a 429 whose retry_after is ahead.
+-- The advisory lock makes two ticks at once take turns, so a replan fires once.
+create or replace function claim_replan(d date, reasons text[], counts jsonb, ids uuid[]) returns uuid
+language plpgsql security invoker set search_path = public as $$
+declare rid uuid;
+begin
+  perform pg_advisory_xact_lock(hashtext('sheet.claim_replan'));
+  if exists (select 1 from replans r where r.day = d
+    and ((r.result is null or r.result = 'started') and r.at > now() - interval '60 minutes'
+      or r.retry_after > now())) then
+    return null;
+  end if;
+  insert into replans (day, reasons, counts) values (d, claim_replan.reasons, claim_replan.counts) returning id into rid;
+  update changes c set replan_id = rid
+  where c.id = any(ids) and c.replan_id is null and c.consumed_rev is null;
+  return rid;
+end $$;
+revoke execute on function claim_replan(date, text[], jsonb, uuid[]) from public, anon, authenticated;
+grant execute on function claim_replan(date, text[], jsonb, uuid[]) to service_role;
+
 -- --- v5 L1, learning from his taps (docs/sheet-v5.md, "Schema") -------------------------------
 -- Needs you gains Not needed (a done row he says wasn't worth showing) and the sender's From
 -- address, lowercased, which the server sets from message_senders.
