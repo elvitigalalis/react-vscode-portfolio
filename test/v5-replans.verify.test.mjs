@@ -270,9 +270,10 @@ const WORDS = {
   handshake_change: "Handshake events changed",
 };
 
-test("REASON_WORDS: exactly the fourteen reason names", async () => {
+// Oura (docs/sheet-v5.md, "Oura") added a fifteenth, woke_late; the fourteen are unchanged.
+test("REASON_WORDS: exactly the fourteen reason names, and Oura's woke_late", async () => {
   const { REASON_WORDS } = await replan();
-  assert.deepEqual(Object.keys(REASON_WORDS).sort(), Object.keys(WORDS).sort());
+  assert.deepEqual(Object.keys(REASON_WORDS).sort(), [...Object.keys(WORDS), "woke_late"].sort());
 });
 
 test("reasonWords: each reason's words", async () => {
