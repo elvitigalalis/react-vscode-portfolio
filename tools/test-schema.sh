@@ -306,7 +306,7 @@ declare
   t1 uuid := '00000000-0000-4000-8000-0000000000a1';
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     raise notice '- v5 revisions: skipped, apply_proposal(d, replaces, ...) is not there yet';
     return;
   end if;
@@ -410,7 +410,7 @@ do $$
 declare
   d date := sheet_today() + 6;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     return;
   end if;
   -- Shutting a day down lapses its pending revision, and the day takes no new one.
@@ -721,7 +721,7 @@ declare
   d date := sheet_today() + 8;
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     raise notice '- apply_proposal read_at: skipped, not there yet';
     return;
   end if;
@@ -1340,6 +1340,65 @@ end $$;
 select pg_temp.as_user('anon', null);
 do $$ begin
   begin perform 1 from event_todos; raise exception 'anon read event_todos';
+-- --- Oura (docs/sheet-v5.md, "Oura") ---------------------------------------------------------
+reset role;
+do $$ begin
+  if exists (select 1 from pg_class where relname in ('oura_account', 'sleep_nights', 'sleep_days') and not relrowsecurity)
+    then raise exception 'RLS off on an Oura table'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('oura_account', 'sleep_nights', 'sleep_days'))
+    then raise exception 'a public view exposes Oura data'; end if;
+  if (select schedule from cron.job where jobname = 'sheet-oura') is distinct from '4-59/10 * * * *'
+    or (select count(*) from cron.job where jobname = 'sheet-oura') <> 1
+    then raise exception 'sheet-oura not scheduled once every 10 minutes'; end if;
+  if has_function_privilege('anon', 'oura_token_save(text, text, timestamptz, text)', 'execute')
+    or has_function_privilege('authenticated', 'oura_token_save(text, text, timestamptz, text)', 'execute')
+    or has_function_privilege('anon', 'oura_tokens()', 'execute')
+    or has_function_privilege('authenticated', 'oura_tokens()', 'execute')
+    or has_function_privilege('authenticated', 'oura_sync_save(jsonb, jsonb, jsonb)', 'execute')
+    or has_function_privilege('authenticated', 'oura_broken(text)', 'execute')
+    then raise exception 'Oura functions callable by anon or authenticated'; end if;
+  if not has_function_privilege('service_role', 'oura_token_save(text, text, timestamptz, text)', 'execute')
+    or not has_function_privilege('service_role', 'oura_tokens()', 'execute')
+    or not has_function_privilege('service_role', 'oura_sync_save(jsonb, jsonb, jsonb)', 'execute')
+    then raise exception 'service_role cannot call the Oura functions'; end if;
+
+  -- Connect, then rotate: the new pair is saved only over the token it replaced.
+  if not oura_token_save('r1', 'a1', '2030-01-01T00:00:00Z') then raise exception 'connect did not save'; end if;
+  if not oura_token_save('r2', 'a2', '2030-01-02T00:00:00Z', 'r1') then raise exception 'rotation did not save'; end if;
+  if oura_token_save('r3', 'a3', '2030-01-03T00:00:00Z', 'r1') then raise exception 'a stale rotation overwrote the newer token'; end if;
+  if not oura_token_save('r2', 'a2', '2030-01-02T00:00:00Z', 'r1') then raise exception 'a retried save was refused'; end if;
+  if oura_tokens()->>'refresh' <> 'r2' or oura_tokens()->>'access' <> 'a2'
+    or (select count(*) from vault.secrets where name in ('oura_refresh', 'oura_access')) <> 2
+    then raise exception 'Oura tokens not rotated in place'; end if;
+  perform oura_broken('token refresh refused: invalid_grant');
+  if (select last_error from oura_account) is null then raise exception 'oura_broken did not mark the grant'; end if;
+  perform oura_token_save('r4', 'a4', '2030-01-04T00:00:00Z');
+  if (select last_error from oura_account) is not null then raise exception 'reconnecting kept the old error'; end if;
+
+  -- The sync upserts by Oura id and logs a woke-late change once per wake.
+  perform oura_sync_save('[{"oura_id": "s1", "day": "2030-01-02", "type": "sleep", "bedtime_start": "2030-01-02T05:00:00Z", "bedtime_end": "2030-01-02T14:00:00Z"}]',
+    '[{"day": "2030-01-02", "readiness": 64, "sleep_s": 20400}]');
+  perform oura_sync_save('[{"oura_id": "s1", "day": "2030-01-02", "type": "long_sleep", "bedtime_start": "2030-01-02T05:00:00Z", "bedtime_end": "2030-01-02T15:20:00Z"}]',
+    '[{"day": "2030-01-02", "readiness": null, "sleep_s": 21000}]',
+    '{"kind": "sleep", "reason": "woke_late", "weight": 9, "ref": "2030-01-02T15:20:00Z"}');
+  perform oura_sync_save('[]', '[]', '{"kind": "sleep", "reason": "woke_late", "weight": 9, "ref": "2030-01-02T15:20:00Z"}');
+  if (select count(*) from sleep_nights) <> 1 or (select type from sleep_nights) <> 'long_sleep'
+    or (select bedtime_end from sleep_nights) <> '2030-01-02T15:20:00Z'
+    then raise exception 'oura_sync_save did not upsert by oura_id'; end if;
+  if (select readiness from sleep_days) <> 64 or (select sleep_s from sleep_days) <> 21000
+    then raise exception 'oura_sync_save lost a readiness or took the new sleep total'; end if;
+  if (select count(*) from changes where reason = 'woke_late') <> 1 then raise exception 'the woke-late change was not logged once'; end if;
+  if (select synced_at from oura_account) is null then raise exception 'oura_sync_save did not stamp synced_at'; end if;
+  delete from changes where reason = 'woke_late';
+  raise notice '✓ Oura: private, functions service-only, tokens rotate in place, sync upserts and logs woke-late once';
+end $$;
+
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from sleep_nights; raise exception 'anon read sleep_nights';
+  exception when insufficient_privilege then null; end;
+  begin perform 1 from oura_account; raise exception 'anon read oura_account';
   exception when insufficient_privilege then null; end;
 end $$;
 select pg_temp.as_user('authenticated', 'stranger@example.com');
@@ -1385,6 +1444,50 @@ do $$ begin
     then raise exception 'nightly_roll should keep event_todos 30 days after their day'; end if;
   delete from event_todos;
   raise notice '✓ event_todos kept 30 days';
+  if (select count(*) from sleep_nights) + (select count(*) from sleep_days) + (select count(*) from oura_account) <> 0
+    then raise exception 'a non-owner sees Oura data'; end if;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if (select count(*) from sleep_nights) <> 1 or (select count(*) from oura_account) <> 1 then raise exception 'the owner cannot read Oura rows'; end if;
+  begin
+    insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end) values ('x', '2030-01-01', 'sleep', now(), now());
+    raise exception 'the browser wrote sleep_nights';
+  exception when insufficient_privilege then null; end;
+  begin update oura_account set last_error = null where id; raise exception 'the browser updated oura_account';
+  exception when insufficient_privilege then null; end;
+  -- Disconnect: the grant, both tokens and every sleep row go.
+  delete from oura_account where id;
+  if (select count(*) from oura_account) <> 0 then raise exception 'Disconnect left the grant'; end if;
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from vault.secrets where name in ('oura_refresh', 'oura_access'))
+    or exists (select 1 from sleep_nights) or exists (select 1 from sleep_days)
+    then raise exception 'Disconnect kept a token or sleep rows'; end if;
+  -- Kept 60 days.
+  insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end) values
+    ('old', current_date - 62, 'long_sleep', now() - interval '61 days 8 hours', now() - interval '61 days'),
+    ('new', current_date - 58, 'long_sleep', now() - interval '59 days 8 hours', now() - interval '59 days');
+  insert into sleep_days (day, readiness) values (current_date - 61, 70), (current_date - 59, 80);
+  perform nightly_roll();
+  if exists (select 1 from sleep_nights where oura_id = 'old') or not exists (select 1 from sleep_nights where oura_id = 'new')
+    or exists (select 1 from sleep_days where day = current_date - 61) or not exists (select 1 from sleep_days where day = current_date - 59)
+    then raise exception 'nightly_roll should keep 60 days of sleep'; end if;
+  delete from sleep_nights where true;
+  delete from sleep_days where true;
+  -- A woke-late change has kind sleep; revisions keep their window start.
+  insert into changes (kind, reason, weight) values ('sleep', 'woke_late', 9);
+  delete from changes where kind = 'sleep';
+  perform apply_proposal(d => '2030-01-04', replaces => null, blocks => '[]', window_from => '10:15');
+  if (select window_from from proposals where day = '2030-01-04') <> '10:15' then raise exception 'apply_proposal lost window_from'; end if;
+  delete from proposals where day = '2030-01-04';
+  begin
+    update proposals set window_from = '7:00' where false;
+    insert into proposals (day, rev, window_from) values ('2030-01-05', 1, '25:00');
+    raise exception 'window_from took a bad time';
+  exception when check_violation then null; end;
+  raise notice '✓ Oura: owner read-only, Disconnect deletes the grant, tokens and rows; kept 60 days';
 end $$;
 SQL
 echo "✓ all schema checks passed"

@@ -8,6 +8,7 @@ import { weatherHours } from "./sources.mjs";
 import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
 import { messageKey, neverRule } from "./triage.mjs";
 import { dayLabel } from "./logic.mjs";
+import { dayCap, hhmm, wakeProfile, windowStart } from "./sleep.mjs";
 import { businessDays } from "./mail.mjs";
 import { threadLink } from "./morning.mjs";
 
@@ -19,19 +20,28 @@ const COURSE_AHEAD = 7;
 const DEFAULT_SHUTDOWN = "17:00";
 // v5 D2: the day rules checkProposal holds a plan to (settings.workload_cap_min's default).
 const DEFAULT_CAP = 360;
-const dayRules = (settings) => ({ workload_cap_min: settings.workload_cap_min ?? DEFAULT_CAP, travel_min: 10, break_after_min: 90, break_min: 10 });
+// Oura: the day's readiness and sleep (sleep_days) scale the cap and can shorten the break rule
+// (dayCap, sleep.mjs); `approved` is the day's approved task minutes, which a lower cap keeps.
+const dayRules = (settings, sleepDay = null, approved = 0) => {
+  const { workload_cap_min, break_after_min, cap_reason } = dayCap(settings.workload_cap_min ?? DEFAULT_CAP, sleepDay, approved);
+  return { workload_cap_min, travel_min: 10, break_after_min, break_min: 10, cap_reason };
+};
 
 // Whether an ISO span overlaps the local day `day` in `timeZone`.
 const onDay = (s, day, timeZone) => minutesOn(s.ends_at, day, timeZone) > 0 && minutesOn(s.starts_at, day, timeZone) < 1440;
 
 // v5 (docs/sheet-v5.md, "proposal.mjs"). The plan window starts at 07:00, or on today at the
 // later of that and now rounded up to the quarter hour, so a replan never plans the past.
-function windowFrom(now, day, tz) {
-  const here = localNow(now, tz);
-  if (here.day !== day) return "07:00";
-  const m = Math.max(EARLIEST, Math.ceil(Math.floor(here.minutes) / 15) * 15);
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
+// Oura: with sleep_nights rows it starts 30 minutes after his wake instead (sleep.mjs).
+const windowFrom = (now, day, tz, profile) => hhmm(windowStart(day, now, tz, profile));
+
+// Oura: what read_planner says about his sleep, local "HH:MM" times, and when it last synced.
+const sleepOf = (profile, synced) => ({
+  typical_wake_weekday: profile.weekday == null ? null : hhmm(profile.weekday),
+  typical_wake_weekend: profile.weekend == null ? null : hhmm(profile.weekend),
+  woke_at: profile.woke_at == null ? null : hhmm(profile.woke_at),
+  last_synced: synced ?? null,
+});
 
 // A replan the server started for this run: started, after the newest revision and under 30
 // minutes old. Otherwise this is the morning run. The changes since the newest revision go in as
@@ -92,6 +102,8 @@ function replyStateOf(rows, timeZone, now) {
 //   habits     v5 H1: the habits rows
 //   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
 //   replyState v5 M1: the reply_state rows
+//   sleep      Oura: the sleep_nights rows, and sleepSynced the oura feed's last good fetched_at
+//   sleepDays  Oura: the sleep_days rows ({ day, readiness, sleep_s })
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -119,6 +131,7 @@ export function planSnapshot(rows, now) {
     source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
   }));
   const shutdown = line ? line.slice(0, 5) : DEFAULT_SHUTDOWN;
+  const profile = wakeProfile(rows.sleep ?? [], now, tz);
   return {
     version: 5,
     now: now.toISOString(),
@@ -129,7 +142,9 @@ export function planSnapshot(rows, now) {
     plan_day: day,
     shutdown,
     run: runOf(rows, now, day),
-    window: { from: windowFrom(now, day, tz), to: shutdown },
+    window: { from: windowFrom(now, day, tz, profile), to: shutdown },
+    // Oura: his typical and actual wake, which window.from follows.
+    sleep: sleepOf(profile, rows.sleepSynced),
     turned_down: turnedDown,
     tasks,
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
@@ -147,7 +162,7 @@ export function planSnapshot(rows, now) {
       : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
-    day_rules: dayRules(settings),
+    day_rules: dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks, day, tz)),
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
     // v5 L1: the triage rules, which submit_proposal enforces for never.
@@ -163,6 +178,11 @@ export function planSnapshot(rows, now) {
     habits: dayHabits(rows.habits, day),
   };
 }
+
+// Oura: the approved task minutes on `day`, which a lower cap never drops below.
+const approvedMinutes = (blocks, day, tz) => blocks
+  .filter((b) => !b.proposed && b.task_id && !b.habit_id && localNow(new Date(b.starts_at), tz).day === day)
+  .reduce((n, b) => n + blockMinutes(b), 0);
 
 // --- v5 H1: habits (docs/sheet-v5.md, "planSnapshot" and "checkProposal") ------------------
 
