@@ -6,10 +6,11 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { proposalLines } from "./proposal.mjs";
+import { couldntFitLine, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
 import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
+import { reasonWords } from "./replan.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -27,6 +28,9 @@ export const SNOOZE_FOR = 10 * 60_000;
 export const FINISHED_LATE = 30 * 60_000;
 // More time adds this much to a block.
 export const MORE_TIME = 30 * 60_000;
+// v5 R1: replan messages a day, outside the budget, and the + and − lines each shows.
+export const REPLANS_SENT_MAX = 4;
+const REPLAN_LINES = 6;
 
 const PLAN_URL = `${ORIGIN}/plan/`;
 
@@ -41,6 +45,8 @@ const PLAN_URL = `${ORIGIN}/plan/`;
 //   campus    the campus_events rows today's proposal picks
 // The last three came with the morning plan (docs/sheet-morning.md); a snapshot without them
 // reads as none.
+// v5 R1: previous   the revision before `proposal` that day ({ status, blocks }), or null
+//         replanSent how many replan messages went out today
 // Returns the messages due at `now`: { kind, block_id, day, send_at, text, buttons }, where
 // send_at is the minute the message belongs to (it may be earlier than `now` if a run was late)
 // and a button has either a url or callback data ("done:<block id>", "snooze:<block id>").
@@ -49,7 +55,7 @@ export function whatToSend(snapshot, now) {
   const day = dayOf(snapshot, now);
   if (day.minutes < BRIEF_AT || day.minutes >= QUIET_FROM) return [];
   // Each kind of message is one rule over the same day.
-  const due = [brief(day), ...planMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
+  const due = [brief(day), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -134,12 +140,42 @@ const planButtons = (d, rev) => {
 
 // The plan on its own, when today's proposal is pending and the brief went out before it was
 // made: once per created_at (a resubmission is sent again). Outside the budget, like the brief.
+// v5: only for a morning revision; a replan revision gets the replan message.
 function planMessage({ plan, proposal, log, today }) {
-  if (!plan) return [];
+  if (!plan || proposal.run_trigger === "replan") return [];
   const made = Date.parse(proposal.created_at);
   const briefOut = log.some((n) => n.kind === "brief" && n.day === today && n.sent_at && Date.parse(n.sent_at) < made);
   if (!briefOut) return [];
   return [{ kind: "proposal", block_id: null, day: today, send_at: new Date(made).toISOString(), text: plan.join("\n"), buttons: planButtons(today, proposal.rev) }];
+}
+
+// --- The replan message (v5 R1, docs/sheet-v5.md "The replan message") ----------------------
+// For a pending replan revision whose proposed blocks differ from what Lisul last saw: the
+// previous revision's when it was still pending (superseded by now), or none when it was
+// approved (its blocks are locked on his timeline) or there is none. Once per revision, at
+// most REPLANS_SENT_MAX a day (snapshot.replanSent), outside the budget.
+const spanKey = (b) => `${b.task_id ?? ""}|${b.habit_id ?? ""}|${Date.parse(b.starts_at)}|${Date.parse(b.ends_at)}`;
+function replanMessage(day) {
+  const p = day.proposal;
+  if (p?.day !== day.today || p.status !== "pending" || p.run_trigger !== "replan") return [];
+  if ((day.replanSent ?? 0) >= REPLANS_SENT_MAX) return [];
+  const before = day.previous?.status === "superseded" ? day.previous.blocks ?? [] : [];
+  const now = p.blocks ?? [];
+  const minus = (a, b) => { const keys = new Set(b.map(spanKey)); return a.filter((x) => !keys.has(spanKey(x))); };
+  const earliest = (list) => [...list].sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at)).slice(0, REPLAN_LINES);
+  const added = earliest(minus(now, before)), gone = earliest(minus(before, now));
+  if (!added.length && !gone.length) return [];
+  const title = (b) => day.tasks.find((t) => t.id === b.task_id)?.title ?? (day.habits ?? []).find((h) => h.id === b.habit_id)?.name ?? "A task";
+  const at = (b) => formatClock(minutesOn(b.starts_at, day.today, day.tz));
+  const words = reasonWords(p.reasons ?? []);
+  const lines = [
+    words ? `Replan: ${words}.` : "Replan: the plan changed.",
+    ...added.map((b) => `+ ${at(b)} · ${title(b)} (${blockMinutes(b)} min)`),
+    ...gone.map((b) => `− ${at(b)} · ${title(b)}`),
+  ];
+  const unfit = couldntFitLine(p.couldnt_fit, day.tasks);
+  if (unfit) lines.push(unfit);
+  return [{ kind: "replan", block_id: null, day: day.today, send_at: new Date(p.created_at).toISOString(), text: lines.join("\n"), buttons: planButtons(day.today, p.rev) }];
 }
 
 // Done and Snooze carry the block they belong to; the webhook reads them back on a tap.
