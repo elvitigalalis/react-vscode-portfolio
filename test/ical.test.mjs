@@ -48,3 +48,10 @@ test("ical: contact is the CONTACT line's value; absent when there is none", () 
   assert.equal(got["c@x"].contact, "https://sbengaged.stonybrook.edu/toscaniniresidencehall/rsvp_boot?id=391210#event_host");
   assert.equal("contact" in got["n@x"], false);
 });
+
+test("parseIcs: STATUS comes through, upper-cased, only when the feed gives one", () => {
+  const ics = (extra) => `BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20261110T133000Z\r\nSUMMARY:Exam 2\r\n${extra}END:VEVENT\r\nEND:VCALENDAR\r\n`;
+  const win = { from: "2026-11-01T00:00:00Z", to: "2026-12-01T00:00:00Z" };
+  assert.equal(parseIcs(ics("STATUS:cancelled\r\n"), win)[0].status, "CANCELLED");
+  assert.equal("status" in parseIcs(ics(""), win)[0], false);
+});
