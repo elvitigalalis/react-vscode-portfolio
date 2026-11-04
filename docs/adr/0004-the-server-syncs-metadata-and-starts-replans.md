@@ -7,7 +7,8 @@ server. So the server only notices, with plain code, and the morning plan's clou
 planning. Three decisions follow.
 
 1. **The server reads mail metadata, never mail text.** The mail sync reads Gmail history and
-   fetches each new message with labels and dates only (`messages.get` with `format=minimal`).
+   fetches each new message with labels, dates and a few headers only (`messages.get` with
+   `format=metadata` and `fields` naming just those, so not even the snippet comes back).
    From those it works out Reply owed and Awaiting reply. It reads the To headers of sent mail
    only to keep salted hashes of known senders; no address is stored in plain text. Mail text
    still reaches only Claude, through `mail-mcp`
