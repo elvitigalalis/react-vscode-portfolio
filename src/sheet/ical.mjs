@@ -143,6 +143,9 @@ function toEvent(props) {
   // The contact (3.8.1.2), only when the feed gives one: SB Engaged's link to the event's page.
   const contact = get("CONTACT")?.value.trim();
   if (contact) event.contact = contact;
+  // The status (3.8.1.11), only when the feed gives one: "CANCELLED" means the item is off.
+  const status = get("STATUS")?.value.trim().toUpperCase();
+  if (status) event.status = status;
   return { event, s: start.t, e: end.t };
 }
 
