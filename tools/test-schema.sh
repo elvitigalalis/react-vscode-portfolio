@@ -1378,6 +1378,42 @@ begin
   delete from messages where id in (m, m2);
   raise notice '✓ messages: each added item is listed, and undone one at a time';
 end $$;
+-- Claude's steps on a message, and its notes on each item (docs/sheet-messages.md).
+do $$
+declare
+  m uuid;
+  m2 uuid;
+begin
+  insert into messages (text, session_url) values ('quiz Tue 9am', 'https://claude.ai/code/session_x') returning id into m;
+  insert into messages (text) values ('done one') returning id into m2;
+  perform answer_message(m2, '[{"title": "MSG x", "day": null, "list": "Inbox", "due": null, "at_time": null, "est_min": null}]', '[]', 'Added x.');
+  perform add_message_step(array[m, m2], 'checking', 'Checking Tuesday on your calendar');
+  if (select jsonb_array_length(steps) <> 1 or steps -> 0 ->> 'kind' <> 'checking' or steps -> 0 ->> 'text' <> 'Checking Tuesday on your calendar'
+        or (steps -> 0 ->> 'at')::timestamptz > now() from messages where id = m)
+    then raise exception 'add_message_step did not add the step'; end if;
+  if (select jsonb_array_length(steps) from messages where id = m2) <> 0
+    then raise exception 'an answered message took a step'; end if;
+  for i in 1..15 loop perform add_message_step(array[m], 'adding', 'Adding ' || i); end loop;
+  if (select jsonb_array_length(steps) from messages where id = m) <> 12 then raise exception 'steps should stop at 12'; end if;
+  -- A stranger adds nothing.
+  perform pg_temp.as_user('authenticated', 'stranger@example.com');
+  perform add_message_step(array[m], 'adding', 'Stranger');
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  if exists (select 1 from messages where id = m and steps::text like '%Stranger%') then raise exception 'a stranger added a step'; end if;
+  update messages set steps = '[]' where id = m;
+  perform add_message_step(array[m], 'adding', 'Adding 1');
+  -- The answer keeps each item's why, and when it came.
+  perform answer_message(m,
+    '[{"title": "MSG Read ch. 5", "day": null, "list": "Inbox", "due": "2026-11-10", "at_time": null, "est_min": null, "why": "Before the quiz."}]',
+    '[{"title": "Quiz", "starts_at": "2026-11-10T14:00:00.000Z", "ends_at": "2026-11-10T15:00:00.000Z", "why": "A class quiz at a time."}]', 'Added.');
+  if (select tasks -> 0 ->> 'why' <> 'Before the quiz.' or events -> 0 ->> 'why' <> 'A class quiz at a time.' or answered_at is null
+        or jsonb_array_length(steps) <> 1 from messages where id = m)
+    then raise exception 'answer_message did not keep the whys and answered_at'; end if;
+  if (select answered_at from messages where id = m2) is null then raise exception 'answered_at missing'; end if;
+  delete from tasks where title like 'MSG %';
+  delete from messages where id in (m, m2);
+  raise notice '✓ messages: steps (at most 12, pending only, owner only), whys and answered_at';
+end $$;
 reset role;
 do $$ begin
   insert into messages (at, text) values (now() - interval '31 days', 'old one'), (now() - interval '29 days', 'new one');

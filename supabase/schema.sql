@@ -1248,21 +1248,22 @@ declare
 begin
   perform 1 from messages where id = m and status = 'pending' for update;
   if not found then raise exception 'message % is not pending', m; end if;
-  for t in select * from jsonb_to_recordset(coalesce(new_tasks, '[]')) as x(title text, day date, list text, due date, at_time time, est_min int)
+  for t in select * from jsonb_to_recordset(coalesce(new_tasks, '[]')) as x(title text, day date, list text, due date, at_time time, est_min int, why text)
   loop
     insert into tasks (title, day, list, due, at_time, est_min, source, position)
     values (t.title, t.day, t.list, t.due, t.at_time, t.est_min, 'message',
       coalesce((select max(position) from tasks where day is not distinct from t.day and list is not distinct from t.list), 0) + 1)
     returning id into task_id;
     added := added || jsonb_build_array(jsonb_build_object('id', task_id, 'title', t.title, 'day', t.day, 'list', t.list,
-      'due', t.due, 'at_time', to_char(t.at_time, 'HH24:MI')));
+      'due', t.due, 'at_time', to_char(t.at_time, 'HH24:MI'))
+      || case when t.why is null then '{}' else jsonb_build_object('why', t.why) end);
     n := n + 1;
   end loop;
   -- Each event gets an id, for /plan's Undo.
   select coalesce(jsonb_agg(e || jsonb_build_object('id', gen_random_uuid())), '[]') into evs
   from jsonb_array_elements(coalesce(new_events, '[]')) as e;
   result := case when n > 0 or jsonb_array_length(evs) > 0 then 'done' else 'failed' end;
-  update messages set status = result, reply = answer, tasks_added = n, tasks = added, events = evs
+  update messages set status = result, reply = answer, tasks_added = n, tasks = added, events = evs, answered_at = now()
   where id = m;
   insert into busy (source, starts_at, ends_at, message_id)
   select 'message', x.starts_at, x.ends_at, m
@@ -1328,3 +1329,21 @@ begin
   return found_item || '{"kind": "event"}';
 end $$;
 revoke execute on function undo_message_item(uuid, uuid) from public, anon;
+
+-- Claude's progress on a message, for /plan while it works (docs/sheet-messages.md): steps
+-- [{ at, kind, text }] (the message function's "Started Claude", planner-mcp's "Read your
+-- planner" and "Saving", and those the run reports with report_step), the run's claude.ai
+-- session_url from the fire, and answered_at, when answer_message wrote it. Each item's why
+-- (Claude's note on how it placed it) rides in tasks and events.
+alter table messages add column if not exists steps jsonb not null default '[]' check (jsonb_typeof(steps) = 'array');
+alter table messages add column if not exists session_url text check (session_url like 'https://claude.ai/%');
+alter table messages add column if not exists answered_at timestamptz;
+
+-- Add one step to each pending message in ms, stamped now, up to 12 a message. Security
+-- invoker: only the owner sees a message. checkStep (src/sheet/messages.mjs) checks the text.
+create or replace function add_message_step(ms uuid[], step_kind text, words text) returns void
+language sql security invoker set search_path = public as $$
+  update messages set steps = steps || jsonb_build_array(jsonb_build_object('at', now(), 'kind', step_kind, 'text', words))
+  where id = any(ms) and status = 'pending' and jsonb_array_length(steps) < 12;
+$$;
+revoke execute on function add_message_step(uuid[], text, text) from public, anon;
