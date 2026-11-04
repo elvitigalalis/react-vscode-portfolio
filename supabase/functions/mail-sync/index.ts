@@ -35,8 +35,8 @@
 // known-sender hashes' salt; without it no sender is known). Refresh tokens come from Vault
 // (mail_refresh_token) and are never logged or written anywhere.
 import {
-  accountPatch, gmailError, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
-  replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead,
+  accountPatch, gmailError, gmailJson, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
+  replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead, unsentOwn,
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
@@ -106,7 +106,8 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
     const gmail = async (path: string) => {
       const res = await fetch(`${GMAIL}/${path}`, { headers: { authorization: `Bearer ${token}` } });
       if (!res.ok) throw new GmailError(res.status, gmailError(res.status, await res.text()));
-      return res.json();
+      // An empty body (a 204, say) reads as {}, never as a JSON.parse error.
+      return gmailJson(await res.text());
     };
 
     // What changed since the last run, or a full sync when there is no position or it is too old.
@@ -162,6 +163,8 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
       threads.push(...await inBatches(newest, async (m: { id: string; threadId: string }) => {
         if (whole.has(m.threadId)) return syncThread(await gmail(`threads/${m.threadId}?${metadataQuery(true)}`), email);
         const msg = syncMessage(await gmail(`messages/${m.id}?${metadataQuery()}`), email);
+        // His unsent message (scheduled, say) as the newest: read the thread for the one before it.
+        if (unsentOwn(msg, email)) return syncThread(await gmail(`threads/${m.threadId}?${metadataQuery(true)}`), email);
         return { account: email, thread_id: m.threadId, messages: [msg] };
       }));
     }
@@ -192,6 +195,10 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
     }
     if (diff.deletes.length) {
       await db(`reply_state?account=eq.${enc}&thread_id=in.(${diff.deletes.map(quoted).join(",")})`, { method: "DELETE" });
+    }
+    // A sweep also clears owed rows the old rule left (no basis), which it may not have re-read.
+    if (full || sweepDue) {
+      await db(`reply_state?account=eq.${enc}&state=eq.owed&basis=is.null`, { method: "DELETE" });
     }
 
     // Changes for replans: new mail from people, and threads that turned owed (known senders, or

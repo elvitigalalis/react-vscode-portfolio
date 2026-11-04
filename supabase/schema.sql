@@ -1125,6 +1125,9 @@ create table if not exists reply_state (
 -- thread holds his unsent Gmail draft (a draft is not a reply).
 alter table reply_state add column if not exists basis text check (basis in ('thread', 'known', 'cc'));
 alter table reply_state add column if not exists draft boolean not null default false;
+-- Owed rows from the rule before basis existed are stale; re-runnable (new owed rows always
+-- have a basis).
+delete from reply_state where state = 'owed' and basis is null;
 
 alter table known_senders enable row level security;
 alter table message_senders enable row level security;
