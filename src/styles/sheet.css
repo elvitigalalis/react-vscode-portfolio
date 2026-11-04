@@ -447,8 +447,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 .sheet-habit-form .sheet-dialog-end { flex-basis: 100%; margin: 0; }
 
-/* Messages to Claude (docs/sheet-messages.md): one line and Send at the top of /plan, and the
-   messages sent from this tab under it, newest first, each with its status and Claude's reply. */
+/* Messages to Claude (docs/sheet-messages.md): a growing box and Send at the top of /plan, and
+   the Recent list under it, newest first: each message's state, Claude's reply and what it added. */
 .sheet-message { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.25rem 0.5rem; margin: 0 0 0.5rem; }
 .sheet-message[hidden] { display: none; }
 .sheet-message textarea {
@@ -458,8 +458,21 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 .sheet-message textarea::placeholder { color: var(--muted); }
 .sheet-message-hint { flex-basis: 100%; margin: 0; font-size: 0.75rem; color: var(--muted); }
-.sheet-message-log { list-style: none; margin: 0 0 0.5rem; padding: 0; font-size: 0.875rem; }
-.sheet-message-log:empty { display: none; }
-.sheet-message-log li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.sheet-message-status { color: var(--muted); }
-.sheet-message-reply { display: block; }
+.sheet-message-hint kbd { font: inherit; }
+@media (pointer: coarse) { .sheet-message-keys { display: none; } }
+.sheet-message-recent { margin: 0 0 0.5rem; font-size: 0.875rem; }
+.sheet-message-recent[hidden] { display: none; }
+.sheet-message-recent summary { cursor: pointer; color: var(--muted); }
+.sheet-message-log { list-style: none; margin: 0; padding: 0; }
+.sheet-message-item { padding: 0.35rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.sheet-message-item p { margin: 0; }
+.sheet-message-text { white-space: pre-wrap; }
+.sheet-message-text.is-folded { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.sheet-message-status, .sheet-message-note { color: var(--muted); }
+.sheet-message-status.is-unparsed { color: var(--fg); }
+.sheet-message-added { list-style: none; margin: 0.25rem 0 0; padding: 0; }
+.sheet-message-added li { padding: 0.15rem 0; }
+.sheet-message-kind { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.sheet-message-title { font-weight: 600; }
+.sheet-message-when { color: var(--muted); }
+.sheet-message-added .sheet-link { min-height: 1.5rem; margin-left: 0.25rem; }
