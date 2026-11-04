@@ -424,6 +424,94 @@ begin
   end;
   raise notice '✓ v5: a shut-down day lapses its revision and stays closed';
 end $$;
+-- --- v5 S1, busy times saved by the server (docs/sheet-v5.md, "Schema") ----------------------
+reset role;
+do $$ begin
+  if (select relrowsecurity from pg_class where oid = 'calendar_account'::regclass) is not true
+    then raise exception 'RLS off on calendar_account'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name = 'calendar_account')
+    then raise exception 'a public view exposes calendar_account'; end if;
+  if (select schedule from cron.job where jobname = 'sheet-busy') is distinct from '*/10 * * * *'
+    or (select count(*) from cron.job where jobname = 'sheet-busy') <> 1
+    then raise exception 'sheet-busy not scheduled once every 10 minutes'; end if;
+  if has_function_privilege('anon', 'calendar_account_save(text, text)', 'execute')
+    or has_function_privilege('authenticated', 'calendar_account_save(text, text)', 'execute')
+    or has_function_privilege('anon', 'calendar_refresh_token()', 'execute')
+    or has_function_privilege('authenticated', 'calendar_refresh_token()', 'execute')
+    or has_function_privilege('anon', 'busy_sync_save(timestamptz, timestamptz, jsonb, jsonb)', 'execute')
+    or has_function_privilege('authenticated', 'busy_sync_save(timestamptz, timestamptz, jsonb, jsonb)', 'execute')
+    then raise exception 'calendar functions callable by anon or authenticated'; end if;
+  if not has_function_privilege('service_role', 'calendar_account_save(text, text)', 'execute')
+    or not has_function_privilege('service_role', 'busy_sync_save(timestamptz, timestamptz, jsonb, jsonb)', 'execute')
+    then raise exception 'service_role cannot call the calendar functions'; end if;
+
+  -- Connect, then reconnect: one row, one secret, the new token.
+  perform calendar_account_save('owner@example.com', 'refresh-one');
+  perform calendar_account_save('owner@example.com', 'refresh-two');
+  if (select count(*) from calendar_account) <> 1
+    or (select count(*) from vault.secrets where name = 'calendar_refresh:owner@example.com') <> 1
+    or calendar_refresh_token() <> 'refresh-two'
+    then raise exception 'reconnecting the calendar did not reuse its secret'; end if;
+  raise notice '✓ v5: calendar_account private, its functions service-only, reconnect reuses the secret';
+end $$;
+
+-- busy_sync_save replaces only calendar rows in its window, stamps busy_as_of, and drops a change
+-- while there is no changes table. Fixed times, since each statement here has its own now().
+insert into busy (source, starts_at, ends_at) values
+  ('calendar', '2030-01-01 13:00+00', '2030-01-01 14:00+00'),
+  ('handshake', '2030-01-01 13:00+00', '2030-01-01 14:00+00'),
+  ('calendar', '2030-01-09 13:00+00', '2030-01-09 14:00+00');
+select set_config('role', 'service_role', false);
+select busy_sync_save('2030-01-01 12:00+00', '2030-01-08 12:00+00',
+  '[{"starts_at": "2030-01-01T15:00:00Z", "ends_at": "2030-01-01T16:00:00Z"}]',
+  '{"kind": "busy", "reason": "busy_change", "weight": 2, "ref": null}');
+reset role;
+do $$ begin
+  if (select count(*) from busy where source = 'handshake' and starts_at = '2030-01-01 13:00+00') <> 1
+    or exists (select 1 from busy where source = 'calendar' and starts_at = '2030-01-01 13:00+00')
+    or not exists (select 1 from busy where source = 'calendar' and starts_at = '2030-01-01 15:00+00')
+    or not exists (select 1 from busy where source = 'calendar' and starts_at = '2030-01-09 13:00+00')
+    then raise exception 'busy_sync_save replaced the wrong rows'; end if;
+  if (select busy_as_of from settings) <> '2030-01-01 12:00+00' then raise exception 'busy_sync_save did not stamp busy_as_of'; end if;
+  delete from busy where starts_at >= '2030-01-01';
+  raise notice '✓ v5: busy_sync_save replaces calendar rows only and stamps busy_as_of';
+end $$;
+
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from calendar_account; raise exception 'anon read calendar_account';
+  exception when insufficient_privilege then null; end;
+  raise notice '✓ v5: anon cannot read calendar_account';
+end $$;
+
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  if (select count(*) from calendar_account) <> 0 then raise exception 'a non-owner sees calendar_account'; end if;
+  delete from calendar_account;
+end $$;
+
+-- The owner reads it, can't write it, and Disconnect (delete) takes the token with it.
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if (select count(*) from calendar_account) <> 1 then raise exception 'owner cannot read calendar_account (or a stranger deleted it)'; end if;
+  begin update calendar_account set vault_secret_id = gen_random_uuid();
+    raise exception 'owner re-aimed the calendar vault_secret_id';
+  exception when insufficient_privilege then null; end;
+  begin insert into calendar_account (email) values ('x@example.com');
+    raise exception 'owner inserted a calendar_account row';
+  exception when insufficient_privilege then null; end;
+  delete from calendar_account;
+  raise notice '✓ v5: owner reads calendar_account, cannot write it, can disconnect';
+end $$;
+
+reset role;
+do $$ begin
+  if exists (select 1 from vault.secrets where name = 'calendar_refresh:owner@example.com')
+    then raise exception 'disconnecting the calendar left its vault secret'; end if;
+  if calendar_refresh_token() is not null then raise exception 'a token outlived the disconnect'; end if;
+  raise notice '✓ v5: disconnecting the calendar deletes its token';
+end $$;
 SQL
 psql_as postgres <<'SQL'
 -- --- v5 D2, a realistic day (docs/sheet-v5.md, "Schema") -----------------------------------

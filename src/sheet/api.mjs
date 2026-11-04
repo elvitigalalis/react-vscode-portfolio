@@ -131,6 +131,11 @@ export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${enco
 export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
 export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
+// The calendar free/busy account (docs/sheet-v5.md): one row or none, read and deleted here;
+// connecting goes through calendar-connect. Deleting it deletes its Vault secret (a trigger).
+export const calendarAccount = async () => (await rest("calendar_account?select=email,connected_at,last_error"))[0] ?? null;
+export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", { method: "DELETE" });
+
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
@@ -146,11 +151,12 @@ export const campusByUid = (uids) => (uids.length
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
-// Busy times (docs/sheet-morning.md, "/plan"): the rows overlapping [from, to) are replaced by
-// `rows`. The insert ignores rows already there, so two tabs saving at once don't fail on the
-// primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+// Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are
+// replaced by `rows`; Handshake's (source 'handshake', docs/sheet-v5.md) are left alone, and the
+// inserts take the default source, 'calendar'. The insert ignores rows already there, so two tabs
+// saving at once (or the server's busy-sync) don't fail on the primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
 export async function replaceBusy(fromIso, toIso, rows) {
-  await rest(`busy?starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
+  await rest(`busy?source=eq.calendar&starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
   if (rows.length) await rest("busy", { method: "POST", body: rows, prefer: "resolution=ignore-duplicates" });
 }
 

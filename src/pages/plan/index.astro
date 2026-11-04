@@ -78,7 +78,7 @@ import "../../styles/sheet.css";
         <dt>T</dt><dd>This week</dd>
         <dt>.</dt><dd>Menu for the focused task</dd>
         <dt>⌘Z</dt><dd>Undo</dd>
-        <dt>S</dt><dd>Settings: mail accounts, interest profile, feeds</dd>
+        <dt>S</dt><dd>Settings: mail accounts, calendar, interest profile, feeds</dd>
         <dt>C</dt><dd>Campus events for the focused day (or the campus chip under its calendar)</dd>
         <dt>M</dt><dd>Needs you: mail waiting on you (or the Needs you chip)</dd>
       </dl>
@@ -126,6 +126,16 @@ import "../../styles/sheet.css";
           <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-link" data-act="mail-remove">Remove</button></li>
         </template>
         <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
+      </section>
+
+      <!-- Calendar (docs/sheet-v5.md, "/plan"): src/sheet/calendar-settings.mjs fills it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-calsync-title">
+        <h3 id="sheet-calsync-title">Calendar</h3>
+        <p class="small">The server saves your busy times (start and end only) every 10 minutes from your calendars' free/busy, never Time blocks.</p>
+        <p><span role="status" data-busy-saved></span></p>
+        <p class="small"><span data-cal-account></span> <span class="sheet-mail-error" data-cal-error></span></p>
+        <button type="button" class="sheet-btn" data-act="cal-connect">Connect</button>
+        <button type="button" class="sheet-link" data-act="cal-disconnect" hidden>Disconnect</button>
       </section>
 
       <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
@@ -217,9 +227,10 @@ import "../../styles/sheet.css";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
   import { setupMailSettings } from "../../sheet/mail-settings.mjs";
   import { setupFeedStatus } from "../../sheet/feed-status.mjs";
+  import { setupCalendarSettings } from "../../sheet/calendar-settings.mjs";
   import { setupCampus } from "../../sheet/campus-list.mjs";
   import { setupTopBar } from "../../sheet/topbar.mjs";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou]);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou]);
 </script>

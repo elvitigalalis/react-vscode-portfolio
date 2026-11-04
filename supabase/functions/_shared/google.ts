@@ -5,7 +5,7 @@ import { env } from "./server.ts";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-export type Grant = { access_token?: string; refresh_token?: string; scope?: string; error?: string; error_description?: string };
+export type Grant = { access_token?: string; refresh_token?: string; id_token?: string; scope?: string; error?: string; error_description?: string };
 
 // Swaps `fields` (code + redirect_uri + grant_type=authorization_code, or refresh_token +
 // grant_type=refresh_token) for tokens. `ok` is false when Google refuses; `grant` then holds

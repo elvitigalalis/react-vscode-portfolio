@@ -36,7 +36,7 @@ const settings = (extra = {}) => ({
 // freeBusyRequest
 // =============================================================================================
 
-test("freeBusyRequest: his main calendar and the ones he shows, from now to 7 days ahead", todo, async () => {
+test("freeBusyRequest: his main calendar and the ones he shows, from now to 7 days ahead", async () => {
   const { freeBusyRequest } = await load();
   assert.deepEqual(freeBusyRequest(settings({ calendars: [CLASSES, HOLIDAYS] }), now), {
     timeMin: "2026-11-04T15:02:00.000Z",
@@ -45,13 +45,13 @@ test("freeBusyRequest: his main calendar and the ones he shows, from now to 7 da
   });
 });
 
-test("freeBusyRequest: Time blocks is never asked for, and each calendar is asked once", todo, async () => {
+test("freeBusyRequest: Time blocks is never asked for, and each calendar is asked once", async () => {
   const { freeBusyRequest } = await load();
   const s = settings({ calendars: [CLASSES, BLOCKS, OWNER, HOLIDAYS, CLASSES] });
   assert.deepEqual(freeBusyRequest(s, now).items, [{ id: OWNER }, { id: CLASSES }, { id: HOLIDAYS }]);
 });
 
-test("freeBusyRequest: with no extra calendars, only his main one", todo, async () => {
+test("freeBusyRequest: with no extra calendars, only his main one", async () => {
   const { freeBusyRequest } = await load();
   assert.deepEqual(freeBusyRequest(settings(), now).items, [{ id: OWNER }]);
   // Before "Time blocks" exists there is nothing to leave out.
@@ -92,7 +92,7 @@ const response = {
   },
 };
 
-test("freeBusyRows: start and end only, in UTC, once each, earliest first; Time blocks and failed calendars add nothing", todo, async () => {
+test("freeBusyRows: start and end only, in UTC, once each, earliest first; Time blocks and failed calendars add nothing", async () => {
   const { freeBusyRows } = await load();
   assert.deepEqual(freeBusyRows(response, now, BLOCKS), {
     rows: [
@@ -106,13 +106,13 @@ test("freeBusyRows: start and end only, in UTC, once each, earliest first; Time 
   });
 });
 
-test("freeBusyRows: the rows hold no titles or other fields, whatever the response carries", todo, async () => {
+test("freeBusyRows: the rows hold no titles or other fields, whatever the response carries", async () => {
   const { freeBusyRows } = await load();
   const withExtras = { calendars: { [OWNER]: { busy: [{ start: "2026-11-04T19:00:00Z", end: "2026-11-04T20:20:00Z", summary: "Therapy" }] } } };
   assert.deepEqual(freeBusyRows(withExtras, now, BLOCKS).rows, [{ starts_at: "2026-11-04T19:00:00.000Z", ends_at: "2026-11-04T20:20:00.000Z" }]);
 });
 
-test("freeBusyRows: Time blocks is left out even when Google returns it", todo, async () => {
+test("freeBusyRows: Time blocks is left out even when Google returns it", async () => {
   const { freeBusyRows } = await load();
   const only = { calendars: { [BLOCKS]: response.calendars[BLOCKS] } };
   assert.deepEqual(freeBusyRows(only, now, BLOCKS), { rows: [], failed: [] });
@@ -120,7 +120,7 @@ test("freeBusyRows: Time blocks is left out even when Google returns it", todo, 
   assert.deepEqual(freeBusyRows(only, now, null).rows, [{ starts_at: "2026-11-04T21:00:00.000Z", ends_at: "2026-11-04T22:00:00.000Z" }]);
 });
 
-test("freeBusyRows: failed calendars are listed in response order", todo, async () => {
+test("freeBusyRows: failed calendars are listed in response order", async () => {
   const { freeBusyRows } = await load();
   const r = {
     calendars: {
@@ -132,7 +132,7 @@ test("freeBusyRows: failed calendars are listed in response order", todo, async 
   assert.deepEqual(freeBusyRows(r, now, BLOCKS), { rows: [], failed: ["a@group.calendar.google.com", "b@group.calendar.google.com"] });
 });
 
-test("freeBusyRows: an empty response gives no rows and no failures", todo, async () => {
+test("freeBusyRows: an empty response gives no rows and no failures", async () => {
   const { freeBusyRows } = await load();
   assert.deepEqual(freeBusyRows({ kind: "calendar#freeBusy", calendars: {} }, now, BLOCKS), { rows: [], failed: [] });
 });
