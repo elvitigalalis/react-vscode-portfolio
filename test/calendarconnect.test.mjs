@@ -31,6 +31,7 @@ test("idTokenEmail: the email only when Google says it is verified", () => {
 // --- The functions' source (supabase/functions/calendar-connect, busy-sync) --------------------
 
 const connectFn = readFileSync(new URL("../supabase/functions/calendar-connect/index.ts", import.meta.url), "utf8");
+const syncFn = readFileSync(new URL("../supabase/functions/busy-sync/index.ts", import.meta.url), "utf8");
 
 test("calendar-connect accepts only the owner's verified account, and stores the token by rpc", () => {
   assert.match(connectFn, /CALENDAR_SCOPES/);
@@ -38,4 +39,15 @@ test("calendar-connect accepts only the owner's verified account, and stores the
   assert.match(connectFn, /owner_email/);
   assert.match(connectFn, /rpc\/calendar_account_save/);
   assert.doesNotMatch(connectFn, /console\.(log|error)\([^)]*refresh_token/);
+});
+
+test("busy-sync checks the cron secret, reads the token by rpc, and writes in one call", () => {
+  assert.match(syncFn, /secretMatches\(/);
+  assert.match(syncFn, /rpc\/calendar_refresh_token/);
+  assert.match(syncFn, /rpc\/busy_sync_save/);
+  assert.match(syncFn, /freeBusyRequest\(/);
+  assert.match(syncFn, /freeBusyRows\(/);
+  assert.match(syncFn, /busyChange\(/);
+  assert.match(syncFn, /"freebusy"/);
+  assert.match(syncFn, /not connected/);
 });
