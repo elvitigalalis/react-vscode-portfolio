@@ -63,6 +63,7 @@ test("replanState: plans today, the last plan and the shutdown line from today's
     plans_today: 3,
     last_plan_at: "2026-11-04T17:00:00.000Z",
     seen_until: "2026-11-04T15:05:00.000Z",
+    closed: false,
     last_edit_at: "2026-11-04T14:00:00Z",
   });
   const none = replanState({ settings: { ...settings, plan_edited_at: null }, day: null, proposals: [], replans: [] });
@@ -139,4 +140,23 @@ test("shouldReplan: a change logged after the run read the day, but before its r
   const old = replanState({ settings, day: null, proposals: [{ ...proposals[0], read_at: null }], replans: [] });
   assert.equal(old.seen_until, "2026-11-04T14:04:00.000Z");
   assert.deepEqual(shouldReplan(mail, old, new Date("2026-11-04T15:05:00Z")), { fire: false, hold: "nothing" });
+});
+
+test("shouldReplan: a day whose newest revision is skipped or lapsed holds as closed", async () => {
+  const { shouldReplan, replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const urgent = [{ id: "c1", at: "2026-11-04T15:01:00Z", kind: "busy", reason: "busy_overlap", weight: 10 }];
+  const now = new Date("2026-11-04T15:02:00Z");
+  const rows = (status) => [
+    { rev: 1, status: "superseded", run_trigger: "morning", created_at: "2026-11-04T11:09:00Z" },
+    { rev: 2, status, run_trigger: "replan", created_at: "2026-11-04T13:00:00Z" },
+  ];
+  for (const status of ["skipped", "lapsed"]) {
+    const state = replanState({ settings, day: null, proposals: rows(status), replans: [] });
+    assert.equal(state.closed, true);
+    assert.deepEqual(shouldReplan(urgent, state, now), { fire: false, hold: "closed" });
+  }
+  for (const status of ["pending", "approved"]) {
+    assert.equal(shouldReplan(urgent, replanState({ settings, day: null, proposals: rows(status), replans: [] }), now).fire, true);
+  }
 });

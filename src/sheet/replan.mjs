@@ -68,6 +68,7 @@ export function shouldReplan(changes, state, now) {
     : !settings.morning_on ? "morning_off"
     : minutes < OPEN_FROM || minutes >= QUIET_FROM ? "quiet"
     : day?.shutdown ? "shut_down"
+    : state.closed ? "closed"
     : minutes >= hhmm(shutdown) ? "after_shutdown"
     : plans_today >= DAILY_CAP ? "daily_cap"
     : lastPlan != null && t - lastPlan < PLAN_GAP ? "too_soon"
@@ -110,6 +111,8 @@ export function replanState({ settings, day, proposals, replans }) {
     plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length,
     last_plan_at: last == null ? null : new Date(last).toISOString(),
     seen_until: cut == null ? null : new Date(cut).toISOString(),
+    // He skipped the day's plan, or it lapsed: no replan reopens it.
+    closed: newest?.status === "skipped" || newest?.status === "lapsed",
     last_edit_at: settings.plan_edited_at ?? null,
   };
 }
