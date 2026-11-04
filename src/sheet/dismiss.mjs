@@ -25,3 +25,26 @@ export function lightDismiss(dialog) {
     down = false;
   });
 }
+
+// Arrow keys in a popover menu (WAI-ARIA APG, menu pattern:
+// https://www.w3.org/WAI/ARIA/apg/patterns/menubar/): ↓ and ↑ move to the next and previous item,
+// wrapping, Home and End to the first and last. The index to focus, or null for any other key.
+export function menuStep(key, index, count) {
+  if (!count) return null;
+  if (key === "ArrowDown") return (index + 1) % count;
+  if (key === "ArrowUp") return index < 0 ? count - 1 : (index - 1 + count) % count;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
+}
+
+// Wires menuStep on a popover menu's visible buttons. Left and right arrows stay in the menu too,
+// so they don't page the week behind it.
+export function menuKeys(menu) {
+  menu.addEventListener("keydown", (e) => {
+    const items = [...menu.querySelectorAll("button:not([hidden])")];
+    const next = menuStep(e.key, items.indexOf(document.activeElement), items.length);
+    if (next !== null) { e.preventDefault(); items[next].focus(); }
+    if (next !== null || e.key === "ArrowLeft" || e.key === "ArrowRight") e.stopPropagation();
+  });
+}

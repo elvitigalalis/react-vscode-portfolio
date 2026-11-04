@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { lightDismiss, onBackdrop } from "../src/sheet/dismiss.mjs";
+import { lightDismiss, onBackdrop, menuStep } from "../src/sheet/dismiss.mjs";
 
 function fakeDialog() {
   const on = {};
@@ -55,4 +55,15 @@ test("/plan: every dialog gets lightDismiss, and nothing cancels Escape", () => 
     assert.doesNotMatch(src, /["']cancel["']/, `${f} listens for cancel`);
     assert.doesNotMatch(src, /createElement\(["']dialog/, `${f} makes a dialog outside the page`);
   }
+});
+
+test("menuStep: arrow keys move through a menu's items and wrap; Home and End jump; other keys don't move", () => {
+  assert.equal(menuStep("ArrowDown", 0, 4), 1);
+  assert.equal(menuStep("ArrowDown", 3, 4), 0);
+  assert.equal(menuStep("ArrowUp", 0, 4), 3);
+  assert.equal(menuStep("ArrowUp", -1, 4), 3); // focus not on an item yet
+  assert.equal(menuStep("Home", 2, 4), 0);
+  assert.equal(menuStep("End", 0, 4), 3);
+  assert.equal(menuStep("Enter", 1, 4), null);
+  assert.equal(menuStep("ArrowDown", 0, 0), null);
 });

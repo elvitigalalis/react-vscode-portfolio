@@ -112,7 +112,8 @@
 .sheet-task:hover .sheet-check, .sheet-task:hover .sheet-more, .sheet-check:focus-visible, .sheet-more:focus-visible { opacity: 1; }
 .sheet-check:hover { color: var(--accent); }
 @media (hover: none) {
-  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; }
+  /* A 44 px tap area (WCAG 2.5.5) with the same small mark; the negative margin keeps the row's height. */
+  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; width: 2.75rem; height: 2.75rem; margin-block: -0.6rem; background: transparent; }
 }
 .sheet-task:hover { border-bottom-color: var(--accent); }
 .sheet-task.is-done .sheet-title { color: var(--muted); text-decoration: line-through; }
@@ -126,6 +127,8 @@ textarea.sheet-add {
   display: block; flex: 1; min-width: 0; line-height: inherit; resize: none; overflow: hidden;
   field-sizing: content;
 }
+/* Under 16 px, iOS Safari zooms the page when a field takes focus. */
+@media (hover: none), (max-width: 48rem) { .sheet-add { font-size: 1rem; } }
 .sheet-row.is-empty { cursor: text; }
 /* The add row's hint shows on hover and focus, and always on touch screens. */
 .sheet-add::placeholder { color: transparent; }

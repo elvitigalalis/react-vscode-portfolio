@@ -10,7 +10,7 @@ import {
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart } from "./sleep.mjs";
-import { lightDismiss } from "./dismiss.mjs";
+import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
@@ -865,6 +865,7 @@ function wire() {
     } else for (const hook of keyHooks) if (hook(e)) { e.preventDefault(); return; }
   });
 
+  for (const menu of root.querySelectorAll(".sheet-menu")) menuKeys(menu);
   root.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
   document.addEventListener("pointerup", (e) => { if (drag?.on) wasDrag.at = Date.now(); onPointerUp(e); });
