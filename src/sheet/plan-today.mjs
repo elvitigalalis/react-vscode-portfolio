@@ -24,6 +24,7 @@ let dialog;
 let day;          // the day being planned
 let events = [];  // his Google events that day
 let notes = [];   // the day's proposal: "Didn't fit: …", "Campus pick: …"
+let rev = null;   // its revision number (v5)
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
@@ -144,6 +145,7 @@ function draw() {
       : "Drag tasks onto the timeline · ? for keys" }),
     google,
     proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"), el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
+      rev ? el("span", { className: "sheet-rev", textContent: `Revision ${rev}` }) : null,
       approveButton("Approve all proposed blocks", "sheet-approve-all", "Approve all")) : null,
     notes.length ? el("ul", { className: "sheet-plan-notes" }, ...notes.map((n) => el("li", { textContent: n }))) : null,
     el("div", { className: "sheet-plan-body" },
@@ -164,8 +166,10 @@ async function fetchEvents() {
 // The morning plan's note and campus picks for the day. Without them the dialog still opens.
 async function fetchNotes() {
   notes = [];
+  rev = null;
   try {
     const p = await api.proposalOn(day);
+    rev = p?.rev ?? null;
     const campus = p?.picks?.length ? await api.campusByUid(p.picks.map((x) => x.uid)) : [];
     notes = planNotes(p, campus, SHEET.timeZone);
   } catch (e) { console.error(e); }
@@ -191,8 +195,16 @@ async function addBlock(taskId, startMin) {
   if (t.est_min == null) state.tasks.set(taskId, await api.updateTask(taskId, { est_min: len }));
 }
 
+// × on a proposed block turns its task down for the day (v5): turn_down deletes the task's
+// proposed blocks that day, and later revisions don't offer it again.
 async function removeBlock(id) {
   const b = state.blocks.find((x) => x.id === id);
+  if (b.proposed) {
+    await api.turnDown(day, b.task_id);
+    const gone = new Set(proposedOn(state.blocks, day, SHEET.timeZone).filter((x) => x.task_id === b.task_id).map((x) => x.id));
+    state.blocks = state.blocks.filter((x) => !gone.has(x.id));
+    return;
+  }
   if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
   await api.deleteBlock(id);
   state.blocks = state.blocks.filter((x) => x.id !== id);
