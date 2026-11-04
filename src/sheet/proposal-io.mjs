@@ -53,3 +53,19 @@ export function snapshotQueries(now, timeZone) {
     }),
   };
 }
+
+// v5 P1, pace (docs/sheet-v5.md, "pace.mjs"): every actuals row (nightly_roll keeps 120 days),
+// and the approved blocks of the 14 days before plan_day with their task's done, embedded through
+// blocks.task_id (https://docs.postgrest.org/en/stable/references/api/resource_embedding.html).
+export function paceQueries(now, timeZone) {
+  const plan_day = planningDay(localNow(now, timeZone));
+  return {
+    actuals: { table: "actuals", select: "at,kind,est_min,minutes", order: "at" },
+    past: {
+      table: "blocks",
+      select: "task_id,starts_at,ends_at,proposed,task:tasks(done)",
+      filters: [["proposed", "is", "false"], ["starts_at", "gte", zonedIso(addDays(plan_day, -14), 0, timeZone)], ["starts_at", "lt", zonedIso(plan_day, 0, timeZone)]],
+      order: "starts_at",
+    },
+  };
+}

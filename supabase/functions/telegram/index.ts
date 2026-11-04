@@ -1,6 +1,6 @@
 // The telegram Edge Function (docs/sheet-nudges.md), the one that talks to Telegram. pg_cron calls
 // it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
-// webhook for Done and Snooze taps, and for Approve all and Skip on the morning plan
+// webhook for Done and Snooze taps, the Finished? answers (docs/sheet-v5.md), and for Approve all and Skip on the morning plan
 // (docs/sheet-morning.md). Which messages are due, their wording, what counts as a tap
 // and what it changes are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
 // day, talks to the Telegram Bot API and writes what the module says.
@@ -55,7 +55,9 @@ async function snapshot(now: Date) {
   const needsOpen = await db("needs_you?select=*&done=is.false");
   // v5 W1: the cached forecast, for the brief's weather line.
   const [weather = null] = await db("weather_cache?select=periods,alerts");
-  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal), weather };
+  // v5 P1: the busy times around today, which More time must not run into.
+  const busy = await db(`busy?select=starts_at,ends_at&starts_at=lt.${to}&ends_at=gt.${from}`);
+  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal), weather, busy };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -80,7 +82,7 @@ async function send(now: Date) {
     if (!c) continue;
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
-      // and Skip under a plan, Open /plan otherwise.
+      // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
       await telegram("sendMessage", {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
@@ -166,20 +168,25 @@ async function tap(update: unknown, now: Date) {
   }
   let { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
   for (const c of changes) {
+    // A PostgREST rpc call: POST /rpc/<name> with the named arguments as the body
+    // (docs.postgrest.org/en/stable/references/api/functions.html).
     if (c.rpc) {
-      // v5: approve_proposal and skip_proposal, as PostgREST rpc calls
-      // (docs.postgrest.org/en/stable/references/api/functions.html). They refuse a revision
-      // that moved on since the snapshot was read, and then nothing changed.
       try {
         await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
-      } catch {
+      } catch (e) {
+        // v5: approve_proposal and skip_proposal refuse a revision that moved on since the
+        // snapshot was read, and then nothing changed. Any other rpc failing is an error.
+        if (c.rpc !== "approve_proposal" && c.rpc !== "skip_proposal") throw e;
         text = "A newer plan is out";
         break;
       }
+    } else if (c.insert && !UPSERT[c.table!]) {
+      // A plain insert (v5: actuals, from Finished).
+      await db(`${c.table}`, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(c.insert) });
     } else if (c.insert) {
-      await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
+      await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
     } else if (c.update) {
-      await db(`${c.table}?${KEY[c.table] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
+      await db(`${c.table}?${KEY[c.table!] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
     } else if (c.delete) {
       await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
     }

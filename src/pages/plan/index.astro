@@ -162,6 +162,13 @@ import "../../styles/sheet.css";
         <ul class="sheet-mail" data-feeds></ul>
       </section>
 
+      <!-- Pace (docs/sheet-v5.md, "/plan"): src/sheet/pace-settings.mjs fills the list. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-pace-title">
+        <h3 id="sheet-pace-title">Pace</h3>
+        <p class="small">How long each kind of task really takes next to its estimate, from your Finished? answers in Telegram. Claude sizes blocks by it once a kind has 5.</p>
+        <ul class="sheet-mail" data-pace></ul>
+      </section>
+
       <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
@@ -232,5 +239,6 @@ import "../../styles/sheet.css";
   import { setupTopBar } from "../../sheet/topbar.mjs";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou]);
+  import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings]);
 </script>

@@ -450,6 +450,44 @@ begin
   raise notice '✓ v5: turn_down deletes proposed blocks and remembers the task';
 end $$;
 
+-- --- v5 P1, actuals (docs/sheet-v5.md, "Schema") ----------------------------------------------
+insert into actuals (at, day, task_id, kind, est_min, minutes) values
+  (now() - interval '121 days', sheet_today() - 121, gen_random_uuid(), 'course', 30, 45),
+  (now() - interval '119 days', sheet_today() - 119, gen_random_uuid(), 'other', null, 20);
+select nightly_roll();
+do $$ begin
+  if (select count(*) from actuals) <> 1 or exists (select 1 from actuals where kind = 'course')
+    then raise exception 'nightly_roll kept actuals older than 120 days, or dropped a newer one'; end if;
+  begin
+    insert into actuals (day, task_id, kind, minutes) values (sheet_today(), gen_random_uuid(), 'other', 0);
+    raise exception 'actuals took 0 minutes';
+  exception when check_violation then null; end;
+  begin
+    insert into nudges (block_id, kind, day, send_at) values (null, 'finished', sheet_today(), now());
+  exception when check_violation then raise exception 'nudges refused kind finished'; end;
+  delete from nudges where kind = 'finished';
+  raise notice '✓ v5: actuals kept 120 days, minutes 1-960, nudges take finished';
+end $$;
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from actuals; raise exception 'anon read actuals';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  if exists (select 1 from actuals) then raise exception 'a stranger read actuals'; end if;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if not exists (select 1 from actuals) then raise exception 'the owner cannot read actuals'; end if;
+  begin
+    insert into actuals (day, task_id, kind, minutes) values (sheet_today(), gen_random_uuid(), 'other', 30);
+    raise exception 'the browser inserted into actuals';
+  exception when insufficient_privilege then null; end;
+  raise notice '✓ v5: actuals owner read-only, closed to anon and strangers';
+end $$;
+reset role;
+
 -- --- v5 S1, busy times saved by the server (docs/sheet-v5.md, "Schema") ----------------------
 reset role;
 do $$ begin

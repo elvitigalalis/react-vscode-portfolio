@@ -98,8 +98,9 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
   exactly like a busy time and never move, cover or replace it. Ignore proposed blocks: this
   revision replaces them. Skip a task that already has a block with proposed false on D.
 - Tasks Lisul turned down today (turned_down) are left out of tasks. Never place one.
-- Starts fall on quarter hours (:00, :15, :30, :45). minutes is est_min rounded to the nearest
-  15 (at least 15, at most 240), or 30 when est_min is null.
+- Starts fall on quarter hours (:00, :15, :30, :45). minutes is the task's paced_min, exactly:
+  its estimate times Lisul's pace for its kind of task, already rounded to 15 (at least 15, at
+  most 240). Never work it out yourself; submit_proposal refuses any other length.
 - Order: course tasks (source "brightspace") and at_risk tasks first, as hard deadlines,
   earliest due first, each in the earliest gap that ends before its due date ends; then tasks
   with at_time, starting exactly at at_time; then the rest, in the order given, in the earliest
