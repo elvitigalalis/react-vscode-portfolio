@@ -5,12 +5,13 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
+  eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
 } from "./logic.mjs";
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart } from "./sleep.mjs";
 import { lightDismiss } from "./dismiss.mjs";
+import { dayRows } from "./event-todos.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -59,6 +60,8 @@ export const state = {
   settings: null,   // the settings row
   sleep: [],        // Oura: the sleep_nights rows, for when each day starts
   events: [],       // the week's Google events, never saved
+  todoEvents: [],   // the same with "Time blocks" too, for event to-dos (never saved)
+  todos: [],        // event_todos rows: done, hidden and Claude's titles
   eventsStale: false,
 };
 
@@ -305,55 +308,93 @@ function addRow(where, label, placeholder = "+ Add a task") {
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
 
-// His calendar for the day, in gray above the tasks: read-only, and a click opens Google. A
-// busy day shows four and folds the rest into "+N more".
-const MAX_EVENTS = 4;
-const openEvents = new Set();
+// --- Event to-dos (docs/sheet-v5.md, "Event to-dos") ---------------------------------------
 
-function eventLines(day) {
-  const evs = eventsOn(day);
-  const nowMin = day === state.today ? now().minutes : null;
-  const all = openEvents.has(day);
-  const { shown, hidden } = all ? { shown: evs, hidden: 0 } : visibleEvents(evs, MAX_EVENTS, nowMin);
-  return { evs, nowMin, all, shown, hidden, lines: shown.length + (hidden || (all && evs.length > MAX_EVENTS) ? 1 : 0) };
+// A day's list: its calendar events as to-dos merged with its tasks, in time order
+// (event-todos.mjs). The calendar itself shows on Plan today's timeline.
+const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
+
+// An event row looks like a task row, with the calendar icon and its time: "9–10:15 am · Dentist".
+function eventTodoRow(r) {
+  const li = el("li", { className: `sheet-row sheet-evtodo${r.done ? " is-done" : ""}` });
+  li.dataset.key = r.key;
+  const text = r.allDay ? r.title : `${formatSpan(r.start, r.end)} · ${r.title}`;
+  const check = el("button", { type: "button", className: "sheet-check", ariaLabel: r.done ? `Reopen ${r.title}` : `Complete ${r.title}` }, r.done ? "↺" : icon("check"));
+  check.dataset.act = "evtodo-done";
+  const more = el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${r.title}` }, icon("more-horizontal"));
+  more.dataset.act = "evtodo-more";
+  li.append(
+    el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar")),
+    el("span", { className: "sheet-title", textContent: text, title: r.raw }),
+    check, more);
+  return li;
 }
 
-// Each event shows its time range and full name. On wide screens the columns share grid rows
-// (subgrid), so the task lines below stay level across the week however long the names are.
-function eventList(day, any) {
-  if (!any) return null;
-  const { evs, nowMin, all, shown, hidden } = eventLines(day);
-  const ul = el("ul", { className: "sheet-events" }, ...shown.map((e) => {
-    const past = nowMin != null && !e.allDay && e.end <= nowMin;
-    const name = e.link
-      ? el("a", { href: e.link, target: "_blank", rel: "noopener", textContent: e.title, title: e.title })
-      : el("span", { textContent: e.title, title: e.title });
-    return el("li", { className: `sheet-event-row${past ? " is-past" : ""}` },
-      el("span", { className: "sheet-event-time", textContent: e.allDay ? "all day" : formatSpan(e.start, e.end) }),
-      name);
-  }));
-  ul.setAttribute("aria-label", "Calendar");
-  if (hidden || (all && evs.length > MAX_EVENTS)) {
-    const more = el("button", { type: "button", className: "sheet-link sheet-events-more", textContent: hidden ? `+${hidden} more` : "Show less" });
-    more.dataset.act = "toggle-events";
-    more.dataset.day = day;
-    ul.append(el("li", {}, more));
-  }
-  return ul;
+const eventRowOf = (target) => {
+  const key = target.closest("[data-key]")?.dataset.key ?? evMenuFor;
+  const day = target.closest("[data-day]")?.dataset.day ?? evMenuDay;
+  return { key, day, row: rowsOn(day).find((r) => r.kind === "event" && r.key === key) };
+};
+
+async function saveEventTodo(key, day, change) {
+  await api.saveEventTodo({ cal_event_key: key, day, ...change });
+  const t = state.todos.find((x) => x.cal_event_key === key);
+  if (t) Object.assign(t, change);
+  else state.todos.push({ cal_event_key: key, title_ai: null, done: false, hidden: false, ...change });
 }
 
-function dayColumn(day, rows, anyEvents) {
+async function toggleEventTodo(target) {
+  const { key, day, row } = eventRowOf(target);
+  if (!row) return;
+  try {
+    await saveEventTodo(key, day, { done: !row.done });
+    if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
+  } catch (e) { failed(e); }
+  render();
+  root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
+}
+
+let evMenuFor = null;
+let evMenuDay = null;
+
+function openEventMenu(target) {
+  const { key, day, row } = eventRowOf(target);
+  if (!row) return;
+  evMenuFor = key;
+  evMenuDay = day;
+  const menu = $("[data-evmenu]");
+  menu.querySelector('[data-act="evtodo-open"]').hidden = !row.link;
+  const r = target.getBoundingClientRect();
+  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 100)}px`;
+  menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
+  menu.showPopover();
+  menu.querySelector("button:not([hidden])")?.focus();
+}
+
+async function eventMenuAction(act) {
+  $("[data-evmenu]").hidePopover();
+  const { key, day, row } = eventRowOf($("[data-evmenu]"));
+  if (!row) return;
+  if (act === "evtodo-open") return void window.open(row.link, "_blank", "noopener");
+  try {
+    await saveEventTodo(key, day, { hidden: true });
+    offerUndo(`Hidden: ${row.title}`, () => saveEventTodo(key, day, { hidden: false }));
+  } catch (e) { failed(e); }
+  render();
+}
+
+function dayColumn(day, rows, items) {
   const list = tasksOn(day);
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
   const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
-  const blank = day === state.today && !list.length;
-  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...list.map(taskRow),
+  const blank = day === state.today && !items.length;
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task) : eventTodoRow(r))),
     blank ? el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" }) : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`));
   ul.dataset.day = day;
-  for (let i = list.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
+  for (let i = items.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
   const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
   const section = el("section", { className: `sheet-day${day === state.today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
     el("h2", { className: "sheet-head" },
@@ -362,7 +403,6 @@ function dayColumn(day, rows, anyEvents) {
       allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
       day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     el("p", { className: "sheet-stamps", textContent: marks }),
-    eventList(day, anyEvents),
     ul);
   section.dataset.day = day;
   return section;
@@ -381,9 +421,9 @@ export function render() {
   state.today = now().day;
   const days = weekDays(state.week);
   if (!days.includes(state.focus)) state.focus = days.includes(state.today) ? state.today : days[0];
-  const rows = rowCount(Object.fromEntries(days.map((d) => [d, tasksOn(d)])));
-  const anyEvents = days.some((d) => eventsOn(d).length);
-  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, anyEvents)));
+  const items = Object.fromEntries(days.map((d) => [d, rowsOn(d)]));
+  const rows = rowCount(items);
+  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])));
   $("[data-week]").style.setProperty("--rows", String(rows));
   const first = dayLabel(days[0]);
   $("[data-week-title]").textContent = `Week of ${first.date}`;
@@ -410,21 +450,23 @@ export const renderHooks = [];
 
 export async function load() {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayRows, parked, settings, sleep] = await Promise.all([
+  const [tasks, blocks, dayList, parked, settings, todos, sleep] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
     api.parkedOn(state.today),
     api.settings(),
+    api.listEventTodos(addDays(days[0], -1), addDays(days[6], 1)).catch((e) => { console.error(e); return []; }),
     api.listSleep(),
   ]);
+  state.todos = todos;
   state.settings = settings;
   state.sleep = sleep;
   state.calendars = settings?.calendars ?? [];
   await loadEvents(days);
   state.tasks = new Map(tasks.map((t) => [t.id, t]));
   state.blocks = blocks;
-  state.days = Object.fromEntries(dayRows.map((d) => [d.day, d]));
+  state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
   state.parked = parked.length;
   render();
   scrollToToday($("[data-week]"));
@@ -436,20 +478,32 @@ export const eventHooks = [];
 // events kept in this browser, and says so.
 const EVENTS_KEY = "sheet.events.";
 
+// Event to-dos also read "Time blocks", for the events a message made there; the week's other
+// views leave it out unless he added it to his calendars.
+function setEvents(all) {
+  const tb = state.settings?.gcal_calendar_id;
+  state.todoEvents = all;
+  state.events = tb && !state.calendars.includes(tb) ? all.filter((e) => e.calendar !== tb) : all;
+}
+
 async function loadEvents(days) {
   const key = EVENTS_KEY + days[0];
+  const tb = state.settings?.gcal_calendar_id;
   if (api.googleReady()) {
     try {
-      state.events = await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone), state.calendars);
+      setEvents(await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone),
+        tb && !state.calendars.includes(tb) ? [...state.calendars, tb] : state.calendars));
       state.eventsStale = false;
-      try { localStorage.setItem(key, JSON.stringify(state.events)); } catch {}
+      try { localStorage.setItem(key, JSON.stringify(state.todoEvents)); } catch {}
       // Work that needs Google and runs after each load, in the background (busy times, events
       // for blocks approved off the page). A hook that fails never stops the page.
       for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error);
       return;
     } catch (e) { console.error(e); }
   }
-  try { state.events = JSON.parse(localStorage.getItem(key)) ?? []; } catch { state.events = []; }
+  let cached = [];
+  try { cached = JSON.parse(localStorage.getItem(key)) ?? []; } catch {}
+  setEvents(cached);
   state.eventsStale = true;
 }
 
@@ -724,11 +778,9 @@ function wire() {
       if (act === "help") return $("[data-help]").showModal();
       if (act === "undo") return undo();
       if (act === "sign-out") { api.signOut(); forgetEvents(); location.reload(); return; }
-      if (act === "toggle-events") {
-        const day = e.target.closest("[data-day]").dataset.day;
-        if (!openEvents.delete(day)) openEvents.add(day);
-        return render();
-      }
+      if (act === "evtodo-done") return toggleEventTodo(e.target);
+      if (act === "evtodo-more") return openEventMenu(e.target);
+      if (act === "evtodo-open" || act === "evtodo-hide") return eventMenuAction(act);
       if (act === "connect") return api.signIn();
       if (act === "calendars") {
         $("#sheet-cal-ids").value = state.calendars.join("\n");

@@ -176,6 +176,8 @@ begin
   delete from message_senders where at < now() - interval '14 days';
   -- Messages to Claude are kept 30 days.
   delete from messages where at < now() - interval '30 days';
+  -- Event to-dos are kept 30 days after their day.
+  delete from event_todos where day < today - 30;
   -- Oura: sleep rows are kept 60 days.
   delete from sleep_nights where bedtime_end < now() - interval '60 days';
   delete from sleep_days where day < current_date - 60;
@@ -493,7 +495,7 @@ alter table settings add column if not exists morning_on boolean not null defaul
 -- one Postgres gave the inline check), so a re-run is safe.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
 
 -- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
 -- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
@@ -1362,6 +1364,46 @@ language sql security invoker set search_path = public as $$
   where id = any(ms) and status = 'pending' and jsonb_array_length(steps) < 12;
 $$;
 revoke execute on function add_message_step(uuid[], text, text) from public, anon;
+
+-- --- Event to-dos (docs/sheet-v5.md, "Event to-dos") -----------------------------------------
+-- Every Google Calendar event on a day is also a to-do in /plan's list. Only what the browser
+-- can't get from Google is kept, by the event's key (calendar ID ":" event ID): done, hidden,
+-- and title_ai, a concise title Claude wrote. No raw event title is ever stored. day is the
+-- event's day (or the plan day Claude wrote it for), for retention. Owner-only, in no public
+-- view; nightly_roll keeps 30 days after day.
+create table if not exists event_todos (
+  cal_event_key text primary key check (char_length(cal_event_key) between 3 and 1300),
+  day date not null,
+  title_ai text check (char_length(title_ai) between 1 and 80),
+  done boolean not null default false,
+  hidden boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+alter table event_todos enable row level security;
+drop policy if exists owner_all on event_todos;
+create policy owner_all on event_todos for all using (is_owner()) with check (is_owner());
+revoke all on event_todos from anon;
+
+drop trigger if exists event_todos_touch on event_todos;
+create or replace function event_todos_touch() returns trigger language plpgsql as $$
+begin new.updated_at := now(); return new; end $$;
+create trigger event_todos_touch before update on event_todos for each row execute function event_todos_touch();
+
+-- Claude's concise titles ([{ cal_event_key, title_ai }], checked first by checkEventTodos in
+-- src/sheet/event-todos.mjs): a new event gets a row on day d; a known one gets only its
+-- title_ai replaced, so done, hidden and day stay. Security invoker, so RLS applies to the caller
+-- (planner-mcp's owner-scoped client).
+create or replace function set_event_titles(d date, titles jsonb) returns int
+language sql security invoker set search_path = public as $$
+  with saved as (
+    insert into event_todos (cal_event_key, day, title_ai)
+    select x.cal_event_key, d, x.title_ai
+    from jsonb_to_recordset(coalesce(titles, '[]')) as x(cal_event_key text, title_ai text)
+    on conflict (cal_event_key) do update set title_ai = excluded.title_ai
+    returning 1)
+  select count(*)::int from saved $$;
+revoke execute on function set_event_titles(date, jsonb) from public, anon;
+grant execute on function set_event_titles(date, jsonb) to authenticated;
 -- --- Oura: the plan starts when he wakes (docs/sheet-v5.md, "Oura") -------------------------
 -- oura-connect connects his Oura account (OAuth2 with PKCE, scope daily); oura-sync reads his
 -- sleep periods and daily readiness every 10 minutes. Only these fields are kept, 60 days

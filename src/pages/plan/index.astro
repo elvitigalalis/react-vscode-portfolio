@@ -70,6 +70,12 @@ import "../../styles/sheet.css";
       <button type="button" data-move="delete">Delete</button>
     </div>
 
+    <!-- Event to-dos (docs/sheet-v5.md, "Event to-dos"): a calendar event's row menu. -->
+    <div class="sheet-menu" data-evmenu popover>
+      <button type="button" data-act="evtodo-open">Open in Calendar</button>
+      <button type="button" data-act="evtodo-hide">Hide</button>
+    </div>
+
     <div class="sheet-toast" role="status" data-toast hidden>
       <span data-toast-text></span> <button type="button" class="sheet-link" data-act="undo">Undo</button>
     </div>
@@ -102,6 +108,7 @@ import "../../styles/sheet.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-clock"></use></svg><span class="visually-hidden">Clock</span></dt><dd>Fixed time</dd>
         <dt>⚠</dt><dd>At risk (amber), overdue (red), or clashes with an event</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-graduation-cap"></use></svg><span class="visually-hidden">Graduation cap</span></dt><dd>Course task from Brightspace</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-calendar"></use></svg><span class="visually-hidden">Calendar</span></dt><dd>An event on your calendar, as a to-do</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-ticket"></use></svg><span class="visually-hidden">Ticket</span></dt><dd>Campus event</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-github"></use></svg><span class="visually-hidden">GitHub</span></dt><dd>Review or issue from GitHub (opens it)</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-kanban"></use></svg><span class="visually-hidden">Kanban</span></dt><dd>Ticket from Jira (opens it)</dd>
@@ -297,6 +304,7 @@ import "../../styles/sheet.css";
       <symbol id="i-more-horizontal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></symbol>
       <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+      <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></symbol>
       <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
     </svg>
 
