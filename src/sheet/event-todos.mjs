@@ -34,9 +34,12 @@ export function dayRows({ day, timeZone, tasks, events, blocks, todos }) {
     const title = own?.title_ai ?? byEvent.get(e.id)?.title_ai ?? raw;
     return [{ kind: "event", key, title, raw, allDay: e.allDay, start: Math.max(0, e.start), end: e.end, done: Boolean(own?.done), link: e.link ?? null }];
   });
+  // A task sorts by its approved block on the day, else by its block in the pending plan, so a
+  // task Claude placed sits among the day's other timed items rather than at the end.
   const blockStart = (id) => {
-    const starts = blocks.filter((b) => b.task_id === id && !b.proposed)
+    const on = (proposed) => blocks.filter((b) => b.task_id === id && Boolean(b.proposed) === proposed)
       .map((b) => minutesOn(b.starts_at, day, timeZone)).filter((m) => m >= 0 && m < 1440);
+    const starts = on(false).length ? on(false) : on(true);
     return starts.length ? Math.min(...starts) : null;
   };
   const timed = [];
