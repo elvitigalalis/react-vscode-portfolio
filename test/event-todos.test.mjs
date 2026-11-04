@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { dayRows, checkEventTodos } from "../src/sheet/event-todos.mjs";
+import { dayRows, checkEventTodos, taskSpan } from "../src/sheet/event-todos.mjs";
 
 const TZ = "America/New_York";
 const DAY = "2026-11-04";
@@ -49,6 +49,31 @@ test("dayRows: The Sheet's own block events are left out, and a task sorts by it
   });
   // A task with only a pending (proposed) block sorts by that block too: 8:00 am comes first.
   assert.deepEqual(shape(rows), ["proposed only", "ev:Standup", "read ch. 4", "ev:Gym"]);
+});
+
+test("taskSpan: a timed task's start and end, from at_time, else its approved block, else its pending block", () => {
+  const blk = (task_id, start, end, proposed = false) => ({ id: `${task_id}-${start}`, task_id, starts_at: start, ends_at: end, proposed, gcal_id: null });
+  const blocks = [
+    blk("approved", "2026-11-04T16:00:00Z", "2026-11-04T17:30:00Z"), // 11 am-12:30 pm
+    blk("approved", "2026-11-04T14:00:00Z", "2026-11-04T14:45:00Z", true), // a pending one loses to the approved
+    blk("pending", "2026-11-04T13:00:00Z", "2026-11-04T13:50:00Z", true), // 8-8:50 am
+    blk("at+block", "2026-11-05T00:00:00Z", "2026-11-05T00:40:00Z"), // 7-7:40 pm
+    blk("elsewhere", "2026-11-05T16:00:00Z", "2026-11-05T17:00:00Z"), // tomorrow
+  ];
+  const span = (t) => taskSpan(task(t.id, 1, t), DAY, TZ, blocks);
+  // "Register for classes" at 7 pm for 20 minutes: 7-7:20 pm.
+  assert.deepEqual(span({ id: "reg", at_time: "19:00:00", est_min: 20 }), { start: 19 * 60, end: 19 * 60 + 20 });
+  // No length: 30 minutes.
+  assert.deepEqual(span({ id: "reg", at_time: "19:00:00" }), { start: 19 * 60, end: 19 * 60 + 30 });
+  // A block at its time gives the end.
+  assert.deepEqual(span({ id: "at+block", at_time: "19:00:00", est_min: 20 }), { start: 19 * 60, end: 19 * 60 + 40 });
+  assert.deepEqual(span({ id: "approved", est_min: 10 }), { start: 11 * 60, end: 12 * 60 + 30 });
+  assert.deepEqual(span({ id: "pending" }), { start: 8 * 60, end: 8 * 60 + 50 });
+  assert.equal(span({ id: "elsewhere" }), null);
+  assert.equal(span({ id: "untimed", est_min: 30 }), null);
+  // dayRows carries the span on a timed task's row.
+  const rows = dayRows({ day: DAY, timeZone: TZ, todos: [], events: [], blocks, tasks: [task("pending", 1), task("reg", 2, { at_time: "19:00:00", est_min: 20 }), task("untimed", 3)] });
+  assert.deepEqual(rows.map((r) => [r.task.id, r.start, r.end]), [["pending", 480, 530], ["reg", 1140, 1160], ["untimed", undefined, undefined]]);
 });
 
 test("dayRows: done and hidden come from event_todos; title_ai replaces the raw title, which is trimmed", () => {

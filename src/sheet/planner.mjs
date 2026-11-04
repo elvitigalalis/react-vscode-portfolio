@@ -11,7 +11,7 @@ import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart } from "./sleep.mjs";
 import { lightDismiss } from "./dismiss.mjs";
-import { dayRows } from "./event-todos.mjs";
+import { dayRows, taskSpan } from "./event-todos.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -260,14 +260,15 @@ const DUE = {
   risk: { className: " sheet-risk", title: "At risk: no block before it is due", tail: "" },
 };
 
-// A task's details beside its title: source, time, clash, estimate, due date and private.
-function detailsOf(t, clash, level) {
+// A task's details beside its title: source, time (when its title doesn't show it), clash,
+// estimate, due date and private.
+function detailsOf(t, clash, level, span) {
   const src = sourceOf(t);
   const due = DUE[level];
   const kids = [
     // v5 SRC1: a GitHub or Jira task's icon links to its page (tasks.link is https only).
     src ? el(t.link ? "a" : "span", { className: "sheet-meta sheet-source", ...(t.link ? { href: t.link, target: "_blank", rel: "noopener" } : {}) }, sourceIcon(src)) : null,
-    t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
+    t.at_time && !span ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
     t.due ? el("span", { className: `sheet-meta${due?.className ?? ""}`, ...(due ? { title: due.title } : {}) },
@@ -277,20 +278,24 @@ function detailsOf(t, clash, level) {
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
 }
 
-export function taskRow(t) {
+// A task on a day with a time (taskSpan) reads like an event row: "7–7:20 pm · Register for classes".
+export const spanOf = (t) => (t.day ? taskSpan(t, t.day, SHEET.timeZone, state.blocks) : null);
+
+export function taskRow(t, span = spanOf(t)) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
   if (sourceOf(t)) li.dataset.source = sourceOf(t);
   li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
-  const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
+  const when = span ? `${formatSpan(span.start, span.end)} · ` : "";
+  const title = el("button", { type: "button", className: "sheet-title", textContent: `${when}${t.title}`, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
   const level = dueLevel(t, state.blocks, state.today, SHEET.timeZone);
-  title.setAttribute("aria-label", `${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
     rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
     title,
     // The details, kept together so they move under the title as one line when they don't fit.
-    detailsOf(t, clash, level),
+    detailsOf(t, clash, level, span),
     el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
@@ -390,7 +395,7 @@ function dayColumn(day, rows, items) {
   const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
   const blank = day === state.today && !items.length;
-  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task) : eventTodoRow(r))),
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : eventTodoRow(r))),
     blank ? el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" }) : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`));
   ul.dataset.day = day;
@@ -411,7 +416,7 @@ function dayColumn(day, rows, items) {
 function listColumn(name) {
   const list = tasksIn(name);
   // An empty list always shows its "+ Add a task" hint.
-  const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map(taskRow), addRow({ list: name }, `Add a task to ${name}`));
+  const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map((t) => taskRow(t, null)), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
   return el("section", { className: "sheet-list" }, el("h3", { className: "sheet-head" }, el("span", { className: "sheet-wd", textContent: name })), ul);
 }
