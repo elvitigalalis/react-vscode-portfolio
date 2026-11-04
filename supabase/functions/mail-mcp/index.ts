@@ -38,7 +38,7 @@ import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@^2
 import { pipeline } from "npm:@supabase/middleware@1";
 import { withOAuthProtectedResource, withSupabase } from "npm:@supabase/server@^1.9.2";
 import { z } from "npm:zod@^4.3.6";
-import { accountPatch, gmailError, messageBody, messageSummary, searchPlan } from "../../../src/sheet/mail.mjs";
+import { accountPatch, gmailError, messageBody, messageSummary, parseAddresses, searchMarks, searchPlan, senderHash } from "../../../src/sheet/mail.mjs";
 import { googleToken } from "../_shared/google.ts";
 
 // Every tool's description ends with this (docs/sheet-claude.md, "Inbox sweep").
@@ -84,7 +84,9 @@ function mailServer(admin: Db) {
   server.registerTool("search_mail", {
     description: "Search mail with Gmail search syntax (e.g. `newer_than:3d`, `is:unread newer_than:14d`). " +
       "Searches every connected account unless `account` names one. Returns message summaries " +
-      `(account, id, from, subject, date, snippet, labels, link), newest first, at most 25. ${UNTRUSTED}`,
+      "(account, id, from, subject, date, snippet, labels, link), newest first, at most 25. Each also has known " +
+      "(Lisul has sent mail to the sender) and reply_state (owed: a reply from him is owed; awaiting: he wrote " +
+      `last and is waiting; or null), which the mail sync keeps. ${UNTRUSTED}`,
     inputSchema: z.object({
       query: z.string().max(500),
       account: z.string().max(320).optional(),
@@ -102,7 +104,7 @@ function mailServer(admin: Db) {
       try { return await use(r.account, (token) => search(token, r)); }
       catch (e) { problems.push(`${r.account}: ${(e as Error).message}`); return []; }
     }));
-    const results = plan.merge(lists);
+    const results = await marked(admin, plan.merge(lists));
     return { content: [text(results), ...(problems.length ? [text(`Could not search: ${problems.join("; ")}`)] : [])] };
   });
 
@@ -122,6 +124,35 @@ function mailServer(admin: Db) {
   });
 
   return server;
+}
+
+// v5 M1: `known` from known_senders, matched by the salted hash of each From address
+// (SHEET_SENDER_SALT, the mail sync's salt; without it nobody is known), and `reply_state` from
+// reply_state, both kept by the mail-sync function. A failed read leaves them false and null.
+// .in() is supabase-js's in.() filter (https://supabase.com/docs/reference/javascript/in).
+async function marked(admin: Db, summaries: { account: string; thread_id: string; from: string }[]) {
+  const salt = Deno.env.get("SHEET_SENDER_SALT") ?? "";
+  const byHash = new Map<string, string>();
+  if (salt) {
+    for (const s of summaries) {
+      const address = parseAddresses(s.from)[0]?.address;
+      if (address) byHash.set(await senderHash(address, salt), address);
+    }
+  }
+  const known = new Set<string>();
+  if (byHash.size) {
+    const { data, error } = await admin.from("known_senders").select("hash").in("hash", [...byHash.keys()]);
+    if (error) console.error("known_senders", error.message);
+    for (const r of data ?? []) known.add(byHash.get(r.hash)!);
+  }
+  const threads = [...new Set(summaries.map((s) => s.thread_id))];
+  let states: { account: string; thread_id: string; state: string }[] = [];
+  if (threads.length) {
+    const { data, error } = await admin.from("reply_state").select("account,thread_id,state").in("thread_id", threads);
+    if (error) console.error("reply_state", error.message);
+    states = data ?? [];
+  }
+  return searchMarks(summaries, known, states);
 }
 
 async function accounts(admin: Db): Promise<Account[]> {
