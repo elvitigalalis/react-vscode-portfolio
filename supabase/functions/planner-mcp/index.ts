@@ -41,7 +41,7 @@ import { z } from "npm:zod@^4.3.6";
 import { checkProposal, NEEDS_KINDS, messageRunOf, planDayOf, planSnapshot } from "../../../src/sheet/proposal.mjs";
 import { habitsQuery, paceQueries, replanQueries, snapshotQueries, todayReplanQueries } from "../../../src/sheet/proposal-io.mjs";
 import { senderHash } from "../../../src/sheet/mail.mjs";
-import { checkAnswers, MAX_ANSWERS, proposalTrigger, withMessages } from "../../../src/sheet/messages.mjs";
+import { checkAnswers, checkStep, MAX_ANSWERS, MAX_READ, proposalTrigger, STEP_KINDS, stepTargets, withMessages } from "../../../src/sheet/messages.mjs";
 
 // The sender hashes' salt (mail-sync's), for hashing triage rule patterns at submit.
 const SALT = Deno.env.get("SHEET_SENDER_SALT") ?? "";
@@ -138,7 +138,10 @@ function plannerServer(db: Db) {
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
     try {
-      return { content: [text(await snapshot(db, new Date()))] };
+      const snap = await snapshot(db, new Date());
+      // Lisul sees this on /plan under each message the run is reading.
+      if (snap.messages.length) await logStep(db, snap.messages.map((m: { id: string }) => m.id), "reading", "Read your planner");
+      return { content: [text(snap)] };
     } catch (e) {
       return failed((e as Error).message);
     }
@@ -189,8 +192,9 @@ function plannerServer(db: Db) {
   server.registerTool("answer_messages", {
     description: "Answer Lisul's pending messages from read_planner's messages, one answer per message: { id, " +
       "tasks: [{ title, day: \"YYYY-MM-DD\" or null (Inbox), due: \"YYYY-MM-DD\" or null, at_time: \"HH:MM\" or " +
-      "null (needs a day), est_min: 15-480 or null }], events: [{ title, start: \"YYYY-MM-DDTHH:MM\", minutes: " +
-      "15-720 }], reply }. Times are local in time_zone. Titles are at most 120 characters; reply is one line of " +
+      "null (needs a day), est_min: 15-480 or null, why }], events: [{ title, start: \"YYYY-MM-DDTHH:MM\", " +
+      "minutes: 15-720, why }], reply }. why is optional: one line of at most 140 characters, no link, telling " +
+      "Lisul why it is a task or an event, why that day or time, or what you assumed. Times are local in time_zone. Titles are at most 120 characters; reply is one line of " +
       "at most 500 characters with no link, saying what was added, and what was skipped and why. At most 20 " +
       "tasks and 10 events per message. An answer with no tasks and no events marks the message failed. Returns { ok, " +
       "answered: [{ id, status }], errors }: an answer with errors is not saved, so fix it and send it again; " +
@@ -204,6 +208,7 @@ function plannerServer(db: Db) {
       if (!settings) throw new Error("settings: no row");
       const pending = await pendingMessages(db);
       const check = checkAnswers(input, pending, settings.time_zone);
+      if (check.answers.length) await logStep(db, check.answers.map((a: { id: string }) => a.id), "saving", "Saving");
       const answered = [];
       const errors = [...check.errors];
       for (const a of check.answers) {
@@ -217,7 +222,51 @@ function plannerServer(db: Db) {
     }
   });
 
+  // Claude's progress on messages (docs/sheet-messages.md), shown on /plan while it works. A step
+  // that fails its check is dropped, and the tool still answers ok, so a step never holds up an
+  // answer; add_message_step keeps at most 12 a message.
+  server.registerTool("report_step", {
+    description: "Tell Lisul what you are doing on his pending messages, shown on /plan while you work: { text, " +
+      `kind: ${STEP_KINDS.join(" | ")}, message_ids? }. text is one plain line of at most 120 characters with ` +
+      "no link, such as \"Checking Thursday on your calendar\", \"Searching the web for the CSE 416 page\" or " +
+      "\"Adding Project 2, due Nov 14\". Leave out message_ids for every pending message. Call it at most 3 " +
+      "times a run, before a step that takes a while; reading the planner and saving are logged for you. Never " +
+      "put mail text, senders or subjects in a step. Returns { ok }.",
+    inputSchema: StepInput,
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  }, async (input: Step) => {
+    try {
+      const check = checkStep(input);
+      if (check.step) {
+        const ids = stepTargets(await pendingMessages(db), input.message_ids ?? undefined);
+        if (ids.length) await logStep(db, ids, check.step.kind, check.step.text);
+      }
+      return { content: [text({ ok: true, ...(check.error ? { dropped: check.error } : {}) })] };
+    } catch (e) {
+      return { content: [text({ ok: true, dropped: (e as Error).message })] };
+    }
+  });
+
   return server;
+}
+
+const StepInput = z.object({
+  text: line,
+  kind: z.string().max(20),
+  message_ids: z.array(z.string().max(64)).max(MAX_READ).nullish(),
+});
+type Step = z.infer<typeof StepInput>;
+
+// One step on each of the messages, through add_message_step (supabase/schema.sql). It never
+// fails the tool it is logged from: a missing function (the schema not run yet) or any other
+// error is only logged.
+async function logStep(db: Db, ids: string[], kind: string, words: string) {
+  try {
+    const { error } = await db.rpc("add_message_step", { ms: ids, step_kind: kind, words });
+    if (error) console.error("add_message_step:", error.message);
+  } catch (e) {
+    console.error("add_message_step:", (e as Error).message);
+  }
 }
 
 // The input's shape only; the limits are checkAnswers', which names each field it refuses.
@@ -230,8 +279,9 @@ const AnswersInput = z.object({
       due: z.string().max(10).nullish(),
       at_time: z.string().max(5).nullish(),
       est_min: z.number().int().nullish(),
+      why: line.nullish(),
     })).max(50).default([]),
-    events: z.array(z.object({ title: line, start: z.string().max(16), minutes: z.number().int() })).max(50).default([]),
+    events: z.array(z.object({ title: line, start: z.string().max(16), minutes: z.number().int(), why: line.nullish() })).max(50).default([]),
     reply: line,
   })).max(MAX_ANSWERS * 5),
 });
