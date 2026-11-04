@@ -237,3 +237,16 @@ test("planSnapshot: today's readiness and sleep set day_rules; checkProposal hol
   assert.match(two(planSnapshot(rows([], { sleepDays, tasks }), at6)).errors.join("\n"), /break after every 60/);
   assert.equal(two(planSnapshot(rows([], { tasks }), at6)).ok, true);
 });
+
+// --- Settings → Oura's status line -----------------------------------------------------------
+
+test("ouraStatus: when it last synced and his usual wake times", async () => {
+  const { ouraStatus } = await import("../src/sheet/sleep.mjs");
+  const now = new Date("2026-11-04T15:00:00Z");
+  const profile = { weekday: 9 * 60 + 40, weekend: 10 * 60 + 50, woke_at: null };
+  assert.equal(ouraStatus({ synced_at: "2026-11-04T14:55:00Z" }, profile, now), "Synced 5 min ago · usually up 9:40 am weekdays, 10:50 am weekends");
+  assert.equal(ouraStatus({ synced_at: "2026-11-04T14:59:40Z" }, { ...profile, weekend: null }, now), "Synced just now · usually up 9:40 am weekdays");
+  assert.equal(ouraStatus({ synced_at: "2026-11-04T12:00:00Z" }, { weekday: null, weekend: null }, now), "Synced 3 hours ago · a few more nights to learn when you wake");
+  assert.equal(ouraStatus({ synced_at: null }, profile, now), "Not synced yet");
+  assert.equal(ouraStatus(null, profile, now), "Not connected");
+});
