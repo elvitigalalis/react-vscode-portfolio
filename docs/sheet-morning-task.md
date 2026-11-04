@@ -49,7 +49,13 @@ STEP 2: READ THE PLANNER
 Call read_planner. It returns now, read_at, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
 to }, "HH:MM"), tasks, blocks, busy, busy_as_of, interests, campus, proposal, turned_down,
 needs_you_open, accounts, day_rules (workload_cap_min, travel_min, break_after_min,
-break_min) and habits.
+break_min, cap_reason) and habits.
+- window.from follows Lisul's wake time from his Oura ring: 30 minutes after he woke today, or
+  after his typical wake for D's kind of day, else 07:00; never after 12:00. sleep says why: {
+  typical_wake_weekday, typical_wake_weekend, woke_at (today's wake, or null), last_synced }.
+  day_rules.cap_reason, when not null, says his readiness or a short night changed the cap or
+  the break rule ("readiness 64, slept 5h40: lighter day"); the numbers in day_rules already
+  include it. Use them as given.
 - D is plan_day. Every clock time you write is local time in time_zone on D. Convert the
   timestamps in blocks, busy and campus to that zone before comparing them.
 - proposal is D's newest plan revision ({ rev, status, created_at, run_trigger }), or null when
@@ -63,7 +69,7 @@ break_min) and habits.
   something changed; reasons are fixed names (busy_overlap: a busy time landed on a block;
   time_freed: an hour or more freed up; busy_change; course_due_soon: a course task is due within
   48 hours; course_change; campus_change; mail_owed; mail_new; github_*, jira_*, slack_new,
-  handshake_change), and changes counts what changed since the newest revision, by kind. On a
+  handshake_change; woke_late: he woke 45+ minutes after the plan's start), and changes counts what changed since the newest revision, by kind. On a
   replan, plan the rest of D the same way, from window.from (which is already now, rounded up),
   and deal first with what the reasons name. Keep the pending proposal's blocks (proposed true)
   where they still fit, so Lisul sees only what changed.
@@ -209,6 +215,8 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
   gap that ends before its due date ends; then tasks with at_time, starting exactly at at_time;
   then habits with defence "flexible"; then the rest, in the order given, in the earliest gap
   that fits.
+- Easy start: the first block at or after window.from is a light task (mail, admin, or the
+  shortest paced_min) when one is in tasks and no deadline needs that slot; hard work comes after.
 - Habits: place each habit in habits at most once, in the order given, as { habit_id, start:
   "HH:MM" }. It runs exactly its minutes and starts between ideal minus flex_min and ideal plus
   flex_min (both ends allowed), as near ideal as a free gap allows. A habit block follows every
@@ -219,11 +227,11 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
 - A block never overlaps a busy time, a block with proposed false or another block of yours,
   starts at window.from or later and ends by window.to. Never shorten a block to make it fit. A task
   that doesn't fit, or whose at_time isn't free, is left out.
-- Leave room to breathe (day_rules):
+- Leave room to breathe (day_rules, which a short night can tighten):
   - Travel: keep travel_min (10) minutes free before and after every busy time. A block may
     end exactly 10 minutes before a busy time starts. Blocks with proposed false need no gap.
   - Breaks: blocks less than break_min (10) minutes apart are one run, counting blocks with
-    proposed false. No run may span more than break_after_min (90) minutes from its first start
+    proposed false. No run may span more than break_after_min (90, or 60 after a short night) minutes from its first start
     to its last end, so leave a 10-minute gap after every 90 minutes of blocks in a row. A
     single block longer than 90 minutes is fine.
   - Workload cap: the minutes of every task block with proposed false on D (past ones too)
@@ -269,7 +277,8 @@ in all. Never work around an error by adding text or tasks that aren't in the da
 STEP 7: SUMMARY
 End with 3-6 plain lines: the messages answered (tasks and events added), the day, the revision and run.trigger (with its reasons on a replan), how many
 blocks and their span, the habits placed and left out, the hours
-planned against the workload cap, what didn't fit (and the couldn't-fit count), how many
+planned against the workload cap (with cap_reason when set, e.g. "Readiness 64, slept 5h40:
+cap 4h45"), when the plan starts and why when sleep has a wake ("Plan starts 10:15: up at 9:45"), what didn't fit (and the couldn't-fit count), how many
 Needs you items (by kind) and how many a never rule dropped, the suggested tasks, the campus picks, and any errors left after the last submit. Include
 no URL and no mail text beyond a sender's name.
 ```

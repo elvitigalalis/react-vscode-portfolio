@@ -1,0 +1,126 @@
+// Oura's API for The Sheet (docs/sheet-v5.md, "Oura"): the consent URL with PKCE, the token
+// refresh, and what a sync keeps. Kept free of Deno so node --test covers it; oura-connect and
+// oura-sync import it, and pass in fetch.
+//   Auth: cloud.ouraring.com/docs/authentication (authorize and token URLs, scopes, PKCE, "The
+//     refresh token is single-use, meaning it is invalidated after being used", and "All requests
+//     to the Oura API must include a non-empty User-Agent header").
+//   Data: cloud.ouraring.com/v2/docs (spec 1.43): /v2/usercollection/sleep and daily_readiness,
+//     paged by next_token; "the dates are interpreted in the user's local timezone".
+import { addDays, localNow } from "./logic.mjs";
+
+export const AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
+export const TOKEN_URL = "https://api.ouraring.com/oauth/token";
+export const API_URL = "https://api.ouraring.com/v2/usercollection";
+// "daily": "Daily summaries of sleep, activity and readiness", the only scope sleep needs.
+export const SCOPE = "daily";
+export const USER_AGENT = "TheSheet/1.0 (+https://lisul-elvi.com/privacy/)";
+
+export const ouraAuthUrl = ({ clientId, redirectUri, state, challenge }) => `${AUTHORIZE_URL}?${new URLSearchParams({
+  response_type: "code", client_id: clientId, redirect_uri: redirectUri, scope: SCOPE, state,
+  code_challenge: challenge, code_challenge_method: "S256",
+})}`;
+
+const b64url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+// A PKCE pair (RFC 7636): a random verifier and its S256 challenge, "hash it with SHA256 and
+// encode the digest in base64url format without padding".
+export async function pkce() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const challenge = b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+  return { verifier, challenge };
+}
+
+// POST the token endpoint with `fields` (a code or a refresh token) and the client's credentials.
+// `grant` holds Oura's reply, whose error never contains a token.
+export async function ouraToken(fetch, fields, { clientId, clientSecret }) {
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": USER_AGENT },
+    body: new URLSearchParams({ ...fields, client_id: clientId, client_secret: clientSecret }).toString(),
+  });
+  const grant = await res.json().catch(() => ({}));
+  return { ok: res.ok && Boolean(grant.access_token), status: res.status, grant };
+}
+
+// A refused refresh: the grant is broken, and Reconnect in Settings fixes it.
+export class Refused extends Error {}
+
+// Refresh this far ahead of the access token's expiry.
+const AHEAD_MS = 60 * 60_000;
+
+// An access token for this run. One still good for an hour is used as it is. Otherwise the
+// refresh token is spent, and the new pair must be saved before the access token is used: the old
+// refresh token is dead now, so a lost new one means reconnecting. `save({ refresh, access,
+// expires_at, old_refresh })` stores it only over `old_refresh` and says whether it did (false:
+// another run rotated first). A save that throws is tried once more; if it fails again, or the
+// pair can't be kept, this throws and nothing uses the access token. A 400 or 401 is Refused.
+export async function freshAccess(fetch, { tokens, now, save, clientId, clientSecret }) {
+  if (tokens.access && Date.parse(tokens.expires_at) - now.getTime() > AHEAD_MS) return tokens.access;
+  const { ok, status, grant } = await ouraToken(fetch, { grant_type: "refresh_token", refresh_token: tokens.refresh }, { clientId, clientSecret });
+  if (!ok) {
+    const why = /^[\w-]{1,40}$/.test(grant.error ?? "") ? grant.error : `HTTP ${status}`;
+    if (status === 400 || status === 401) throw new Refused(`token refresh refused: ${why}`);
+    throw new Error(`token refresh failed: ${why}`);
+  }
+  if (!grant.refresh_token) throw new Error("token refresh: no new refresh token");
+  const pair = {
+    refresh: grant.refresh_token, access: grant.access_token,
+    expires_at: new Date(now.getTime() + Number(grant.expires_in ?? 0) * 1000).toISOString(), old_refresh: tokens.refresh,
+  };
+  let saved = null;
+  for (let i = 0; i < 2 && saved === null; i++) saved = await save(pair).catch(() => null);
+  if (saved === null) throw new Error("token refresh: couldn't save the new token; reconnect if the next run is refused");
+  if (!saved) throw new Error("token refresh: another run rotated the token first");
+  return pair.access;
+}
+
+// The dates a run reads: the last 2 days, or 21 on the first sync, through tomorrow (end_date
+// is the last day read), in his time zone.
+export function syncRange(now, tz, first) {
+  const today = localNow(now, tz).day;
+  return { start_date: addDays(today, first ? -21 : -2), end_date: addDays(today, 1) };
+}
+
+// Every document of a collection over `range`, following next_token.
+export async function ouraDocs(fetch, collection, range, access) {
+  const docs = [];
+  let next = null;
+  do {
+    const q = new URLSearchParams({ ...range, ...(next ? { next_token: next } : {}) });
+    const res = await fetch(`${API_URL}/${collection}?${q}`, { headers: { Authorization: `Bearer ${access}`, "User-Agent": USER_AGENT } });
+    if (!res.ok) throw new Error(`oura ${collection}: HTTP ${res.status}`);
+    const body = await res.json();
+    docs.push(...(body.data ?? []));
+    next = body.next_token ?? null;
+  } while (next);
+  return docs;
+}
+
+const TYPES = ["deleted", "sleep", "long_sleep", "late_nap", "rest"];
+const iso = (s) => { const t = Date.parse(s ?? ""); return Number.isNaN(t) ? null : new Date(t).toISOString(); };
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+// The sleep_nights rows from /sleep documents: { oura_id, day, type, bedtime_start, bedtime_end }
+// and nothing else. A document missing any of them is skipped.
+export const sleepRows = (docs) => docs.flatMap((d) => {
+  const row = { oura_id: d?.id, day: d?.day, type: d?.type, bedtime_start: iso(d?.bedtime_start), bedtime_end: iso(d?.bedtime_end) };
+  return typeof row.oura_id === "string" && row.oura_id.length <= 100 && DAY.test(row.day ?? "") && TYPES.includes(row.type)
+    && row.bedtime_start && row.bedtime_end ? [row] : [];
+});
+
+// The sleep_days rows, by Oura's day, oldest first: readiness's score (daily_readiness) and the
+// longest long_sleep's total_sleep_duration in seconds (sleep), each null when Oura gave none.
+export function dayRows(sleepDocs, readinessDocs) {
+  const days = new Map();
+  const at = (day) => days.get(day) ?? days.set(day, { day, readiness: null, sleep_s: null }).get(day);
+  for (const r of readinessDocs) {
+    if (DAY.test(r?.day ?? "") && Number.isInteger(r.score) && r.score >= 0 && r.score <= 100) at(r.day).readiness = r.score;
+  }
+  for (const s of sleepDocs) {
+    const secs = s?.total_sleep_duration;
+    if (s?.type !== "long_sleep" || !DAY.test(s.day ?? "") || !Number.isInteger(secs) || secs < 0 || secs > 86400) continue;
+    const row = at(s.day);
+    row.sleep_s = Math.max(row.sleep_s ?? 0, secs);
+  }
+  return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}

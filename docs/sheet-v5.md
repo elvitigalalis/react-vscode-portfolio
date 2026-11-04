@@ -769,6 +769,79 @@ set_event_titles(d date, titles jsonb) -> int    -- upserts title_ai only; done,
   its two connectors.
 - It reads the fire payload only as reason names and counts, as untrusted data.
 
+## Oura
+
+The plan starts when Lisul actually wakes, not at a fixed 07:00, and a rough night makes a
+lighter day. Data comes from his Oura ring through Oura's API v2 (cloud.ouraring.com/v2/docs,
+cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](../GLOSSARY.md).
+
+### Contract
+
+- **Connect.** `oura-connect` (`/start` with his session and the owner check, `/callback` with a
+  signed one-time state, both as `calendar-connect`). OAuth2 authorization code with PKCE (S256;
+  the verifier waits in `mail_connect_states.verifier`, never in a URL), scope `daily` only,
+  state `grant: 'oura'`, back to `/plan/?oura=connected` or `?oura=error&reason=…`. Secrets
+  `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET`, and `MAIL_STATE_SECRET` (shared).
+- **Tokens.** Both live only in Vault (`oura_refresh`, `oura_access`), through
+  `oura_token_save(refresh, access, expires_at, old_refresh)` and `oura_tokens()`, service key
+  only. Oura's refresh tokens are single-use: `freshAccess` (src/sheet/oura.mjs) reuses an
+  access token good for another hour, and otherwise refreshes and saves the new pair over the old
+  refresh token before the access token is used. A save is retried once; if it still fails the
+  run stops. A refused refresh (400/401) marks the grant broken (`oura_broken`, unless another run
+  rotated it meanwhile), and Settings shows Reconnect.
+- **Sync.** `oura-sync`, job `sheet-oura` at minute 4 of every 10, Vault URL `sheet_oura_url`,
+  shared cron secret, off until the URL exists. Each run reads `/v2/usercollection/sleep` and
+  `/daily_readiness` for the last 2 days (21 on the first run) through tomorrow, keeps only
+  `sleep_nights { oura_id, day, type, bedtime_start, bedtime_end }` (upsert by `oura_id`) and
+  `sleep_days { day, readiness, sleep_s }` (the longest long_sleep's `total_sleep_duration`), all
+  in `oura_sync_save`, and records `feed_state` source `oura`. Owner-only reads, server-only
+  writes, 60 days (`nightly_roll`). No webhooks yet: a night reaches Oura only once he opens the
+  Oura app, so it can lag that plus up to 10 minutes.
+- **Disconnect** (Settings) deletes `oura_account`; its trigger deletes both Vault secrets and
+  every `sleep_nights` and `sleep_days` row.
+- **Wake profile** (`wakeProfile`, src/sheet/sleep.mjs). Each wake day (local in
+  `settings.time_zone`) takes its long_sleep, the latest-ending if several, or, with none, its
+  longest sleep over 3 hours; naps, rest and deleted periods never count. Typical wake is the
+  median of the newest 14 weekday and 14 weekend (a Saturday or Sunday wake) days, each null with
+  fewer than 3. Today's wake is today's main sleep.
+- **Window start** (`windowStart`): today's wake + 30, else the day's typical wake + 30, else
+  07:00; rounded up to the quarter hour; never after 12:00; on today never before now. read_planner's
+  `window.from`, checkProposal's earliest start and /plan's day start (dayCapacity, 9:30 am without
+  Oura) all use it. read_planner adds `sleep { typical_wake_weekday, typical_wake_weekend, woke_at,
+  last_synced }`, local "HH:MM" times.
+- **Day rules** (`dayCap`): on a day with a `sleep_days` row, readiness under 70 takes 0.8 of the
+  workload cap, 85 or more 1.1; a main sleep under 6 hours takes 0.85 and `break_after_min` 60.
+  With both, the lower multiplier. Rounded to 15 minutes, and never below the day's approved task
+  minutes. `day_rules.cap_reason` says why ("readiness 64, slept 5h40: lighter day"), or null.
+  Late numbers only change later revisions.
+- **Woke late.** apply_proposal saves each revision's `window_from`. When today's wake syncs 45+
+  minutes after the newest pending or approved revision's `window_from` (07:00, or when it was
+  read today, for a revision without one), oura-sync logs one change `{ kind: 'sleep', reason:
+  'woke_late', weight: 9, ref: <the wake's instant> }`, once per wake, and the replan tick replans
+  the rest of today, with its holds. The replan message says "you woke up at 10:20 am".
+- **Telegram.** With sleep rows, quiet lasts until his wake today (or typical wake before it
+  syncs), never before 8:00, and the brief goes 15 minutes after the wake, or 90 after the typical
+  one while the ring hasn't synced; it goes once a day. The brief adds "Readiness 64, slept 5h40:
+  cap 4h45." when the cap changed. Without sleep rows, nothing changes.
+- **Privacy.** Only the fields above, 60 days, never on /now, never shared or used to train or
+  evaluate a model (cloud.ouraring.com/legal/api-agreement). /privacy says so.
+
+### Deploy
+
+1. Run `supabase/schema.sql` in the SQL editor (it adds the Oura section, `apply_proposal`'s
+   `window_from` and the `sleep` change kind), then deploy `planner-mcp`, `telegram`,
+   `oura-connect` and `oura-sync` with `--use-api --no-verify-jwt`, and the site.
+2. **[Lisul]** At cloud.ouraring.com/oauth/applications, register an app with the redirect URI
+   `https://bmbsvvprpfdbvalnkowp.supabase.co/functions/v1/oura-connect/callback`, exactly, and
+   scope `daily`.
+3. **[Lisul]** Set `OURA_CLIENT_ID` and `OURA_CLIENT_SECRET` in Supabase → Edge Functions →
+   Secrets.
+4. **[Lisul]** /plan → Settings → Oura → Connect.
+5. Once `oura_account` has its row, add `sheet_oura_url` to Vault
+   (`https://bmbsvvprpfdbvalnkowp.supabase.co/functions/v1/oura-sync`). `tools/sheet-v5-setup.sh`
+   walks through 2-5.
+6. Update the live routine's prompt from docs/sheet-morning-task.md.
+
 ## Out of scope
 
 As spec 47: push notifications, solvers, Brightspace's API, scrapers, mail text on the server,
