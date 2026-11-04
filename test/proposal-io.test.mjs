@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { snapshotQueries, queryPath } from "../src/sheet/proposal-io.mjs";
+import { snapshotQueries, habitsQuery, queryPath } from "../src/sheet/proposal-io.mjs";
 
 const TZ = "America/New_York";
 const sixOhSeven = new Date("2026-11-04T11:07:00Z"); // 6:07 am EST
@@ -23,7 +23,7 @@ test("snapshotQueries: at 6:07 am it reads today's rows, in New York's day bound
     days: "days?select=*&day=eq.2026-11-04",
     campus: "campus_events?select=uid,title,starts_at,ends_at,all_day,group_name,event_type,tags,rsvp_count" +
       "&starts_at=gte.2026-11-04T05:00:00.000Z&starts_at=lt.2026-11-05T05:00:00.000Z&order=starts_at",
-    proposal: "proposals?select=*&day=eq.2026-11-04",
+    proposal: "proposals?select=*&day=eq.2026-11-04&order=rev.desc",
     needsOpen: "needs_you?select=account,message_id&done=is.false&order=created_at",
     accounts: "mail_accounts?select=email&order=connected_at",
   });
@@ -32,18 +32,22 @@ test("snapshotQueries: at 6:07 am it reads today's rows, in New York's day bound
 test("snapshotQueries: blocks are plan_day's, plus every block of the tasks read, for atRisk", () => {
   const { blocks } = snapshotQueries(sixOhSeven, TZ);
   assert.equal(queryPath(blocks([T1, T4])),
-    "blocks?select=task_id,starts_at,ends_at,proposed" +
+    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed" +
     `&or=(and(starts_at.lt.2026-11-05T05:00:00.000Z,ends_at.gt.2026-11-04T05:00:00.000Z),task_id.in.(${T1},${T4}))&order=starts_at`);
   assert.equal(queryPath(blocks([])),
-    "blocks?select=task_id,starts_at,ends_at,proposed" +
+    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed" +
     "&or=(and(starts_at.lt.2026-11-05T05:00:00.000Z,ends_at.gt.2026-11-04T05:00:00.000Z))&order=starts_at");
+});
+
+test("habitsQuery: every habit, by position", () => {
+  assert.equal(queryPath(habitsQuery()), "habits?select=id,name,days,ideal,minutes,flex_min,defence,position&order=position");
 });
 
 test("snapshotQueries: from 3 pm it reads tomorrow, and tomorrow's 7 days", () => {
   const q = snapshotQueries(new Date("2026-11-04T20:00:00Z"), TZ); // 3:00 pm
   assert.equal(q.plan_day, "2026-11-05");
   assert.equal(queryPath(q.queries.tasks), "tasks?select=*&done=is.false&or=(day.eq.2026-11-05,due.lte.2026-11-12)&order=position");
-  assert.equal(queryPath(q.queries.proposal), "proposals?select=*&day=eq.2026-11-05");
+  assert.equal(queryPath(q.queries.proposal), "proposals?select=*&day=eq.2026-11-05&order=rev.desc");
 });
 
 test("snapshotQueries: a daylight-saving day is 25 hours long", () => {
@@ -89,4 +93,14 @@ test("planner-mcp: submit_proposal writes only through apply_proposal, after che
   const submit = code.split('registerTool("submit_proposal"')[1];
   assert.ok(submit.indexOf("checkProposal(") < submit.indexOf('rpc("apply_proposal"'));
   assert.match(submit, /if \(!check\.ok \|\| !rows\) return/);
+});
+
+test("replanQueries: plan_day's newest replan and the changes since the newest revision", async () => {
+  const { replanQueries } = await import("../src/sheet/proposal-io.mjs");
+  const at1002 = new Date("2026-11-04T15:02:00Z");
+  const q = replanQueries(at1002, TZ, { created_at: "2026-11-04T11:09:00Z" });
+  assert.equal(queryPath(q.replan), "replans?select=at,reasons,result&day=eq.2026-11-04&order=at.desc");
+  assert.equal(queryPath(q.changes), "changes?select=at,kind&at=gt.2026-11-04T11:09:00Z&at=lte.2026-11-04T15:02:00.000Z&order=at");
+  // No revision yet: from plan_day's midnight.
+  assert.equal(queryPath(replanQueries(at1002, TZ, null).changes), "changes?select=at,kind&at=gt.2026-11-04T05:00:00.000Z&at=lte.2026-11-04T15:02:00.000Z&order=at");
 });

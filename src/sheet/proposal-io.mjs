@@ -39,16 +39,49 @@ export function snapshotQueries(now, timeZone) {
         filters: [["starts_at", "gte", from], ["starts_at", "lt", to]],
         order: "starts_at",
       },
-      proposal: { table: "proposals", select: "*", filters: [["day", "eq", plan_day]] },
+      // v5: newest revision first; the snapshot takes the first row.
+      proposal: { table: "proposals", select: "*", filters: [["day", "eq", plan_day]], order: "rev.desc" },
       needsOpen: { table: "needs_you", select: "account,message_id", filters: [["done", "is", "false"]], order: "created_at" },
       accounts: { table: "mail_accounts", select: "email", order: "connected_at" },
     },
     // Task ids are uuids from the tasks read, so they go into in.() as they are.
     blocks: (taskIds) => ({
       table: "blocks",
-      select: "task_id,starts_at,ends_at,proposed",
+      select: "task_id,habit_id,starts_at,ends_at,proposed",
       or: [`and(starts_at.lt.${to},ends_at.gt.${from})`, ...(taskIds.length ? [`task_id.in.(${taskIds.join(",")})`] : [])].join(","),
       order: "starts_at",
     }),
+  };
+}
+
+// v5 P1, pace (docs/sheet-v5.md, "pace.mjs"): every actuals row (nightly_roll keeps 120 days),
+// and the approved blocks of the 14 days before plan_day with their task's done, embedded through
+// blocks.task_id (https://docs.postgrest.org/en/stable/references/api/resource_embedding.html).
+export function paceQueries(now, timeZone) {
+  const plan_day = planningDay(localNow(now, timeZone));
+  return {
+    actuals: { table: "actuals", select: "at,kind,est_min,minutes", order: "at" },
+    past: {
+      table: "blocks",
+      select: "task_id,starts_at,ends_at,proposed,task:tasks(done)",
+      filters: [["proposed", "is", "false"], ["starts_at", "gte", zonedIso(addDays(plan_day, -14), 0, timeZone)], ["starts_at", "lt", zonedIso(plan_day, 0, timeZone)]],
+      order: "starts_at",
+    },
+  };
+}
+
+// v5 H1, habits (docs/sheet-v5.md, "planSnapshot"): every habits row; planSnapshot keeps
+// plan_day's weekday's and orders them.
+export const habitsQuery = () => ({ table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence,position", order: "position" });
+
+// v5 R1, replans (docs/sheet-v5.md, "planSnapshot"): plan_day's newest replans row, and the
+// changes since `proposal` (the newest revision, or plan_day's start without one) up to now, as
+// kinds only. planSnapshot turns them into `run`.
+export function replanQueries(now, timeZone, proposal) {
+  const plan_day = planningDay(localNow(now, timeZone));
+  const since = proposal?.created_at ?? zonedIso(plan_day, 0, timeZone);
+  return {
+    replan: { table: "replans", select: "at,reasons,result", filters: [["day", "eq", plan_day]], order: "at.desc" },
+    changes: { table: "changes", select: "at,kind", filters: [["at", "gt", since], ["at", "lte", now.toISOString()]], order: "at" },
   };
 }

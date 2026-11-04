@@ -310,6 +310,10 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block[data-source="course"] { background: color-mix(in srgb, var(--stem) 18%, var(--bg)); border-left: 3px solid var(--stem); }
 .sheet-block.is-proposed[data-source="course"] { background: var(--bg); }
 .sheet-task[data-source="course"] .sheet-proposal { border-left: 3px solid var(--stem); }
+/* v5 SRC1: GitHub tasks take a --fg edge with the GitHub mark, Jira tasks a --muted edge with the
+   kanban, on rows and blocks alike. */
+.sheet-task[data-source="github"], .sheet-block[data-source="github"] { border-left: 3px solid var(--fg); padding-left: 0.35rem; }
+.sheet-task[data-source="jira"], .sheet-block[data-source="jira"] { border-left: 3px solid var(--muted); padding-left: 0.35rem; }
 .sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
 /* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
 .sheet-overdue { color: var(--danger); cursor: help; }
@@ -367,6 +371,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   border: 1px dashed var(--accent); border-radius: 0.4rem;
 }
 .sheet-banner > .sheet-icon { color: var(--accent); }
+.sheet-banner > .sheet-rev { color: var(--muted); font-size: 0.8125rem; }
 .sheet-banner > .sheet-btn-approve { margin-left: auto; align-self: center; font-size: 0.8125rem; padding: 0.15rem 0.5rem; }
 .sheet-proposal > .sheet-icon { color: var(--accent); }
 .sheet-proposal > .sheet-btn-approve { margin-left: auto; align-self: center; }
@@ -424,3 +429,20 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-needs-item > .sheet-needs-acts { margin-top: 0.25rem; }
 .sheet-needs-acts .sheet-btn { display: inline-flex; align-items: center; gap: 0.25rem; }
 .sheet-plan-notes { list-style: none; padding: 0; margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted); }
+
+/* v5 D2: Settings' workload cap, a short hours field. */
+.sheet-cap {
+  width: 5rem; font: inherit; font-size: 0.9375rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.35rem 0.5rem;
+}
+
+/* v5 H1: habit blocks, in the muted colour, and Settings' habit form. */
+.sheet-block.is-habit { background: color-mix(in srgb, var(--muted) 16%, var(--bg)); border-left: 3px solid var(--muted); }
+.sheet-block.is-habit.is-proposed { background: var(--bg); border: 1px dashed var(--muted); }
+.sheet-habit-form { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; font-size: 0.9375rem; }
+.sheet-habit-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.sheet-habit-form legend { float: left; margin-right: 0.5rem; }
+.sheet-habit-form input:not([type="checkbox"]), .sheet-habit-form select {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.3rem 0.45rem;
+}
+.sheet-habit-form .sheet-dialog-end { flex-basis: 100%; margin: 0; }

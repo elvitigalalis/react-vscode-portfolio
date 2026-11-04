@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
 } from "./logic.mjs";
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
@@ -37,7 +37,7 @@ export function icon(name, label) {
 }
 
 // A source's icon (docs/sheet-glance.md, change 3), paired with its edge colour in sheet.css.
-const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"] };
+const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"], github: ["github", "From GitHub"], jira: ["kanban", "From Jira"], slack: ["slack", "From Slack"] };
 export const sourceIcon = (src) => icon(...SOURCES[src]);
 // The words for the aria-label, since the icon is hidden.
 export const sourceWords = (src) => (src ? `, ${SOURCES[src][1].toLowerCase()}` : "");
@@ -70,12 +70,16 @@ const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null
 export const eventsOn = (day) => eventsOnDay(state.events, day, SHEET.timeZone);
 const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
 
-// Time for tasks on a day: the 5h30 budget, or less when his events leave less free time
+// The workload cap from Settings (v5 D2, settings.workload_cap_min), or the site's budget
+// before settings load.
+export const workloadCap = () => state.settings?.workload_cap_min ?? SHEET.capacityMin;
+
+// Time for tasks on a day: the workload cap, or less when his events leave less free time
 // between 9:30 am and 10 pm (on today, between now and 10 pm).
 export function dayCapacity(day) {
   const from = Math.max(clock(SHEET.dayStartAt), day === state.today ? now().minutes : 0);
   const free = freeMinutes(eventsOn(day), from, clock(SHEET.dayEndAt));
-  return { free, capacity: Math.min(SHEET.capacityMin, free) };
+  return { free, capacity: Math.min(workloadCap(), free) };
 }
 const lastPosition = (siblings) => (siblings.length ? siblings[siblings.length - 1].position : null);
 
@@ -248,7 +252,8 @@ function detailsOf(t, clash, level) {
   const src = sourceOf(t);
   const due = DUE[level];
   const kids = [
-    src ? el("span", { className: "sheet-meta sheet-source" }, sourceIcon(src)) : null,
+    // v5 SRC1: a GitHub or Jira task's icon links to its page (tasks.link is https only).
+    src ? el(t.link ? "a" : "span", { className: "sheet-meta sheet-source", ...(t.link ? { href: t.link, target: "_blank", rel: "noopener" } : {}) }, sourceIcon(src)) : null,
     t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
@@ -465,7 +470,15 @@ async function saveCalendars() {
 // another, and the order they were added in doesn't matter.
 export const settingsHooks = [];
 
+// The sections only Settings needs are a module of their own (settings.mjs), loaded the first
+// time Settings opens; start() gets the loader, and each section's setup runs once.
+let settingsModule = () => Promise.resolve([]);
+let settingsReady = null;
+const loadSettings = () => (settingsReady ??= settingsModule().then((setups) => { for (const setup of setups) setup(root); }, (e) => { settingsReady = null; throw e; }));
+
 async function openSettings() {
+  try { await loadSettings(); } catch (e) { return failed(e); }
+  if ($("[data-settings]").open) return;
   $("[data-interests-note]").textContent = "";
   $("[data-settings]").showModal();
   await Promise.all(settingsHooks.map(async (fill) => { try { await fill(); } catch (e) { failed(e); } }));
@@ -482,6 +495,24 @@ async function saveInterests() {
     await api.saveSettings({ interests });
     state.settings = { ...state.settings, interests };
     $("[data-interests-note]").textContent = "Saved.";
+  } catch (e) { failed(e); }
+}
+
+// Settings, workload cap (v5 D2): the most hours of blocks Claude plans in a day, and the load
+// bar's capacity. Hours from 1 to 16 in half hours; anything else says so and saves nothing.
+settingsHooks.push(() => {
+  $("#sheet-cap").value = String(workloadCap() / 60);
+  $("[data-cap-note]").textContent = "";
+});
+
+async function saveCap() {
+  const workload_cap_min = capMinutes($("#sheet-cap").value);
+  if (workload_cap_min == null) return void ($("[data-cap-note]").textContent = "1 to 16 hours, in half hours.");
+  try {
+    await api.saveSettings({ workload_cap_min });
+    state.settings = { ...state.settings, workload_cap_min };
+    $("[data-cap-note]").textContent = "Saved.";
+    render();
   } catch (e) { failed(e); }
 }
 
@@ -693,6 +724,7 @@ function wire() {
       if (act === "save-calendars") return saveCalendars();
       if (act === "settings") return openSettings();
       if (act === "save-interests") return saveInterests();
+      if (act === "save-cap") return saveCap();
       if (act === "telegram") return toggleTelegram();
       return actHooks[act]?.(e);
     }
@@ -767,9 +799,11 @@ function wire() {
 
 // --- Start -------------------------------------------------------------------------------
 
-// `plugins` (plan today, shutdown) each get the root once the planner is wired.
-export async function start(node, plugins = []) {
+// `plugins` (plan today, shutdown) each get the root once the planner is wired; `settings`
+// loads Settings' own plugins on demand (openSettings).
+export async function start(node, plugins = [], settings = settingsModule) {
   root = node;
+  settingsModule = settings;
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
   if (!(await api.signedIn())) {
@@ -782,6 +816,8 @@ export async function start(node, plugins = []) {
   }
   wire();
   for (const plugin of plugins) plugin(root);
+  // Back from connecting mail or the calendar: those sections say how it went (mail-settings.mjs).
+  if (/[?&](mail|calendar)=/.test(location.search)) loadSettings().catch(failed);
   try {
     if (!(await api.settings())) {
       setStatus("This account cannot open the planner.");

@@ -1,7 +1,7 @@
 // /plan's side of the morning plan (docs/sheet-morning.md, "/plan"): the busy times it saves for
 // the morning task, and how the Needs you list is grouped and linked. Pure, so node --test covers
 // it; busy-sync.mjs and needs-you.mjs do the network and the drawing.
-import { pickedEvents, pickLine } from "./proposal.mjs";
+import { couldntFitLine, pickedEvents, pickLine } from "./proposal.mjs";
 
 // --- Busy times ----------------------------------------------------------------------------
 
@@ -48,12 +48,23 @@ export function needsGroups(rows) {
 export const gmailLink = (link) =>
   typeof link === "string" && link.startsWith("https://mail.google.com/") ? link : null;
 
+// v5 M1: a thread's Open in Gmail link, as messageSummary builds it, for an Awaiting reply row;
+// null unless the thread id is hex, as Gmail's are.
+export const threadLink = (account, thread) => (/^[0-9a-f]{6,32}$/.test(thread)
+  ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${thread}` : null);
+
+// v5 SRC2: a Slack row's Open in Slack link: an https:// permalink on a <workspace>.slack.com
+// address, else null. slack-sync keeps only these, and /plan checks again before drawing one.
+export const slackLink = (link) =>
+  typeof link === "string" && /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.slack\.com\//i.test(link) ? link : null;
+
 // --- Plan today ----------------------------------------------------------------------------
 
-// What the day's proposal says above Plan today's timeline: "Didn't fit: …", then a "Campus
-// pick: …" line for each pick found in `campus`. A skipped or lapsed proposal says nothing.
-export function planNotes(proposal, campus, tz) {
+// What the day's proposal says above Plan today's timeline: "Didn't fit: …", "Couldn't fit: …"
+// (titles from `tasks`), then a "Campus pick: …" line for each pick found in `campus`. A skipped or lapsed proposal says nothing.
+export function planNotes(proposal, campus, tz, tasks = []) {
   if (!proposal || proposal.status === "skipped" || proposal.status === "lapsed") return [];
   const picks = pickedEvents(proposal.picks, campus);
-  return [...(proposal.note ? [`Didn't fit: ${proposal.note}`] : []), ...picks.map((e) => pickLine(e, tz))];
+  const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
+  return [...(proposal.note ? [`Didn't fit: ${proposal.note}`] : []), ...(unfit ? [unfit] : []), ...picks.map((e) => pickLine(e, tz))];
 }

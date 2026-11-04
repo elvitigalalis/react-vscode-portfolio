@@ -1,0 +1,255 @@
+{
+  "total_count": 3,
+  "incomplete_results": false,
+  "items": [
+    {
+      "url": "https://api.github.com/repos/acme-robotics/planner/issues/38",
+      "repository_url": "https://api.github.com/repos/acme-robotics/planner",
+      "labels_url": "https://api.github.com/repos/acme-robotics/planner/issues/38/labels{/name}",
+      "comments_url": "https://api.github.com/repos/acme-robotics/planner/issues/38/comments",
+      "events_url": "https://api.github.com/repos/acme-robotics/planner/issues/38/events",
+      "html_url": "https://github.com/acme-robotics/planner/issues/38",
+      "id": 3000000038,
+      "node_id": "I_38",
+      "number": 38,
+      "title": "Calendar import drops all-day events",
+      "user": {
+        "login": "jordan-park-dev",
+        "id": 2038,
+        "node_id": "U_2038",
+        "avatar_url": "https://avatars.githubusercontent.com/u/2038?v=4",
+        "url": "https://api.github.com/users/jordan-park-dev",
+        "html_url": "https://github.com/jordan-park-dev",
+        "type": "User",
+        "site_admin": false
+      },
+      "labels": [],
+      "state": "open",
+      "locked": false,
+      "assignee": {
+        "login": "sample-owner",
+        "id": 4242,
+        "node_id": "U_4242",
+        "avatar_url": "https://avatars.githubusercontent.com/u/4242?v=4",
+        "url": "https://api.github.com/users/sample-owner",
+        "html_url": "https://github.com/sample-owner",
+        "type": "User",
+        "site_admin": false
+      },
+      "assignees": [
+        {
+          "login": "sample-owner",
+          "id": 4242,
+          "node_id": "U_4242",
+          "avatar_url": "https://avatars.githubusercontent.com/u/4242?v=4",
+          "url": "https://api.github.com/users/sample-owner",
+          "html_url": "https://github.com/sample-owner",
+          "type": "User",
+          "site_admin": false
+        }
+      ],
+      "milestone": null,
+      "comments": 2,
+      "created_at": "2026-10-28T15:00:00Z",
+      "updated_at": "2026-11-03T18:00:00Z",
+      "closed_at": null,
+      "author_association": "MEMBER",
+      "active_lock_reason": null,
+      "body": "BODY-TEXT-38: steps to reproduce follow.",
+      "reactions": {
+        "url": "https://api.github.com/repos/acme-robotics/planner/issues/38/reactions",
+        "total_count": 0
+      },
+      "timeline_url": "https://api.github.com/repos/acme-robotics/planner/issues/38/timeline",
+      "performed_via_github_app": null,
+      "state_reason": null,
+      "score": 1.0
+    },
+    {
+      "url": "https://api.github.com/repos/acme-robotics/site/issues/12",
+      "repository_url": "https://api.github.com/repos/acme-robotics/site",
+      "labels_url": "https://api.github.com/repos/acme-robotics/site/issues/12/labels{/name}",
+      "comments_url": "https://api.github.com/repos/acme-robotics/site/issues/12/comments",
+      "events_url": "https://api.github.com/repos/acme-robotics/site/issues/12/events",
+      "html_url": "https://github.com/acme-robotics/site/issues/12",
+      "id": 3000000012,
+      "node_id": "I_12",
+      "number": 12,
+      "title": "Fix footer links",
+      "user": {
+        "login": "alex-chen-dev",
+        "id": 2012,
+        "node_id": "U_2012",
+        "avatar_url": "https://avatars.githubusercontent.com/u/2012?v=4",
+        "url": "https://api.github.com/users/alex-chen-dev",
+        "html_url": "https://github.com/alex-chen-dev",
+        "type": "User",
+        "site_admin": false
+      },
+      "labels": [],
+      "state": "open",
+      "locked": false,
+      "assignee": {
+        "login": "sample-owner",
+        "id": 4242,
+        "node_id": "U_4242",
+        "avatar_url": "https://avatars.githubusercontent.com/u/4242?v=4",
+        "url": "https://api.github.com/users/sample-owner",
+        "html_url": "https://github.com/sample-owner",
+        "type": "User",
+        "site_admin": false
+      },
+      "assignees": [
+        {
+          "login": "sample-owner",
+          "id": 4242,
+          "node_id": "U_4242",
+          "avatar_url": "https://avatars.githubusercontent.com/u/4242?v=4",
+          "url": "https://api.github.com/users/sample-owner",
+          "html_url": "https://github.com/sample-owner",
+          "type": "User",
+          "site_admin": false
+        }
+      ],
+      "milestone": {
+        "url": "https://api.github.com/repos/acme-robotics/site/milestones/1",
+        "html_url": "https://github.com/acme-robotics/site/milestone/1",
+        "labels_url": "https://api.github.com/repos/acme-robotics/site/milestones/1/labels",
+        "id": 9001,
+        "node_id": "MI_1",
+        "number": 1,
+        "title": "Launch",
+        "description": "Milestone notes MILESTONE-TEXT",
+        "creator": {
+          "login": "alex-chen-dev",
+          "id": 1001,
+          "node_id": "U_1001",
+          "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+          "url": "https://api.github.com/users/alex-chen-dev",
+          "html_url": "https://github.com/alex-chen-dev",
+          "type": "User",
+          "site_admin": false
+        },
+        "open_issues": 4,
+        "closed_issues": 9,
+        "state": "open",
+        "created_at": "2026-10-01T14:00:00Z",
+        "updated_at": "2026-11-01T14:00:00Z",
+        "due_on": "2026-11-07T07:00:00Z",
+        "closed_at": null
+      },
+      "comments": 2,
+      "created_at": "2026-10-28T15:00:00Z",
+      "updated_at": "2026-11-03T18:00:00Z",
+      "closed_at": null,
+      "author_association": "MEMBER",
+      "active_lock_reason": null,
+      "body": "BODY-TEXT-12",
+      "reactions": {
+        "url": "https://api.github.com/repos/acme-robotics/site/issues/12/reactions",
+        "total_count": 0
+      },
+      "timeline_url": "https://api.github.com/repos/acme-robotics/site/issues/12/timeline",
+      "performed_via_github_app": null,
+      "state_reason": null,
+      "score": 1.0
+    },
+    {
+      "url": "https://api.github.com/repos/acme-robotics/planner/issues/41",
+      "repository_url": "https://api.github.com/repos/acme-robotics/planner",
+      "labels_url": "https://api.github.com/repos/acme-robotics/planner/issues/41/labels{/name}",
+      "comments_url": "https://api.github.com/repos/acme-robotics/planner/issues/41/comments",
+      "events_url": "https://api.github.com/repos/acme-robotics/planner/issues/41/events",
+      "html_url": "https://github.com/acme-robotics/planner/pull/41",
+      "id": 3000000041,
+      "node_id": "I_41",
+      "number": 41,
+      "title": "Add retry to the sync worker",
+      "user": {
+        "login": "alex-chen-dev",
+        "id": 2041,
+        "node_id": "U_2041",
+        "avatar_url": "https://avatars.githubusercontent.com/u/2041?v=4",
+        "url": "https://api.github.com/users/alex-chen-dev",
+        "html_url": "https://github.com/alex-chen-dev",
+        "type": "User",
+        "site_admin": false
+      },
+      "labels": [],
+      "state": "open",
+      "locked": false,
+      "assignee": {
+        "login": "sample-owner",
+        "id": 4242,
+        "node_id": "U_4242",
+        "avatar_url": "https://avatars.githubusercontent.com/u/4242?v=4",
+        "url": "https://api.github.com/users/sample-owner",
+        "html_url": "https://github.com/sample-owner",
+        "type": "User",
+        "site_admin": false
+      },
+      "assignees": [
+        {
+          "login": "sample-owner",
+          "id": 4242,
+          "node_id": "U_4242",
+          "avatar_url": "https://avatars.githubusercontent.com/u/4242?v=4",
+          "url": "https://api.github.com/users/sample-owner",
+          "html_url": "https://github.com/sample-owner",
+          "type": "User",
+          "site_admin": false
+        }
+      ],
+      "milestone": {
+        "url": "https://api.github.com/repos/acme-robotics/planner/milestones/3",
+        "html_url": "https://github.com/acme-robotics/planner/milestone/3",
+        "labels_url": "https://api.github.com/repos/acme-robotics/planner/milestones/3/labels",
+        "id": 9003,
+        "node_id": "MI_3",
+        "number": 3,
+        "title": "Sprint 9",
+        "description": "Milestone notes MILESTONE-TEXT",
+        "creator": {
+          "login": "alex-chen-dev",
+          "id": 1001,
+          "node_id": "U_1001",
+          "avatar_url": "https://avatars.githubusercontent.com/u/1001?v=4",
+          "url": "https://api.github.com/users/alex-chen-dev",
+          "html_url": "https://github.com/alex-chen-dev",
+          "type": "User",
+          "site_admin": false
+        },
+        "open_issues": 4,
+        "closed_issues": 9,
+        "state": "open",
+        "created_at": "2026-10-01T14:00:00Z",
+        "updated_at": "2026-11-01T14:00:00Z",
+        "due_on": "2026-11-06T08:00:00Z",
+        "closed_at": null
+      },
+      "comments": 2,
+      "created_at": "2026-10-28T15:00:00Z",
+      "updated_at": "2026-11-03T18:00:00Z",
+      "closed_at": null,
+      "author_association": "MEMBER",
+      "active_lock_reason": null,
+      "body": "BODY-TEXT-41: retries with backoff, see the design doc.",
+      "reactions": {
+        "url": "https://api.github.com/repos/acme-robotics/planner/issues/41/reactions",
+        "total_count": 0
+      },
+      "timeline_url": "https://api.github.com/repos/acme-robotics/planner/issues/41/timeline",
+      "performed_via_github_app": null,
+      "state_reason": null,
+      "score": 1.0,
+      "draft": false,
+      "pull_request": {
+        "url": "https://api.github.com/repos/acme-robotics/planner/pulls/41",
+        "html_url": "https://github.com/acme-robotics/planner/pull/41",
+        "diff_url": "https://github.com/acme-robotics/planner/pull/41.diff",
+        "patch_url": "https://github.com/acme-robotics/planner/pull/41.patch",
+        "merged_at": null
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 // The telegram Edge Function (docs/sheet-nudges.md), the one that talks to Telegram. pg_cron calls
 // it every minute (supabase/schema.sql, "sheet-telegram") to send what's due, and it is the bot's
-// webhook for Done and Snooze taps, and for Approve all and Skip on the morning plan
+// webhook for Done and Snooze taps, the Finished? answers (docs/sheet-v5.md), and for Approve all and Skip on the morning plan
 // (docs/sheet-morning.md). Which messages are due, their wording, what counts as a tap
 // and what it changes are decided in src/sheet/nudges.mjs, the module /plan's tests cover; this file only reads the
 // day, talks to the Telegram Bot API and writes what the module says.
@@ -13,20 +13,31 @@
 // secret_token tools/sheet-setup.sh passes to setWebhook).
 //
 // Secrets (function secrets, set by Lisul, never in the repo): TELEGRAM_BOT_TOKEN,
-// SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
+// SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
+// SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../../../src/sheet/nudges.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
+import { rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
+import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
+import { tapFeedback } from "../../../src/sheet/triage.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const WEBHOOK_SECRET = env("TELEGRAM_WEBHOOK_SECRET");
+// v5 R1: the morning task's API trigger (docs/sheet-morning.md, "Setup"; routine-fire.mjs).
+// Without both, no replan fires.
+const ROUTINE_ID = env("SHEET_ROUTINE_ID");
+const ROUTINE_TOKEN = env("SHEET_ROUTINE_TOKEN");
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
   if (CRON_SECRET && secretMatches(req.headers.get("x-sheet-cron") ?? "", CRON_SECRET)) {
-    return Response.json(await send(new Date()));
+    const now = new Date();
+    // A replan that fails to start must not stop the messages, and the other way round.
+    const replan = await replanTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    return Response.json({ ...(await send(now)), replan });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await tap(await req.json(), new Date());
@@ -51,9 +62,19 @@ async function snapshot(now: Date) {
   const blocks = await db(`blocks?select=*&or=(and(starts_at.gte.${from},starts_at.lt.${to})${ids ? `,task_id.in.(${ids})` : ""})`);
   const [day = null] = await db(`days?select=*&day=eq.${today}`);
   const log = await db(`nudges?select=*&day=eq.${today}`);
-  const [proposal = null] = await db(`proposals?select=*&day=eq.${today}`);
+  // v5 R1: the newest revision and the one before it, for the replan message.
+  const [proposal = null, previous = null] = await db(`proposals?select=*&day=eq.${today}&order=rev.desc&limit=2`);
   const needsOpen = await db("needs_you?select=*&done=is.false");
-  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal) };
+  // v5 W1: the cached forecast, for the brief's weather line.
+  const [weather = null] = await db("weather_cache?select=periods,alerts");
+  // v5 P1: the busy times around today, which More time must not run into.
+  const busy = await db(`busy?select=starts_at,ends_at&starts_at=lt.${to}&ends_at=gt.${from}`);
+  const replanSent = log.filter((n: { kind: string }) => n.kind === "replan").length;
+  // v5 SRC3: today's academic calendar entries, for the brief's calendar line.
+  const [academicDay = null] = await db(`academic_days?select=entries&day=eq.${today}`);
+  // v5 M1: the threads he's awaiting a reply on, oldest first, for the brief's Awaiting reply line.
+  const awaiting = await db("reply_state?select=who,since&state=eq.awaiting&order=since");
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -62,6 +83,41 @@ async function snapshot(now: Date) {
 async function picked(proposal: { picks?: { uid: string }[] } | null) {
   const uids = (proposal?.picks ?? []).map((p) => `"${String(p.uid).replace(/["\\]/g, "\\$&")}"`);
   return uids.length ? db(`campus_events?select=*&uid=in.(${encodeURIComponent(uids.join(","))})`) : [];
+}
+
+// --- Replans (v5 R1, docs/sheet-v5.md "The replan tick") ------------------------------------
+// shouldReplan decides from the changes no replan or revision has taken yet. On fire the replans
+// row goes in first (result null), the changes are tied to it, and only then is the routine
+// fired, once: a fire is never retried without a new row (routine-fire.mjs). The run reads the
+// replan back through read_planner, and its revision marks the changes consumed. A run that
+// fails or never submits leaves the plan as it was.
+async function replanTick(now: Date) {
+  if (!ROUTINE_ID || !ROUTINE_TOKEN) return { hold: "not connected" };
+  const [settings] = await db("settings?select=*");
+  const { day: today } = localNow(now, settings.time_zone);
+  const [[day = null], proposals, replans, changes] = await Promise.all([
+    db(`days?select=*&day=eq.${today}`),
+    db(`proposals?select=rev,run_trigger,created_at&day=eq.${today}`),
+    db(`replans?select=at,retry_after&day=eq.${today}`),
+    db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
+  ]);
+  if (rateLimited(replans, now)) return { hold: "rate_limited" };
+  const r = shouldReplan(changes, replanState({ settings, day, proposals, replans }), now) as
+    { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
+  if (!r.fire) return { hold: r.hold };
+  const [row] = await db("replans", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ day: today, reasons: r.reasons, counts: r.counts }),
+  });
+  await db(`changes?id=in.(${r.ids.join(",")})`, { method: "PATCH", body: JSON.stringify({ replan_id: row.id }) });
+  const out = await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "replan", counts: r.counts }, now) as
+    { ok: boolean; status?: number; error?: string; session_id?: string; retry_at?: string };
+  const result = out.ok ? { result: "started", session_id: out.session_id }
+    : out.status === 429 ? { result: "rate_limited", error: out.error, retry_after: out.retry_at }
+    : { result: "failed", error: out.error };
+  await db(`replans?id=eq.${row.id}`, { method: "PATCH", body: JSON.stringify(result) });
+  return { fired: result.result };
 }
 
 // --- Sending ------------------------------------------------------------------------------
@@ -78,7 +134,7 @@ async function send(now: Date) {
     if (!c) continue;
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
-      // and Skip under a plan, Open /plan otherwise.
+      // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
       await telegram("sendMessage", {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
@@ -127,7 +183,7 @@ const PLAIN = { link_preview_options: { is_disabled: true } };
 
 // --- Taps ---------------------------------------------------------------------------------
 
-type Change = { table: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean };
+type Change = { table?: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean; rpc?: string; args?: unknown };
 
 // A second tap on the same button meets the row the first one wrote: a snooze stays as logged,
 // and a pending Google edit takes the latest end.
@@ -149,7 +205,7 @@ async function tap(update: unknown, now: Date) {
   // A plan tap acts on its own day's proposal and proposed blocks, which may not be today's
   // (readTap lets only a plain date through).
   if (planTap(t) && t.day !== snap.proposal?.day) {
-    [snap.proposal = null] = await db(`proposals?select=*&day=eq.${t.day}`);
+    [snap.proposal = null] = await db(`proposals?select=*&day=eq.${t.day}&order=rev.desc&limit=1`);
     const from = new Date(Date.parse(`${t.day}T00:00:00Z`) - 86_400_000).toISOString();
     const to = new Date(Date.parse(`${t.day}T00:00:00Z`) + 2 * 86_400_000).toISOString();
     snap.blocks.push(...(await db(`blocks?select=*&proposed=is.true&starts_at=gte.${from}&starts_at=lt.${to}`))
@@ -162,16 +218,35 @@ async function tap(update: unknown, now: Date) {
       snap.tasks.push(...(await db(`tasks?select=*&id=eq.${b.task_id}`)));
     }
   }
-  const { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
+  let { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
+  // v5 L1: the decision, logged once its changes are made (and not when a newer plan refused it).
+  let logged = tapFeedback(t, snap);
   for (const c of changes) {
-    if (c.insert) {
-      await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
+    // A PostgREST rpc call: POST /rpc/<name> with the named arguments as the body
+    // (docs.postgrest.org/en/stable/references/api/functions.html).
+    if (c.rpc) {
+      try {
+        await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
+      } catch (e) {
+        // v5: approve_proposal and skip_proposal refuse a revision that moved on since the
+        // snapshot was read, and then nothing changed. Any other rpc failing is an error.
+        if (c.rpc !== "approve_proposal" && c.rpc !== "skip_proposal") throw e;
+        text = "A newer plan is out";
+        logged = null;
+        break;
+      }
+    } else if (c.insert && !UPSERT[c.table!]) {
+      // A plain insert (v5: actuals, from Finished).
+      await db(`${c.table}`, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(c.insert) });
+    } else if (c.insert) {
+      await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
     } else if (c.update) {
-      await db(`${c.table}?${KEY[c.table] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
+      await db(`${c.table}?${KEY[c.table!] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
     } else if (c.delete) {
       await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
     }
   }
+  if (logged) await db("feedback", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(logged) });
   await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
   await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN }).catch(() => {});

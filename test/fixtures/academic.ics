@@ -1,0 +1,49 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Stony Brook University//Academic Calendar//EN
+X-WR-CALNAME:SBU Academic Calendar
+BEGIN:VEVENT
+UID:acad-2026-late-reg@stonybrook.edu
+DTSTART:20261104T030000Z
+DTEND:20261104T040000Z
+SUMMARY:Late registration closes
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-no-classes@stonybrook.edu
+DTSTART;VALUE=DATE:20261104
+DTEND;VALUE=DATE:20261105
+SUMMARY:No classes
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-withdraw@stonybrook.edu
+DTSTART;VALUE=DATE:20261104
+SUMMARY:Last day to withdraw from a course
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-open-house@stonybrook.edu
+DTSTART;TZID=America/New_York:20261104T200000
+DTEND;TZID=America/New_York:20261104T210000
+SUMMARY:Fall open house
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-gpnc@stonybrook.edu
+DTSTART;VALUE=DATE:20261104
+SUMMARY:Last day for undergraduates to change a course's grading basis to G/P/NC for the fall term
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-registrar@stonybrook.edu
+DTSTART;VALUE=DATE:20261104
+SUMMARY:Details at www.stonybrook.edu/registrar
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-advising@stonybrook.edu
+DTSTART;VALUE=DATE:20261105
+SUMMARY:Advising week begins
+END:VEVENT
+BEGIN:VEVENT
+UID:acad-2026-thanksgiving@stonybrook.edu
+DTSTART;VALUE=DATE:20261125
+DTEND;VALUE=DATE:20261130
+SUMMARY:Thanksgiving break
+END:VEVENT
+END:VCALENDAR

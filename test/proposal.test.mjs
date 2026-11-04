@@ -3,7 +3,7 @@
 // 2026-11-04 in New York (EST, UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkProposal, proposalLines } from "../src/sheet/proposal.mjs";
+import { checkProposal, couldntFitLine, planSnapshot, proposalLines } from "../src/sheet/proposal.mjs";
 
 const DAY = "2026-11-04";
 const SBU = "lisul.elvitigala@stonybrook.edu";
@@ -82,4 +82,93 @@ test("proposalLines: a campus pick whose title could become a link stays off Tel
   const lines = proposalLines({ day: DAY, status: "pending", note: null, picks: [{ uid: "a" }, { uid: "b" }] }, [], [], [], null, campus, "America/New_York");
   assert.ok(!lines.some((l) => l.includes("evil")), lines.join("\n"));
   assert.ok(lines.includes("Campus pick: Robotics GBM (7:00 pm, 9 going)"), lines.join("\n"));
+});
+
+// --- v5 D2: a realistic day ---------------------------------------------------------------------
+
+test("planSnapshot: day_rules carry the workload cap from settings, 6 hours without one", () => {
+  const rows = (settings) => ({ settings: { time_zone: "America/New_York", ...settings }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] });
+  const now = new Date("2026-11-04T11:07:00Z");
+  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10 });
+  assert.equal(planSnapshot(rows({}), now).day_rules.workload_cap_min, 360);
+});
+
+test("couldntFitLine: a title that could become a link reads \"A task\"; a gone task drops", () => {
+  const tasks = [{ id: "a", title: "Sign up at evil.com" }, { id: "b", title: "Lab 4" }];
+  assert.equal(couldntFitLine(["a", "b", "gone"], tasks), "Couldn't fit: A task, Lab 4.");
+  assert.equal(couldntFitLine(["gone"], tasks), null);
+  assert.equal(couldntFitLine(undefined, tasks), null);
+});
+
+test("checkProposal: without version 5, couldnt_fit is ignored and rows don't carry it", () => {
+  const r = checkProposal({ day: DAY, blocks: [], couldnt_fit: ["nope"] }, snap());
+  assert.equal(r.ok, true);
+  assert.equal("couldnt_fit" in r.rows, false);
+});
+
+// --- v5 V1: the plan window, the run and turned-down tasks in read_planner --------------------
+
+const v5Rows = (extra = {}) => ({
+  settings: { time_zone: "America/New_York", busy_as_of: null, interests: null },
+  tasks: [
+    { id: "t1", title: "OS homework", day: DAY, done: false, est_min: 45 },
+    { id: "t2", title: "Laundry", day: DAY, done: false, est_min: 30 },
+  ],
+  blocks: [], busy: [], days: [{ day: DAY, shutdown_at: null, turned_down: ["t2"] }], campus: [],
+  proposal: { day: DAY, rev: 2, status: "pending", created_at: "2026-11-04T14:00:00Z", run_trigger: "replan" },
+  needsOpen: [], accounts: [],
+  ...extra,
+});
+
+test("planSnapshot v5: the window starts at now rounded up to the quarter hour, on today only", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  assert.deepEqual(planSnapshot(v5Rows(), new Date("2026-11-04T14:07:00Z")).window, { from: "09:15", to: "17:00" });
+  assert.deepEqual(planSnapshot(v5Rows(), new Date("2026-11-04T14:15:00Z")).window, { from: "09:15", to: "17:00" });
+  assert.deepEqual(planSnapshot(v5Rows(), new Date("2026-11-04T11:07:00Z")).window, { from: "07:00", to: "17:00" });
+  // From 3 pm the day planned is tomorrow, which starts at 07:00.
+  const late = planSnapshot(v5Rows(), new Date("2026-11-04T20:30:00Z"));
+  assert.equal(late.plan_day, "2026-11-05");
+  assert.deepEqual(late.window, { from: "07:00", to: "17:00" });
+});
+
+test("planSnapshot v5: a turned-down task leaves the list; the proposal carries its revision", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  const s = planSnapshot(v5Rows(), new Date("2026-11-04T14:07:00Z"));
+  assert.equal(s.version, 5);
+  assert.deepEqual(s.tasks.map((t) => t.id), ["t1"]);
+  assert.deepEqual(s.turned_down, ["t2"]);
+  assert.deepEqual(s.proposal, { rev: 2, status: "pending", created_at: "2026-11-04T14:00:00Z", run_trigger: "replan" });
+});
+
+test("planSnapshot v5: a started replan after the newest revision and under 30 minutes old makes a replan run", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  const now = new Date("2026-11-04T14:20:00Z");
+  const replan = { at: "2026-11-04T14:05:00Z", result: "started", reasons: ["busy_overlap"] };
+  const changes = [{ kind: "busy" }, { kind: "mail" }, { kind: "mail" }];
+  assert.deepEqual(planSnapshot(v5Rows({ replan, changes }), now).run, { trigger: "replan", reasons: ["busy_overlap"], changes: { busy: 1, mail: 2 } });
+  // Too old, failed, or before the newest revision: the morning run.
+  const morning = { trigger: "morning", reasons: [], changes: {} };
+  assert.deepEqual(planSnapshot(v5Rows({ replan }), new Date("2026-11-04T14:36:00Z")).run, morning);
+  assert.deepEqual(planSnapshot(v5Rows({ replan: { ...replan, result: "failed" } }), now).run, morning);
+  assert.deepEqual(planSnapshot(v5Rows({ replan: { ...replan, at: "2026-11-04T13:55:00Z" } }), now).run, morning);
+});
+
+// --- v5 H1: habits ------------------------------------------------------------------------------
+
+test("proposalLines: a habit block reads \"Habit\"", () => {
+  const p = { day: DAY, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [] };
+  const blocks = [{ id: "p1", task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: true }];
+  assert.deepEqual(proposalLines(p, blocks, [], [], [], [], "America/New_York"),
+    ["Morning plan: 1 block, 12:30–1:00 pm.", "12:30 pm · Habit (30 min)"]);
+});
+
+test("planSnapshot: approved habit blocks keep their habit_id, and stay out of planned versus done", () => {
+  const rows = {
+    settings: { time_zone: "America/New_York" }, tasks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [],
+    blocks: [{ task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: false }],
+    past: [{ task_id: null, habit_id: "h1", starts_at: "2026-11-03T17:30:00Z", ends_at: "2026-11-03T18:00:00Z", proposed: false, task: null }],
+  };
+  const s = planSnapshot(rows, new Date("2026-11-04T11:07:00Z"));
+  assert.deepEqual(s.blocks, [{ task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: false }]);
+  assert.deepEqual(s.planned_vs_done, []);
 });

@@ -7,6 +7,9 @@
 // internalDate (epoch milliseconds, as a string) and a MessagePart tree with base64url bodies.
 // https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages
 
+import { addDays, localNow } from "./logic.mjs";
+import { changeRow } from "./replan.mjs";
+
 // A message's summary, for the account (its email address) it was read from. `link` opens the
 // thread in Gmail signed in as that account.
 export function messageSummary(message, account) {
@@ -135,4 +138,223 @@ export function accountPatch(outcome, now) {
   if (outcome.ok) return { last_used_at: new Date(now).toISOString(), last_error: null };
   if (outcome.status === 400 || outcome.status === 404) return null;
   return { last_error: String(outcome.error ?? "failed").slice(0, 300) };
+}
+
+// --- v5 A1: assessment and interview senders (docs/sheet-v5.md, "mail.mjs") ------------------
+
+const ASSESSMENT_DOMAINS = {
+  "hackerrank.com": "assessment",
+  "codesignal.com": "assessment",
+  "codility.com": "assessment",
+  "hirevue.com": "assessment",
+  "karat.com": "interview",
+  "calendly.com": "interview",
+  "goodtime.io": "interview",
+};
+
+// 'assessment' or 'interview' when a bare From address is at one of those domains or a
+// subdomain of one (any case), otherwise null. Only the part after the last "@" counts, so
+// "hackerrank.com@gmail.com" and "a@hackerrank.com.evil.io" are null.
+export function assessmentSender(from) {
+  const at = String(from ?? "").lastIndexOf("@");
+  if (at < 0) return null;
+  const domain = String(from).slice(at + 1).toLowerCase();
+  for (const [d, kind] of Object.entries(ASSESSMENT_DOMAINS)) {
+    if (domain === d || domain.endsWith(`.${d}`)) return kind;
+  }
+  return null;
+}
+
+// --- v5 M1: reply tracking from metadata (docs/sheet-v5.md, "mail.mjs") ----------------------
+// The mail sync (supabase/functions/mail-sync) reads labels, dates and a few headers only, never
+// mail text; these work out Reply owed and Awaiting reply from them.
+
+// The Mondays to Fridays after fromIso's local date, up to and including toIso's.
+export function businessDays(fromIso, toIso, timeZone) {
+  let day = localNow(new Date(fromIso), timeZone).day;
+  const last = localNow(new Date(toIso), timeZone).day;
+  let n = 0;
+  while (day < last) {
+    day = addDays(day, 1);
+    const wd = new Date(`${day}T12:00:00Z`).getUTCDay();
+    if (wd !== 0 && wd !== 6) n++;
+  }
+  return n;
+}
+
+// A header's value from Gmail's `payload.headers` ([{ name, value }]), any case, or "".
+const headerOf = (headers, name) => (headers ?? []).find((h) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+// An address list ("Ana <a@x.edu>, b@y.com") as [{ name, address }]: commas inside quotes don't
+// split, a quoted name loses its quotes, and `name` is "" without one.
+export function parseAddresses(value) {
+  const parts = String(value ?? "").match(/(?:"[^"]*"|[^,])+/g) ?? [];
+  return parts.map((part) => {
+    const angle = part.match(/<([^>]*)>/);
+    const address = (angle ? angle[1] : part).trim().toLowerCase();
+    const name = angle ? part.slice(0, angle.index).trim().replace(/^"(.*)"$/, "$1").trim() : "";
+    return { name, address };
+  }).filter((a) => a.address.includes("@"));
+}
+
+// Local parts that only machines write from.
+const AUTOMATED_LOCAL = /^(?:no-?reply|do-?not-?reply|notifications?|mailer-daemon|bounces?)(?:[-+._].*)?$/i;
+
+// True for mail no person wrote: a no-reply style From address, or a mailing list or
+// auto-reply header (RFC 2369 List-*, RFC 2919 List-Id, RFC 3834 Auto-Submitted, Precedence).
+export function automatedSender(headers) {
+  const from = parseAddresses(headerOf(headers, "From"))[0];
+  if (from && AUTOMATED_LOCAL.test(from.address.split("@")[0])) return true;
+  if (headerOf(headers, "List-Id") || headerOf(headers, "List-Unsubscribe")) return true;
+  const auto = headerOf(headers, "Auto-Submitted").trim().toLowerCase();
+  if (auto && auto !== "no") return true;
+  return /^(bulk|list|junk)$/i.test(headerOf(headers, "Precedence").trim());
+}
+
+// The Gmail categories spec 47 leaves out of reply tracking.
+export const SKIPPED_CATEGORIES = ["CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"];
+export const skippedCategory = (labels) => (labels ?? []).some((l) => SKIPPED_CATEGORIES.includes(l));
+
+// reply_state.who: a display name, never an address, at most 80 characters.
+export const WHO_MAX = 80;
+function displayName(value) {
+  const first = parseAddresses(value)[0];
+  if (!first) return "";
+  const name = first.name && !first.name.includes("@") ? first.name : first.address.split("@")[0];
+  return name.slice(0, WHO_MAX);
+}
+
+// A thread's reply state, { state, since, message_id, who } or null, from its newest message
+// that isn't spam or trash. thread: { account, thread_id, messages: [{ id, date, labels, from,
+// to, automated }] }. Owed: from a person, not him, 2+ business days old. Awaiting: his, 3+.
+export function replyState(thread, timeZone, now) {
+  const kept = (thread.messages ?? []).filter((m) => !m.labels.includes("SPAM") && !m.labels.includes("TRASH"));
+  if (!kept.length) return null;
+  const newest = kept.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
+  if (skippedCategory(newest.labels)) return null;
+  const days = businessDays(newest.date, now.toISOString(), timeZone);
+  const sent = newest.labels.includes("SENT");
+  if (sent ? days < 3 : newest.automated || days < 2) return null;
+  const who = displayName(sent ? newest.to : newest.from);
+  if (!who) return null;
+  return { state: sent ? "awaiting" : "owed", since: newest.date, message_id: newest.id, who };
+}
+
+// The mail sync's changes rows (replan.mjs's REASON_WORDS). added: the messages new since the
+// last sync, [{ id, labels, automated }], each from a person and not skipped giving mail_new
+// (weight 2). owed: the threads that turned owed this sync, [{ message_id, known }], each from
+// a known sender giving mail_owed (weight 8).
+export function mailChanges(added, owed) {
+  const quiet = ["SENT", "SPAM", "TRASH"];
+  return [
+    ...added.filter((m) => !m.automated && !skippedCategory(m.labels) && !m.labels.some((l) => quiet.includes(l)))
+      .map((m) => changeRow("mail_new", m.id)),
+    ...owed.filter((t) => t.known).map((t) => changeRow("mail_owed", t.message_id)),
+  ];
+}
+
+// A known sender's key: hex SHA-256 of the salt (SHEET_SENDER_SALT) and the address, trimmed
+// and lowercased, so no address is kept in plain text (crypto.subtle, in Node and Deno alike).
+export async function senderHash(address, salt) {
+  const bytes = new TextEncoder().encode(salt + String(address).trim().toLowerCase());
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// --- v5 M1: the mail sync's reads (supabase/functions/mail-sync) -----------------------------
+// Gmail's message formats (developers.google.com/workspace/gmail/api/reference/rest/v1/Format):
+// `metadata` "Returns only email message ID, labels, and email headers", while `full` and `raw`
+// return the body. Even metadata responses carry `snippet` ("A short part of the message text",
+// …/rest/v1/users.messages#Message), so every read also names its `fields` (a partial response,
+// developers.google.com/workspace/gmail/api/guides/performance#partial), which leaves the snippet,
+// the size and any body out of the reply altogether. metadataHeaders ("When given and format is
+// METADATA, only include headers specified", …/users.messages/get) keeps the headers to these.
+export const SYNC_HEADERS = ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"];
+const MESSAGE_FIELDS = "id,threadId,labelIds,internalDate,payload/headers";
+
+// The query for users.messages.get (`thread: false`) or users.threads.get (`thread: true`).
+export function metadataQuery(thread = false) {
+  const q = new URLSearchParams({ format: "metadata" });
+  for (const h of SYNC_HEADERS) q.append("metadataHeaders", h);
+  q.set("fields", thread ? `id,messages(${MESSAGE_FIELDS})` : MESSAGE_FIELDS);
+  return q.toString();
+}
+
+// A metadata message as replyState reads it, plus its thread and From address. Drafts aren't
+// mail anyone has seen, so syncThread leaves them out.
+export function syncMessage(message) {
+  const headers = message.payload?.headers ?? [];
+  const from = headerOf(headers, "From");
+  return {
+    id: message.id,
+    thread_id: message.threadId,
+    date: new Date(Number(message.internalDate)).toISOString(),
+    labels: message.labelIds ?? [],
+    from,
+    to: headerOf(headers, "To"),
+    from_address: parseAddresses(from)[0]?.address ?? null,
+    automated: automatedSender(headers),
+  };
+}
+
+// A users.threads.get reply (metadata) as replyState's thread.
+export function syncThread(thread, account) {
+  const messages = (thread.messages ?? []).map(syncMessage).filter((m) => !m.labels.includes("DRAFT"));
+  return { account, thread_id: thread.id, messages };
+}
+
+// What users.history.list pages say changed: the threads touched and the messages added, each
+// once and in order. A history record's messages carry only id and threadId
+// (developers.google.com/workspace/gmail/api/reference/rest/v1/users.history/list).
+export function historyChanges(pages) {
+  const threads = new Set();
+  const added = new Set();
+  for (const page of pages) {
+    for (const h of page.history ?? []) {
+      for (const m of h.messagesAdded ?? []) { added.add(m.message.id); threads.add(m.message.threadId); }
+      for (const key of ["messagesDeleted", "labelsAdded", "labelsRemoved"]) {
+        for (const m of h[key] ?? []) threads.add(m.message.threadId);
+      }
+    }
+  }
+  return { threads: [...threads], added: [...added] };
+}
+
+// The daily sweep's messages: users.messages.list gives ids and thread ids, newest first, so the
+// first message seen of each thread is its newest.
+export function newestPerThread(messages) {
+  const seen = new Set();
+  return messages.filter((m) => !seen.has(m.threadId) && seen.add(m.threadId));
+}
+
+// How one account's reply_state rows move. before: its rows now; after: [{ thread_id, state:
+// replyState(...) | null, from_address }] for the threads read this sync; known: the From
+// addresses (lowercased) he has written to. Gives the rows to upsert, the thread ids to delete,
+// and the threads that turned owed (not owed at that message before), for mailChanges.
+export function replyDiff(account, before, after, known) {
+  const old = new Map(before.map((r) => [r.thread_id, r]));
+  const upserts = [];
+  const deletes = [];
+  const owed = [];
+  for (const { thread_id, state, from_address } of after) {
+    const prev = old.get(thread_id);
+    if (!state) { if (prev) deletes.push(thread_id); continue; }
+    upserts.push({ account, thread_id, ...state });
+    if (state.state === "owed" && !(prev?.state === "owed" && prev.message_id === state.message_id)) {
+      owed.push({ message_id: state.message_id, known: Boolean(from_address && known.has(from_address)) });
+    }
+  }
+  return { upserts, deletes, owed };
+}
+
+// search_mail's summaries with `known` (he has sent mail to the From address) and the thread's
+// `reply_state` ('owed' | 'awaiting' | null). known: lowercased addresses; states: reply_state
+// rows, matched on account and thread.
+export function searchMarks(summaries, known, states) {
+  const state = new Map(states.map((r) => [`${r.account} ${r.thread_id}`, r.state]));
+  return summaries.map((s) => ({
+    ...s,
+    known: known.has(parseAddresses(s.from)[0]?.address ?? ""),
+    reply_state: state.get(`${s.account} ${s.thread_id}`) ?? null,
+  }));
 }

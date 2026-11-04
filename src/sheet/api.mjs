@@ -82,9 +82,22 @@ async function rest(path, { method = "GET", body, prefer, anon = false } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new SheetError(`${method} ${path.split("?")[0]}: ${res.status}`);
+  if (!anon && stampsEdit(method, path)) stampEdit();
   // Writes without return=representation answer 201 or 204 with an empty body.
   const text = await res.text();
   return text ? JSON.parse(text) : null;
+}
+
+// v5 R1 (docs/sheet-v5.md, "/plan"): a write to tasks or blocks (a × on a proposed block too)
+// stamps settings.plan_edited_at, at most once a minute, so no replan starts while he edits.
+const EDIT_STAMP_MS = 60_000;
+let editStampedAt = 0;
+export const stampsEdit = (method, path) => method !== "GET" && /^(tasks|blocks|rpc\/turn_down)(\?|$)/.test(path);
+function stampEdit() {
+  if (Date.now() - editStampedAt < EDIT_STAMP_MS) return;
+  editStampedAt = Date.now();
+  rest("settings?id=eq.true", { method: "PATCH", body: { plan_edited_at: new Date(editStampedAt).toISOString() } })
+    .catch(() => { editStampedAt = 0; });
 }
 
 // Public views, readable by anyone.
@@ -94,7 +107,9 @@ export const publicNow = async () => (await rest("public_now", { anon: true }))[
 
 // Owner tables.
 export const listTasks = (from, to) => rest(`tasks?or=(day.is.null,and(day.gte.${from},day.lte.${to}))&order=position`);
-export const listBlocks = (from, to) => rest(`blocks?starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
+// v5 H1: a habit block brings its habit's name (an embedded many-to-one row,
+// https://docs.postgrest.org/en/stable/references/api/resource_embedding.html).
+export const listBlocks = (from, to) => rest(`blocks?select=*,habit:habits(name)&starts_at=gte.${from}&starts_at=lt.${to}&order=starts_at`);
 // The approved blocks with a Google event that start at or after `from`.
 export const eventBlocksFrom = (from) => rest(`blocks?starts_at=gte.${from}&proposed=is.false&gcal_id=not.is.null`);
 // Approved blocks with no Google event that end after `from`, with their task's title and
@@ -131,11 +146,20 @@ export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${enco
 export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
 export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
+// The calendar free/busy account (docs/sheet-v5.md): one row or none, read and deleted here;
+// connecting goes through calendar-connect. Deleting it deletes its Vault secret (a trigger).
+export const calendarAccount = async () => (await rest("calendar_account?select=email,connected_at,last_error"))[0] ?? null;
+export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", { method: "DELETE" });
+
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
+// v5 M1: the threads he's awaiting a reply on, which the mail sync keeps (read only).
+export const listAwaiting = () => rest("reply_state?select=account,thread_id,who,since&state=eq.awaiting&order=since");
 export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
-export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,status,note,picks`))[0] ?? null;
+// v5: a day's newest revision, and turning a proposed block's task down for the day.
+export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,rev,status,note,picks,couldnt_fit&order=rev.desc&limit=1`))[0] ?? null;
+export const turnDown = (d, task) => rest("rpc/turn_down", { method: "POST", body: { d, task } });
 // uids are quoted, so commas and parentheses in one stay inside it
 // (https://docs.postgrest.org/en/stable/references/api/url_grammar.html#reserved-characters).
 export const campusByUid = (uids) => (uids.length
@@ -146,11 +170,30 @@ export const campusByUid = (uids) => (uids.length
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
-// Busy times (docs/sheet-morning.md, "/plan"): the rows overlapping [from, to) are replaced by
-// `rows`. The insert ignores rows already there, so two tabs saving at once don't fail on the
-// primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+// v5 P1, pace (docs/sheet-v5.md): the actuals rows Telegram's Finished answer wrote. Read-only here.
+export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
+
+// v5 H1, habits (Settings).
+export const listHabits = () => rest("habits?select=id,name,days,ideal,minutes,flex_min,defence,position&order=position,created_at");
+export const insertHabit = async (habit) => one(await rest("habits", { method: "POST", body: habit, prefer: "return=representation" }));
+export const deleteHabit = (id) => rest(`habits?id=eq.${id}`, { method: "DELETE" });
+
+// v5 L1, learning from his taps (docs/sheet-v5.md): Done and Not needed on a Needs you row
+// (Not needed is done as well; Undo clears both), the append-only feedback log, and the triage
+// rules, which only /plan writes. Patterns are lowercased, as the table's check wants.
+export const setNeedState = (id, done, not_needed) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done, not_needed } });
+export const logFeedback = (row) => rest("feedback", { method: "POST", body: row, prefer: "return=minimal" });
+export const listNeedsFeedback = () => rest("feedback?select=at,item,action,ref&item=eq.needs_you&order=at");
+export const listTriageRules = () => rest("triage_rules?select=id,match,pattern,action&order=created_at");
+export const addTriageRule = (match, pattern, action) => rest("triage_rules", { method: "POST", body: { match, pattern: pattern.trim().toLowerCase(), action } });
+export const deleteTriageRule = (id) => rest(`triage_rules?id=eq.${id}`, { method: "DELETE" });
+
+// Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are
+// replaced by `rows`; Handshake's (source 'handshake', docs/sheet-v5.md) are left alone, and the
+// inserts take the default source, 'calendar'. The insert ignores rows already there, so two tabs
+// saving at once (or the server's busy-sync) don't fail on the primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
 export async function replaceBusy(fromIso, toIso, rows) {
-  await rest(`busy?starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
+  await rest(`busy?source=eq.calendar&starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
   if (rows.length) await rest("busy", { method: "POST", body: rows, prefer: "resolution=ignore-duplicates" });
 }
 
