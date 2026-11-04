@@ -6,11 +6,11 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
-import { couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
+import { clockSpan, couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
 import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
-import { reasonWords } from "./replan.mjs";
+import { REASON_WORDS } from "./replan.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -197,7 +197,7 @@ function replanMessage(day) {
   if (!added.length && !gone.length) return [];
   const title = (b) => day.tasks.find((t) => t.id === b.task_id)?.title ?? (day.habits ?? []).find((h) => h.id === b.habit_id)?.name ?? "A task";
   const at = (b) => formatClock(minutesOn(b.starts_at, day.today, day.tz));
-  const words = reasonWords(p.reasons ?? []);
+  const words = replanWords(p.reasons ?? [], day);
   const lines = [
     words ? `Replan: ${words}.` : "Replan: the plan changed.",
     ...added.map((b) => `+ ${at(b)} · ${title(b)} (${blockMinutes(b)} min)`),
@@ -206,6 +206,45 @@ function replanMessage(day) {
   const unfit = couldntFitLine(p.couldnt_fit, day.tasks);
   if (unfit) lines.push(unfit);
   return [{ kind: "replan", block_id: null, day: day.today, send_at: new Date(p.created_at).toISOString(), text: lines.join("\n"), buttons: planButtons(day.today, p.rev) }];
+}
+
+// The replan message's reasons (fix): a few specific words where the stored rows allow, from
+// day.replanChanges (the { reason, ref } rows the revision consumed), and the fixed words for the
+// rest, in the revision's order. Only titles The Sheet already stores are used, never mail:
+// - busy_overlap (ref "<starts_at>/<ends_at>"): "Busy 2:00–3:00 pm now overlaps Gym", naming the
+//   earliest approved or previous-revision block it overlaps, or "Busy 2:00–3:00 pm now";
+// - *_due_soon (ref the task's source_uid): "HW3 due Thu".
+// A title that could become a link, or a ref with nothing stored, gets the fixed words. At most
+// SPECIFIC_MAX specific phrases; each reason's fixed words go when one of its phrases is said.
+const SPECIFIC_MAX = 3;
+const TITLE_CHARS = 30;
+function replanWords(reasons, day) {
+  const said = new Map();
+  const title = (t) => (t && !linkish(t.title) ? String(t.title).replace(/\s+/g, " ").trim().slice(0, TITLE_CHARS).trim() : null);
+  let n = 0;
+  for (const c of day.replanChanges ?? []) {
+    if (n >= SPECIFIC_MAX || !reasons.includes(c.reason) || !c.ref) continue;
+    let phrase = null;
+    if (c.reason === "busy_overlap") {
+      const [from, to] = String(c.ref).split("/").map(Date.parse);
+      if (Number.isNaN(from) || Number.isNaN(to)) continue;
+      const span = clockSpan(minutesOn(new Date(from).toISOString(), day.today, day.tz), minutesOn(new Date(to).toISOString(), day.today, day.tz));
+      const hit = [...day.blocks, ...(day.previous?.blocks ?? [])]
+        .filter((b) => Date.parse(b.starts_at) < to && from < Date.parse(b.ends_at))
+        .sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at))
+        .map((b) => title(day.tasks.find((t) => t.id === b.task_id)) ?? (day.habits ?? []).find((h) => h.id === b.habit_id)?.name)
+        .find(Boolean);
+      phrase = hit && !linkish(hit) ? `Busy ${span} now overlaps ${hit}` : `Busy ${span} now`;
+    } else if (/_due_soon$/.test(c.reason)) {
+      const t = day.tasks.find((x) => x.source_uid === c.ref && x.due);
+      const name = title(t);
+      if (name) phrase = `${name} ${dueLabel(t.due, day.today)}`;
+    }
+    if (!phrase) continue;
+    if (!said.has(c.reason)) said.set(c.reason, []);
+    if (!said.get(c.reason).includes(phrase)) { said.get(c.reason).push(phrase); n++; }
+  }
+  return reasons.flatMap((r) => said.get(r) ?? (REASON_WORDS[r] ? [REASON_WORDS[r]] : [])).join(", ");
 }
 
 // Done and Snooze carry the block they belong to; the webhook reads them back on a tap.

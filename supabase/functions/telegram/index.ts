@@ -70,11 +70,15 @@ async function snapshot(now: Date) {
   // v5 P1: the busy times around today, which More time must not run into.
   const busy = await db(`busy?select=starts_at,ends_at&starts_at=lt.${to}&ends_at=gt.${from}`);
   const replanSent = log.filter((n: { kind: string }) => n.kind === "replan").length;
+  // The changes a replan revision consumed (reason and ref only), for the replan message's words.
+  const replanChanges = proposal?.run_trigger === "replan"
+    ? await db(`changes?select=reason,ref&consumed_day=eq.${today}&consumed_rev=eq.${proposal.rev}&order=at`)
+    : [];
   // v5 SRC3: today's academic calendar entries, for the brief's calendar line.
   const [academicDay = null] = await db(`academic_days?select=entries&day=eq.${today}`);
   // v5 M1: the threads he's awaiting a reply on, oldest first, for the brief's Awaiting reply line.
   const awaiting = await db("reply_state?select=who,since&state=eq.awaiting&order=since");
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting };
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
