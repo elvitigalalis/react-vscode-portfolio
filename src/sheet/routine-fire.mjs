@@ -36,7 +36,7 @@ export function fireRequest(routineId, token, text) {
 // (ticket 50) and a message to Claude (docs/sheet-messages.md). Reasons are the change kinds of
 // spec 47's changes table, in its order.
 export const TRIGGERS = ["morning", "replan", "test", "message"];
-export const REASONS = ["mail", "busy", "course", "campus", "github", "jira", "slack", "handshake"];
+export const REASONS = ["mail", "busy", "course", "campus", "github", "jira", "slack", "handshake", "sleep"];
 
 // The text for one fire, such as "trigger: replan\nreasons: busy 2, course 1". `counts` maps a
 // reason to how many changes of that kind there were; a count of 0 is left out. Anything that

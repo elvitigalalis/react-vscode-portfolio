@@ -131,7 +131,9 @@ function plannerServer(db: Db) {
       "and where Lisul is awaiting a reply (he wrote last, 3+ business days ago), by thread and display name. " +
       "messages are Lisul's own pending messages to Claude ({ id, at, text }, oldest first, at most 10), to answer " +
       "with answer_messages; run.trigger is message when one of them started this run. today is his date in " +
-      "time_zone, and replans_on whether replans are on. " +
+      "time_zone, and replans_on whether replans are on. window.from follows his wake time from his Oura ring: sleep " +
+      "gives typical_wake_weekday, typical_wake_weekend, woke_at (today's actual wake, or null) and last_synced, and " +
+      "day_rules.cap_reason says when his readiness or a short night changed the cap. " +
       `${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -171,6 +173,8 @@ function plannerServer(db: Db) {
       rows.run_trigger = proposalTrigger(snap.message_run && rows.run_trigger === "morning" ? "message" : rows.run_trigger);
       // apply_proposal (supabase/schema.sql) is security invoker and does it all in one
       // transaction; it refuses anything but the newest revision, and a day skipped or lapsed.
+      // Oura: the window start this revision was planned from, for the woke-late replan.
+      rows.window_from = snap.window.from;
       const { data: rev, error } = await db.rpc("apply_proposal", rows);
       if (error) return failed(`apply_proposal: ${error.message}`);
       return { content: [text({
@@ -280,7 +284,15 @@ async function snapshot(db: Db, now: Date) {
   const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
   // v5 M1: Reply owed and Awaiting reply, which the mail sync keeps.
   const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who,message_id,basis,draft", order: "since" });
+  // Oura: the sleep periods (nightly_roll keeps 60 days), the days' readiness and sleep, and the
+  // last good sync. A missing table (the Oura schema not run yet) reads as none.
+  const [sleep, sleepDays, [ouraFeed = null]] = await Promise.all([
+    optional(db, { table: "sleep_nights", select: "oura_id,day,type,bedtime_start,bedtime_end", order: "bedtime_end" }),
+    optional(db, { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "eq", planDay]] }),
+    read(db, { table: "feed_state", select: "fetched_at,ok", filters: [["source", "eq", "oura"]] }),
+  ]);
   const snap = planSnapshot({
+    sleep, sleepDays, sleepSynced: ouraFeed?.ok ? ouraFeed.fetched_at : null,
     plan_day: planDay, actuals, past, habits, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
@@ -317,6 +329,16 @@ async function patternHashes(rules: { match: string; pattern: string }[]) {
   const map = new Map<string, string>();
   if (SALT) for (const r of rules) if (r.match !== "sender") map.set(r.pattern, await senderHash(r.pattern, SALT));
   return (pattern: string) => map.get(pattern) ?? null;
+}
+
+// A read of a table that may not exist yet: none until its schema section has run.
+async function optional(db: Db, q: Query) {
+  try {
+    return await read(db, q);
+  } catch (e) {
+    if (/schema cache|does not exist/.test((e as Error).message)) return [];
+    throw e;
+  }
 }
 
 // One query through supabase-js: .filter(column, operator, value) and .or() take PostgREST's own
