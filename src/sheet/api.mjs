@@ -158,7 +158,9 @@ export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
 export const listAwaiting = () => rest("reply_state?select=account,thread_id,who,since&state=eq.awaiting&order=since");
 export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
 // v5: a day's newest revision, and turning a proposed block's task down for the day.
-export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,rev,status,note,picks,couldnt_fit&order=rev.desc&limit=1`))[0] ?? null;
+export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,rev,status,note,picks,couldnt_fit,suggested&order=rev.desc&limit=1`))[0] ?? null;
+// Approve all on a pending revision, as Telegram's: its blocks approved, its suggested tasks made.
+export const approveProposal = (d, rev) => rest("rpc/approve_proposal", { method: "POST", body: { d, rev } });
 export const turnDown = (d, task) => rest("rpc/turn_down", { method: "POST", body: { d, task } });
 // uids are quoted, so commas and parentheses in one stay inside it
 // (https://docs.postgrest.org/en/stable/references/api/url_grammar.html#reserved-characters).

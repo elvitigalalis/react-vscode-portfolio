@@ -547,6 +547,10 @@ export function couldntFitLine(ids, tasks) {
   return `Couldn't fit: ${titles.slice(0, SHOWN_COULDNT_FIT).join(", ")}${more}.`;
 }
 
+// "Task to add: HackerRank assessment (due Nov 7)", for the brief and /plan. Titles passed
+// checkProposal; one that could become a link reads "A task" anyway.
+export const suggestedLine = (t) => `Task to add: ${linkish(t.title) ? "A task" : t.title} (due ${dayLabel(t.due).date})`;
+
 // The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
 // up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
 // may hold any blocks; only the proposal day's proposed ones count. `picks` is [{ uid, why }],
@@ -569,7 +573,7 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   if (unfit) lines.push(unfit);
   // v5 A1: one line per suggested task. Titles passed checkProposal; one that could become a link
   // reads "A task" anyway.
-  for (const t of proposal.suggested ?? []) lines.push(`Task to add: ${linkish(t.title) ? "A task" : t.title} (due ${dayLabel(t.due).date})`);
+  for (const t of proposal.suggested ?? []) lines.push(suggestedLine(t));
   const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).

@@ -677,7 +677,13 @@ weather_cache id boolean pk default true check (id), point text not null,
   same `from_address`, it offers "Never show mail from <address>", which adds a `never` rule on
   confirm.
 - **The proposal banner** shows "Revision 2" beside "Claude proposed 3 blocks", and the couldn't
-  fit titles.
+  fit titles. **Fix:** while the revision is pending, its notes also list each suggested task,
+  `"Task to add: HackerRank assessment (due Nov 7)"` (`suggestedLine`, as the brief's).
+- **Approve all** (fix) on a pending revision calls `approve_proposal(d, rev)` (`approveAllCall`
+  in morning.mjs), as Telegram's Approve all does, so the revision becomes `approved` and its
+  suggested tasks are made; then the week and the notes reload, and the approved blocks get
+  their Google events as off-page approvals do. Without a pending revision it approves each
+  proposed block, as in v4. Approving or moving a single block is unchanged.
 - **Icons:** `repeat` (habit), `github` and `kanban` (Jira), from Lucide; GitHub and Jira tasks
   get source edges like course tasks.
 - **The load bar** takes `workload_cap_min` as its capacity.
