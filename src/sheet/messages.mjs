@@ -37,8 +37,11 @@ export function messageText(value) {
 // --- Answering (planner-mcp's answer_messages) -----------------------------------------------
 
 export const MAX_ANSWERS = 10;
-export const MAX_TASKS = 10;
-export const MAX_EVENTS = 5;
+// A pasted announcement can list a term's worth of deadlines.
+export const MAX_TASKS = 20;
+export const MAX_EVENTS = 10;
+// Room to say what was added and what was skipped, and why.
+export const MAX_REPLY = 500;
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
 const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
@@ -124,7 +127,7 @@ export function checkAnswers(input, pending, timeZone) {
     seen.add(a?.id);
     const tasks = many(a?.tasks, `${name}.tasks`, MAX_TASKS, errors).map((t, j) => taskRow(t, `${name}.tasks[${j}]`, errors));
     const events = many(a?.events, `${name}.events`, MAX_EVENTS, errors).map((e, j) => eventRow(e, `${name}.events[${j}]`, timeZone, errors));
-    const reply = text(a?.reply, `${name}.reply`, 280, errors);
+    const reply = text(a?.reply, `${name}.reply`, MAX_REPLY, errors);
     if (errors.length === before) answers.push({ id: a.id, tasks, events, reply });
   });
   return { errors, answers };

@@ -1213,6 +1213,9 @@ create index if not exists messages_pending on messages (at) where status = 'pen
 -- Long messages: a pasted class announcement runs to thousands of characters (messageText).
 alter table messages drop constraint if exists messages_text_check;
 alter table messages add constraint messages_text_check check (char_length(text) between 1 and 8000);
+-- A reply says what was added and what was skipped, and why (MAX_REPLY).
+alter table messages drop constraint if exists messages_reply_check;
+alter table messages add constraint messages_reply_check check (char_length(reply) <= 500);
 
 alter table messages enable row level security;
 drop policy if exists owner_all on messages;
