@@ -1014,6 +1014,28 @@ do $$ begin
   raise notice '✓ v5: github_orgs, https-only task links kept out of public views, sheet-work at :40';
 end $$;
 
+-- SRC1: /now shows no GitHub or Jira task. They are private, so planned on today and running now,
+-- each shows only as a length, never its title, tag or link.
+do $$ declare g uuid := gen_random_uuid(); j uuid := gen_random_uuid(); begin
+  if not exists (select 1 from information_schema.columns where table_name = 'tasks' and column_name = 'link') then
+    raise notice '- v5 GitHub and Jira on /now: skipped, not there yet';
+    return;
+  end if;
+  insert into tasks (id, title, day, public, tag, source, source_uid, link) values
+    (g, 'Review: Add retry to the sync worker', sheet_today(), false, 'workit', 'github',
+     'https://github.com/acme-robotics/planner/pull/41', 'https://github.com/acme-robotics/planner/pull/41'),
+    (j, 'KAN-12 Write the onboarding checklist', sheet_today(), false, null, 'jira', 'KAN-12', 'https://example-team.atlassian.net/browse/KAN-12');
+  delete from blocks where not proposed and starts_at <= now() and ends_at > now();
+  insert into blocks (task_id, starts_at, ends_at) values (g, now() - interval '10 minutes', now() + interval '20 minutes');
+  set local role anon;
+  if (select title is not null or tag is not null or public from public_now) then raise exception 'public_now showed a GitHub task'; end if;
+  if exists (select 1 from public_week where id in (g, j) and (title is not null or tag is not null or bar is null))
+    then raise exception 'public_week showed a GitHub or Jira task'; end if;
+  reset role;
+  delete from tasks where id in (g, j);
+  raise notice '✓ v5: /now shows GitHub and Jira tasks only as private lengths';
+end $$;
+
 -- --- SRC2, Slack in Needs you -----------------------------------------------------------------------
 do $$ begin
   if not exists (select 1 from information_schema.columns where table_name = 'needs_you' and column_name = 'source') then
