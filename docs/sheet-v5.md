@@ -326,6 +326,13 @@ weather_cache id boolean pk default true check (id), point text not null,
   - `run.trigger` is `replan` when `replan` exists with result `started`, its `at` is after the
     newest revision's `created_at`, and it is under 30 minutes old; its `reasons` are then the
     replan's. Otherwise `morning` with `reasons: []`.
+  - **plan_day of a replan run** (fix): `rows.plan_day`, when given, is the day planned.
+    planner-mcp sets it with `planDayOf(now, time_zone, replan, todayRevision)`: today when
+    today's newest `replans` row is `started`, under 30 minutes old and after today's newest
+    revision, so a replan from 3 pm to shutdown plans the rest of today; otherwise v4's 3 pm
+    rule. `snapshotQueries`, `paceQueries` and `replanQueries` take that plan_day, and
+    `todayReplanQueries(now, time_zone)` reads the two rows it is decided from. A `replan` row
+    of another day never makes a replan run.
   - `window.from` is 07:00, or, when plan_day is today, the later of 07:00 and now rounded up
     to the next quarter hour (9:07 → 09:15, 9:15 → 09:15). `window.to` is `shutdown`.
   - **Decided:** locked blocks stay in `blocks` with `proposed: false` rather than being copied

@@ -172,3 +172,32 @@ test("planSnapshot: approved habit blocks keep their habit_id, and stay out of p
   assert.deepEqual(s.blocks, [{ task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: false }]);
   assert.deepEqual(s.planned_vs_done, []);
 });
+
+// --- Fix: a replan from 3 pm plans the rest of today ---------------------------------------------
+
+test("planDayOf: a fresh started replan from 3 pm plans today; otherwise the 3 pm rule", async () => {
+  const { planDayOf } = await import("../src/sheet/proposal.mjs");
+  const four = new Date("2026-11-04T21:00:00Z"); // 4:00 pm
+  const replan = { day: DAY, at: "2026-11-04T20:55:00Z", result: "started", reasons: ["busy_overlap"] };
+  const morning = { created_at: "2026-11-04T11:09:00Z" };
+  assert.equal(planDayOf(four, "America/New_York", replan, morning), DAY);
+  assert.equal(planDayOf(four, "America/New_York", replan, null), DAY);
+  assert.equal(planDayOf(four, "America/New_York", null, morning), "2026-11-05");
+  assert.equal(planDayOf(four, "America/New_York", { ...replan, result: "failed" }, morning), "2026-11-05");
+  // Its revision is in already, or it is over 30 minutes old: the 3 pm rule again.
+  assert.equal(planDayOf(four, "America/New_York", replan, { created_at: "2026-11-04T20:58:00Z" }), "2026-11-05");
+  assert.equal(planDayOf(new Date("2026-11-04T21:30:00Z"), "America/New_York", replan, morning), "2026-11-05");
+});
+
+test("planSnapshot v5: a replan run at 4 pm plans today from now, not tomorrow", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  const four = new Date("2026-11-04T21:02:00Z"); // 4:02 pm
+  const replan = { day: DAY, at: "2026-11-04T20:55:00Z", result: "started", reasons: ["busy_overlap"] };
+  const days = [{ day: DAY, shutdown_at: "18:30:00", turned_down: [] }];
+  const s = planSnapshot(v5Rows({ replan, days, plan_day: DAY }), four);
+  assert.equal(s.plan_day, DAY);
+  assert.deepEqual(s.window, { from: "16:15", to: "18:30" });
+  assert.equal(s.run.trigger, "replan");
+  // A replans row of another day never makes a replan run.
+  assert.equal(planSnapshot(v5Rows({ replan: { ...replan, day: "2026-11-03" } }), new Date("2026-11-04T14:20:00Z")).run.trigger, "morning");
+});
