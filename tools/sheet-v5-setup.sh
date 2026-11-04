@@ -276,7 +276,9 @@ step "Pick elvitigalalis@gmail.com, get past the unverified screen, and allow"
 say "    \"See the availability on Google Calendars\"."
 step "You land back on /plan, and Settings shows Calendar connected."
 pause "Press Enter when it says connected"
-if [[ "$(sql "select count(*) as n from calendar_account")" =~ \"n\":\ ([1-9]) ]]; then
+cal_connected() { sql "select count(*) as n from calendar_account" | grep -qE '"n": *"?[1-9]'; }
+until cal_connected || ! confirm "Not connected yet as far as the database can see. Check again?"; do :; done
+if cal_connected; then
   vault_url sheet_busy_url busy-sync
 else
   SKIPPED+=("Calendar not connected yet: re-run this script after Connect")
