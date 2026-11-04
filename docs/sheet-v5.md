@@ -642,6 +642,9 @@ weather_cache id boolean pk default true check (id), point text not null,
   touched thread (`threads.get`, format=metadata). Business days pass only at local midnight, so
   the first good run of each local day (and a full sync) also sweeps: `messages.list` with
   `newer_than:14d -in:drafts`, then each thread's newest message. A full sync logs no changes.
+  **Fix:** a run reads at most 50 touched threads (`threadsToRead(threads, more)`); when it cuts
+  any off, or history pages are left over, the run is a full sync (fresh `history_id`, a sweep),
+  so the threads it skipped are swept rather than lost.
   mail.mjs adds `parseAddresses`, `metadataQuery`, `syncMessage`, `syncThread`,
   `historyChanges`, `newestPerThread`, `replyDiff` and `searchMarks` for it and mail-mcp.
 - **The replan tick** in `telegram`'s send job: it reads the state, runs `shouldReplan`, and on

@@ -320,6 +320,14 @@ export function historyChanges(pages) {
   return { threads: [...threads], added: [...added] };
 }
 
+// The threads one run reads again: at most THREADS_MAX of those history touched. Cutting any
+// off, or history pages left over (`more`), makes it a full sync: the run starts from a fresh
+// history position and sweeps, so the threads it skipped are read by the sweep, not lost.
+export const THREADS_MAX = 50;
+export function threadsToRead(threads, more) {
+  return { threads: threads.slice(0, THREADS_MAX), full: Boolean(more) || threads.length > THREADS_MAX };
+}
+
 // The daily sweep's messages: users.messages.list gives ids and thread ids, newest first, so the
 // first message seen of each thread is its newest.
 export function newestPerThread(messages) {
