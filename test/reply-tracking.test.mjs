@@ -385,3 +385,39 @@ test("summarySignals: a bank alert is automated; addressed is to, cc or none for
   assert.deepEqual(summarySignals(g(PAT, "team@example.org", ME), "owner@example.com"), { automated: false, addressed: "cc" });
   assert.deepEqual(summarySignals(g(PAT, "team@example.org"), "owner@example.com"), { automated: false, addressed: "none" });
 });
+
+// --- Live fixes: his own unsent messages, empty Gmail replies, rows from the old rule ---------
+
+test("replyState: his draft as the thread's newest message is his, not theirs: owed to the person before it", async () => {
+  const { replyState, syncThread } = await import("../src/sheet/mail.mjs");
+  const g = (id, iso, labels, from, to) => ({ id, threadId: "18f3a1c2d4e5f800", labelIds: labels, internalDate: String(Date.parse(iso)),
+    payload: { headers: [{ name: "From", value: from }, { name: "To", value: to }] } });
+  const t = syncThread({ id: "18f3a1c2d4e5f800", messages: [
+    g("18f3a1c2d4e5f801", "2026-11-02T15:00:00Z", ["SENT"], ME, PAT),
+    g("18f3a1c2d4e5f802", "2026-11-03T20:00:00Z", ["INBOX", "CATEGORY_PERSONAL"], PAT, ME),
+    g("18f3a1c2d4e5f803", "2026-11-04T01:07:00Z", ["DRAFT"], ME, PAT),
+  ] }, "owner@example.com");
+  assert.deepEqual(replyState(t, TZ, wed0607), {
+    state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f802", who: "Pat Kim", basis: "thread", draft: true,
+  });
+});
+
+test("replyState: a message from his own address that isn't SENT (scheduled, or a draft without its label) is his unsent reply", async () => {
+  const { replyState, syncThread } = await import("../src/sheet/mail.mjs");
+  const g = (id, iso, labels, from, to) => ({ id, threadId: "18f3a1c2d4e5f800", labelIds: labels, internalDate: String(Date.parse(iso)),
+    payload: { headers: [{ name: "From", value: from }, { name: "To", value: to }] } });
+  for (const labels of [["SCHEDULED"], ["INBOX"], []]) {
+    const t = syncThread({ id: "18f3a1c2d4e5f800", messages: [
+      g("18f3a1c2d4e5f801", "2026-11-02T15:00:00Z", ["SENT"], ME, PAT),
+      g("18f3a1c2d4e5f802", "2026-11-03T20:00:00Z", ["INBOX"], PAT, ME),
+      g("18f3a1c2d4e5f803", "2026-11-04T12:45:00Z", labels, ME, PAT),
+    ] }, "owner@example.com");
+    const s = replyState(t, TZ, wed0607);
+    assert.equal(s.who, "Pat Kim", labels.join());
+    assert.equal(s.draft, true, labels.join());
+  }
+  // The sweep's single newest message from his own address, unsent, decides nothing.
+  const lone = { account: "owner@example.com", thread_id: "18f3a1c2d4e5f800",
+    messages: [m("18f3a1c2d4e5f803", "2026-11-04T01:07:00.000Z", ["INBOX"], ME, PAT, { from_address: "owner@example.com" })] };
+  assert.equal(replyState(lone, TZ, wed0607, { participated: true }), null);
+});
