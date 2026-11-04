@@ -151,6 +151,13 @@ export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { met
 export const calendarAccount = async () => (await rest("calendar_account?select=email,connected_at,last_error"))[0] ?? null;
 export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", { method: "DELETE" });
 
+// Oura (docs/sheet-v5.md, "Oura"): the grant's row and the sleep periods oura-sync keeps, read
+// here; connecting goes through oura-connect. Deleting the row deletes its tokens and every sleep
+// row (a trigger). Before the Oura schema has run, there is no row and no sleep.
+export const ouraAccount = async () => (await rest("oura_account?select=connected_at,synced_at,last_error").catch(() => []))[0] ?? null;
+export const deleteOuraAccount = () => rest("oura_account?id=eq.true", { method: "DELETE" });
+export const listSleep = () => rest("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
+
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
@@ -226,7 +233,8 @@ async function google(path, { method = "GET", body } = {}) {
 // Only his browser reads them; they are never saved, except as busy times (start and end only,
 // busy-sync.mjs). An extra calendar that fails is skipped.
 // "busy" is false for events Google marks as free; those don't take time from the day.
-// "calendar" is the ID it was read from ("primary" for his main one).
+// "calendar" is the ID it was read from ("primary" for his main one), and "id" Google's event ID
+// (with calendar, an event to-do's key).
 export async function calendarEvents(fromIso, toIso, extra = []) {
   const q = new URLSearchParams({ timeMin: fromIso, timeMax: toIso, singleEvents: "true", orderBy: "startTime" });
   const lists = await Promise.all(["primary", ...extra].map(async (id) => {
@@ -248,6 +256,7 @@ export async function calendarEvents(fromIso, toIso, extra = []) {
     ends_at: e.end.dateTime ?? e.end.date,
     link: e.htmlLink ?? null,
     calendar: e.calendar,
+    id: e.id,
   }));
 }
 
@@ -336,8 +345,15 @@ export async function sendMessage(text) {
   if (!res.ok || !out.id) throw new SheetError(`message: ${res.status} ${out.error ?? ""}`.trim());
   return out;
 }
-const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,events,created_in_calendar";
+const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,tasks,events,created_in_calendar,fired_at,steps,session_url,answered_at";
 export const getMessage = async (id) => (await rest(`messages?select=${MESSAGE_COLUMNS}&id=eq.${id}`))[0] ?? null;
+// The newest 10 messages, newest first, for /plan's Recent list. 404 (no table yet) reads as none.
+export const recentMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&order=at.desc&limit=10`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
+// Undo one item a message added (supabase/schema.sql): the item with its kind, or null.
+export const undoMessageItem = (m, item) => rest("rpc/undo_message_item", { method: "POST", body: { m, item } });
+// Record the Google event made for a message's event, so its Undo can delete it.
+export const messageEventCreated = (m, item, gcal) => rest("rpc/message_event_created", { method: "POST", body: { m, item, gcal } });
 // Answered messages whose events aren't in Google Calendar yet. Until the table exists PostgREST
 // answers 404, which reads as none.
 export const uncreatedMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&status=eq.done&created_in_calendar=is.false&order=at`)
@@ -346,3 +362,13 @@ export const uncreatedMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&
 // this call flipped created_in_calendar. unclaimEvents puts it back after a failed create.
 export const claimEvents = async (id) => (await rest(`messages?id=eq.${id}&created_in_calendar=is.false`, { method: "PATCH", body: { created_in_calendar: true }, prefer: "return=representation" })).length > 0;
 export const unclaimEvents = (id) => rest(`messages?id=eq.${id}`, { method: "PATCH", body: { created_in_calendar: false } });
+
+// --- Event to-dos (docs/sheet-v5.md, "Event to-dos") ---------------------------------------
+
+// The event to-dos of days from..to: done, hidden and Claude's concise title, by event key. Until
+// the table exists PostgREST answers 404, which reads as none.
+export const listEventTodos = (from, to) => rest(`event_todos?select=cal_event_key,title_ai,done,hidden&day=gte.${from}&day=lte.${to}`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
+// Checking an event off or hiding it: an upsert by key that writes only the fields given, so
+// Claude's title stays (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+export const saveEventTodo = (row) => rest("event_todos?on_conflict=cal_event_key", { method: "POST", body: row, prefer: "resolution=merge-duplicates,return=minimal" });

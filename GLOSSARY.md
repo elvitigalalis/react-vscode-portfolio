@@ -9,6 +9,10 @@ covers planning a day and being reminded of the plan.
 One thing to do, either on a day or in a Someday list.
 _Avoid_: To-do, item, todo
 
+**Event to-do**:
+A Google Calendar event shown as a row in its day's list, in time order among the tasks, so Lisul plans from one list. He can check it off or hide it; it is not a task.
+_Avoid_: Calendar task, event row
+
 **Someday list**:
 A named column of tasks with no day. "Inbox" is the one that takes rolled-out tasks.
 _Avoid_: Backlog, capture list
@@ -74,8 +78,16 @@ For one kind of task, the median of actual time over estimate, which shows how f
 _Avoid_: Speed, velocity, accuracy
 
 **Workload cap**:
-The most planned work a day may hold.
+The most planned work a day may hold. On a day with Oura numbers it follows his readiness and how long he slept.
 _Avoid_: Daily limit, capacity, budget
+
+**Wake time**:
+When Lisul got up today, from the end of his main sleep on his Oura ring. The plan starts 30 minutes after it.
+_Avoid_: Wake-up, alarm, start time
+
+**Typical wake**:
+The median wake time of his last 14 weekday nights, or of his last 14 weekend nights, used until today's wake time has synced.
+_Avoid_: Usual wake, average wake, chronotype
 
 **Habit**:
 A recurring time Lisul protects, such as gym or lunch, with set days, an ideal time, a flex window and a defence level (flexible or firm).
