@@ -112,7 +112,9 @@ the date just named. Go through a long message item by item:
   at_time, est_min, why }. due is its deadline's date; tasks have no due time, so a deadline at
   a time goes in the title: "Project 2 (due 11:59 pm)". day is the day to do it, or null for
   the Inbox; at_time "HH:MM" only when he gave a time to do it (it needs a day); est_min from a
-  length given ("~2h" is 120), 15 to 480, or null.
+  length given ("~2h" is 120), 15 to 480, or null. A task with at_time always gets est_min:
+  when no length is given, estimate a reasonable one ("Register for classes" is 20), since his
+  day list shows when it ends; answer_messages refuses at_time without est_min.
 - each thing that happens at a time (a class, an exam or quiz in class, a meeting, an
   appointment, an event) is an event: { title, start: "YYYY-MM-DDTHH:MM", minutes, why }.
   minutes is the length given, or 60 when there is none.
