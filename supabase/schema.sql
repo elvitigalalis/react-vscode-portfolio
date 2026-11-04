@@ -749,7 +749,8 @@ begin
     coalesce(apply_proposal.couldnt_fit, '{}'), coalesce(apply_proposal.suggested, '[]'),
     coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'));
   -- As in v4: a new revision replaces the day's open items, skipping any message already there.
-  delete from needs_you n where n.day = d and not n.done;
+  -- v5 SRC2: only mail rows; Slack rows are slack-sync's, and stay until he marks them done.
+  delete from needs_you n where n.day = d and not n.done and n.source = 'mail';
   -- v5 L1: each row carries the From address checkProposal looked up (null when unknown).
   insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due, from_address)
   select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due, x.from_address
@@ -1019,4 +1020,27 @@ select cron.schedule('sheet-work', '40 * * * *', $job$
     body := '{"job": "work"}'::jsonb)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_work_url')
+$job$);
+
+-- --- v5 SRC2, Slack in Needs you (docs/sheet-v5.md) ------------------------------------------
+-- slack-sync (supabase/functions/slack-sync) writes a needs_you row per new mention or DM, with
+-- account 'slack', message_id '<channel id>:<ts>', the channel, the person and the permalink,
+-- never the message text. Its ids go in feed_seen ('slack', message_id) as well, so a row he
+-- marked done (and nightly_roll deleted) never comes back. The token is a function secret
+-- (SHEET_SLACK_TOKEN), never a column here.
+alter table needs_you add column if not exists source text not null default 'mail';
+alter table needs_you drop constraint if exists needs_you_source_check;
+alter table needs_you add constraint needs_you_source_check check (source in ('mail', 'slack'));
+
+-- At :42 every hour, call slack-sync. Like sheet-work, it does nothing until its URL and the
+-- shared secret are in Vault.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-slack';
+select cron.schedule('sheet-slack', '42 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_slack_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "slack"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_slack_url')
 $job$);
