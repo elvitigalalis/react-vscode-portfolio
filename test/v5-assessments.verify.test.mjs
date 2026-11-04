@@ -29,21 +29,21 @@ const PERSONAL = "elvitigalalis@gmail.com";
 // assessmentSender
 // =============================================================================================
 
-test("assessmentSender: online-assessment senders", todo, async () => {
+test("assessmentSender: online-assessment senders", async () => {
   const { assessmentSender } = await mail();
   for (const from of ["no-reply@hackerrank.com", "support@codesignal.com", "noreply@codility.com", "noreply@hirevue.com"]) {
     assert.equal(assessmentSender(from), "assessment", from);
   }
 });
 
-test("assessmentSender: interview-scheduling senders", todo, async () => {
+test("assessmentSender: interview-scheduling senders", async () => {
   const { assessmentSender } = await mail();
   for (const from of ["scheduling@karat.com", "notifications@calendly.com", "no-reply@goodtime.io"]) {
     assert.equal(assessmentSender(from), "interview", from);
   }
 });
 
-test("assessmentSender: any subdomain, and any case", todo, async () => {
+test("assessmentSender: any subdomain, and any case", async () => {
   const { assessmentSender } = await mail();
   assert.equal(assessmentSender("invites@email.hackerrank.com"), "assessment");
   assert.equal(assessmentSender("x@app.eu.codesignal.com"), "assessment");
@@ -51,7 +51,7 @@ test("assessmentSender: any subdomain, and any case", todo, async () => {
   assert.equal(assessmentSender("No-Reply@HackerRank.com"), "assessment");
 });
 
-test("assessmentSender: look-alikes and everything else are null", todo, async () => {
+test("assessmentSender: look-alikes and everything else are null", async () => {
   const { assessmentSender } = await mail();
   for (const from of [
     "a@nothackerrank.com", // not a subdomain
