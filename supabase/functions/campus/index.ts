@@ -22,7 +22,7 @@
 // Secrets: SHEET_CRON_SECRET (already set for telegram). SUPABASE_URL and
 // SUPABASE_SERVICE_ROLE_KEY are provided by Supabase and read in ../_shared/server.ts.
 import { parseIcs } from "../../../src/sheet/ical.mjs";
-import { campusRows, campusWindowIcs, countsDue, rsvpCount } from "../../../src/sheet/feeds.mjs";
+import { campusChange, campusRows, campusWindowIcs, countsDue, rsvpCount } from "../../../src/sheet/feeds.mjs";
 import { calendarText, db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -59,15 +59,29 @@ async function sync(now: Date) {
   if (state?.etag) headers["If-None-Match"] = state.etag;
   if (state?.last_modified) headers["If-Modified-Since"] = state.last_modified;
   const res = await fetch(FEED, { headers });
+  // v5 R1: today's events before and after a changed feed's write, for the replan decision.
+  const before = res.status === 304 ? null : await todays(now);
   const fresh = res.status === 304 ? null : await write(res, now);
 
   const at = encodeURIComponent(now.toISOString());
   await db(`campus_events?ends_at=lte.${at}`, { method: "DELETE" });
+  if (before) {
+    const [settings] = await db("settings?select=time_zone");
+    const change = campusChange(before, await todays(now), now, settings?.time_zone ?? "America/New_York");
+    if (change) await db("changes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(change) });
+  }
   await saveFeedState(SOURCE, { fetched_at: now.toISOString(), ok: true, error: null, ...fresh });
   // The counts are extra: their failing never marks the feed as failed.
   const counts = await refreshCounts(now).catch((e) => { console.error("campus counts:", e instanceof Error ? e.message : e); return null; });
   return { ok: true, status: res.status, items: fresh?.items, counts };
 }
+
+// The events still to come within the next day; campusChange narrows them to today.
+const todays = (now: Date) => {
+  const from = encodeURIComponent(now.toISOString());
+  const to = encodeURIComponent(new Date(now.getTime() + 86_400_000).toISOString());
+  return db(`campus_events?select=uid,starts_at,ends_at&ends_at=gt.${from}&starts_at=lt.${to}`);
+};
 
 // --- RSVP counts ------------------------------------------------------------------------------
 
