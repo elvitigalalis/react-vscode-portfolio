@@ -1308,6 +1308,76 @@ begin
     then raise exception 'deleting a message kept its busy time'; end if;
   raise notice '✓ messages: owner-only, answer_message adds tasks, events as busy times, and answers once';
 end $$;
+-- What a message added, item by item, and Undo on each (docs/sheet-messages.md).
+do $$
+declare
+  m uuid;
+  m2 uuid;
+  t1 uuid;
+  e1 uuid;
+  e2 uuid;
+  out jsonb;
+begin
+  insert into messages (text) values ('Project 2 due Nov 14 11:59pm; quiz Tue 9am; lab Wed 2pm') returning id into m;
+  perform answer_message(m,
+    '[{"title": "MSG Project 2 (due 11:59 pm)", "day": null, "list": "Inbox", "due": "2026-11-14", "at_time": null, "est_min": null},
+      {"title": "MSG Read ch. 5", "day": "2026-11-09", "list": null, "due": "2026-11-10", "at_time": null, "est_min": 60}]',
+    '[{"title": "Quiz ch. 5", "starts_at": "2026-11-10T14:00:00.000Z", "ends_at": "2026-11-10T15:00:00.000Z"},
+      {"title": "Lab", "starts_at": "2026-11-11T19:00:00.000Z", "ends_at": "2026-11-11T20:00:00.000Z"}]',
+    'Added 2 tasks and 2 events; skipped office hours (no day given).');
+  -- Each task is listed with its id, title and place; each event gets an id.
+  if (select jsonb_array_length(tasks) <> 2 or tasks -> 0 ->> 'title' <> 'MSG Project 2 (due 11:59 pm)'
+        or tasks -> 0 ->> 'list' <> 'Inbox' or tasks -> 0 ->> 'due' <> '2026-11-14' or tasks -> 1 ->> 'day' <> '2026-11-09'
+        from messages where id = m)
+    then raise exception 'answer_message did not list the tasks it added'; end if;
+  select (tasks -> 0 ->> 'id')::uuid, (events -> 0 ->> 'id')::uuid, (events -> 1 ->> 'id')::uuid into t1, e1, e2 from messages where id = m;
+  if not exists (select 1 from tasks where id = t1 and title = 'MSG Project 2 (due 11:59 pm)')
+    then raise exception 'a listed task id is not the task added'; end if;
+  if e1 is null or e2 is null or e1 = e2 then raise exception 'events did not get their own ids'; end if;
+
+  -- /plan records the Google event it made for an event.
+  perform message_event_created(m, e1, 'gcal-abc');
+  if (select events -> 0 ->> 'gcal_id' from messages where id = m) is distinct from 'gcal-abc'
+    then raise exception 'message_event_created did not keep the Google id'; end if;
+
+  -- Undo a task: the task goes, and so does its line.
+  out := undo_message_item(m, t1);
+  if out ->> 'kind' <> 'task' or out ->> 'title' <> 'MSG Project 2 (due 11:59 pm)' then raise exception 'undo of a task returned %', out; end if;
+  if exists (select 1 from tasks where id = t1) then raise exception 'undo kept the task'; end if;
+  if (select jsonb_array_length(tasks) <> 1 or tasks_added <> 1 or status <> 'done' from messages where id = m)
+    then raise exception 'undo did not take the task off the message'; end if;
+
+  -- Undo an event: its line and its busy time go; it comes back with its Google id, for /plan to delete.
+  out := undo_message_item(m, e1);
+  if out ->> 'kind' <> 'event' or out ->> 'gcal_id' <> 'gcal-abc' then raise exception 'undo of an event returned %', out; end if;
+  if (select jsonb_array_length(events) <> 1 or events -> 0 ->> 'title' <> 'Lab' from messages where id = m)
+    then raise exception 'undo did not take the event off the message'; end if;
+  if exists (select 1 from busy where message_id = m and starts_at = '2026-11-10T14:00:00Z')
+    then raise exception 'undo kept the event''s busy time'; end if;
+  if not exists (select 1 from busy where message_id = m and starts_at = '2026-11-11T19:00:00Z')
+    then raise exception 'undo took another event''s busy time'; end if;
+
+  -- An item undone already, or of another message, is nothing to undo.
+  if undo_message_item(m, e1) is not null then raise exception 'undo ran twice'; end if;
+
+  -- Two messages with an event at the same times share a busy row; undoing one keeps it busy.
+  insert into messages (text) values ('lab Wed 2pm') returning id into m2;
+  perform answer_message(m2, '[]', '[{"title": "Lab again", "starts_at": "2026-11-11T19:00:00.000Z", "ends_at": "2026-11-11T20:00:00.000Z"}]', 'Lab Wed 2-3 pm.');
+  perform undo_message_item(m, e2);
+  if not exists (select 1 from busy where source = 'message' and message_id = m2 and starts_at = '2026-11-11T19:00:00Z')
+    then raise exception 'undo left the other message''s event without its busy time'; end if;
+
+  -- A stranger can undo nothing.
+  perform pg_temp.as_user('authenticated', 'stranger@example.com');
+  if undo_message_item(m2, (select (events -> 0 ->> 'id')::uuid from messages where id = m2)) is not null
+    then raise exception 'a stranger undid an item'; end if;
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  if (select jsonb_array_length(events) from messages where id = m2) <> 1 then raise exception 'a stranger changed a message'; end if;
+
+  delete from tasks where title like 'MSG %';
+  delete from messages where id in (m, m2);
+  raise notice '✓ messages: each added item is listed, and undone one at a time';
+end $$;
 reset role;
 do $$ begin
   insert into messages (at, text) values (now() - interval '31 days', 'old one'), (now() - interval '29 days', 'new one');
