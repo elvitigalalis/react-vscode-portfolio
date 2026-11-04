@@ -53,6 +53,7 @@ function runOf(rows, now) {
 //   actuals    v5 P1: the actuals rows (pace)
 //   past       v5 P1: the approved blocks of the 14 days before plan_day, each with its task's
 //              done as `task: { done }` (paceQueries, proposal-io.mjs)
+//   habits     v5 H1: the habits rows
 //   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
@@ -73,7 +74,8 @@ export function planSnapshot(rows, now) {
   const seen = new Set(turnedDown);
   // v5 P1: pace per kind, and each task's paced estimate.
   const pace = paceByKind(rows.actuals ?? []);
-  const past = rows.past ?? [];
+  // v5 H1: habit blocks aren't tasks, so they stay out of planned versus done.
+  const past = (rows.past ?? []).filter((b) => b.task_id);
   const tasks = groups.flat().filter((t) => !seen.has(t.id) && seen.add(t.id)).map((t) => ({
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
     source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
@@ -90,7 +92,7 @@ export function planSnapshot(rows, now) {
     turned_down: turnedDown,
     tasks,
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
-      .map((b) => ({ task_id: b.task_id, starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
+      .map((b) => ({ task_id: b.task_id, ...(b.habit_id ? { habit_id: b.habit_id } : {}), starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
     busy: rows.busy.filter((b) => onDay(b, day, tz)).map((b) => ({ starts_at: b.starts_at, ends_at: b.ends_at })),
     busy_as_of: settings.busy_as_of ?? null,
     interests: settings.interests ?? null,
@@ -114,7 +116,24 @@ export function planSnapshot(rows, now) {
     // v5 P1.
     pace,
     planned_vs_done: plannedVsDone(past, past.map((b) => ({ id: b.task_id, done: Boolean(b.task?.done) })), day, tz),
+    // v5 H1.
+    habits: dayHabits(rows.habits, day),
   };
+}
+
+// --- v5 H1: habits (docs/sheet-v5.md, "planSnapshot" and "checkProposal") ------------------
+
+// ISO weekday of a "YYYY-MM-DD" date, 1 = Monday.
+const isoWeekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay() || 7;
+
+// The habits on `day`'s weekday: firm ones first, then flexible, each by ideal time, then
+// position. The morning task places them in this order.
+function dayHabits(habits, day) {
+  const wd = isoWeekday(day);
+  return list(habits).filter((h) => list(h.days).includes(wd))
+    .sort((a, b) => (a.defence === "firm" ? 0 : 1) - (b.defence === "firm" ? 0 : 1)
+      || a.ideal.localeCompare(b.ideal) || (a.position ?? 0) - (b.position ?? 0))
+    .map((h) => ({ id: h.id, name: h.name, ideal: h.ideal.slice(0, 5), minutes: h.minutes, flex_min: h.flex_min, defence: h.defence }));
 }
 
 // --- submit_proposal -------------------------------------------------------------------------
@@ -207,6 +226,51 @@ function dayRuleErrors(spans, snapshot, errors) {
   }
 }
 
+// The habit blocks of a proposal ({ habit_id, start: "HH:MM" }): each one of the day's habits, at
+// most once, starting within ideal ± flex_min (both ends included) and running the habit's
+// minutes inside the plan window, over no busy time, approved block, block or other habit block.
+// Returns apply_proposal's habit_blocks and the spans (named habits[i]) for the day rules.
+function habitBlockRows(input, snapshot, placed, errors) {
+  const out = { rows: [], spans: [] };
+  const given = list(input?.habits);
+  if (!Array.isArray(given)) return errors.push("habits: must be a list"), out;
+  if (given.length > MAX_BLOCKS) return errors.push(`habits: at most ${MAX_BLOCKS}, got ${given.length}`), out;
+  const { plan_day: day, time_zone: tz, window } = snapshot;
+  const habits = new Map(list(snapshot.habits).map((h) => [h.id, h]));
+  const at = (iso) => minutesOn(iso, day, tz);
+  const fixed = [
+    ...snapshot.busy.map((s) => ({ start: at(s.starts_at), end: at(s.ends_at), label: "a busy time" })),
+    ...snapshot.blocks.filter((b) => !b.proposed).map((s) => ({ start: at(s.starts_at), end: at(s.ends_at), label: "an approved block" })),
+  ];
+  const seen = new Set();
+  given.forEach((g, i) => {
+    const name = `habits[${i}]`;
+    const before = errors.length;
+    const h = habits.get(g?.habit_id);
+    if (!h) return errors.push(`${name}: habit_id is not one of the habits read_planner gave`);
+    if (seen.has(h.id)) return errors.push(`${name}: this habit is placed already; place it at most once`);
+    seen.add(h.id);
+    if (typeof g.start !== "string" || !HHMM.test(g.start)) return errors.push(`${name}: start must be "HH:MM", 24-hour`);
+    const from = toMinutes(g.start);
+    const to = from + h.minutes;
+    const ideal = toMinutes(h.ideal);
+    if (Math.abs(from - ideal) > h.flex_min) {
+      errors.push(`${name}: must start between ${formatClock(Math.max(0, ideal - h.flex_min))} and ${formatClock(Math.min(1439, ideal + h.flex_min))}, ${h.name}'s ideal time ± ${h.flex_min} minutes`);
+    }
+    if (from < toMinutes(window.from)) errors.push(`${name}: starts before ${window.from}, the start of the plan window`);
+    else if (to > toMinutes(window.to)) errors.push(`${name}: ends after ${window.to}, the end of the plan window`);
+    const hit = fixed.find((s) => from < s.end && s.start < to);
+    if (hit) errors.push(`${name}: overlaps ${hit.label} ${clockSpan(hit.start, hit.end)}`);
+    const block = placed.find((p) => from < p.end && p.start < to);
+    if (block) errors.push(`${name}: overlaps blocks[${block.i}]`);
+    const twin = out.spans.find((p) => from < p.end && p.start < to);
+    if (twin) errors.push(`${name}: overlaps ${twin.name}`);
+    out.spans.push({ name, start: from, end: to });
+    if (errors.length === before) out.rows.push({ habit_id: h.id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
+  });
+  return out;
+}
+
 export const MAX_COULDNT_FIT = 12;
 
 // The tasks Claude couldn't fit: ids from the task list, each once, none also given a block.
@@ -290,6 +354,7 @@ export function checkProposal(input, snapshot, senders = {}) {
 
   // Blocks.
   const blocks = [];
+  const placed = [];
   const inBlocks = list(input?.blocks);
   if (!Array.isArray(inBlocks)) errors.push("blocks: must be a list");
   else if (inBlocks.length > MAX_BLOCKS) errors.push(`blocks: at most ${MAX_BLOCKS}, got ${inBlocks.length}`);
@@ -303,7 +368,6 @@ export function checkProposal(input, snapshot, senders = {}) {
       ...taken(snapshot.busy, "a busy time"),
       ...taken(snapshot.blocks.filter((b) => !b.proposed), "an approved block"),
     ];
-    const placed = [];
     inBlocks.forEach((b, i) => {
       const name = `blocks[${i}]`;
       const before = errors.length;
@@ -337,8 +401,10 @@ export function checkProposal(input, snapshot, senders = {}) {
         blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
       }
     });
-    if (v5) dayRuleErrors(placed.map((p) => ({ ...p, name: `blocks[${p.i}]` })), snapshot, errors);
   }
+  // v5 H1: habit blocks, checked against the same window, busy times and blocks.
+  const habitBlocks = v5 ? habitBlockRows(input, snapshot, placed, errors) : { rows: [], spans: [] };
+  if (v5) dayRuleErrors([...placed.map((p) => ({ ...p, name: `blocks[${p.i}]` })), ...habitBlocks.spans], snapshot, errors);
 
   // Needs you.
   const needs = [];
@@ -390,12 +456,11 @@ export function checkProposal(input, snapshot, senders = {}) {
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
-  // Habit blocks (H1) come with their ticket.
   const { trigger: run_trigger, reasons } = snapshot.run;
   const kept = dropNeverShown(needs, suggested, snapshot, senders);
   return {
     ok: true, errors: [],
-    rows: { d: day, replaces, blocks, habit_blocks: [], needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons },
+    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons },
     dropped: kept.dropped,
   };
 }
@@ -459,7 +524,8 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
     ? `Morning plan: ${plural(mine.length, "block")}, ${clockSpan(at(mine[0].starts_at), at(mine.at(-1).ends_at))}.`
     : "Morning plan: no blocks."];
   for (const b of mine.slice(0, SHOWN_BLOCKS)) {
-    const title = tasks.find((t) => t.id === b.task_id)?.title ?? "A task";
+    // v5 H1: a habit block has no task; the brief doesn't read habits, so it says "Habit".
+    const title = b.habit_id ? "Habit" : tasks.find((t) => t.id === b.task_id)?.title ?? "A task";
     lines.push(`${formatClock(at(b.starts_at))} · ${title} (${blockMinutes(b)} min)`);
   }
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);

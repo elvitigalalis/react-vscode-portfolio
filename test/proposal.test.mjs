@@ -152,3 +152,23 @@ test("planSnapshot v5: a started replan after the newest revision and under 30 m
   assert.deepEqual(planSnapshot(v5Rows({ replan: { ...replan, result: "failed" } }), now).run, morning);
   assert.deepEqual(planSnapshot(v5Rows({ replan: { ...replan, at: "2026-11-04T13:55:00Z" } }), now).run, morning);
 });
+
+// --- v5 H1: habits ------------------------------------------------------------------------------
+
+test("proposalLines: a habit block reads \"Habit\"", () => {
+  const p = { day: DAY, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [] };
+  const blocks = [{ id: "p1", task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: true }];
+  assert.deepEqual(proposalLines(p, blocks, [], [], [], [], "America/New_York"),
+    ["Morning plan: 1 block, 12:30–1:00 pm.", "12:30 pm · Habit (30 min)"]);
+});
+
+test("planSnapshot: approved habit blocks keep their habit_id, and stay out of planned versus done", () => {
+  const rows = {
+    settings: { time_zone: "America/New_York" }, tasks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [],
+    blocks: [{ task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: false }],
+    past: [{ task_id: null, habit_id: "h1", starts_at: "2026-11-03T17:30:00Z", ends_at: "2026-11-03T18:00:00Z", proposed: false, task: null }],
+  };
+  const s = planSnapshot(rows, new Date("2026-11-04T11:07:00Z"));
+  assert.deepEqual(s.blocks, [{ task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: false }]);
+  assert.deepEqual(s.planned_vs_done, []);
+});
