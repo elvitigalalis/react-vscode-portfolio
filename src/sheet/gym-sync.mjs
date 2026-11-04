@@ -53,9 +53,14 @@ export function outbox(storage, name = "sheet.gym.outbox") {
     // The queued rows of a table, for drawing what the server hasn't got yet.
     rows: (table) => entries.filter((e) => e.op === "upsert" && e.table === table).map((e) => e.row),
     dropped: (table) => entries.filter((e) => e.op === "delete" && e.table === table).map((e) => e.id),
-    // One flush at a time; a second call while one runs waits for it. True when all went up.
+    // One flush at a time; a second call while one runs waits for it, and what was saved in the
+    // meantime goes up before it ends. True when all went up.
     flush(send) {
-      running ??= run(send).finally(() => { running = null; });
+      running ??= (async () => {
+        let ok;
+        do ok = await run(send); while (ok && entries.length);
+        return ok;
+      })().finally(() => { running = null; });
       return running;
     },
   };
