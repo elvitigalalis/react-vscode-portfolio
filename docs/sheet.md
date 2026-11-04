@@ -144,7 +144,8 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
   reaches /now; one never approved lapses at shutdown or the nightly rollover.
 - `D` sends the focused task to tomorrow, `Z` to Someday. A block can be focused: `↑` `↓` move
   it 15 minutes, `A` approves a proposed one, and `Shift+A` approves all.
-- Opening it after 3 pm plans tomorrow instead.
+- It plans today while today has time left before shutdown, and tomorrow once shutdown has
+  passed or the day is shut down. (The morning routine still plans tomorrow from 3 pm.)
 - "Done" closes it and marks the day planned.
 
 **Block rules** (Sunsama): The Sheet only ever edits events it created. Completing a task during
