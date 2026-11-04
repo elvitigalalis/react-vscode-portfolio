@@ -3,7 +3,7 @@
 // side: when the message function fires the task, what answer_messages may write, and what
 // read_planner adds for them. Kept free of the network and of Node APIs so node --test covers
 // it; the message and planner-mcp Edge Functions import it.
-import { addDays, localNow, plural, zonedIso } from "./logic.mjs";
+import { addDays, dayLabel, formatClock, formatSpan, localNow, minutesOn, plural, weekdayName, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Sending (the message function) ----------------------------------------------------------
@@ -172,10 +172,42 @@ export const proposalTrigger = (trigger) => (trigger === "message" ? "replan" : 
 
 // --- /plan -------------------------------------------------------------------------------------
 
-// "Added: 2 tasks, 1 event" under an answered message's reply; "Nothing added" for a failed one.
+// "Added: 2 tasks, 1 event" under an answered message's reply; "Nothing added" for a failed one,
+// and "All undone" for one whose items were all undone.
 export function addedLine(m) {
   if (m.status === "failed") return "Nothing added";
   if (m.status !== "done") return "";
   const parts = [m.tasks_added && plural(m.tasks_added, "task"), list(m.events).length && plural(m.events.length, "event")].filter(Boolean);
-  return parts.length ? `Added: ${parts.join(", ")}` : "Nothing added";
+  return parts.length ? `Added: ${parts.join(", ")}` : "All undone";
+}
+
+// Where a message stands, from its row, the other rows /plan has (a batched message rides on
+// another's run) and now: { key, words }. Sending is /plan's own, before there is a row.
+export function messageState(m, rows, now) {
+  if (m.status === "done") return { key: "added", words: addedLine(m) };
+  if (m.status === "failed") return { key: "unparsed", words: "Couldn't parse it: nothing added" };
+  const fresh = (r) => r.status === "pending" && r.fired_at && now.getTime() - Date.parse(r.fired_at) < MESSAGE_FRESH;
+  if (fresh(m) || list(rows).some(fresh)) return { key: "reading", words: "Claude is reading…" };
+  return { key: "queued", words: "Queued: Claude is busy, so this runs with the next plan." };
+}
+
+// "Tue Nov 10".
+const shortDay = (day) => `${weekdayName(day)} ${dayLabel(day).date}`;
+
+// What an answered message added, one line each, to-dos first: { id, kind, title, when }, with
+// a to-do's day (or Inbox), fixed time and due date, and an event's day and times. id is what
+// undo_message_item takes; an event from before events had ids has none.
+export function itemLines(m, timeZone) {
+  const tasks = list(m.tasks).map((t) => ({
+    id: t.id, kind: "task", title: t.title,
+    when: [
+      t.day ? `${shortDay(t.day)}${t.at_time ? `, ${formatClock(Number(t.at_time.slice(0, 2)) * 60 + Number(t.at_time.slice(3, 5)))}` : ""}` : (t.list ?? "Inbox"),
+      t.due && `due ${shortDay(t.due)}`,
+    ].filter(Boolean).join(" · "),
+  }));
+  const events = list(m.events).map((e) => {
+    const day = localNow(new Date(e.starts_at), timeZone).day;
+    return { id: e.id ?? null, kind: "event", title: e.title, when: `${shortDay(day)}, ${formatSpan(minutesOn(e.starts_at, day, timeZone), minutesOn(e.ends_at, day, timeZone))}` };
+  });
+  return [...tasks, ...events];
 }
