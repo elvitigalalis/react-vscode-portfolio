@@ -33,6 +33,7 @@ export const reasonWords = (reasons) => reasons.map((r) => REASON_WORDS[r]).filt
 
 // The changes row a sync writes for `reason`: { kind, reason, weight, ref }. `ref` is an id in
 // the source (never a title), cut to the column's 200 characters.
+/** @param {string} reason @param {string | number | null} [ref] */
 export function changeRow(reason, ref = null) {
   const [kind, weight] = REASONS[reason] ?? [];
   if (!kind) throw new Error(`replan: unknown reason ${reason}`);
