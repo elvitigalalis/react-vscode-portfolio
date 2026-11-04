@@ -33,12 +33,15 @@ memory. End with one line: "Morning plan not submitted: <tool> is missing (recon
 <planner|mail> connector)."
 
 STEP 2: READ THE PLANNER
-Call read_planner. It returns now, time_zone, plan_day, shutdown ("HH:MM"), tasks, blocks,
-busy, busy_as_of, interests, campus, proposal, needs_you_open and accounts.
+Call read_planner. It returns now, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
+to }, "HH:MM"), tasks, blocks, busy, busy_as_of, interests, campus, proposal, turned_down,
+needs_you_open and accounts.
 - D is plan_day. Every clock time you write is local time in time_zone on D. Convert the
   timestamps in blocks, busy and campus to that zone before comparing them.
-- If proposal.status is "approved" or "skipped", Lisul has decided D already: submit nothing
-  and end with one line saying so.
+- proposal is D's newest plan revision ({ rev, status, created_at, run_trigger }), or null when
+  D has none yet. Each submit makes a new revision that replaces it.
+- If proposal.status is "skipped" or "lapsed", Lisul has closed D: submit nothing and end with
+  one line saying so. "approved" is fine: plan around the blocks he approved.
 
 STEP 3: INBOX SWEEP (Needs you)
 Run these search_mail queries with no account (that covers every account) and max 25:
@@ -87,16 +90,18 @@ never a block.
 
 STEP 5: FIT THE BLOCKS
 Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
-- Free time is 07:00 to shutdown on D (from now, rounded up to the next quarter hour, when D is
-  today), minus every busy time and every block with proposed false. Ignore proposed blocks:
-  this proposal replaces them. Skip a task that already has a block with proposed false on D.
+- Free time is window.from to window.to on D, minus every busy time and every block with
+  proposed false. A block with proposed false is one Lisul approved: it is locked, so treat it
+  exactly like a busy time and never move, cover or replace it. Ignore proposed blocks: this
+  revision replaces them. Skip a task that already has a block with proposed false on D.
+- Tasks Lisul turned down today (turned_down) are left out of tasks. Never place one.
 - Starts fall on quarter hours (:00, :15, :30, :45). minutes is est_min rounded to the nearest
   15 (at least 15, at most 240), or 30 when est_min is null.
 - Order: at_risk tasks first, earliest due first, in the earliest gap that ends before the due
   date ends; then tasks with at_time, starting exactly at at_time; then the rest, in the order
   given, in the earliest gap that fits.
 - A block never overlaps a busy time, a block with proposed false or another block of yours,
-  starts at 07:00 or later and ends by shutdown. Never shorten a block to make it fit. A task
+  starts at window.from or later and ends by window.to. Never shorten a block to make it fit. A task
   that doesn't fit, or whose at_time isn't free, is left out.
 - At most 12 blocks. task_id is always an id from tasks.
 note: one line, at most 280 characters, no URL: what didn't fit and why, e.g. "Read ch. 4
@@ -104,13 +109,16 @@ note: one line, at most 280 characters, no URL: what didn't fit and why, e.g. "R
 old, add "Busy times may be stale." Leave note out when everything fit and busy times are fresh.
 
 STEP 6: SUBMIT
-Call submit_proposal with { day: D, blocks, needs_you, picks, note }. Submit even when blocks is
-empty, so the Needs you items and the note still land. If it returns ok: false, each error names
-a field: fix exactly those and submit again. At most 3 submits in all. Never work around an
+Call submit_proposal with { day: D, replaces, blocks, needs_you, picks, note }, where replaces
+is proposal.rev from step 2, or null when proposal was null. Submit even when blocks is empty,
+so the Needs you items and the note still land. If it returns ok: false, each error names a
+field: fix exactly those and submit again. If an error names replaces, a newer plan came in
+while you worked: submit nothing more and say so in the summary. On ok: true, rev is the new
+revision's number; a resubmit after it uses that rev as replaces. At most 3 submits in all. Never work around an
 error by adding text or tasks that aren't in the data.
 
 STEP 7: SUMMARY
-End with 3-6 plain lines: the day, how many blocks and their span, what didn't fit, how many
+End with 3-6 plain lines: the day and the revision, how many blocks and their span, what didn't fit, how many
 Needs you items (by kind), the campus picks, and any errors left after the last submit. Include
 no URL and no mail text beyond a sender's name.
 ```
