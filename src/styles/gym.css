@@ -1,0 +1,134 @@
+/* /plan/gym/ (docs/sheet-gym.md), on top of sheet.css and the site's tokens (global.css). Phone
+   first: one column, thumb-sized controls (56 px steppers and ✓, 44 px chips), inputs at 20 px so
+   iOS never zooms, and the rest timer in a bar along the bottom. */
+.gym { max-width: 40rem; padding-bottom: 6rem; }
+.gym-main { min-height: 70vh; }
+.gym a.sheet-btn { text-decoration: none; display: inline-flex; align-items: center; }
+.gym-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.gym-tools .sheet-btn { min-height: 2.75rem; display: inline-flex; align-items: center; text-decoration: none; }
+.gym-tools [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+
+.gym-day { font-family: var(--serif); font-size: 1.5rem; margin: 0.5rem 0 0.4rem; }
+.gym-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0 1rem; color: var(--muted); font-size: 0.875rem; }
+.gym-select, .gym-text {
+  font: inherit; font-size: 1rem; color: var(--fg); background: var(--card); border: 1px solid var(--line-strong);
+  border-radius: 0.4rem; min-height: 2.75rem; padding: 0 0.6rem; max-width: 100%;
+}
+.gym-text { width: 100%; }
+
+/* The 4 × 6 strip: one row per week. */
+.gym-strip { display: grid; gap: 0.25rem; width: max-content; }
+.gym-strip-week { display: grid; grid-template-columns: repeat(6, 1.1rem); gap: 0.25rem; }
+.gym-dot { height: 0.6rem; border-radius: 0.15rem; background: var(--line); }
+.gym-dot.is-done { background: var(--muted); }
+.gym-dot.is-today { background: var(--accent); outline: 2px solid var(--accent); outline-offset: 1px; }
+.gym-dot.is-next { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* An exercise. */
+.gym-card { background: var(--card); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.9rem 0.5rem; margin: 0 0 1rem; }
+.gym-name { display: flex; align-items: center; gap: 0.4rem; font-size: 1.125rem; margin: 0 0 0.25rem; }
+.gym-name > span:first-child { flex: 1; min-width: 0; }
+.gym-tag { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); border: 1px solid var(--line); border-radius: 0.25rem; padding: 0 0.3rem; }
+.gym-icon-btn {
+  font: inherit; font-size: 1.125rem; color: var(--fg); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 0.4rem; min-width: 2.75rem; min-height: 2.75rem; cursor: pointer;
+}
+.gym-rx, .gym-last { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.2rem; }
+.gym-suggest { margin: 0.35rem 0; display: flex; flex-wrap: wrap; gap: 0.2rem 0.6rem; align-items: baseline; }
+.gym-suggest span { color: var(--muted); font-size: 0.875rem; }
+.gym-spark { display: block; width: 6rem; height: 1.5rem; margin: 0.25rem 0; }
+.gym-spark polyline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.gym-plates { color: var(--muted); font-size: 0.8125rem; margin: -0.25rem 0 0.5rem 2rem; font-variant-numeric: tabular-nums; }
+
+/* A set: number, last time and ✓ on top, then the weight and reps steppers. On wide screens it is
+   one line, like Strong's Set | Previous | lb | Reps | ✓. */
+.gym-set {
+  display: grid; grid-template-columns: 2rem 1fr 3.5rem; grid-template-areas: "n last ok" "in in in";
+  align-items: center; gap: 0.4rem 0.5rem; padding: 0.5rem 0; border-top: 1px solid var(--line);
+}
+.gym-set-head { display: none; }
+.gym-set-n { grid-area: n; font-weight: 700; text-align: center; }
+.gym-set.is-warmup .gym-set-n { color: var(--muted); }
+.gym-set-last { grid-area: last; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.gym-check { grid-area: ok; }
+/* Weight takes the room left by reps; on the narrowest phones reps wrap below. */
+.gym-set-inputs { grid-area: in; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.gym-stepper { flex: 1 1 9.5rem; display: flex; align-items: stretch; min-width: 0; }
+.gym-stepper + .gym-stepper { flex: 0 1 9.5rem; }
+.gym-step {
+  flex: none; width: 3.5rem; min-height: 3.5rem; font: inherit; font-size: 1.5rem; line-height: 1; color: var(--fg);
+  background: var(--chip); border: 1px solid var(--line-strong); cursor: pointer; touch-action: manipulation;
+}
+.gym-stepper .gym-step:first-child { border-radius: 0.5rem 0 0 0.5rem; }
+.gym-stepper .gym-step:last-child { border-radius: 0 0.5rem 0.5rem 0; }
+.gym-num-wrap { flex: 1; min-width: 2.5rem; position: relative; display: flex; }
+.gym-num {
+  width: 100%; min-width: 0; text-align: center; font: inherit; font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-inline: 0; border-radius: 0; padding: 0.6rem 0 0;
+}
+.gym-unit { position: absolute; top: 0.15rem; left: 0; right: 0; text-align: center; font-size: 0.625rem; color: var(--muted); pointer-events: none; }
+.gym-check {
+  width: 3.5rem; height: 3.5rem; border-radius: 50%; font: inherit; font-size: 1.5rem; cursor: pointer; touch-action: manipulation;
+  color: var(--accent); background: var(--bg); border: 2px solid var(--accent);
+}
+.gym-check.is-done { background: var(--accent); color: var(--on-btn); }
+.gym-set.is-done .gym-num { color: var(--muted); }
+.gym-more { display: inline-block; margin-top: 0.5rem; min-height: 2.75rem; }
+
+.gym-rpe { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0 0.5rem 2.5rem; }
+.gym-chip {
+  min-width: 2.75rem; min-height: 2.75rem; font: inherit; font-size: 0.9375rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line-strong); border-radius: 1.4rem; cursor: pointer;
+}
+.gym-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
+
+@media (min-width: 40rem) {
+  .gym-set { grid-template-columns: 2rem 5rem 3.5rem 1fr; grid-template-areas: "n last ok in"; }
+  .gym-set-head { display: grid; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 0 0.25rem; border-top: 0; }
+  .gym-set-head > :nth-child(3) { text-align: center; }
+}
+.gym-finish { width: 100%; min-height: 3.5rem; font-size: 1.125rem; margin-top: 0.5rem; }
+
+/* The rest bar along the bottom, clear of the home indicator. Past zero it turns to the accent
+   and keeps counting (+0:20). */
+.gym-rest {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem max(1rem, env(safe-area-inset-left)) calc(0.5rem + env(safe-area-inset-bottom));
+  background: var(--fg); color: var(--bg);
+}
+.gym-rest-label { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.8; }
+.gym-rest-time { flex: 1; font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.gym-rest .gym-step { width: auto; padding: 0 0.75rem; font-size: 1rem; border-radius: 0.5rem; background: transparent; color: inherit; border-color: currentColor; }
+.gym-rest.is-over { background: var(--accent); color: var(--on-btn); }
+body.gym-resting .gym-toast { bottom: calc(5rem + env(safe-area-inset-bottom)); }
+body.gym-flash { animation: gym-flash 0.7s ease-out; }
+@keyframes gym-flash { 0%, 40% { background: var(--accent); } 100% { background: var(--bg); } }
+@media (prefers-reduced-motion: reduce) { body.gym-flash { animation: none; background: var(--chip); } }
+
+/* The PR banner at the top. */
+.gym-pr {
+  position: fixed; top: calc(0.75rem + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 7;
+  max-width: calc(100vw - 2rem); margin: 0; padding: 0.6rem 1rem; border-radius: 0.5rem;
+  background: var(--accent); color: var(--on-btn); font-weight: 600; box-shadow: 0 2px 10px rgb(0 0 0 / 0.2);
+}
+
+/* Swap and summary dialogs, records and the editor. */
+.gym-fieldset { border: 0; padding: 0; margin: 0 0 0.75rem; }
+.gym-fieldset legend { font-weight: 600; margin-bottom: 0.25rem; }
+.gym-radio { display: flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; }
+.gym-radio input { width: 1.25rem; height: 1.25rem; accent-color: var(--accent); }
+.gym-prs { padding-left: 1.1rem; }
+.gym-h2 { font-size: 1.125rem; margin: 1.25rem 0 0.5rem; }
+.gym-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.gym-table th, .gym-table td { text-align: left; padding: 0.4rem 0.25rem; border-bottom: 1px solid var(--line); }
+.gym-table th { color: var(--muted); font-size: 0.8125rem; font-weight: 600; }
+/* Beaten records fade but keep their contrast: muted ink and a strike. */
+.gym-table .is-beaten td { color: var(--muted); text-decoration: line-through; }
+.gym-history { list-style: none; padding: 0; }
+.gym-history li { padding: 0.4rem 0; border-bottom: 1px solid var(--line); }
+.gym-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.5rem; margin: 0.5rem 0; }
+.gym-field { display: grid; gap: 0.2rem; font-size: 0.8125rem; color: var(--muted); }
+.gym-field .gym-text { color: var(--fg); }
+.gym-edit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.5rem 0 0; }
+.gym-edit-row .gym-text { flex: 1; min-width: 10rem; }
+.gym-edit-row .sheet-btn, .gym-edit-row .sheet-link { min-height: 2.75rem; }

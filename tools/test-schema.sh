@@ -1605,4 +1605,104 @@ do $$ begin
   raise notice '✓ event_todos kept 30 days';
 end $$;
 SQL
+# --- Gym (docs/sheet-gym.md) ---------------------------------------------------------------------
+# tools/gym-seed.mjs's SQL for a made-up program, run twice: nothing doubles.
+seed() { node tools/gym-seed.mjs test/fixtures/gym/program.json test/fixtures/gym/baselines.json | psql_as postgres >/dev/null; }
+seed && seed || { echo "✗ gym seed failed"; exit 1; }
+psql_as postgres >/dev/null <<'SQL'
+\set QUIET on
+do $$ begin
+  if (select count(*) from gym_exercises) <> 5 or (select count(*) from gym_program_days) <> 4
+    or (select count(*) from gym_prescriptions) <> 4 or (select count(*) from gym_baselines) <> 1
+    then raise exception 'gym seed: wrong counts after two runs'; end if;
+  if (select bar_lb from gym_exercises where name = 'Barbell Thing Row') <> 45 or (select bar_lb from gym_exercises where name = 'Widget Press') is not null
+    then raise exception 'gym seed: bar weights'; end if;
+  if not exists (select 1 from gym_prescriptions p join gym_exercises e on e.id = p.exercise_id
+                 join gym_exercises s on s.id = p.sub2_exercise_id where e.name = 'Widget Press' and s.name = 'O''Brien Machine Press'
+                 and p.rep_min = 5 and p.rep_max = 7 and p.rpe_target = 8.5)
+    then raise exception 'gym seed: a slot lost its numbers or substitutes'; end if;
+  -- A baseline he confirmed survives a re-seed.
+  update gym_baselines set weight_lb = 130, confirmed = true where exercise_id = (select id from gym_exercises where name = 'Widget Press');
+end $$;
+SQL
+seed
+psql_as postgres >/dev/null <<'SQL'
+\set QUIET on
+\pset tuples_only on
+create function pg_temp.as_user(r text, email text) returns void language sql as $$
+  select set_config('role', r, false),
+         set_config('request.jwt.claims', coalesce(json_build_object('email', email)::text, ''), false) $$;
+do $$ begin
+  if (select weight_lb from gym_baselines) <> 130 then raise exception 'gym seed overwrote a confirmed baseline'; end if;
+  if exists (select 1 from pg_class where relname like 'gym\_%' and relkind = 'r' and relnamespace = 'public'::regnamespace and not relrowsecurity)
+    then raise exception 'RLS off on a gym table'; end if;
+  -- PostgREST signs in as authenticator, which loads pg-safeupdate on Supabase.
+  if not exists (select 1 from pg_roles where rolname = 'authenticator' and array_to_string(rolconfig, ',') like '%safeupdate%')
+    then raise exception 'authenticator does not load safeupdate'; end if;
+  raise notice '✓ gym: seed twice, confirmed baselines kept, RLS on, safeupdate for PostgREST';
+end $$;
+
+select pg_temp.as_user('anon', null);
+do $$
+declare t text;
+begin
+  foreach t in array array['gym_exercises', 'gym_program_days', 'gym_prescriptions', 'gym_sessions', 'gym_sets', 'gym_baselines', 'gym_swaps'] loop
+    begin execute format('select 1 from %I limit 1', t); raise exception 'anon read %', t;
+    exception when insufficient_privilege then null; end;
+  end loop;
+  raise notice '✓ gym: anon reads no gym table';
+end $$;
+
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  if (select count(*) from gym_exercises) + (select count(*) from gym_program_days) + (select count(*) from gym_prescriptions)
+     + (select count(*) from gym_baselines) <> 0 then raise exception 'a non-owner sees gym rows'; end if;
+  begin
+    insert into gym_exercises (name) values ('Stranger Lift'); raise exception 'a non-owner added an exercise';
+  exception when insufficient_privilege then null; end;
+  raise notice '✓ gym: a non-owner sees and writes nothing';
+end $$;
+
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$
+declare
+  day uuid := (select id from gym_program_days where week = 1 and day_key = 'push1');
+  rx uuid := (select id from gym_prescriptions where program_day_id = (select id from gym_program_days where week = 1 and day_key = 'push1') and position = 1);
+  wp uuid := (select id from gym_exercises where name = 'Widget Press');
+  s uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  a uuid := 'aaaaaaaa-0000-4000-8000-0000000000a1';
+begin
+  -- The outbox's upsert by id, sent twice with new values: one row, the latest.
+  insert into gym_sessions (id, program_day_id, started_at) values (s, day, now()) on conflict (id) do update set finished_at = excluded.finished_at;
+  insert into gym_sessions (id, program_day_id, started_at) values (s, day, now()) on conflict (id) do update set finished_at = excluded.finished_at;
+  insert into gym_sets (id, session_id, prescription_id, exercise_id, set_index, weight_lb, reps) values (a, s, rx, wp, 1, 100, 5)
+    on conflict (id) do update set weight_lb = excluded.weight_lb, reps = excluded.reps;
+  insert into gym_sets (id, session_id, prescription_id, exercise_id, set_index, weight_lb, reps) values (a, s, rx, wp, 1, 100, 6)
+    on conflict (id) do update set weight_lb = excluded.weight_lb, reps = excluded.reps;
+  if (select count(*) from gym_sets) <> 1 or (select reps from gym_sets where id = a) <> 6 then raise exception 'gym_sets upsert by id'; end if;
+  begin insert into gym_sets (session_id, exercise_id, set_index, weight_lb, reps) values (s, wp, 2, -5, 5); raise exception 'gym_sets took a negative weight';
+  exception when check_violation then null; end;
+  -- A today swap needs its session; a phase swap has none.
+  begin insert into gym_swaps (prescription_id, exercise_id, scope) values (rx, wp, 'today'); raise exception 'a today swap without a session';
+  exception when check_violation then null; end;
+  insert into gym_swaps (prescription_id, exercise_id, scope, session_id, program_day_id) values (rx, wp, 'today', s, day);
+  insert into gym_swaps (prescription_id, exercise_id, scope) values (rx, wp, 'phase');
+  -- An exercise with logged sets can't be deleted: the history stays.
+  begin delete from gym_exercises where id = wp; raise exception 'deleted an exercise with sets';
+  exception when foreign_key_violation then null; end;
+  -- Deleting a session takes its sets and today swaps with it.
+  delete from gym_sessions where id = s;
+  if exists (select 1 from gym_sets) or (select count(*) from gym_swaps) <> 1 then raise exception 'session delete did not cascade'; end if;
+  delete from gym_swaps where scope = 'phase';
+  raise notice '✓ gym: owner upserts by id, checks hold, sessions cascade to sets';
+end $$;
+SQL
+# pg-safeupdate, as PostgREST's sessions load it: an update or delete with no where is refused.
+out=$(psql_as supabase_admin 2>&1 <<'SQL' || true
+load 'safeupdate';
+delete from gym_sets;
+SQL
+)
+grep -q "requires a WHERE clause" <<<"$out" || { echo "✗ safeupdate let a delete without where through: $out"; exit 1; }
+echo "✓ gym: safeupdate refuses a delete without where"
 echo "✓ all schema checks passed"
