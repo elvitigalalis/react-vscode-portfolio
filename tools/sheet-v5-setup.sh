@@ -228,7 +228,7 @@ vault_url() {
 
 run_wizard() {
 
-TOTAL_STAGES=14
+TOTAL_STAGES=15
 
 banner "The Sheet v5 setup"
 
@@ -283,6 +283,38 @@ if cal_connected; then
 else
   SKIPPED+=("Calendar not connected yet: re-run this script after Connect")
   warn "The calendar isn't connected yet, so the busy sync stays off. Re-run this script later."
+fi
+pause
+
+# ── 5b ───────────────────────────────────────────────────────────────────
+stage "Oura (optional): plan from when you wake"
+say "The plan starts 30 minutes after your ring says you woke up, and goes lighter after a rough"
+say "night. Only sleep times, readiness and hours slept are kept, 60 days."
+if confirm "Set up Oura now?"; then
+  open_url "https://cloud.ouraring.com/oauth/applications"
+  step "Sign in to Oura, and create a new application (any name, e.g. The Sheet)."
+  step "Redirect URI, exactly:"
+  say "    $URL/functions/v1/oura-connect/callback"
+  step "Scopes: tick daily only. Privacy policy: https://lisul-elvi.com/privacy/"
+  step "Save, then keep its Client ID and Client Secret on screen."
+  pause "Press Enter when the app is saved"
+  open_url "$SECRETS_PAGE"
+  step "Add OURA_CLIENT_ID and OURA_CLIENT_SECRET with those values, Save."
+  pause "Press Enter when both are saved"
+  open_url "$PLAN"
+  step "Click ••• → Settings → Oura → Connect, and allow Daily on Oura's screen."
+  step "You land back on /plan, and Settings shows Oura connected."
+  pause "Press Enter when it says connected"
+  oura_connected() { sql "select count(*) as n from oura_account" | grep -qE '"n": *"?[1-9]'; }
+  until oura_connected || ! confirm "Not connected yet as far as the database can see. Check again?"; do :; done
+  if oura_connected; then
+    vault_url sheet_oura_url oura-sync
+  else
+    SKIPPED+=("Oura not connected yet: re-run this script after Connect")
+    warn "Oura isn't connected yet, so its sync stays off. Re-run this script later."
+  fi
+else
+  SKIPPED+=("Oura (optional)")
 fi
 pause
 
