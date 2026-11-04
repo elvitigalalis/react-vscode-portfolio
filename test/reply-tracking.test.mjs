@@ -152,6 +152,9 @@ test("mail-sync: never asks Gmail for a body, a snippet or a raw message", async
   assert.doesNotMatch(code, /format=(full|raw)|messageBody|snippet|\/attachments/);
   assert.match(code, /metadataQuery\(true\)/);
   assert.match(code, /fields: "messages\(id,threadId\)"/);
+  // The sent list for participation asks for thread ids only, and replyState gets it and known.
+  assert.match(code, /q: "in:sent newer_than:30d", maxResults: "500", fields: "messages\(threadId\)"/);
+  assert.match(code, /replyState\(t, tz, now, \{ participated: sentThreads\.has\(t\.thread_id\), known \}\)/);
 });
 
 test("threadLink: Gmail's thread link for an Awaiting reply row, only for a hex thread id", async () => {
