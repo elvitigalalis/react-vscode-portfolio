@@ -139,3 +139,10 @@ test("mail-sync: never asks Gmail for a body, a snippet or a raw message", async
   assert.match(code, /metadataQuery\(true\)/);
   assert.match(code, /fields: "messages\(id,threadId\)"/);
 });
+
+test("threadLink: Gmail's thread link for an Awaiting reply row, only for a hex thread id", async () => {
+  const { threadLink } = await import("../src/sheet/morning.mjs");
+  assert.equal(threadLink("owner@example.com", "18f3a1c2d4e5f000"), "https://mail.google.com/mail/?authuser=owner%40example.com#all/18f3a1c2d4e5f000");
+  assert.equal(threadLink("owner@example.com", "javascript:alert(1)"), null);
+  assert.equal(threadLink("owner@example.com", null), null);
+});
