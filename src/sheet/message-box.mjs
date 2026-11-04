@@ -3,12 +3,14 @@
 // morning task answers it with tasks and events. Under the box, a collapsible Recent list keeps
 // the newest 10 messages, from the table, so what happened survives a reload: each with where it
 // stands (Sending, Claude is reading, Queued, Added, Couldn't parse), Claude's reply, and every
-// to-do and event it added, each with an Undo. A message being read is polled (every 5 s, at most
+// to-do and event it added, each with an Undo. While Claude works it shows the time since the fire
+// and the run's steps (progress), with a link to the run on claude.ai; once answered they fold
+// into "4 steps · 52 s · How Claude decided", with Claude's note on each item. A message being read is polled (every 5 s, at most
 // 6 min, only while the tab is visible). An answered message's events go into Google Calendar from
 // here, since the Google token lives only in the browser (ADR 0001): on the reply, and on load for
 // any left over from a closed tab. Text goes in through textContent only.
 import * as api from "./api.mjs";
-import { itemLines, MAX_TEXT, messageState, messageText } from "./messages.mjs";
+import { itemLines, MAX_TEXT, messageState, messageText, progress } from "./messages.mjs";
 import { SHEET } from "../site.mjs";
 import { dropBlocks, el, load, failed } from "./planner.mjs";
 
@@ -41,6 +43,14 @@ export function setupMessages(root) {
   });
   input.addEventListener("input", grow);
   grow();
+  // The running timers, counted here each second; the steps come with each poll.
+  setInterval(() => {
+    for (const span of log.querySelectorAll(".sheet-message-elapsed")) {
+      const m = rows.find((r) => r.id === span.closest("[data-id]")?.dataset.id);
+      const p = m && progress(m, new Date());
+      if (p?.running && p.elapsed) span.textContent = p.elapsed;
+    }
+  }, 1000);
   // Only the owner gets a settings row; anyone else signed in sees no box.
   api.settings().then(async (row) => {
     if (!row) return;
@@ -80,7 +90,9 @@ async function send() {
     grow();
     return;
   }
-  const m = { id: out.id, at: out.at, text, status: "pending", fired_at: out.fired ? new Date().toISOString() : null, tasks: [], events: [] };
+  const fired = out.fired ? new Date().toISOString() : null;
+  const m = { id: out.id, at: out.at, text, status: "pending", fired_at: fired, tasks: [], events: [],
+    steps: fired ? [{ at: fired, kind: "started", text: "Started Claude" }] : [] };
   rows = [m, ...rows].slice(0, RECENT);
   li.dataset.id = m.id;
   draw(li, m, SENT[out.fired ? "true" : out.why] ?? "Queued: this runs with the next plan.");
@@ -100,8 +112,9 @@ function showAll() {
 }
 
 // One message: its text (long ones folded), where it stands, the reply, and what it added.
-function draw(li, m, words = messageState(m, rows, new Date()).words) {
-  const key = m.status === "sending" ? "sending" : messageState(m, rows, new Date()).key;
+// words and key, when given, say where it stands instead of its row (sending, or "late" once
+// polling gives up).
+function draw(li, m, words = messageState(m, rows, new Date()).words, key = m.status === "sending" ? "sending" : messageState(m, rows, new Date()).key) {
   const text = el("p", { className: "sheet-message-text", textContent: m.text });
   const long = m.text.length > 160 || m.text.split("\n").length > 2;
   if (long) text.classList.add("is-folded");
@@ -112,11 +125,48 @@ function draw(li, m, words = messageState(m, rows, new Date()).words) {
       e.target.textContent = folded ? "Show all" : "Show less";
       e.target.setAttribute("aria-expanded", String(!folded));
     } }) : null,
-    el("p", { className: `sheet-message-status is-${key}`, textContent: words }),
-    m.reply ? el("p", { className: "sheet-message-reply", textContent: m.reply }) : null,
+    el("p", { className: `sheet-message-status is-${key}`, textContent: words }, key === "reading" ? timer(m) : null),
+    key === "reading" ? running(m) : null,
+    m.reply ? el("p", { className: `sheet-message-reply is-${key}`, textContent: m.reply }) : null,
     items(m),
+    key === "added" || key === "unparsed" ? decided(m) : null,
+    m.session_url && key !== "sending" ? el("a", { className: "sheet-message-run", href: m.session_url, target: "_blank", rel: "noopener", textContent: "Open the run" }) : null,
   ].filter(Boolean));
   li.querySelector(".sheet-message-more")?.setAttribute("aria-expanded", "false");
+}
+
+// The time since the fire, beside "Claude is reading…".
+function timer(m) {
+  const p = progress(m, new Date());
+  return p?.elapsed ? el("span", { className: "sheet-message-elapsed", textContent: p.elapsed, ariaHidden: "true" }) : null;
+}
+
+// While Claude works: its steps, ticked, the newest current, and a note when it is slow.
+function running(m) {
+  const p = progress(m, new Date());
+  if (!p?.running) return null;
+  const box = el("div", { className: "sheet-message-progress" },
+    p.steps.length ? stepList(p.steps) : null,
+    p.note ? el("p", { className: "sheet-message-note", textContent: p.note }) : null);
+  return box;
+}
+
+const stepList = (steps) => el("ol", { className: "sheet-message-steps" }, ...steps.map((x) =>
+  el("li", { className: x.done ? "is-done" : "is-current" },
+    el("span", { className: "sheet-message-tick", textContent: x.done ? "✓" : "●", ariaHidden: "true" }), " ",
+    x.text, x.done ? null : el("span", { className: "visually-hidden", textContent: " (now)" }))));
+
+// Once answered: the steps folded into one line, and Claude's note on each item it added.
+function decided(m) {
+  const p = progress(m, new Date());
+  const notes = itemLines(m, SHEET.timeZone).filter((l) => l.why);
+  if (!p && !notes.length) return null;
+  const summary = [p?.summary, notes.length ? "How Claude decided" : null].filter(Boolean).join(" · ");
+  return el("details", { className: "sheet-message-decided" },
+    el("summary", { textContent: summary }),
+    notes.length ? el("ul", { className: "sheet-message-notes", ariaLabel: "Claude's notes" }, ...notes.map((l) =>
+      el("li", {}, el("span", { className: "sheet-message-title", textContent: l.title }), ": ", l.why))) : null,
+    p ? stepList(p.steps) : null);
 }
 
 // Each to-do and event the message added, with an Undo.
@@ -171,11 +221,24 @@ function poll(id) {
   const tick = async () => {
     const li = log.querySelector(`[data-id="${id}"]`);
     if (!li) return;
-    if (Date.now() > until) return draw(li, rows.find((r) => r.id === id) ?? { text: "", status: "pending" }, "No answer yet. Claude adds it on its next run.");
+    if (Date.now() > until) {
+      const m = rows.find((r) => r.id === id) ?? { text: "", status: "pending" };
+      return draw(li, m, "No answer yet. Open the run to see what happened, or it's picked up on the next run.", "late");
+    }
     if (document.visibilityState === "visible") {
       try {
         const m = await api.getMessage(id);
         if (m && m.status !== "pending") return answered(m, li);
+        // New steps: draw them, keeping a long message unfolded if he opened it.
+        const was = rows.find((r) => r.id === id);
+        const seen = (r) => r && JSON.stringify([r.steps, r.session_url, progress(r, new Date())?.note]);
+        if (m && (seen(m) !== li.dataset.seen || !was)) {
+          li.dataset.seen = seen(m);
+          rows = rows.map((r) => (r.id === id ? m : r));
+          const open = li.querySelector(".sheet-message-text:not(.is-folded)") && li.querySelector(".sheet-message-more");
+          draw(li, m);
+          if (open) li.querySelector(".sheet-message-more").click();
+        }
       } catch (e) { console.error(e); }
     }
     setTimeout(tick, POLL_MS);

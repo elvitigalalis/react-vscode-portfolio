@@ -31,15 +31,19 @@ const blocks = [
 const days = [{ day: "2026-11-02", planned: true, shutdown: true }, { day: "2026-11-03", planned: false, shutdown: false }];
 // Messages to Claude (docs/sheet-messages.md): a pasted announcement answered, one being read.
 const messages = [
-  { id: "m2", at: "2026-11-03T15:18:00Z", text: "gym tomorrow 7am", status: "pending", fired_at: "2026-11-03T15:18:00Z", tasks: [], events: [], tasks_added: 0, created_in_calendar: false, reply: null },
+  { id: "m2", at: "2026-11-03T15:19:20Z", text: "gym tomorrow 7am", status: "pending", fired_at: "2026-11-03T15:19:26Z", tasks: [], events: [], tasks_added: 0, created_in_calendar: false, reply: null,
+    session_url: "https://claude.ai/code/session_x",
+    steps: [{ at: "2026-11-03T15:19:26Z", kind: "started", text: "Started Claude" }, { at: "2026-11-03T15:19:40Z", kind: "reading", text: "Read your planner" }, { at: "2026-11-03T15:19:50Z", kind: "checking", text: "Checking Wednesday on your calendar" }] },
   { id: "m1", at: "2026-11-03T14:00:00Z", status: "done", fired_at: "2026-11-03T14:00:00Z", created_in_calendar: true, tasks_added: 2,
     text: "CSE 320 reminders:\nProject 2 is due Nov 14 11:59pm.\nQuiz on ch. 5 next Tuesday in class.\nLab 4 report due the Friday after.\nOffice hours moved, see the site.",
     reply: "Added Project 2 and Lab 4 to your Inbox and the quiz on Tue Nov 10. Skipped office hours: no day or time given.",
+    session_url: "https://claude.ai/code/session_y", answered_at: "2026-11-03T14:00:52Z",
+    steps: [{ at: "2026-11-03T14:00:00Z", kind: "started", text: "Started Claude" }, { at: "2026-11-03T14:00:12Z", kind: "reading", text: "Read your planner" }, { at: "2026-11-03T14:00:40Z", kind: "adding", text: "Adding Project 2, due Nov 14" }, { at: "2026-11-03T14:00:50Z", kind: "saving", text: "Saving" }],
     tasks: [
-      { id: "t1", title: "CSE 320 Project 2 (due 11:59 pm)", day: null, list: "Inbox", due: "2026-11-14", at_time: null },
+      { id: "t1", title: "CSE 320 Project 2 (due 11:59 pm)", day: null, list: "Inbox", due: "2026-11-14", at_time: null, why: "A deadline at 11:59 pm, so a task due that day." },
       { id: "t2", title: "CSE 320 Lab 4 report", day: null, list: "Inbox", due: "2026-11-13", at_time: null },
     ],
-    events: [{ id: "e1", title: "CSE 320 quiz, ch. 5", starts_at: "2026-11-10T14:00:00.000Z", ends_at: "2026-11-10T15:20:00.000Z", gcal_id: "gq" }] },
+    events: [{ id: "e1", title: "CSE 320 quiz, ch. 5", starts_at: "2026-11-10T14:00:00.000Z", ends_at: "2026-11-10T15:20:00.000Z", gcal_id: "gq", why: "An in-class quiz: an event at the class's time from your calendar." }] },
 ];
 const settings = [{ id: true, owner_email: "x@y", nudges_on: true, calendars: [], gcal_calendar_id: "c", interests: "robotics, free food" }];
 const campus = [
@@ -192,9 +196,10 @@ for (const w of [1440, 390]) {
   await shot("/plan/", `plan-messages-${w}`, w, 900, false, async (pg) => {
     const r = await pg.evaluate(() => {
       const d = document.querySelector("[data-message-recent]");
-      return { open: d?.open, items: document.querySelectorAll(".sheet-message-added li").length, wide: document.documentElement.scrollWidth > innerWidth };
+      document.querySelector(".sheet-message-decided")?.setAttribute("open", "");
+      return { open: d?.open, items: document.querySelectorAll(".sheet-message-added li").length, steps: document.querySelectorAll(".sheet-message-progress .sheet-message-steps li").length, wide: document.documentElement.scrollWidth > innerWidth };
     });
-    if (!r.open || r.items !== 3) failures.push(`/plan ${w}px: Recent should be open with 3 added items, got ${JSON.stringify(r)}`);
+    if (!r.open || r.items !== 3 || r.steps !== 3) failures.push(`/plan ${w}px: Recent should be open with 3 added items and 3 live steps, got ${JSON.stringify(r)}`);
     if (r.wide) failures.push(`/plan ${w}px: the message list scrolls sideways`);
   });
 }
