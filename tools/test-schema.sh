@@ -1106,5 +1106,28 @@ do $$ begin
     then raise exception 'sheet-slack not scheduled once at minute 42'; end if;
   raise notice '✓ v5: needs_you.source mail or slack, one row per Slack message, sheet-slack at :42';
 end $$;
+
+-- A new revision replaces the day's open mail rows only: Slack rows stay until he marks them done.
+do $$
+declare d date := sheet_today() + 40;
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'needs_you' and column_name = 'source') then
+    raise notice '- v5 Slack rows kept by a revision: skipped, not there yet';
+    return;
+  end if;
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, source)
+    values (d, 'slack', 'C0KEEP:1762354800.000100', 'https://example-team.slack.com/archives/C0KEEP/p1762354800000100',
+            'dana.lee', '#team-backend', 'Mentioned you', 'reply', 'slack'),
+           (d, 'owner@example.com', 'keep-mail-1', 'https://mail.google.com/mail/#all/keep-mail-1',
+            'Ana Ruiz', 'Lab 4', 'Asked a question', 'reply', 'mail');
+  perform apply_proposal(d => d, replaces => null, blocks => '[]');
+  if not exists (select 1 from needs_you where message_id = 'C0KEEP:1762354800.000100')
+    then raise exception 'a revision deleted an open Slack row'; end if;
+  if exists (select 1 from needs_you where message_id = 'keep-mail-1')
+    then raise exception 'a revision kept an open mail row'; end if;
+  delete from needs_you where message_id = 'C0KEEP:1762354800.000100';
+  delete from proposals where day = d;
+  raise notice '✓ v5: a revision replaces open mail rows and keeps Slack ones';
+end $$;
 SQL
 echo "✓ all schema checks passed"

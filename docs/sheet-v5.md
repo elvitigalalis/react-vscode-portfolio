@@ -161,6 +161,7 @@ weather_cache id boolean pk default true check (id), point text not null,
       lists, in start order), `couldnt_fit`, `suggested`, `run_trigger` and `reasons`.
     - Needs you is as in v4: open items for d are replaced, `(account, message_id)` already there
       is skipped.
+      **Decided (SRC2):** only `source = 'mail'` items are replaced; Slack items stay until done.
     - It sets `consumed_day = d, consumed_rev = <new rev>` on every `changes` row with both null
       and `at <= now()`.
     - The v4 `apply_proposal(date, jsonb, jsonb, jsonb, text)` is dropped, and V1 moves the v4
@@ -538,6 +539,14 @@ weather_cache id boolean pk default true check (id), point text not null,
   - **Decided (SRC2):** a match is a direct message when `channel.is_im`; `known` is the slack
     `needs_you` rows already saved, `[{ message_id }]`; a match listed twice (the mentions and
     DM searches overlap) gives one row.
+  - **Decided (SRC2, at build):** `known` also takes the ids in `feed_seen ('slack', id)`, which
+    slack-sync writes with each row, since `nightly_roll` deletes done rows. An optional `self`
+    (his user id from `auth.test`) leaves out his own messages. Channel names and usernames must
+    be Slack words (`[\w.-]{1,80}`): a channel that isn't is skipped, a username that isn't reads
+    "Someone". `slackLink` (morning.mjs) is the permalink check, shared with /plan: https:// and a
+    host ending in `.slack.com`. slack-sync searches `<@USERID> after:<date>` and
+    `to:me after:<date>`, from the day before its last good sync, and writes one `slack_new`
+    change per new row.
 - `handshakeBusy(events)` returns busy rows (`source = 'handshake'`) for parsed Handshake events
   whose summary starts with "Interview" or "Appointment" (case aside); other events are left out.
 - `academicEntries(events, day, timeZone)` returns `[{ title, all_day }]` for parsed academic

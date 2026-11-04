@@ -53,6 +53,11 @@ export const gmailLink = (link) =>
 export const threadLink = (account, thread) => (/^[0-9a-f]{6,32}$/.test(thread)
   ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${thread}` : null);
 
+// v5 SRC2: a Slack row's Open in Slack link: an https:// permalink on a <workspace>.slack.com
+// address, else null. slack-sync keeps only these, and /plan checks again before drawing one.
+export const slackLink = (link) =>
+  typeof link === "string" && /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.slack\.com\//i.test(link) ? link : null;
+
 // --- Plan today ----------------------------------------------------------------------------
 
 // What the day's proposal says above Plan today's timeline: "Didn't fit: …", "Couldn't fit: …"

@@ -38,19 +38,19 @@ const PRIVATE = {
   sender: "ria.patel", subject: "#design-crit", why: "Mentioned you", kind: "reply",
 };
 
-test("slackNeeds: mentions and DMs become Needs you rows with channel, person and permalink", todo, async () => {
+test("slackNeeds: mentions and DMs become Needs you rows with channel, person and permalink", async () => {
   const { slackNeeds } = await load();
   assert.deepEqual(slackNeeds(MATCHES, { known: [] }), [MENTION, DM, PRIVATE]);
 });
 
-test("slackNeeds: never the message text", todo, async () => {
+test("slackNeeds: never the message text", async () => {
   const { slackNeeds } = await load();
   const rows = slackNeeds(MATCHES, { known: [] });
   assert.doesNotMatch(JSON.stringify(rows), /MSG-TEXT|U0OWNER|deploy/);
   for (const row of rows) assert.equal("text" in row, false);
 });
 
-test("slackNeeds: a DM reads as a direct message, a channel as #name", todo, async () => {
+test("slackNeeds: a DM reads as a direct message, a channel as #name", async () => {
   const { slackNeeds } = await load();
   const [dm] = slackNeeds([MATCHES[1]], { known: [] });
   assert.equal(dm.subject, "Direct message");
@@ -60,7 +60,7 @@ test("slackNeeds: a DM reads as a direct message, a channel as #name", todo, asy
   assert.equal(mention.why, "Mentioned you");
 });
 
-test("slackNeeds: a permalink must be https:// on a .slack.com/ address", todo, async () => {
+test("slackNeeds: a permalink must be https:// on a .slack.com/ address", async () => {
   const { slackNeeds } = await load();
   assert.deepEqual(slackNeeds([MATCHES[3]], { known: [] }), []); // http://
   assert.deepEqual(slackNeeds([MATCHES[4]], { known: [] }), []); // .slack.com.evil.example/
@@ -68,7 +68,7 @@ test("slackNeeds: a permalink must be https:// on a .slack.com/ address", todo, 
   assert.deepEqual(slackNeeds([{ ...MATCHES[0], permalink: "javascript:alert(1)//.slack.com/" }], { known: [] }), []);
 });
 
-test("slackNeeds: no duplicates within a sync or across syncs", todo, async () => {
+test("slackNeeds: no duplicates within a sync or across syncs", async () => {
   const { slackNeeds } = await load();
   const first = slackNeeds(MATCHES, { known: [] });
   assert.equal(first.filter((r) => r.message_id === MENTION.message_id).length, 1);
@@ -78,12 +78,12 @@ test("slackNeeds: no duplicates within a sync or across syncs", todo, async () =
   assert.deepEqual(slackNeeds(MATCHES, { known: [{ message_id: MENTION.message_id }] }), [DM, PRIVATE]);
 });
 
-test("slackNeeds: nothing found, nothing written", todo, async () => {
+test("slackNeeds: nothing found, nothing written", async () => {
   const { slackNeeds } = await load();
   assert.deepEqual(slackNeeds([], { known: [] }), []);
 });
 
-test("changeRow: a Slack mention is a weight-3 slack change", todo, async () => {
+test("changeRow: a Slack mention is a weight-3 slack change", async () => {
   const { changeRow } = await import("../src/sheet/replan.mjs");
   assert.deepEqual(changeRow("slack_new", MENTION.message_id), { kind: "slack", reason: "slack_new", weight: 3, ref: "C0EXAMPLE1:1762354800.000100" });
 });
