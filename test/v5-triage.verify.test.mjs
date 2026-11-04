@@ -35,7 +35,7 @@ const M5 = "18f2a3b4c5d6e7f5";
 
 const fb = (at, action, account, message_id, from_address = null) => ({ at, item: "needs_you", action, ref: { account, message_id, from_address } });
 
-test("triageLabels: Done is needed, Not needed isn't, Undo leaves no label", todo, async () => {
+test("triageLabels: Done is needed, Not needed isn't, Undo leaves no label", async () => {
   const { triageLabels } = await triage();
   const feedback = [
     fb("2026-11-04T14:00:00Z", "done", PERSONAL, M3),
@@ -53,13 +53,13 @@ test("triageLabels: Done is needed, Not needed isn't, Undo leaves no label", tod
   ]);
 });
 
-test("triageLabels: the newest row by time decides, whatever the list order", todo, async () => {
+test("triageLabels: the newest row by time decides, whatever the list order", async () => {
   const { triageLabels } = await triage();
   const feedback = [fb("2026-11-04T15:05:00Z", "done", SBU, M1), fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1)];
   assert.deepEqual(triageLabels(feedback), [{ account: SBU, message_id: M1, needed: true }]);
 });
 
-test("triageLabels: Not needed again after an Undo labels it again", todo, async () => {
+test("triageLabels: Not needed again after an Undo labels it again", async () => {
   const { triageLabels } = await triage();
   const feedback = [
     fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1),
@@ -75,7 +75,7 @@ test("triageLabels: Not needed again after an Undo labels it again", todo, async
 
 const key = (account, id) => `${account} ${id}`;
 
-test("scoreTriage: caught, missed and wrongly shown", todo, async () => {
+test("scoreTriage: caught, missed and wrongly shown", async () => {
   const { scoreTriage } = await triage();
   const items = [{ account: SBU, message_id: M1 }, { account: SBU, message_id: M2 }, { account: PERSONAL, message_id: M3 }];
   const labels = [
@@ -92,13 +92,13 @@ test("scoreTriage: caught, missed and wrongly shown", todo, async () => {
   });
 });
 
-test("scoreTriage: the same message id in another account is another message", todo, async () => {
+test("scoreTriage: the same message id in another account is another message", async () => {
   const { scoreTriage } = await triage();
   const r = scoreTriage([{ account: SBU, message_id: M1 }], [{ account: PERSONAL, message_id: M1, needed: true }]);
   assert.deepEqual(r, { caught: [], missed: [key(PERSONAL, M1)], wrongly_shown: [] });
 });
 
-test("scoreTriage: keys are listed once, in item order and label order", todo, async () => {
+test("scoreTriage: keys are listed once, in item order and label order", async () => {
   const { scoreTriage } = await triage();
   const items = [{ account: SBU, message_id: M2 }, { account: SBU, message_id: M1 }, { account: SBU, message_id: M2 }, { account: SBU, message_id: M3 }, { account: SBU, message_id: M3 }];
   const labels = [
@@ -115,7 +115,7 @@ test("scoreTriage: keys are listed once, in item order and label order", todo, a
   });
 });
 
-test("scoreTriage: nothing in, nothing out", todo, async () => {
+test("scoreTriage: nothing in, nothing out", async () => {
   const { scoreTriage } = await triage();
   assert.deepEqual(scoreTriage([], []), { caught: [], missed: [], wrongly_shown: [] });
 });
@@ -124,7 +124,7 @@ test("scoreTriage: nothing in, nothing out", todo, async () => {
 // neverOffers: "Never show mail from <address>" after two Not needed
 // =============================================================================================
 
-test("neverOffers: two messages from one sender marked Not needed make an offer", todo, async () => {
+test("neverOffers: two messages from one sender marked Not needed make an offer", async () => {
   const { neverOffers } = await triage();
   const feedback = [
     fb("2026-11-03T15:00:00Z", "not_needed", SBU, M1, "jobs@acme.com"),
@@ -134,7 +134,7 @@ test("neverOffers: two messages from one sender marked Not needed make an offer"
   assert.deepEqual(neverOffers(feedback, []), ["jobs@acme.com"]);
 });
 
-test("neverOffers: several offers, sorted", todo, async () => {
+test("neverOffers: several offers, sorted", async () => {
   const { neverOffers } = await triage();
   const feedback = [
     fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1, "zed@digest.io"),
@@ -145,7 +145,7 @@ test("neverOffers: several offers, sorted", todo, async () => {
   assert.deepEqual(neverOffers(feedback, []), ["jobs@acme.com", "zed@digest.io"]);
 });
 
-test("neverOffers: one message marked twice is one message", todo, async () => {
+test("neverOffers: one message marked twice is one message", async () => {
   const { neverOffers } = await triage();
   const feedback = [
     fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1, "jobs@acme.com"),
@@ -155,7 +155,7 @@ test("neverOffers: one message marked twice is one message", todo, async () => {
   assert.deepEqual(neverOffers(feedback, []), []);
 });
 
-test("neverOffers: an Undo or a later Done takes a message back out", todo, async () => {
+test("neverOffers: an Undo or a later Done takes a message back out", async () => {
   const { neverOffers } = await triage();
   const two = [fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1, "jobs@acme.com"), fb("2026-11-04T15:01:00Z", "not_needed", SBU, M2, "jobs@acme.com")];
   assert.deepEqual(neverOffers([...two, fb("2026-11-04T15:02:00Z", "undo", SBU, M2, "jobs@acme.com")], []), []);
@@ -164,7 +164,7 @@ test("neverOffers: an Undo or a later Done takes a message back out", todo, asyn
   assert.deepEqual(neverOffers([fb("2026-11-04T15:00:00Z", "done", SBU, M1, "jobs@acme.com"), fb("2026-11-04T15:01:00Z", "done", SBU, M2, "jobs@acme.com")], []), []);
 });
 
-test("neverOffers: no offer for an address a rule already covers", todo, async () => {
+test("neverOffers: no offer for an address a rule already covers", async () => {
   const { neverOffers } = await triage();
   const feedback = [fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1, "jobs@mail.acme.com"), fb("2026-11-04T15:01:00Z", "not_needed", SBU, M2, "jobs@mail.acme.com")];
   assert.deepEqual(neverOffers(feedback, [{ match: "domain", pattern: "acme.com", action: "never" }]), []);
@@ -179,7 +179,7 @@ test("neverOffers: no offer for an address a rule already covers", todo, async (
   assert.deepEqual(neverOffers(feedback, others), ["jobs@mail.acme.com"]);
 });
 
-test("neverOffers: rows with no From address count for nothing", todo, async () => {
+test("neverOffers: rows with no From address count for nothing", async () => {
   const { neverOffers } = await triage();
   assert.deepEqual(neverOffers([fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1), fb("2026-11-04T15:01:00Z", "not_needed", SBU, M2)], []), []);
 });
