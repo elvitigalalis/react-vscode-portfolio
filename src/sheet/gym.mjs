@@ -126,3 +126,61 @@ export function suggest(rx, exercise, history, { dayKey, now = new Date(), basel
   const aim = Math.min(rx.rep_max, Math.min(...reps) + 1);
   return { kind: "same", weight_lb: weight, reps: aim, reason: `Same weight, aim for ${aim}` };
 }
+
+// --- The session order ----------------------------------------------------------------------
+
+// The program's days in order: week, then position (Push #1 … Legs #2).
+export const ordered = (days) => [...days].sort((a, b) => a.week - b.week || a.position - b.position);
+const finished = (sessions) => sessions.filter((s) => s.finished_at).sort((a, b) => a.finished_at.localeCompare(b.finished_at));
+
+// The day to open on: the one after the day of the last finished session, by sequence, not by
+// calendar (a missed day never breaks the program); after the last day, week 1 again.
+export function nextDay(days, sessions) {
+  const list = ordered(days);
+  if (!list.length) return null;
+  const last = finished(sessions).filter((s) => list.some((d) => d.id === s.program_day_id)).at(-1);
+  if (!last) return list[0].id;
+  return list[(list.findIndex((d) => d.id === last.program_day_id) + 1) % list.length].id;
+}
+
+// The progress strip: one row per week, each day marked "done" (finished in this pass through the
+// program), "today" (the day on screen), "next" or "". A pass starts with the latest finished
+// session of the first day, so when today is the first day nothing shows done.
+export function strip(days, sessions, todayId) {
+  const list = ordered(days);
+  const at = list.findIndex((d) => d.id === todayId);
+  const nextId = at < 0 ? null : list[(at + 1) % list.length].id;
+  const fin = finished(sessions);
+  const passStart = at === 0 ? Infinity : fin.filter((s) => s.program_day_id === list[0].id).at(-1)?.finished_at ?? "";
+  const doneIds = new Set(fin.filter((s) => s.finished_at >= passStart).map((s) => s.program_day_id));
+  const weeks = new Map();
+  for (const d of list) {
+    const state = d.id === todayId ? "today" : d.id === nextId ? "next" : doneIds.has(d.id) ? "done" : "";
+    (weeks.get(d.week) ?? weeks.set(d.week, []).get(d.week)).push({ ...d, state });
+  }
+  return [...weeks.values()];
+}
+
+// --- Plates ---------------------------------------------------------------------------------
+
+const PLATES = [45, 35, 25, 10, 5, 2.5];
+
+// The plates on each side for `total` lb on a `bar` lb bar, heaviest first; exact is false when
+// standard plates can't make it. null under the bar.
+export function plates(total, bar = 45) {
+  if (!(total >= bar)) return null;
+  let side = (total - bar) / 2;
+  const perSide = [];
+  for (const p of PLATES) while (side >= p - 1e-9) { perSide.push(p); side -= p; }
+  return { bar, perSide, exact: side < 1e-9 };
+}
+
+// "45 bar | 45 25 / side", or "Just the bar"; "(+1)" is what standard plates can't make. Empty
+// under the bar.
+export function plateText(total, bar = 45) {
+  const p = plates(total, bar);
+  if (!p) return "";
+  if (!p.perSide.length && p.exact) return "Just the bar";
+  const off = tenth(total - p.bar - 2 * p.perSide.reduce((a, b) => a + b, 0));
+  return `${p.bar} bar | ${p.perSide.join(" ")} / side${p.exact ? "" : ` (+${off})`}`;
+}

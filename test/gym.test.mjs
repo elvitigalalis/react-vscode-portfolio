@@ -2,7 +2,7 @@
 // suggestion, the session order, plate math. Every exercise and number here is made up.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { e1rm, records, prsFor, historyFor, suggest } from "../src/sheet/gym.mjs";
+import { e1rm, records, prsFor, historyFor, suggest, nextDay, strip, plates, plateText } from "../src/sheet/gym.mjs";
 
 // A made-up exercise, "Widget Press", and its sets.
 const set = (weight_lb, reps, more = {}) => ({ exercise_id: "wp", weight_lb, reps, warmup: false, done_at: "2026-01-05T15:00:00Z", ...more });
@@ -143,4 +143,59 @@ test("historyFor: an exercise's sessions, newest first, working sets only, witho
   const h = historyFor("wp", sessions, sets, { d1: "push1", d2: "pull1" });
   assert.deepEqual(h.map((x) => [x.day_key, x.sets.map((s) => s.reps)]), [["push1", [6, 5]], ["pull1", [5]], ["push1", [5]]]);
   assert.deepEqual(historyFor("wp", sessions, sets, { d1: "push1", d2: "pull1" }, "s2").map((x) => x.day_key), ["push1", "push1"]);
+});
+
+// --- The session order ------------------------------------------------------------------------
+
+const KEYS = ["push1", "pull1", "legs1", "push2", "pull2", "legs2"];
+// A made-up 2-week program, listed out of order: days w1-push1 … w2-legs2.
+const days = [2, 1].flatMap((week) => KEYS.map((day_key, i) => ({ id: `w${week}-${day_key}`, phase: 1, week, day_key, position: i + 1 })));
+const done = (id, at) => ({ id: `s-${id}-${at}`, program_day_id: id, started_at: `${at}T15:00:00Z`, finished_at: `${at}T16:00:00Z` });
+
+test("nextDay: the day after the last finished session, in program order, not by date", () => {
+  assert.equal(nextDay(days, []), "w1-push1");
+  assert.equal(nextDay(days, [done("w1-push1", "2026-01-01")]), "w1-pull1");
+  assert.equal(nextDay(days, [done("w1-push1", "2026-01-01"), done("w1-legs2", "2026-01-09")]), "w2-push1");
+  // He picked another day last time: the next one follows the day he did.
+  assert.equal(nextDay(days, [done("w1-push1", "2026-01-01"), done("w2-pull2", "2026-01-03")]), "w2-legs2");
+  // An unfinished session doesn't move it on.
+  assert.equal(nextDay(days, [done("w1-push1", "2026-01-01"), { ...done("w1-pull1", "2026-01-02"), finished_at: null }]), "w1-pull1");
+});
+
+test("nextDay: after the last day of the last week, back to week 1", () => {
+  assert.equal(nextDay(days, [done("w2-legs2", "2026-01-15")]), "w1-push1");
+});
+
+test("strip: one row per week, six days each, marked done, today and next", () => {
+  const sessions = [done("w1-push1", "2026-01-01"), done("w1-pull1", "2026-01-02")];
+  const rows = strip(days, sessions, "w1-legs1");
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0].map((d) => d.state), ["done", "done", "today", "next", "", ""]);
+  assert.deepEqual(rows[1].map((d) => d.day_key), KEYS);
+  assert.ok(rows[1].every((d) => d.state === ""));
+});
+
+test("strip: a new pass starts clean, so last pass's sessions aren't shown as done", () => {
+  const sessions = KEYS.flatMap((k, i) => [done(`w1-${k}`, `2026-01-0${i + 1}`), done(`w2-${k}`, `2026-01-1${i + 1}`)]);
+  const rows = strip(days, sessions, "w1-push1");
+  assert.deepEqual(rows.flat().map((d) => d.state).filter(Boolean), ["today", "next"]);
+  const later = strip(days, [...sessions, done("w1-push1", "2026-02-01")], "w1-pull1");
+  assert.deepEqual(later[0].map((d) => d.state), ["done", "today", "next", "", "", ""]);
+  assert.ok(later[1].every((d) => d.state === ""));
+});
+
+// --- Plates -----------------------------------------------------------------------------------
+
+test("plates: per side on a 45 lb bar, heaviest first", () => {
+  assert.deepEqual(plates(135), { bar: 45, perSide: [45], exact: true });
+  assert.deepEqual(plates(185), { bar: 45, perSide: [45, 25], exact: true });
+  assert.deepEqual(plates(230), { bar: 45, perSide: [45, 45, 2.5], exact: true });
+  assert.deepEqual(plates(45), { bar: 45, perSide: [], exact: true });
+  assert.deepEqual(plates(136), { bar: 45, perSide: [45], exact: false });
+  assert.deepEqual(plates(75, 25), { bar: 25, perSide: [25], exact: true });
+  assert.equal(plates(40), null);
+  assert.equal(plateText(185), "45 bar | 45 25 / side");
+  assert.equal(plateText(45), "Just the bar");
+  assert.equal(plateText(136), "45 bar | 45 / side (+1)");
+  assert.equal(plateText(40), "");
 });
