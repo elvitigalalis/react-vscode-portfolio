@@ -48,6 +48,11 @@ export function needsGroups(rows) {
 export const gmailLink = (link) =>
   typeof link === "string" && link.startsWith("https://mail.google.com/") ? link : null;
 
+// v5 SRC2: a Slack row's Open in Slack link: an https:// permalink on a <workspace>.slack.com
+// address, else null. slack-sync keeps only these, and /plan checks again before drawing one.
+export const slackLink = (link) =>
+  typeof link === "string" && /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.slack\.com\//i.test(link) ? link : null;
+
 // --- Plan today ----------------------------------------------------------------------------
 
 // What the day's proposal says above Plan today's timeline: "Didn't fit: …", "Couldn't fit: …"

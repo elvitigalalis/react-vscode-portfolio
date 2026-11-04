@@ -3,6 +3,7 @@
 import { addDays, formatSpan, minutesOn, cutTitle, localNow, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 import { changeRow } from "./replan.mjs";
+import { slackLink } from "./morning.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
 // The NWS API (https://www.weather.gov/documentation/services-web-api): /points/{lat},{lon} names
@@ -149,6 +150,38 @@ export function jiraTaskChanges(issues, { tasks, seen, site, today }) {
 export function githubOrgsFromInput(value) {
   const orgs = [...new Set(String(value ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean))];
   return orgs.every((o) => /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/.test(o)) ? orgs : undefined;
+}
+
+// --- Slack (SRC2) ----------------------------------------------------------------------------
+// slack-sync runs search.messages (https://docs.slack.dev/reference/methods/search.messages) for
+// mentions and DMs and hands the matches here. Only the channel, the person and the permalink
+// come out, never `text`: a mention becomes a Needs you row written by code, with no AI.
+
+// Slack usernames and channel names are short words of letters, digits, dots, hyphens and
+// underscores; anything else is left out, so no stray text rides along.
+const slackWord = (s) => (/^[\w.-]{1,80}$/.test(String(s ?? "")) ? String(s) : null);
+
+export function slackNeeds(matches, { known, self } = {}) {
+  const seen = new Set((known ?? []).map((k) => k.message_id));
+  const rows = [];
+  for (const m of matches ?? []) {
+    const channel = m?.channel ?? {};
+    const id = /^[A-Z0-9]{1,30}$/.test(String(channel.id ?? "")) && /^\d{1,12}\.\d{1,8}$/.test(String(m.ts ?? ""))
+      ? `${channel.id}:${m.ts}` : null;
+    const link = slackLink(m?.permalink);
+    if (!id || !link || seen.has(id) || (self && m.user === self)) continue;
+    seen.add(id);
+    const dm = channel.is_im === true;
+    const name = slackWord(channel.name);
+    if (!dm && !name) continue;
+    rows.push({
+      source: "slack", account: "slack", message_id: id, link, sender: slackWord(m.username) ?? "Someone",
+      subject: dm ? "Direct message" : `#${name}`,
+      why: dm ? "Sent you a direct message" : "Mentioned you",
+      kind: "reply",
+    });
+  }
+  return rows;
 }
 
 // --- Handshake, the academic calendar and enrollment (SRC3) ----------------------------------
