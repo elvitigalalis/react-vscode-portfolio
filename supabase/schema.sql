@@ -1227,6 +1227,12 @@ create table if not exists messages (
   fired_at timestamptz
 );
 create index if not exists messages_pending on messages (at) where status = 'pending';
+-- Long messages: a pasted class announcement runs to thousands of characters (messageText).
+alter table messages drop constraint if exists messages_text_check;
+alter table messages add constraint messages_text_check check (char_length(text) between 1 and 8000);
+-- A reply says what was added and what was skipped, and why (MAX_REPLY).
+alter table messages drop constraint if exists messages_reply_check;
+alter table messages add constraint messages_reply_check check (char_length(reply) <= 500);
 
 alter table messages enable row level security;
 drop policy if exists owner_all on messages;
@@ -1252,27 +1258,112 @@ language plpgsql security invoker set search_path = public as $$
 declare
   t record;
   n int := 0;
+  added jsonb := '[]';
+  task_id uuid;
+  evs jsonb;
   result text;
 begin
   perform 1 from messages where id = m and status = 'pending' for update;
   if not found then raise exception 'message % is not pending', m; end if;
-  for t in select * from jsonb_to_recordset(coalesce(new_tasks, '[]')) as x(title text, day date, list text, due date, at_time time, est_min int)
+  for t in select * from jsonb_to_recordset(coalesce(new_tasks, '[]')) as x(title text, day date, list text, due date, at_time time, est_min int, why text)
   loop
     insert into tasks (title, day, list, due, at_time, est_min, source, position)
     values (t.title, t.day, t.list, t.due, t.at_time, t.est_min, 'message',
-      coalesce((select max(position) from tasks where day is not distinct from t.day and list is not distinct from t.list), 0) + 1);
+      coalesce((select max(position) from tasks where day is not distinct from t.day and list is not distinct from t.list), 0) + 1)
+    returning id into task_id;
+    added := added || jsonb_build_array(jsonb_build_object('id', task_id, 'title', t.title, 'day', t.day, 'list', t.list,
+      'due', t.due, 'at_time', to_char(t.at_time, 'HH24:MI'))
+      || case when t.why is null then '{}' else jsonb_build_object('why', t.why) end);
     n := n + 1;
   end loop;
-  result := case when n > 0 or jsonb_array_length(coalesce(new_events, '[]')) > 0 then 'done' else 'failed' end;
-  update messages set status = result, reply = answer, tasks_added = n, events = coalesce(new_events, '[]')
+  -- Each event gets an id, for /plan's Undo.
+  select coalesce(jsonb_agg(e || jsonb_build_object('id', gen_random_uuid())), '[]') into evs
+  from jsonb_array_elements(coalesce(new_events, '[]')) as e;
+  result := case when n > 0 or jsonb_array_length(evs) > 0 then 'done' else 'failed' end;
+  update messages set status = result, reply = answer, tasks_added = n, tasks = added, events = evs, answered_at = now()
   where id = m;
   insert into busy (source, starts_at, ends_at, message_id)
   select 'message', x.starts_at, x.ends_at, m
-  from jsonb_to_recordset(coalesce(new_events, '[]')) as x(starts_at timestamptz, ends_at timestamptz)
+  from jsonb_to_recordset(evs) as x(starts_at timestamptz, ends_at timestamptz)
   on conflict do nothing;
   return result;
 end $$;
 revoke execute on function answer_message(uuid, jsonb, jsonb, text) from public, anon;
+
+-- What a message added, item by item, so /plan can list it and undo each one (docs/sheet-messages.md):
+-- tasks is [{ id, title, day, list, due, at_time }] as added (the task may move later), and each
+-- of events carries an id, and a gcal_id once /plan has made it in Google Calendar.
+alter table messages add column if not exists tasks jsonb not null default '[]' check (jsonb_typeof(tasks) = 'array');
+
+-- /plan made event `item` of message m in Google Calendar, as Google event `gcal`.
+create or replace function message_event_created(m uuid, item uuid, gcal text) returns void
+language sql security invoker set search_path = public as $$
+  update messages set events = (
+    select jsonb_agg(case when e ->> 'id' = item::text then e || jsonb_build_object('gcal_id', gcal) else e end order by i)
+    from jsonb_array_elements(events) with ordinality as x(e, i))
+  where id = m and events @> jsonb_build_array(jsonb_build_object('id', item::text));
+$$;
+revoke execute on function message_event_created(uuid, uuid, text) from public, anon;
+
+-- Undo item `item` (a task's or an event's id) of message m: a task is deleted, an event comes
+-- off the message and out of busy (another message's event at the same times keeps the time
+-- busy). Either way it leaves the message's list. Returns the item with its kind ('task' or
+-- 'event'; an event keeps its gcal_id, for /plan to delete from Google), or null when there is
+-- nothing to undo. Security invoker: only the owner sees a message, so only he can undo.
+create or replace function undo_message_item(m uuid, item uuid) returns jsonb
+language plpgsql security invoker set search_path = public as $$
+declare
+  msg messages;
+  found_item jsonb;
+  s timestamptz;
+  e timestamptz;
+begin
+  select * into msg from messages where id = m for update;
+  if not found then return null; end if;
+  select x into found_item from jsonb_array_elements(msg.tasks) as x where x ->> 'id' = item::text;
+  if found_item is not null then
+    delete from tasks where id = item and source = 'message';
+    update messages set tasks = (select coalesce(jsonb_agg(x), '[]') from jsonb_array_elements(msg.tasks) as x where x ->> 'id' <> item::text),
+      tasks_added = greatest(tasks_added - 1, 0)
+    where id = m;
+    return found_item || '{"kind": "task"}';
+  end if;
+  select x into found_item from jsonb_array_elements(msg.events) as x where x ->> 'id' = item::text;
+  if found_item is null then return null; end if;
+  update messages set events = (select coalesce(jsonb_agg(x), '[]') from jsonb_array_elements(msg.events) as x where x ->> 'id' <> item::text)
+  where id = m;
+  s := (found_item ->> 'starts_at')::timestamptz;
+  e := (found_item ->> 'ends_at')::timestamptz;
+  if not exists (select 1 from messages, jsonb_array_elements(events) as x
+                 where id = m and (x ->> 'starts_at')::timestamptz = s and (x ->> 'ends_at')::timestamptz = e) then
+    delete from busy where source = 'message' and message_id = m and starts_at = s and ends_at = e;
+    insert into busy (source, starts_at, ends_at, message_id)
+    select 'message', s, e, o.id from messages o, jsonb_array_elements(o.events) as x
+    where o.id <> m and (x ->> 'starts_at')::timestamptz = s and (x ->> 'ends_at')::timestamptz = e
+    limit 1
+    on conflict do nothing;
+  end if;
+  return found_item || '{"kind": "event"}';
+end $$;
+revoke execute on function undo_message_item(uuid, uuid) from public, anon;
+
+-- Claude's progress on a message, for /plan while it works (docs/sheet-messages.md): steps
+-- [{ at, kind, text }] (the message function's "Started Claude", planner-mcp's "Read your
+-- planner" and "Saving", and those the run reports with report_step), the run's claude.ai
+-- session_url from the fire, and answered_at, when answer_message wrote it. Each item's why
+-- (Claude's note on how it placed it) rides in tasks and events.
+alter table messages add column if not exists steps jsonb not null default '[]' check (jsonb_typeof(steps) = 'array');
+alter table messages add column if not exists session_url text check (session_url like 'https://claude.ai/%');
+alter table messages add column if not exists answered_at timestamptz;
+
+-- Add one step to each pending message in ms, stamped now, up to 12 a message. Security
+-- invoker: only the owner sees a message. checkStep (src/sheet/messages.mjs) checks the text.
+create or replace function add_message_step(ms uuid[], step_kind text, words text) returns void
+language sql security invoker set search_path = public as $$
+  update messages set steps = steps || jsonb_build_array(jsonb_build_object('at', now(), 'kind', step_kind, 'text', words))
+  where id = any(ms) and status = 'pending' and jsonb_array_length(steps) < 12;
+$$;
+revoke execute on function add_message_step(uuid[], text, text) from public, anon;
 
 -- --- Event to-dos (docs/sheet-v5.md, "Event to-dos") -----------------------------------------
 -- Every Google Calendar event on a day is also a to-do in /plan's list. Only what the browser
