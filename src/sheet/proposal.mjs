@@ -218,6 +218,51 @@ function dayRuleErrors(spans, snapshot, errors) {
   }
 }
 
+// The habit blocks of a proposal ({ habit_id, start: "HH:MM" }): each one of the day's habits, at
+// most once, starting within ideal ± flex_min (both ends included) and running the habit's
+// minutes inside the plan window, over no busy time, approved block, block or other habit block.
+// Returns apply_proposal's habit_blocks and the spans (named habits[i]) for the day rules.
+function habitBlockRows(input, snapshot, placed, errors) {
+  const out = { rows: [], spans: [] };
+  const given = list(input?.habits);
+  if (!Array.isArray(given)) return errors.push("habits: must be a list"), out;
+  if (given.length > MAX_BLOCKS) return errors.push(`habits: at most ${MAX_BLOCKS}, got ${given.length}`), out;
+  const { plan_day: day, time_zone: tz, window } = snapshot;
+  const habits = new Map(list(snapshot.habits).map((h) => [h.id, h]));
+  const at = (iso) => minutesOn(iso, day, tz);
+  const fixed = [
+    ...snapshot.busy.map((s) => ({ start: at(s.starts_at), end: at(s.ends_at), label: "a busy time" })),
+    ...snapshot.blocks.filter((b) => !b.proposed).map((s) => ({ start: at(s.starts_at), end: at(s.ends_at), label: "an approved block" })),
+  ];
+  const seen = new Set();
+  given.forEach((g, i) => {
+    const name = `habits[${i}]`;
+    const before = errors.length;
+    const h = habits.get(g?.habit_id);
+    if (!h) return errors.push(`${name}: habit_id is not one of the habits read_planner gave`);
+    if (seen.has(h.id)) return errors.push(`${name}: this habit is placed already; place it at most once`);
+    seen.add(h.id);
+    if (typeof g.start !== "string" || !HHMM.test(g.start)) return errors.push(`${name}: start must be "HH:MM", 24-hour`);
+    const from = toMinutes(g.start);
+    const to = from + h.minutes;
+    const ideal = toMinutes(h.ideal);
+    if (Math.abs(from - ideal) > h.flex_min) {
+      errors.push(`${name}: must start between ${formatClock(Math.max(0, ideal - h.flex_min))} and ${formatClock(Math.min(1439, ideal + h.flex_min))}, ${h.name}'s ideal time ± ${h.flex_min} minutes`);
+    }
+    if (from < toMinutes(window.from)) errors.push(`${name}: starts before ${window.from}, the start of the plan window`);
+    else if (to > toMinutes(window.to)) errors.push(`${name}: ends after ${window.to}, the end of the plan window`);
+    const hit = fixed.find((s) => from < s.end && s.start < to);
+    if (hit) errors.push(`${name}: overlaps ${hit.label} ${clockSpan(hit.start, hit.end)}`);
+    const block = placed.find((p) => from < p.end && p.start < to);
+    if (block) errors.push(`${name}: overlaps blocks[${block.i}]`);
+    const twin = out.spans.find((p) => from < p.end && p.start < to);
+    if (twin) errors.push(`${name}: overlaps ${twin.name}`);
+    out.spans.push({ name, start: from, end: to });
+    if (errors.length === before) out.rows.push({ habit_id: h.id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
+  });
+  return out;
+}
+
 export const MAX_COULDNT_FIT = 12;
 
 // The tasks Claude couldn't fit: ids from the task list, each once, none also given a block.
@@ -267,6 +312,7 @@ export function checkProposal(input, snapshot) {
 
   // Blocks.
   const blocks = [];
+  const placed = [];
   const inBlocks = list(input?.blocks);
   if (!Array.isArray(inBlocks)) errors.push("blocks: must be a list");
   else if (inBlocks.length > MAX_BLOCKS) errors.push(`blocks: at most ${MAX_BLOCKS}, got ${inBlocks.length}`);
@@ -280,7 +326,6 @@ export function checkProposal(input, snapshot) {
       ...taken(snapshot.busy, "a busy time"),
       ...taken(snapshot.blocks.filter((b) => !b.proposed), "an approved block"),
     ];
-    const placed = [];
     inBlocks.forEach((b, i) => {
       const name = `blocks[${i}]`;
       const before = errors.length;
@@ -314,8 +359,10 @@ export function checkProposal(input, snapshot) {
         blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
       }
     });
-    if (v5) dayRuleErrors(placed.map((p) => ({ ...p, name: `blocks[${p.i}]` })), snapshot, errors);
   }
+  // v5 H1: habit blocks, checked against the same window, busy times and blocks.
+  const habitBlocks = v5 ? habitBlockRows(input, snapshot, placed, errors) : { rows: [], spans: [] };
+  if (v5) dayRuleErrors([...placed.map((p) => ({ ...p, name: `blocks[${p.i}]` })), ...habitBlocks.spans], snapshot, errors);
 
   // Needs you.
   const needs = [];
@@ -366,11 +413,11 @@ export function checkProposal(input, snapshot) {
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
-  // Habit blocks (H1) and suggested tasks (A1) come with their tickets.
+  // Suggested tasks (A1) come with their ticket.
   const { trigger: run_trigger, reasons } = snapshot.run;
   return {
     ok: true, errors: [],
-    rows: { d: day, replaces, blocks, habit_blocks: [], needs, picks, note, couldnt_fit: couldntFit, suggested: [], run_trigger, reasons },
+    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs, picks, note, couldnt_fit: couldntFit, suggested: [], run_trigger, reasons },
     dropped: [],
   };
 }
