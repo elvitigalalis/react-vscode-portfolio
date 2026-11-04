@@ -8,9 +8,10 @@
 import { ORIGIN, SHEET } from "../site.mjs";
 import { clockSpan, couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
-import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
+import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
 import { REASON_WORDS } from "./replan.mjs";
+import { dayCap, isWeekend, wakeProfile } from "./sleep.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -56,9 +57,11 @@ const PLAN_URL = `${ORIGIN}/plan/`;
 export function whatToSend(snapshot, now) {
   if (!telegramOn(snapshot.settings)) return [];
   const day = dayOf(snapshot, now);
-  if (day.minutes < BRIEF_AT || day.minutes >= QUIET_FROM) return [];
-  // Each kind of message is one rule over the same day.
-  const due = [brief(day), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
+  if (day.minutes < day.openAt || day.minutes >= QUIET_FROM) return [];
+  // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
+  // wake syncs, so it goes once a day, whenever it went.
+  const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
+  const due = [...(briefOut ? [] : [brief(day)]), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -86,7 +89,30 @@ function dayOf(snapshot, now) {
   const plan = p?.day === today && p.status === "pending"
     ? proposalLines(p, proposedOn(snapshot.blocks, today, tz), snapshot.tasks, needsOpen, p.picks ?? [], snapshot.campus ?? [], tz)
     : null;
-  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, plan, today, minutes, tz, now: now.getTime() };
+  return { ...snapshot, blocks: snapshot.blocks.filter((b) => !b.proposed), needsOpen, plan, today, minutes, tz, now: now.getTime(), ...wakeTimes(snapshot, now, today, tz) };
+}
+
+// Oura (docs/sheet-v5.md, "Oura"): with his sleep_nights rows (snapshot.sleep), quiet lasts until
+// he's up, today's actual wake or else his typical wake for the day, and the brief waits until 15
+// minutes after the actual wake, or 90 after the typical one while the ring hasn't synced. Never
+// before 8:00; without rows, 8:00 as before.
+function wakeTimes(snapshot, now, today, tz) {
+  if (!snapshot.sleep?.length) return { openAt: BRIEF_AT, briefAt: BRIEF_AT };
+  const p = wakeProfile(snapshot.sleep, now, tz);
+  const typical = isWeekend(today) ? p.weekend : p.weekday;
+  const up = p.woke_at ?? typical ?? BRIEF_AT;
+  const brief = p.woke_at != null ? p.woke_at + 15 : typical != null ? typical + 90 : BRIEF_AT;
+  return { openAt: Math.max(BRIEF_AT, up), briefAt: Math.max(BRIEF_AT, brief) };
+}
+
+// Oura: "Readiness 64, slept 5h40: cap 4h45.", when today's numbers (snapshot.sleepDay, a
+// sleep_days row) changed the workload cap; otherwise null.
+function capLine({ settings, sleepDay, today }) {
+  if (sleepDay?.day !== today) return null;
+  const { workload_cap_min, cap_reason } = dayCap(settings.workload_cap_min ?? 360, sleepDay);
+  if (!cap_reason) return null;
+  const why = cap_reason.split(":")[0];
+  return `${why[0].toUpperCase()}${why.slice(1)}: cap ${formatMinutes(workload_cap_min)}.`;
 }
 
 const BUDGETED = ["start", "repeat", "snooze"];
@@ -123,13 +149,15 @@ function brief(day) {
   const n = blocksToday.length;
   const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
   if (risky.length) lines.push(`At risk: ${risky.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
+  const cap = capLine(day);
+  if (cap) lines.push(cap);
   // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
   if (wx) lines.push(wx);
   // v5 SRC3: today's academic calendar entries (snapshot.academic, from academicEntries), at most 3.
   const cal = academicLine(day.academic);
   if (cal) lines.push(cal);
-  const send_at = zonedIso(today, BRIEF_AT, tz);
+  const send_at = zonedIso(today, day.briefAt, tz);
   // v5 M1: who he's waiting on, after the plan's lines.
   const waiting = awaitingLine(day.awaiting);
   if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan, waiting].filter(Boolean).join("\n"), buttons: planButtons(today, day.proposal?.rev) };
@@ -235,6 +263,9 @@ function replanWords(reasons, day) {
         .map((b) => title(day.tasks.find((t) => t.id === b.task_id)) ?? (day.habits ?? []).find((h) => h.id === b.habit_id)?.name)
         .find(Boolean);
       phrase = hit && !linkish(hit) ? `Busy ${span} now overlaps ${hit}` : `Busy ${span} now`;
+    } else if (c.reason === "woke_late") {
+      // Oura: ref is the wake's bedtime_end.
+      if (!Number.isNaN(Date.parse(c.ref))) phrase = `you woke up at ${formatClock(minutesOn(new Date(Date.parse(c.ref)).toISOString(), day.today, day.tz))}`;
     } else if (/_due_soon$/.test(c.reason)) {
       const t = day.tasks.find((x) => x.source_uid === c.ref && x.due);
       const name = title(t);
