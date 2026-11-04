@@ -25,7 +25,11 @@ async function draw() {
   const [account, settings] = await Promise.all([api.calendarAccount(), api.settings()]);
   $("[data-busy-saved]").textContent = busySaved(settings?.busy_as_of ?? state.settings?.busy_as_of, new Date());
   $("[data-cal-account]").textContent = account ? `Connected: ${account.email}` : "Not connected. /plan saves busy times only while it is open.";
-  $("[data-cal-error]").textContent = account?.last_error ? `Last error: ${account.last_error}. Reconnect to fix.` : "";
+  // A grant from before /plan's scopes were added (or with them unticked) saves busy times but
+  // can't stand in for /plan's sign-in token (calendar-connect's /token).
+  const grant = account && !account.last_error ? await api.calendarGrantStatus() : null;
+  $("[data-cal-error]").textContent = account?.last_error ? `Last error: ${account.last_error}. Reconnect to fix.`
+    : grant === "needs-scopes" ? "Reconnect to let /plan read events." : "";
   $('[data-act="cal-connect"]').textContent = account ? "Reconnect" : "Connect";
   $('[data-act="cal-disconnect"]').hidden = !account;
 }

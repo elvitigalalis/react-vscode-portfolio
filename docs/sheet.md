@@ -28,9 +28,11 @@ write-ups do not change and keep their budgets (no third-party requests, ≤ 5 K
   return a private task's length, never its title, so private titles never leave the database.
 - **Google Calendar: from the browser,** with the Google access token Supabase hands back at
   sign-in. Scopes: `calendar.app.created` (create and manage one "Time blocks" calendar) and
-  `calendar.events.readonly` (show his real events in gray in the week and while planning). When
-  the token expires (1 h) the week keeps the last copy of its events (kept in his browser,
-  cleared on sign-out) and offers "Connect"; Google remembers consent, so it is one click.
+  `calendar.events.readonly` (show his real events in gray in the week and while planning). The
+  token lasts an hour and Supabase never refreshes it, so after that /plan gets one from the
+  server's calendar grant (calendar-connect's `/token`, docs/sheet-v5.md). Only when neither
+  works does the week keep the last copy of its events (kept in his browser, cleared on
+  sign-out) and offer "Reconnect Google Calendar in Settings".
 - **The Sheet writes to Google, never reads its own blocks back.** The database is the source of
   truth for blocks; each block stores its Google event ID.
 - **Rollover runs in the database** (`pg_cron`, hourly and idempotent, using the owner's time zone), so `/now` is

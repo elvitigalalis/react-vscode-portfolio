@@ -8,10 +8,14 @@ import { ORIGIN } from "../site.mjs";
 // grant holds it.
 export const READONLY = "https://www.googleapis.com/auth/gmail.readonly";
 
-// The calendar grant (docs/sheet-v5.md, calendar-connect): free/busy only, plus openid and email,
-// which are there only to prove whose account it is (the ID token's verified email).
+// The calendar grant (docs/sheet-v5.md, calendar-connect): free/busy for busy-sync, and the two
+// scopes /plan's own sign-in asks for (SCOPES in api.mjs), so calendar-connect's /token can give
+// /plan an access token after its sign-in token runs out. openid and email are there only to
+// prove whose account it is (the ID token's verified email).
 export const FREEBUSY = "https://www.googleapis.com/auth/calendar.freebusy";
-export const CALENDAR_SCOPES = `openid email ${FREEBUSY}`;
+export const EVENTS_READONLY = "https://www.googleapis.com/auth/calendar.events.readonly";
+export const APP_CREATED = "https://www.googleapis.com/auth/calendar.app.created";
+export const CALENDAR_SCOPES = `openid email ${FREEBUSY} ${EVENTS_READONLY} ${APP_CREATED}`;
 
 // A state lives 10 minutes: long enough to pick an account and click through Google's screens.
 const STATE_TTL = 10 * 60_000;
