@@ -367,6 +367,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   border: 1px dashed var(--accent); border-radius: 0.4rem;
 }
 .sheet-banner > .sheet-icon { color: var(--accent); }
+.sheet-banner > .sheet-rev { color: var(--muted); font-size: 0.8125rem; }
 .sheet-banner > .sheet-btn-approve { margin-left: auto; align-self: center; font-size: 0.8125rem; padding: 0.15rem 0.5rem; }
 .sheet-proposal > .sheet-icon { color: var(--accent); }
 .sheet-proposal > .sheet-btn-approve { margin-left: auto; align-self: center; }

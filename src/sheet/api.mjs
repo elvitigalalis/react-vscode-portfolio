@@ -135,7 +135,9 @@ export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { met
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
 export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
-export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,status,note,picks`))[0] ?? null;
+// v5: a day's newest revision, and turning a proposed block's task down for the day.
+export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,rev,status,note,picks&order=rev.desc&limit=1`))[0] ?? null;
+export const turnDown = (d, task) => rest("rpc/turn_down", { method: "POST", body: { d, task } });
 // uids are quoted, so commas and parentheses in one stay inside it
 // (https://docs.postgrest.org/en/stable/references/api/url_grammar.html#reserved-characters).
 export const campusByUid = (uids) => (uids.length
