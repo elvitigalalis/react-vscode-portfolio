@@ -776,6 +776,19 @@ begin
   where b.proposed and (b.starts_at at time zone (select time_zone from settings))::date = d;
   get diagnostics n = row_count;
   update proposals p set status = 'approved' where p.day = d and p.rev = newest.rev;
+  -- v5 A1: each suggested task goes to the bottom of Inbox, private, keyed by its message. A uid
+  -- already in feed_seen is skipped, so a message makes one task, ever, even once deleted.
+  with s as (
+    select x.title, x.due, x.account || ':' || x.message_id as uid, row_number() over () as k
+    from jsonb_to_recordset(newest.suggested) as x(account text, message_id text, title text, due date)
+  ), fresh as (
+    insert into feed_seen (source, uid) select 'mail', s.uid from s on conflict do nothing returning uid
+  )
+  insert into tasks (title, list, due, public, source, source_uid, position)
+  select s.title, 'Inbox', s.due, false, 'mail', s.uid,
+    (select coalesce(max(t.position), 0) from tasks t where t.day is null and t.list = 'Inbox') + s.k
+  from s join fresh on fresh.uid = s.uid
+  on conflict (source, source_uid) do nothing;
   return n;
 end $$;
 create or replace function skip_proposal(d date, rev int) returns void
