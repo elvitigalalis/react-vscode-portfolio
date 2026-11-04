@@ -169,6 +169,20 @@ import "../../styles/sheet.css";
         <ul class="sheet-mail" data-pace></ul>
       </section>
 
+      <!-- Triage rules (docs/sheet-v5.md, "/plan"): src/sheet/triage-settings.mjs fills and saves them. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-triage-title">
+        <h3 id="sheet-triage-title">Triage rules</h3>
+        <p class="small">Mail from a sender or domain you always or never want in Needs you. Never show holds whatever Claude decides.</p>
+        <ul class="sheet-mail" data-triage-rules></ul>
+        <form class="sheet-dialog-end" data-triage-add>
+          <label for="sheet-triage-pattern">Address or domain</label>
+          <input id="sheet-triage-pattern" name="pattern" type="text" required minlength="3" maxlength="254" pattern="[^\s]+" placeholder="jobs@acme.com or acme.com" autocomplete="off">
+          <label class="visually-hidden" for="sheet-triage-action">Rule</label>
+          <select id="sheet-triage-action" name="action"><option value="never">Never show</option><option value="always">Always show</option></select>
+          <button type="submit" class="sheet-btn primary">Add</button>
+        </form>
+      </section>
+
       <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
@@ -240,5 +254,6 @@ import "../../styles/sheet.css";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings]);
+  import { setupTriageSettings } from "../../sheet/triage-settings.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupTriageSettings]);
 </script>
