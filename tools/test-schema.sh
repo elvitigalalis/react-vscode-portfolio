@@ -306,7 +306,7 @@ declare
   t1 uuid := '00000000-0000-4000-8000-0000000000a1';
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     raise notice '- v5 revisions: skipped, apply_proposal(d, replaces, ...) is not there yet';
     return;
   end if;
@@ -410,7 +410,7 @@ do $$
 declare
   d date := sheet_today() + 6;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     return;
   end if;
   -- Shutting a day down lapses its pending revision, and the day takes no new one.
@@ -721,7 +721,7 @@ declare
   d date := sheet_today() + 8;
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text)') is null then
     raise notice '- apply_proposal read_at: skipped, not there yet';
     return;
   end if;
@@ -1414,6 +1414,9 @@ do $$ begin
   -- A woke-late change has kind sleep; revisions keep their window start.
   insert into changes (kind, reason, weight) values ('sleep', 'woke_late', 9);
   delete from changes where kind = 'sleep';
+  perform apply_proposal(d => '2030-01-04', replaces => null, blocks => '[]', window_from => '10:15');
+  if (select window_from from proposals where day = '2030-01-04') <> '10:15' then raise exception 'apply_proposal lost window_from'; end if;
+  delete from proposals where day = '2030-01-04';
   begin
     update proposals set window_from = '7:00' where false;
     insert into proposals (day, rev, window_from) values ('2030-01-05', 1, '25:00');

@@ -724,10 +724,14 @@ drop function if exists apply_proposal(date, jsonb, jsonb, jsonb, text);
 -- Without it, now() as before. The signature without it is dropped.
 alter table proposals add column if not exists read_at timestamptz;
 drop function if exists apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[]);
+-- Oura: window_from, the window start the revision was planned from (the column is with Oura's
+-- section, below). The signature without it is dropped.
+drop function if exists apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz);
 create or replace function apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
   needs jsonb default '[]', picks jsonb default '[]', note text default null,
   couldnt_fit uuid[] default '{}', suggested jsonb default '[]',
-  run_trigger text default 'morning', reasons text[] default '{}', read_at timestamptz default null) returns int
+  run_trigger text default 'morning', reasons text[] default '{}', read_at timestamptz default null,
+  window_from text default null) returns int
 language plpgsql security invoker set search_path = public as $$
 declare
   newest proposals%rowtype;
@@ -756,12 +760,12 @@ begin
     select x.habit_id, x.starts_at, x.ends_at, true
     from jsonb_to_recordset(apply_proposal.habit_blocks) as x(habit_id uuid, starts_at timestamptz, ends_at timestamptz);
   end if;
-  insert into proposals (day, rev, created_at, status, note, picks, blocks, couldnt_fit, suggested, run_trigger, reasons, read_at)
+  insert into proposals (day, rev, created_at, status, note, picks, blocks, couldnt_fit, suggested, run_trigger, reasons, read_at, window_from)
   values (d, r, clock_timestamp(), 'pending', apply_proposal.note, coalesce(apply_proposal.picks, '[]'),
     (select coalesce(jsonb_agg(x order by x->>'starts_at'), '[]')
      from jsonb_array_elements(coalesce(apply_proposal.blocks, '[]') || coalesce(apply_proposal.habit_blocks, '[]')) x),
     coalesce(apply_proposal.couldnt_fit, '{}'), coalesce(apply_proposal.suggested, '[]'),
-    coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'), cut);
+    coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'), cut, apply_proposal.window_from);
   -- As in v4: a new revision replaces the day's open items, skipping any message already there.
   -- v5 SRC2: only mail rows; Slack rows are slack-sync's, and stay until he marks them done.
   delete from needs_you n where n.day = d and not n.done and n.source = 'mail';
@@ -777,8 +781,8 @@ begin
   end if;
   return r;
 end $$;
-revoke execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz) from public, anon;
-grant execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz) to authenticated;
+revoke execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text) from public, anon;
+grant execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz, text) to authenticated;
 
 -- Approve all and Skip, from Telegram or /plan, act on revision `rev` only while it is d's newest
 -- and pending, so a tap never decides a plan he hasn't seen.
