@@ -548,6 +548,13 @@ weather_cache id boolean pk default true check (id), point text not null,
   `triageLabels`) is not needed, unless a rule already covers the address (an `address` rule
   equal to it, or a `domain` rule matching it as the never-show rules do, either action). Rows
   with no `from_address` count for nothing.
+- **Decided (L1):** `tapFeedback(tap, snapshot)` gives the row a Telegram tap logs (Approve all or
+  Skip on the pending revision, each Finished? answer), or null; telegram inserts it after the
+  tap's changes, and not when a newer plan refused it. `needsFeedback(row, action)` gives /plan's
+  Needs you row. `ruleMatches` and `neverRule` are the match checkProposal drops by.
+  `tools/triage-score.mjs <run.json> [days]` scores a run file (a list of `{ account, message_id
+  }`, or a submit_proposal input) against the labels of the last 14 days' feedback; done
+  `needs_you` rows go hourly, so the live table can't give a past run's items.
 
 ### Edge Functions
 
