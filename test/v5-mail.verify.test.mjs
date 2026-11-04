@@ -61,7 +61,7 @@ const headers = (from, extra = []) => [
   ...extra.map(([name, value]) => ({ name, value })),
 ];
 
-test("automatedSender: a person writing directly is not automated", todo, async () => {
+test("automatedSender: a person writing directly is not automated", async () => {
   const { automatedSender } = await mail();
   assert.equal(automatedSender(headers("Ana Ruiz <ana.ruiz@example.edu>")), false);
   assert.equal(automatedSender(headers("kim@cs.example.edu")), false);
@@ -69,7 +69,7 @@ test("automatedSender: a person writing directly is not automated", todo, async 
   assert.equal(automatedSender(headers("Ana Ruiz <ana.ruiz@example.edu>", [["Auto-Submitted", "no"]])), false);
 });
 
-test("automatedSender: no-reply style local parts", todo, async () => {
+test("automatedSender: no-reply style local parts", async () => {
   const { automatedSender } = await mail();
   for (const from of [
     "GitHub <noreply@github.com>",
@@ -82,7 +82,7 @@ test("automatedSender: no-reply style local parts", todo, async () => {
   ]) assert.equal(automatedSender(headers(from)), true, from);
 });
 
-test("automatedSender: list and auto-reply headers", todo, async () => {
+test("automatedSender: list and auto-reply headers", async () => {
   const { automatedSender } = await mail();
   const person = "Ana Ruiz <ana.ruiz@example.edu>";
   assert.equal(automatedSender(headers(person, [["List-Id", "CS Department <cs-all.example.edu>"]])), true);
@@ -201,7 +201,7 @@ test("replyState: who is a display name, unquoted, or else the local part", todo
   assert.ok(long.length <= 80 && long.startsWith("AAAA") && !long.includes("@"));
 });
 
-test("skippedCategory: the four Gmail categories spec 47 skips", todo, async () => {
+test("skippedCategory: the four Gmail categories spec 47 skips", async () => {
   const { skippedCategory } = await mail();
   assert.equal(skippedCategory(["INBOX", "CATEGORY_PROMOTIONS"]), true);
   assert.equal(skippedCategory(["CATEGORY_UPDATES"]), true);
