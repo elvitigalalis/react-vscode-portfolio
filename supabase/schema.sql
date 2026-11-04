@@ -760,11 +760,11 @@ begin
   -- As in v4: a new revision replaces the day's open items, skipping any message already there.
   -- v5 SRC2: only mail rows; Slack rows are slack-sync's, and stay until he marks them done.
   delete from needs_you n where n.day = d and not n.done and n.source = 'mail';
-  -- v5 L1: each row carries the From address checkProposal looked up (null when unknown).
-  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due, from_address)
-  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due, x.from_address
+  -- v5 L1: each row carries the sender hash checkProposal looked up (null when unknown).
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due, sender_hash)
+  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due, x.sender_hash
   from jsonb_to_recordset(coalesce(apply_proposal.needs, '[]'))
-    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date, from_address text)
+    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date, sender_hash text)
   on conflict (account, message_id) do nothing;
   if to_regclass('public.changes') is not null then
     update changes c set consumed_day = d, consumed_rev = r
@@ -959,14 +959,13 @@ revoke execute on function claim_replan(date, text[], jsonb, uuid[]) from public
 grant execute on function claim_replan(date, text[], jsonb, uuid[]) to service_role;
 
 -- --- v5 L1, learning from his taps (docs/sheet-v5.md, "Schema") -------------------------------
--- Needs you gains Not needed (a done row he says wasn't worth showing) and the sender's From
--- address, lowercased, which the server sets from message_senders.
+-- Needs you gains Not needed (a done row he says wasn't worth showing) and the sender's hash
+-- (sender_hash, below with message_senders), which the server sets from message_senders.
 alter table needs_you add column if not exists not_needed boolean not null default false;
-alter table needs_you add column if not exists from_address text;
 
 -- Every decision he makes, as ids only: Approve all or Skip by revision, turning down a block,
 -- Done, Not needed and Undo on Needs you, and each Finished? answer. Refs: proposal { day, rev },
--- block { day, task_id }, needs_you { account, message_id, from_address }, finished { block_id,
+-- block { day, task_id }, needs_you { account, message_id, sender_hash }, finished { block_id,
 -- task_id }. Append-only: the owner (/plan) and Telegram (service key) insert, nobody updates or
 -- deletes but nightly_roll, which keeps 120 days.
 create table if not exists feedback (
@@ -1087,8 +1086,9 @@ $job$);
 -- mail text, and keeps three things, all owner-only and written only by the server:
 --   known_senders    salted SHA-256 hashes (senderHash, src/sheet/mail.mjs) of the addresses he
 --                    has sent mail to, never an address;
---   message_senders  each received message's From address, lowercased, for submit_proposal's
---                    never-show rules (L1); 14 days, like Needs you;
+--   message_senders  each received message's sender hashes (senderHashes: the address's, its
+--                    domain's and each parent's), for submit_proposal's never-show rules (L1);
+--                    14 days, like Needs you; never an address;
 --   reply_state      per thread, Reply owed or Awaiting reply (replyState), with a display name.
 -- mail_accounts.history_id is where each account's next history read starts.
 alter table mail_accounts add column if not exists history_id text;
@@ -1102,7 +1102,8 @@ create table if not exists message_senders (
   account text,
   message_id text,
   thread_id text not null,
-  from_address text not null,
+  address_hash text not null,
+  domain_hashes text[] not null default '{}',
   at timestamptz not null,
   primary key (account, message_id)
 );
@@ -1129,6 +1130,29 @@ drop policy if exists owner_all on reply_state;
 create policy owner_all on reply_state for all using (is_owner()) with check (is_owner());
 revoke all on known_senders, message_senders, reply_state from anon;
 revoke insert, update, delete on known_senders, message_senders, reply_state from authenticated;
+
+-- Fix: no From address in plain text (docs/sheet-v5.md, "Sender hashes"). message_senders keeps
+-- hashes only, Needs you rows and their feedback a sender_hash, and a triage rule made from a
+-- /plan offer matches by hash (match 'sender', with the sender's display name as its label).
+-- Rows written with plain addresses before are deleted or stripped. Safe to re-run.
+alter table message_senders add column if not exists address_hash text;
+alter table message_senders add column if not exists domain_hashes text[] not null default '{}';
+delete from message_senders where address_hash is null;
+alter table message_senders drop column if exists from_address;
+alter table message_senders alter column address_hash set not null;
+alter table message_senders drop constraint if exists message_senders_hashes_check;
+alter table message_senders add constraint message_senders_hashes_check
+  check (address_hash ~ '^[0-9a-f]{64}$' and array_to_string(domain_hashes, ',') ~ '^([0-9a-f]{64}(,|$))*$');
+alter table needs_you add column if not exists sender_hash text;
+alter table needs_you drop column if exists from_address;
+alter table needs_you drop constraint if exists needs_you_sender_hash_check;
+alter table needs_you add constraint needs_you_sender_hash_check check (sender_hash is null or sender_hash ~ '^[0-9a-f]{64}$');
+update feedback set ref = ref - 'from_address' where item = 'needs_you' and ref ? 'from_address';
+alter table triage_rules add column if not exists label text check (label is null or char_length(label) <= 80);
+alter table triage_rules drop constraint if exists triage_rules_match_check;
+alter table triage_rules add constraint triage_rules_match_check check (match in ('address', 'domain', 'sender'));
+alter table triage_rules drop constraint if exists triage_rules_sender_check;
+alter table triage_rules add constraint triage_rules_sender_check check (match <> 'sender' or pattern ~ '^[0-9a-f]{64}$');
 
 -- Every 5 minutes from :02, call mail-sync. Like sheet-brightspace, it does nothing until its URL
 -- and the shared secret are in Vault.

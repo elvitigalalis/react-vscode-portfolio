@@ -65,7 +65,9 @@ break_min) and habits.
   where they still fit, so Lisul sees only what changed.
 - triage_rules are Lisul's rules for Needs you, [{ match, pattern, action }]: match is
   "address" (a From address) or "domain" (a From address's domain or a parent of it, so
-  mail.example.com matches example.com); action is "always" or "never". Use them in step 3.
+  mail.example.com matches example.com); action is "always" or "never". Use them in step 3. A
+  rule with match "sender" has a hashed pattern you can't read: submit_proposal applies it
+  itself, so ignore it.
 - weather is D's hourly forecast from 07:00 to 23:00, [{ at, temp_f, pop, short }]: pop is the
   chance of precipitation in percent. It may be empty; then plan as if it were dry.
 - reply_state is what the mail sync worked out from his mail's labels and dates: { owed,

@@ -886,7 +886,7 @@ do $$ begin
   -- nightly_roll keeps feedback 120 days.
   insert into feedback (at, item, action, ref) values
     (now() - interval '121 days', 'proposal', 'approve', '{"day": "2026-01-01", "rev": 1}'),
-    (now() - interval '119 days', 'needs_you', 'not_needed', '{"account": "owner@example.com", "message_id": "18f2a3b4c5d6e7f1", "from_address": "jobs@acme.com"}');
+    (now() - interval '119 days', 'needs_you', 'not_needed', '{"account": "owner@example.com", "message_id": "18f2a3b4c5d6e7f1", "sender_hash": "b2d1910ecb638f419ce06372f8393efff2ab1f90e03954509117859182151af9"}');
   perform nightly_roll();
   if exists (select 1 from feedback where item = 'proposal') or not exists (select 1 from feedback where item = 'needs_you')
     then raise exception 'nightly_roll should keep feedback for 120 days, no longer'; end if;
@@ -1074,7 +1074,7 @@ do $$ begin
     raise exception 'reply_state took a thread twice';
   exception when unique_violation then null; end;
   begin insert into message_senders (account, message_id, thread_id, at) values ('owner@example.com', '18f3a1c2d4e5f002', '18f3a1c2d4e5f000', now());
-    raise exception 'message_senders took a row with no from_address';
+    raise exception 'message_senders took a row with no address_hash';
   exception when not_null_violation then null; end;
   if (select data_type from information_schema.columns where table_name = 'mail_accounts' and column_name = 'history_id')
      is distinct from 'text' then raise exception 'mail_accounts.history_id missing'; end if;
@@ -1086,15 +1086,46 @@ do $$ begin
   raise notice '✓ v5: known_senders hashes only; reply tracking private and server-written; sheet-mail every 5 minutes';
 end $$;
 
+-- Fix: no From address in plain text (docs/sheet-v5.md, "Sender hashes").
+do $$ begin
+  if to_regclass('public.message_senders') is null then return; end if;
+  if exists (select 1 from information_schema.columns where table_name in ('message_senders', 'needs_you') and column_name = 'from_address')
+    then raise exception 'message_senders or needs_you still has from_address'; end if;
+  begin insert into message_senders (account, message_id, thread_id, address_hash, at)
+      values ('owner@example.com', 'fx-1', 'fx', 'jobs@acme.com', now());
+    raise exception 'message_senders took an address as its hash';
+  exception when check_violation then null; end;
+  begin insert into message_senders (account, message_id, thread_id, address_hash, domain_hashes, at)
+      values ('owner@example.com', 'fx-1', 'fx', repeat('a', 64), array['acme.com'], now());
+    raise exception 'message_senders took a domain as a domain hash';
+  exception when check_violation then null; end;
+  insert into message_senders (account, message_id, thread_id, address_hash, domain_hashes, at)
+    values ('owner@example.com', 'fx-1', 'fx', repeat('a', 64), array[repeat('b', 64), repeat('c', 64)], now());
+  delete from message_senders where thread_id = 'fx';
+  begin insert into needs_you (day, account, message_id, link, sender, subject, why, kind, sender_hash)
+      values (sheet_today(), 'owner@example.com', 'fx-2', 'x', 'Acme', 'Hi', 'Why', 'reply', 'jobs@acme.com');
+    raise exception 'needs_you took an address as its sender_hash';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action) values ('sender', 'jobs@acme.com', 'never');
+    raise exception 'triage_rules took a sender rule that is not a hash';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action, label) values ('sender', repeat('a', 64), 'never', repeat('x', 81));
+    raise exception 'triage_rules took an 81-character label';
+  exception when check_violation then null; end;
+  insert into triage_rules (match, pattern, action, label) values ('sender', repeat('a', 64), 'never', 'Acme Recruiting');
+  delete from triage_rules where match = 'sender';
+  raise notice '✓ fix: message_senders, needs_you and sender rules hold hashes, never a From address';
+end $$;
+
 -- M1, beyond the verification checks: nightly_roll keeps 14 days of reply_state and message_senders.
 do $$ begin
   if to_regclass('public.reply_state') is null or to_regclass('public.message_senders') is null then return; end if;
   insert into reply_state (account, thread_id, state, since, message_id, who) values
     ('owner@example.com', 'm1-old', 'owed', now() - interval '15 days', 'm1-old-1', 'Ana Ruiz'),
     ('owner@example.com', 'm1-new', 'awaiting', now() - interval '4 days', 'm1-new-1', 'Prof. Kim');
-  insert into message_senders (account, message_id, thread_id, from_address, at) values
-    ('owner@example.com', 'm1-old-1', 'm1-old', 'ana.ruiz@example.edu', now() - interval '15 days'),
-    ('owner@example.com', 'm1-new-0', 'm1-new', 'kim@cs.example.edu', now() - interval '5 days');
+  insert into message_senders (account, message_id, thread_id, address_hash, at) values
+    ('owner@example.com', 'm1-old-1', 'm1-old', repeat('a', 64), now() - interval '15 days'),
+    ('owner@example.com', 'm1-new-0', 'm1-new', repeat('b', 64), now() - interval '5 days');
   perform nightly_roll();
   if exists (select 1 from reply_state where thread_id = 'm1-old') or not exists (select 1 from reply_state where thread_id = 'm1-new')
     or exists (select 1 from message_senders where message_id = 'm1-old-1') or not exists (select 1 from message_senders where message_id = 'm1-new-0')

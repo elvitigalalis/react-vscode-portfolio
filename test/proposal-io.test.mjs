@@ -84,7 +84,9 @@ test("planner-mcp: OAuth metadata, owner-only, Streamable HTTP, as mail-mcp", ()
 test("planner-mcp: only the owner's user-scoped client, and no fetch of its own", () => {
   assert.doesNotMatch(code, /supabaseAdmin|SERVICE_ROLE|service_role|_shared\//);
   assert.doesNotMatch(code, /(?<!handler\.)\bfetch\(|https?:\/\//);
-  assert.doesNotMatch(code, /Deno\.env/);
+  // Its one secret is the sender hashes' salt, to hash triage rule patterns at submit (fix).
+  assert.deepEqual([...code.matchAll(/Deno\.env\.get\("(\w+)"\)/g)].map((m) => m[1]), ["SHEET_SENDER_SALT"]);
+  assert.equal(code.match(/Deno\.env/g).length, 1);
 });
 
 test("planner-mcp: submit_proposal writes only through apply_proposal, after checkProposal", () => {
