@@ -13,23 +13,9 @@
 // Only those fields are read: notes, logged loads and raw cells never reach the SQL.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { nums, parseSlot } from "../src/sheet/gym.mjs";
 
-const nums = (text) => (String(text ?? "").match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
-
-// A slot's reps, RPE and rest as numbers: "5-7" → 5, 7; RPE "8-9" → 8.5 (the middle); rest
-// "~2-3 min" → 120, 180 seconds, unless the file gives the seconds.
-export function parseSlot(x) {
-  const [rmin, rmax = rmin] = nums(x.reps);
-  const rpe = nums(x.rpe);
-  const [smin, smax = smin] = nums(x.rest).map((m) => m * 60);
-  return {
-    rep_min: rmin ?? null,
-    rep_max: rmax ?? null,
-    rpe_target: rpe.length ? (Math.min(...rpe) + Math.max(...rpe)) / 2 : null,
-    rest_min_s: x.rest_min_s ?? smin ?? null,
-    rest_max_s: x.rest_max_s ?? smax ?? null,
-  };
-}
+export { parseSlot };
 
 // A 45 lb bar for barbell lifts, for the plate chip; none for dumbbells, machines and the Smith
 // machine. He can change it in the table.

@@ -185,6 +185,25 @@ export function plateText(total, bar = 45) {
   return `${p.bar} bar | ${p.perSide.join(" ")} / side${p.exact ? "" : ` (+${off})`}`;
 }
 
+// --- The program ---------------------------------------------------------------------------
+
+export const nums = (text) => (String(text ?? "").match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+
+// A slot's reps, RPE and rest as numbers, for the seed and the edit mode: "5-7" → 5, 7; RPE
+// "8-9" → 8.5 (the middle); rest "~2-3 min" → 120, 180 seconds, unless the row gives seconds.
+export function parseSlot(x) {
+  const [rmin, rmax = rmin] = nums(x.reps);
+  const rpe = nums(x.rpe);
+  const [smin, smax = smin] = nums(x.rest).map((m) => m * 60);
+  return {
+    rep_min: rmin ?? null,
+    rep_max: rmax ?? null,
+    rpe_target: rpe.length ? (Math.min(...rpe) + Math.max(...rpe)) / 2 : null,
+    rest_min_s: x.rest_min_s ?? smin ?? null,
+    rest_max_s: x.rest_max_s ?? smax ?? null,
+  };
+}
+
 // --- The card -------------------------------------------------------------------------------
 
 const clock = (s) => (s % 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : String(s / 60));
