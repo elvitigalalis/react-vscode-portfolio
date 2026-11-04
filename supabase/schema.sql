@@ -1256,3 +1256,117 @@ begin
   return result;
 end $$;
 revoke execute on function answer_message(uuid, jsonb, jsonb, text) from public, anon;
+
+-- --- Gym (docs/sheet-gym.md) ------------------------------------------------------------------
+-- The /plan/gym/ lift tracker: a program (days, and the exercise prescribed in each slot), the
+-- sessions and sets he logs, his spreadsheet's starting numbers, and swaps. Owner-only, in no
+-- public view. The program itself is not in this repo: tools/gym-seed.mjs writes it from a local
+-- JSON file. No coaching notes are stored anywhere. Sessions and sets take ids made on the phone,
+-- so the offline outbox (src/sheet/gym-sync.mjs) resends them as upserts by id.
+create table if not exists gym_exercises (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique check (char_length(name) between 1 and 80),
+  "group" text check (char_length("group") <= 40),     -- a movement, e.g. 'horizontal press'
+  unit text not null default 'lb' check (unit = 'lb'),
+  step_lb numeric not null default 5 check (step_lb > 0 and step_lb <= 50),
+  bar_lb numeric check (bar_lb > 0 and bar_lb <= 100),  -- barbell lifts: the plate chip
+  created_at timestamptz not null default now()
+);
+
+create table if not exists gym_program_days (
+  id uuid primary key default gen_random_uuid(),
+  phase int not null check (phase > 0),
+  week int not null check (week between 1 and 12),
+  day_key text not null check (day_key ~ '^[a-z]+[0-9]$'),   -- 'push1' … 'legs2'
+  name text not null check (char_length(name) between 1 and 40),
+  position int not null,
+  unique (phase, week, day_key)
+);
+
+create table if not exists gym_prescriptions (
+  id uuid primary key default gen_random_uuid(),
+  program_day_id uuid not null references gym_program_days on delete cascade,
+  position int not null,
+  exercise_id uuid not null references gym_exercises,
+  warmup_sets text check (char_length(warmup_sets) <= 10),     -- '3-4'
+  working_sets int not null check (working_sets between 1 and 10),
+  reps text not null check (char_length(reps) between 1 and 10), -- '4-6'
+  rep_min int check (rep_min between 1 and 100),
+  rep_max int check (rep_max between 1 and 100 and rep_max >= rep_min),
+  rpe text check (char_length(rpe) <= 10),                       -- '8-9'
+  rpe_target numeric check (rpe_target between 1 and 10),
+  rest_min_s int check (rest_min_s between 0 and 1200),
+  rest_max_s int check (rest_max_s between 0 and 1200),
+  sub1_exercise_id uuid references gym_exercises on delete set null,
+  sub2_exercise_id uuid references gym_exercises on delete set null
+);
+create index if not exists gym_prescriptions_day on gym_prescriptions (program_day_id, position);
+
+create table if not exists gym_sessions (
+  id uuid primary key default gen_random_uuid(),
+  program_day_id uuid references gym_program_days on delete set null,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz check (finished_at >= started_at)
+);
+
+-- exercise_id is what he actually did (the prescribed one or a swap), so records stay per
+-- exercise. Deleting a session deletes its sets; an exercise with sets can't be deleted.
+create table if not exists gym_sets (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references gym_sessions on delete cascade,
+  prescription_id uuid references gym_prescriptions on delete set null,
+  exercise_id uuid not null references gym_exercises,
+  set_index int not null check (set_index between 0 and 50),
+  warmup boolean not null default false,
+  weight_lb numeric not null check (weight_lb >= 0 and weight_lb < 2000),
+  reps int not null check (reps between 0 and 100),
+  rpe numeric check (rpe between 1 and 10),
+  done_at timestamptz not null default now()
+);
+create index if not exists gym_sets_session on gym_sets (session_id);
+create index if not exists gym_sets_exercise on gym_sets (exercise_id, done_at);
+
+-- His spreadsheet's numbers: starting points, never records until he confirms one.
+create table if not exists gym_baselines (
+  exercise_id uuid primary key references gym_exercises on delete cascade,
+  weight_lb numeric check (weight_lb >= 0 and weight_lb < 2000),
+  reps int check (reps between 1 and 100),
+  note text check (char_length(note) <= 500),
+  confirmed boolean not null default false
+);
+
+-- A swap in one slot: for today's session only, or for the rest of the phase (program_day_id
+-- null: that day's slot in every week).
+create table if not exists gym_swaps (
+  id uuid primary key default gen_random_uuid(),
+  program_day_id uuid references gym_program_days on delete cascade,
+  prescription_id uuid not null references gym_prescriptions on delete cascade,
+  exercise_id uuid not null references gym_exercises on delete cascade,
+  scope text not null check (scope in ('today', 'phase')),
+  session_id uuid references gym_sessions on delete cascade,
+  created_at timestamptz not null default now(),
+  check ((scope = 'today') = (session_id is not null))
+);
+
+alter table gym_exercises enable row level security;
+alter table gym_program_days enable row level security;
+alter table gym_prescriptions enable row level security;
+alter table gym_sessions enable row level security;
+alter table gym_sets enable row level security;
+alter table gym_baselines enable row level security;
+alter table gym_swaps enable row level security;
+drop policy if exists owner_all on gym_exercises;
+drop policy if exists owner_all on gym_program_days;
+drop policy if exists owner_all on gym_prescriptions;
+drop policy if exists owner_all on gym_sessions;
+drop policy if exists owner_all on gym_sets;
+drop policy if exists owner_all on gym_baselines;
+drop policy if exists owner_all on gym_swaps;
+create policy owner_all on gym_exercises for all using (is_owner()) with check (is_owner());
+create policy owner_all on gym_program_days for all using (is_owner()) with check (is_owner());
+create policy owner_all on gym_prescriptions for all using (is_owner()) with check (is_owner());
+create policy owner_all on gym_sessions for all using (is_owner()) with check (is_owner());
+create policy owner_all on gym_sets for all using (is_owner()) with check (is_owner());
+create policy owner_all on gym_baselines for all using (is_owner()) with check (is_owner());
+create policy owner_all on gym_swaps for all using (is_owner()) with check (is_owner());
+revoke all on gym_exercises, gym_program_days, gym_prescriptions, gym_sessions, gym_sets, gym_baselines, gym_swaps from anon;
