@@ -552,7 +552,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 | `mail-sync` | `sheet-mail` | `x-sheet-cron` | history → `reply_state`, `message_senders`, `known_senders`, mail changes |
 | `work-sync` | `sheet-work` | `x-sheet-cron` | GitHub and Jira → tasks, changes |
 | `slack-sync` | `sheet-slack` | `x-sheet-cron` | Slack → `needs_you` rows, changes |
-| `ical-sync` | `sheet-ical` | `x-sheet-cron` | Handshake → `busy` (source handshake); academic → `feed_state` items |
+| `ical-sync` | `sheet-ical` | `x-sheet-cron` | Handshake → `busy` (source handshake, `handshake_sync_save`); academic → `academic_days`; `enrollment_at` → its task |
 | `weather` | `sheet-weather` | `x-sheet-cron` | NWS → `weather_cache` |
 | `telegram` | as before | as before | plus the replan decision and fire, Finished?, replan messages, rpc changes |
 | `planner-mcp` | as before | as before | read_planner and submit_proposal with the v5 fields |
