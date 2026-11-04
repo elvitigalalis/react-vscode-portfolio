@@ -3,7 +3,8 @@
 The Sheet's third version. It brings three outside sources into the planner, so Lisul doesn't
 have to check each one by hand:
 
-- **Course tasks:** Brightspace due dates become tasks with due dates.
+- **Course tasks:** Brightspace due dates become tasks with due dates, and its other calendar
+  items (exams, quizzes, class events) tasks on their day at their time.
 - **Campus events:** each day in /plan gets a browsable list of SB Engaged events, and Claude
   points out the ones that fit him.
 - **Mail:** during "plan my day", Claude reads every connected mail account and lists what may
@@ -78,7 +79,20 @@ mail_connect_states  nonce text pk, created_at timestamptz   -- service role onl
     - new UIDs become task rows in list "Brightspace", with no day, a due date, `public: false`
       and `source: 'brightspace'`;
     - an already-seen UID that still has an undone task updates that task's title and due date;
-    - done tasks, deleted tasks and items that drop out of the feed are left alone.
+    - done tasks, deleted tasks and items that drop out of the feed are left alone;
+    - a `STATUS:CANCELLED` item is skipped.
+  - `courseEventChanges(events, { tasks, seen, timeZone, today })` returns `{ insert, update,
+    seen }` for the items with no role suffix (exams, quizzes, class events, holidays), not
+    cancelled, from today on:
+    - new UIDs become private tasks on the item's local day, no list, no due date, titled with the
+      course code from `LOCATION` (`"AMS 261.01 - Fall 2026"` + `"Exam 2"` → `"AMS 261 Exam 2"`,
+      unless the title already names it). A timed item gets `at_time` (its local start) and
+      `est_min` (its length, at most 240; none when zero-length), so it stays on its day and a plan
+      starts its block then; an all-day item gets neither;
+    - a seen UID with an undone task follows the feed's title, day, time and length.
+  - `courseRemovals(events, { tasks, today, until })` returns `{ id, uid }` for undone course
+    tasks dated (due, else day) from today to `until` whose item is cancelled or gone from the
+    feed; the function deletes them and their `feed_seen` rows. An empty feed removes nothing.
   - `campusRows(events, now)` returns rows for `campus_events`, from now to 14 days ahead.
     `url` is the feed's `URL`, or else its `CONTACT` (the same page under the group, without
     `#event_host`), kept only when it starts with `https://sbengaged.stonybrook.edu/`, otherwise
