@@ -28,7 +28,7 @@ const $ = (sel) => root.querySelector(sel);
 // D: the rows, as the server has them plus every write made here since.
 let D = { exercises: [], days: [], rxs: [], baselines: [], swaps: [], sessions: [], sets: [] };
 const TABLE = { gym_exercises: "exercises", gym_program_days: "days", gym_prescriptions: "rxs", gym_baselines: "baselines", gym_swaps: "swaps", gym_sessions: "sessions", gym_sets: "sets" };
-const S = { view: "today", dayId: null, session: null, extra: {}, rpeFor: null, recordsFor: null, draft: readJson(DRAFT) ?? {} };
+const S = { view: "today", dayId: null, session: null, extra: {}, removed: {}, rpeFor: null, recordsFor: null, draft: readJson(DRAFT) ?? {} };
 
 const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -246,6 +246,7 @@ function card(rx, dayKey) {
   for (const spec of specs) {
     const done = logged.find((s) => s.warmup === spec.warmup && s.set_index === spec.index);
     const key = `${rx.id}|${spec.warmup ? "w" : "s"}${spec.index}`;
+    if (!done && S.removed[key]) continue;
     const v = rowValues(key, done, spec.prefill);
     const id = key.replace(/[^a-z0-9]/gi, "");
     const what = `${spec.warmup ? "warm-up" : "set"} ${spec.warmup ? spec.index + 1 : spec.index}`;
@@ -266,10 +267,13 @@ function card(rx, dayKey) {
       if (values.error) return askFor(row, values.error, values.error === "weight" ? w : r);
       logSet({ rx, exId, name, spec, done, values });
     });
+    // ✕ drops a planned row, or deletes a logged set; either way with Undo for 5 s.
+    const x = btn("✕", { id: `${id}-x`, className: "gym-x", ariaLabel: `${done ? "Delete" : "Remove"} ${what} of ${name}`, title: done ? "Delete set" : "Remove set" });
+    x.addEventListener("click", () => removeSet(key, done, what));
     const row = el("div", { className: `gym-set${spec.warmup ? " is-warmup" : ""}${done ? " is-done" : ""}` },
       el("span", { className: "gym-set-n", textContent: spec.label, title: spec.warmup ? "Warm-up: never counted" : "" }),
       el("span", { className: "gym-set-last", textContent: prev ? `${lb(prev.weight_lb)}×${prev.reps}` : "—", ariaLabel: prev ? `Last time ${lb(prev.weight_lb)} by ${prev.reps}` : "No last time" }),
-      check,
+      x, check,
       el("span", { className: "gym-set-inputs" },
         stepper(`${id}-w`, `Weight, ${what}, lb`, "lb", v.weight_lb, Number(ex.step_lb) || 5, (x, redraw) => change({ weight_lb: x }, redraw)),
         stepper(`${id}-r`, `Reps, ${what}`, "reps", v.reps, 1, (x, redraw) => change({ reps: x == null ? x : Math.round(x) }, redraw), true)));
@@ -289,6 +293,20 @@ function card(rx, dayKey) {
     el("div", { className: "gym-sets", role: "group", ariaLabel: `Sets of ${name}` },
       el("div", { className: "gym-set gym-set-head", ariaHidden: "true" }, ...["Set", "Last", "✓", "lb · Reps"].map((t) => el("span", { textContent: t }))), ...rows),
     more);
+}
+
+// Removing a row: a planned one is hidden for this session; a logged one is deleted (by id, from the
+// outbox or the server), and records, PRs and the summary are worked out again from the sets left.
+function removeSet(key, done, what) {
+  if (done) {
+    drop("gym_sets", done.id);
+    if (S.rpeFor === done.id) S.rpeFor = null;
+    offerUndo(`Deleted ${what}: ${lb(done.weight_lb)} × ${done.reps}`, () => put("gym_sets", done));
+  } else {
+    S.removed[key] = true;
+    offerUndo(`Removed ${what}`, () => { delete S.removed[key]; });
+  }
+  render();
 }
 
 // A row with nothing to save says so under its fields and focuses the one to fill.
@@ -396,6 +414,7 @@ async function finishSession() {
   lock = null;
   S.dayId = nextDay(D.days, D.sessions);
   S.extra = {};
+  S.removed = {};
   const dlg = $("[data-gym-summary]");
   dlg.replaceChildren(
     el("h2", { id: "gym-summary-title", textContent: "Workout done" }),

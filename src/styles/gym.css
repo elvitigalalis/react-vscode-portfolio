@@ -43,7 +43,7 @@
 /* A set: number, last time and ✓ on top, then the weight and reps steppers. On wide screens it is
    one line, like Strong's Set | Previous | lb | Reps | ✓. */
 .gym-set {
-  display: grid; grid-template-columns: 2rem 1fr 3.5rem; grid-template-areas: "n last ok" "in in in";
+  display: grid; grid-template-columns: 2rem 1fr 2.75rem 3.5rem; grid-template-areas: "n last x ok" "in in in in";
   align-items: center; gap: 0.4rem 0.5rem; padding: 0.5rem 0; border-top: 1px solid var(--line);
 }
 .gym-set-head { display: none; }
@@ -51,6 +51,12 @@
 .gym-set.is-warmup .gym-set-n { color: var(--muted); }
 .gym-set-last { grid-area: last; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
 .gym-check { grid-area: ok; }
+/* ✕: a quiet 44 px button, kept clear of ✓ by the gap; Undo backs out a mis-tap. */
+.gym-x {
+  grid-area: x; width: 2.75rem; height: 2.75rem; font: inherit; font-size: 1rem; color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: 50%; cursor: pointer; touch-action: manipulation; margin-right: 0.5rem;
+}
+.gym-x:hover, .gym-x:focus-visible { border-color: var(--line-strong); color: var(--fg); }
 /* Weight takes the room left by reps; on the narrowest phones reps wrap below. */
 .gym-set-inputs { grid-area: in; display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .gym-stepper { flex: 1 1 9.5rem; display: flex; align-items: stretch; min-width: 0; }
@@ -84,7 +90,8 @@
 .gym-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
 
 @media (min-width: 40rem) {
-  .gym-set { grid-template-columns: 2rem 5rem 3.5rem 1fr; grid-template-areas: "n last ok in"; }
+  .gym-set { grid-template-columns: 2rem 5rem 3.5rem 1fr 2.75rem; grid-template-areas: "n last ok in x"; }
+  .gym-x { margin: 0 0 0 0.5rem; }
   .gym-set-head { display: grid; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 0 0.25rem; border-top: 0; }
   .gym-set-head > :nth-child(3) { text-align: center; }
 }
