@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldFire, messageText, checkAnswers, withMessages, proposalTrigger } from "../src/sheet/messages.mjs";
+import { shouldFire, messageText, checkAnswers, withMessages, proposalTrigger, addedLine } from "../src/sheet/messages.mjs";
 import { fireText } from "../src/sheet/routine-fire.mjs";
 
 const NOW = new Date("2026-11-04T15:00:00Z"); // 10:00 am EST
@@ -197,4 +197,15 @@ test("proposalTrigger: a revision a message run submits is recorded as a replan"
   assert.equal(proposalTrigger("message"), "replan");
   assert.equal(proposalTrigger("morning"), "morning");
   assert.equal(proposalTrigger("replan"), "replan");
+});
+
+// ---------------------------------------------------------------- addedLine (/plan)
+
+test("addedLine: what an answered message added, as /plan shows it under the reply", () => {
+  const ev = { title: "Dentist", starts_at: "2026-11-05T20:00:00.000Z", ends_at: "2026-11-05T21:00:00.000Z" };
+  assert.equal(addedLine({ status: "done", tasks_added: 2, events: [ev] }), "Added: 2 tasks, 1 event");
+  assert.equal(addedLine({ status: "done", tasks_added: 1, events: [] }), "Added: 1 task");
+  assert.equal(addedLine({ status: "done", tasks_added: 0, events: [ev, ev] }), "Added: 2 events");
+  assert.equal(addedLine({ status: "failed", tasks_added: 0, events: [] }), "Nothing added");
+  assert.equal(addedLine({ status: "pending", tasks_added: 0, events: [] }), "");
 });

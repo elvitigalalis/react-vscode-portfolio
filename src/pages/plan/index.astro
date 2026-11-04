@@ -38,6 +38,14 @@ import "../../styles/sheet.css";
       <button type="button" data-act="help">Help <kbd>?</kbd></button>
       <button type="button" data-act="sign-out">Sign out</button>
     </div>
+    <!-- Messages to Claude (docs/sheet-messages.md): src/sheet/message-box.mjs sends them and
+         shows the replies. Hidden until the owner's settings load. -->
+    <form class="sheet-message" data-message-form hidden>
+      <label class="visually-hidden" for="sheet-message">Message to Claude</label>
+      <input id="sheet-message" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" required placeholder="Tell Claude: dentist Thu 3pm, lab report due Fri…">
+      <button type="submit" class="sheet-btn primary">Send<span class="visually-hidden"> to Claude</span></button>
+    </form>
+    <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
     <p class="sheet-status" data-status>Loading…</p>
     <p class="sheet-notice" data-notice hidden></p>
     <p class="sheet-notice" role="status" data-mail-notice hidden></p>
@@ -291,8 +299,9 @@ import "../../styles/sheet.css";
   import { setupTopBar } from "../../sheet/topbar.mjs";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
+  import { setupMessages } from "../../sheet/message-box.mjs";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings]);
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou], settings);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages], settings);
 </script>

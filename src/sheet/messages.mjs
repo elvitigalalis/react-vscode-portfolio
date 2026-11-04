@@ -3,7 +3,7 @@
 // side: when the message function fires the task, what answer_messages may write, and what
 // read_planner adds for them. Kept free of the network and of Node APIs so node --test covers
 // it; the message and planner-mcp Edge Functions import it.
-import { addDays, localNow, zonedIso } from "./logic.mjs";
+import { addDays, localNow, plural, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Sending (the message function) ----------------------------------------------------------
@@ -149,3 +149,13 @@ export function withMessages(snapshot, rows, settings, now) {
 // The run_trigger a revision is recorded with: proposals hold morning or replan, and a revision
 // a message run goes on to submit is a replan of today.
 export const proposalTrigger = (trigger) => (trigger === "message" ? "replan" : trigger);
+
+// --- /plan -------------------------------------------------------------------------------------
+
+// "Added: 2 tasks, 1 event" under an answered message's reply; "Nothing added" for a failed one.
+export function addedLine(m) {
+  if (m.status === "failed") return "Nothing added";
+  if (m.status !== "done") return "";
+  const parts = [m.tasks_added && plural(m.tasks_added, "task"), list(m.events).length && plural(m.events.length, "event")].filter(Boolean);
+  return parts.length ? `Added: ${parts.join(", ")}` : "Nothing added";
+}
