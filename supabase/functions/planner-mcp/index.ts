@@ -141,8 +141,8 @@ function plannerServer(db: Db) {
       "message_id, title, due, kind: assessment | interview }) for Needs you items from assessment or " +
       "interview-scheduling senders, which become Inbox tasks only when Lisul approves. Needs you items from a " +
       "never-show sender are dropped, and dropped lists their message ids. Blocks and habits keep the day rules " +
-      "from read_planner's day_rules: the workload cap, a break after every 90 minutes in a row and travel time " +
-      "around busy times. It is checked against a fresh " +
+      "from read_planner's day_rules: the workload cap (task blocks only; habits stay out of it), a break after " +
+      "every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
       "{ ok: true, rev } the revision waits for Lisul to approve it; submitting again (replaces: that rev) " +
       "supersedes it. " + UNTRUSTED,

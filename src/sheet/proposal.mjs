@@ -245,7 +245,9 @@ function dayRuleErrors(spans, snapshot, errors) {
     errors.push(`${named.name}: makes ${run.end - run.start} minutes of blocks in a row; leave a ${rules.break_min}-minute break after every ${rules.break_after_min}`);
   }
 
-  const planned = approved.reduce((n, b) => n + blockMinutes(b), 0) + spans.reduce((n, s) => n + s.end - s.start, 0);
+  // The cap is for work: habit blocks (approved ones, and spans named habits[i]) stay out of it.
+  const planned = approved.filter((b) => !b.habit_id).reduce((n, b) => n + blockMinutes(b), 0)
+    + spans.filter((s) => !s.name.startsWith("habits[")).reduce((n, s) => n + s.end - s.start, 0);
   if (planned > rules.workload_cap_min) {
     errors.push(`blocks: ${hoursLabel(planned)} planned, over the ${hoursLabel(rules.workload_cap_min)} workload cap`);
   }

@@ -156,7 +156,8 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
 - Habits: place each habit in habits at most once, in the order given, as { habit_id, start:
   "HH:MM" }. It runs exactly its minutes and starts between ideal minus flex_min and ideal plus
   flex_min (both ends allowed), as near ideal as a free gap allows. A habit block follows every
-  rule a task block does: free time, travel, breaks and the workload cap all count it. A habit
+  rule a task block does: free time, travel and breaks all count it. Only the workload cap
+  leaves it out: the cap is for work. A habit
   that can't fit in its window is left out for the day: never move it outside the window,
   shorten it, or list it in couldnt_fit (that is for task ids only).
 - A block never overlaps a busy time, a block with proposed false or another block of yours,
@@ -169,8 +170,8 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
     proposed false. No run may span more than break_after_min (90) minutes from its first start
     to its last end, so leave a 10-minute gap after every 90 minutes of blocks in a row. A
     single block longer than 90 minutes is fine.
-  - Workload cap: the minutes of every block with proposed false on D (past ones too) plus
-    your blocks add up to at most workload_cap_min. When the next task would go over, stop
+  - Workload cap: the minutes of every task block with proposed false on D (past ones too)
+    plus your task blocks add up to at most workload_cap_min. Habit blocks don't count. When the next task would go over, stop
     placing.
 - At most 12 blocks and 12 habits. task_id is always an id from tasks, habit_id one from
   habits.
