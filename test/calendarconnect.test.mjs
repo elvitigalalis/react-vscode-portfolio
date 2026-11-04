@@ -27,3 +27,15 @@ test("idTokenEmail: the email only when Google says it is verified", () => {
   assert.equal(idTokenEmail(idToken({ email_verified: true })), null);
   for (const bad of [undefined, null, "", "not-a-token", "a.%%%.c"]) assert.equal(idTokenEmail(bad), null, String(bad));
 });
+
+// --- The functions' source (supabase/functions/calendar-connect, busy-sync) --------------------
+
+const connectFn = readFileSync(new URL("../supabase/functions/calendar-connect/index.ts", import.meta.url), "utf8");
+
+test("calendar-connect accepts only the owner's verified account, and stores the token by rpc", () => {
+  assert.match(connectFn, /CALENDAR_SCOPES/);
+  assert.match(connectFn, /idTokenEmail\(/);
+  assert.match(connectFn, /owner_email/);
+  assert.match(connectFn, /rpc\/calendar_account_save/);
+  assert.doesNotMatch(connectFn, /console\.(log|error)\([^)]*refresh_token/);
+});
