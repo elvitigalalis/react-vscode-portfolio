@@ -31,3 +31,14 @@ test("slackLink: only https:// permalinks on a .slack.com address", () => {
   for (const bad of ["http://acme.slack.com/x", "https://acme.slack.com.evil.example/x", "https://evil.example/.slack.com/", "https://slack.com/x", null])
     assert.equal(slackLink(bad), null, String(bad));
 });
+
+const fn = (await import("node:fs")).readFileSync(new URL("../supabase/functions/slack-sync/index.ts", import.meta.url), "utf8");
+
+test("slack-sync: only auth.test and search.messages, the token from env, text never stored or logged", () => {
+  assert.deepEqual([...new Set(fn.match(/slack\("[\w.]+"/g))].sort(), ['slack("auth.test"', 'slack("search.messages"']);
+  assert.match(fn, /env\("SHEET_SLACK_TOKEN"\)/);
+  assert.match(fn, /Authorization: `Bearer \$\{SLACK_TOKEN\}`/);
+  assert.doesNotMatch(fn, /\.text\b|console\.log/);
+  assert.match(fn, /slackNeeds\(matches, \{ known, self \}\)/);
+  assert.match(fn, /not connected/);
+});
