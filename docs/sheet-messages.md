@@ -82,7 +82,7 @@ with `trigger: message`, and that run does the reading. Terms are as in
   fired, or whose run was missed, shows "Queued: Claude is busy, so this runs with the next plan."
   A message being read is polled every 5 s for up to 6 minutes while the tab is visible. Once
   answered, the steps fold into "4 steps · 52 s · How Claude decided", which also holds each
-  item's why; "Open the run ↗" links to the run on claude.ai. Undo on a to-do deletes its blocks'
+  item's why; "Open the run" links to the run on claude.ai. Undo on a to-do deletes its blocks'
   Google events and the task; on an event it deletes the Google event (when /plan made one), then
   calls `undo_message_item`. A done message's events are
   created in the Time blocks calendar through `createMessageEvent`: titled, with Google's
