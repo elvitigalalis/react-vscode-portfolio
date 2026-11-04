@@ -93,24 +93,27 @@ function draw() {
     timeline.append(nowLine);
   }
   for (const b of blocksOn(day)) {
-    if (b.habit_id) { timeline.append(habitBox(b)); continue; }
-    const t = state.tasks.get(b.task_id);
+    // v5 H1: a habit block stands in as a task with its name: no source, done or Google event,
+    // and never on /now (public_now reads task blocks only).
+    const habit = b.habit_id && { title: b.habit?.name ?? "Habit" };
+    const t = habit || state.tasks.get(b.task_id);
     if (!t) continue;
     const top = minutesOn(b.starts_at, day, SHEET.timeZone);
     const end = minutesOn(b.ends_at, day, SHEET.timeZone);
-    const box = el("div", { className: `sheet-block${t.done ? " is-done" : ""}${b.proposed ? " is-proposed" : ""}${end - top < 30 ? " is-short" : ""}` },
+    const box = el("div", { className: `sheet-block${habit ? " is-habit" : ""}${t.done ? " is-done" : ""}${b.proposed ? " is-proposed" : ""}${end - top < 30 ? " is-short" : ""}` },
       el("span", { className: "sheet-block-title", title: t.title },
-        b.proposed ? icon("sparkles", "Proposed by Claude") : null, `${t.title}${b.proposed || b.gcal_id ? "" : " (not in Google)"}`),
+        habit ? icon("repeat", "Habit") : null, b.proposed ? icon("sparkles", "Proposed by Claude") : null,
+        `${t.title}${b.proposed || b.gcal_id || habit ? "" : " (not in Google)"}`),
       b.proposed ? approveButton(`Approve block for ${t.title}`, "sheet-approve") : null,
-      el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed ? "Turn down" : "Remove"} block for ${t.title}` }),
+      el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed && !habit ? "Turn down" : "Remove"} block for ${t.title}` }),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
     // A block takes its task's source: the edge colour (sheet.css) and the icon.
-    const src = sourceOf(t);
+    const src = habit ? null : sourceOf(t);
     if (src) { box.dataset.source = src; box.prepend(sourceIcon(src)); }
     // Focusable, so a block can be moved and approved from the keyboard (see the dialog's keys).
     box.tabIndex = 0;
-    box.ariaLabel = `${t.title}${sourceWords(src)}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
+    box.ariaLabel = `${t.title}${habit ? ", habit" : sourceWords(src)}, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
     Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
     timeline.append(box);
   }
@@ -156,25 +159,6 @@ function draw() {
       el("button", { type: "submit", className: "sheet-btn primary", value: "done", textContent: "Done" })),
   ].filter(Boolean));
   if (scroll != null) dialog.querySelector(".sheet-timeline-wrap").scrollTop = scroll;
-}
-
-// v5 H1: a habit's block, with the habit icon and its name. It has no task, so no source, done or
-// Google event; it never reaches /now (public_now reads task blocks only).
-function habitBox(b) {
-  const name = b.habit?.name ?? "Habit";
-  const top = minutesOn(b.starts_at, day, SHEET.timeZone);
-  const end = minutesOn(b.ends_at, day, SHEET.timeZone);
-  const box = el("div", { className: `sheet-block is-habit${b.proposed ? " is-proposed" : ""}${end - top < 30 ? " is-short" : ""}` },
-    el("span", { className: "sheet-block-title", title: name },
-      icon("repeat", "Habit"), b.proposed ? icon("sparkles", "Proposed by Claude") : null, name),
-    b.proposed ? approveButton(`Approve block for ${name}`, "sheet-approve") : null,
-    el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `Remove block for ${name}` }),
-    el("span", { className: "sheet-resize", ariaHidden: "true" }));
-  box.dataset.block = b.id;
-  box.tabIndex = 0;
-  box.ariaLabel = `${name}, habit, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
-  Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
-  return box;
 }
 
 async function fetchEvents() {
