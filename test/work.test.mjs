@@ -25,3 +25,29 @@ test("work-sync: a list that may be cut short closes nothing", () => {
   assert.match(fn, /if \(whole && c\.close\.length\)/);
   assert.match(fn, /incomplete_results === false/);
 });
+
+// --- /plan ----------------------------------------------------------------------------------------
+
+test("githubOrgsFromInput: Settings' orgs, comma or space separated, lower case, once each", async () => {
+  const { githubOrgsFromInput } = await import("../src/sheet/sources.mjs");
+  assert.deepEqual(githubOrgsFromInput(" Acme-Robotics, other-org  acme-robotics "), ["acme-robotics", "other-org"]);
+  assert.deepEqual(githubOrgsFromInput(""), []);
+  // Not a GitHub login: nothing is saved.
+  assert.equal(githubOrgsFromInput("acme/robotics"), undefined);
+  assert.equal(githubOrgsFromInput("-acme"), undefined);
+  assert.equal(githubOrgsFromInput("https://github.com/acme"), undefined);
+});
+
+test("sourceOf: GitHub and Jira tasks get their own source, before the #campus tag", async () => {
+  const { sourceOf } = await import("../src/sheet/glance.mjs");
+  assert.equal(sourceOf({ source: "github", tag: "campus" }), "github");
+  assert.equal(sourceOf({ source: "jira", tag: null }), "jira");
+  assert.equal(sourceOf({ source: "mail", tag: null }), null);
+});
+
+test("/plan: the github and kanban icons are in the sprite, with edges for both sources", () => {
+  const page = readFileSync(new URL("../src/pages/plan/index.astro", import.meta.url), "utf8");
+  for (const n of ["github", "kanban"]) assert.match(page, new RegExp(`<symbol id="i-${n}" viewBox="0 0 24 24">`), n);
+  const css = readFileSync(new URL("../src/styles/sheet.css", import.meta.url), "utf8");
+  for (const s of ["github", "jira"]) assert.match(css, new RegExp(`\\.sheet-task\\[data-source="${s}"\\]`), s);
+});

@@ -37,7 +37,7 @@ export function icon(name, label) {
 }
 
 // A source's icon (docs/sheet-glance.md, change 3), paired with its edge colour in sheet.css.
-const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"] };
+const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"], github: ["github", "From GitHub"], jira: ["kanban", "From Jira"] };
 export const sourceIcon = (src) => icon(...SOURCES[src]);
 // The words for the aria-label, since the icon is hidden.
 export const sourceWords = (src) => (src ? `, ${SOURCES[src][1].toLowerCase()}` : "");
@@ -252,7 +252,8 @@ function detailsOf(t, clash, level) {
   const src = sourceOf(t);
   const due = DUE[level];
   const kids = [
-    src ? el("span", { className: "sheet-meta sheet-source" }, sourceIcon(src)) : null,
+    // v5 SRC1: a GitHub or Jira task's icon links to its page (tasks.link is https only).
+    src ? el(t.link ? "a" : "span", { className: "sheet-meta sheet-source", ...(t.link ? { href: t.link, target: "_blank", rel: "noopener" } : {}) }, sourceIcon(src)) : null,
     t.at_time ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
     clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
