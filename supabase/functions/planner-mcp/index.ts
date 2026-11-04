@@ -232,7 +232,7 @@ function plannerServer(db: Db) {
       "no link, such as \"Checking Thursday on your calendar\", \"Searching the web for the CSE 416 page\" or " +
       "\"Adding Project 2, due Nov 14\". Leave out message_ids for every pending message. Call it at most 3 " +
       "times a run, before a step that takes a while; reading the planner and saving are logged for you. Never " +
-      "put mail text, senders or subjects in a step. Returns { ok }.",
+      "put mail text, senders or subjects in a step. Returns { ok }. " + UNTRUSTED,
     inputSchema: StepInput,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async (input: Step) => {
