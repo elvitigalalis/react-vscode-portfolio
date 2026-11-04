@@ -40,7 +40,7 @@ const fixture = async (name) => {
 // Handshake: interviews and appointments are busy, events aren't
 // =============================================================================================
 
-test("handshakeBusy: interviews and appointments become busy rows from Handshake", todo, async () => {
+test("handshakeBusy: interviews and appointments become busy rows from Handshake", async () => {
   const { handshakeBusy } = await sources();
   assert.deepEqual(handshakeBusy(await fixture("handshake.ics")), [
     { source: "handshake", starts_at: "2026-11-06T15:00:00.000Z", ends_at: "2026-11-06T15:45:00.000Z" }, // Interview, 10:00-10:45 am
@@ -50,7 +50,7 @@ test("handshakeBusy: interviews and appointments become busy rows from Handshake
   ]);
 });
 
-test("handshakeBusy: the summary must start with Interview or Appointment", todo, async () => {
+test("handshakeBusy: the summary must start with Interview or Appointment", async () => {
   const { handshakeBusy } = await sources();
   const ev = (summary) => ({ uid: summary, summary, description: "", location: "", url: "", categories: [], start: "2026-11-06T15:00:00.000Z", end: "2026-11-06T16:00:00.000Z", allDay: false });
   assert.equal(handshakeBusy([ev("Fall Career Fair")]).length, 0);
@@ -65,7 +65,7 @@ test("handshakeBusy: the summary must start with Interview or Appointment", todo
 // The academic calendar
 // =============================================================================================
 
-test("academicEntries: a day's entries, all-day and timed, by New York time", todo, async () => {
+test("academicEntries: a day's entries, all-day and timed, by New York time", async () => {
   const { academicEntries } = await sources();
   assert.deepEqual(academicEntries(await fixture("academic.ics"), "2026-11-04", TZ), [
     { title: "No classes", all_day: true },
@@ -76,13 +76,13 @@ test("academicEntries: a day's entries, all-day and timed, by New York time", to
   ]);
 });
 
-test("academicEntries: a timed entry late in the evening belongs to its New York day", todo, async () => {
+test("academicEntries: a timed entry late in the evening belongs to its New York day", async () => {
   const { academicEntries } = await sources();
   // Late registration closes at 10 pm on Nov 3 (03:00 UTC on Nov 4).
   assert.deepEqual(academicEntries(await fixture("academic.ics"), "2026-11-03", TZ), [{ title: "Late registration closes", all_day: false }]);
 });
 
-test("academicEntries: a several-day entry is on each of its days, up to its end", todo, async () => {
+test("academicEntries: a several-day entry is on each of its days, up to its end", async () => {
   const { academicEntries } = await sources();
   const events = await fixture("academic.ics");
   const thanksgiving = [{ title: "Thanksgiving break", all_day: true }];
@@ -92,7 +92,7 @@ test("academicEntries: a several-day entry is on each of its days, up to its end
   assert.deepEqual(academicEntries(events, "2026-11-24", TZ), []);
 });
 
-test("academicEntries: the next day has its own entries only", todo, async () => {
+test("academicEntries: the next day has its own entries only", async () => {
   const { academicEntries } = await sources();
   assert.deepEqual(academicEntries(await fixture("academic.ics"), "2026-11-05", TZ), [{ title: "Advising week begins", all_day: true }]);
 });
@@ -114,7 +114,7 @@ const ENTRIES = [
 ];
 const briefOf = (out) => out.find((m) => m.kind === "brief");
 
-test("brief: today's academic entries, at most 3", todo, async () => {
+test("brief: today's academic entries, at most 3", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ academic: ENTRIES }), at8)).text, [
     "Today: 1 task, 1 block.",
@@ -123,13 +123,13 @@ test("brief: today's academic entries, at most 3", todo, async () => {
   assert.equal(briefOf(whatToSend(snapshot({ academic: ENTRIES.slice(0, 1) }), at8)).text, "Today: 1 task, 1 block.\nCalendar: No classes.");
 });
 
-test("brief: no academic entries, no calendar line", todo, async () => {
+test("brief: no academic entries, no calendar line", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ academic: [] }), at8)).text, "Today: 1 task, 1 block.");
   assert.equal(briefOf(whatToSend(snapshot(), at8)).text, "Today: 1 task, 1 block.");
 });
 
-test("brief: the calendar line comes before the plan's lines", todo, async () => {
+test("brief: the calendar line comes before the plan's lines", async () => {
   const { whatToSend } = await nudges();
   const proposed = { ...approved, id: "0b0b0b0b-0000-4000-8000-000000000002", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true };
   const proposal = { day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], run_trigger: "morning", reasons: [], blocks: [] };
@@ -150,25 +150,25 @@ const enrollment = (day, at_time) => ({
   title: "Enrollment opens", day, at_time, est_min: 15, public: false, list: null, source: "enrollment", source_uid: "enrollment",
 });
 
-test("enrollmentTask: one private task on the local day, at the local time", todo, async () => {
+test("enrollmentTask: one private task on the local day, at the local time", async () => {
   const { enrollmentTask } = await sources();
   assert.deepEqual(enrollmentTask("2026-11-12T12:00:00Z", TZ), enrollment("2026-11-12", "07:00"));
   assert.deepEqual(enrollmentTask("2026-11-12T12:00:00.000Z", TZ), enrollment("2026-11-12", "07:00"));
 });
 
-test("enrollmentTask: an evening time stays on its New York day", todo, async () => {
+test("enrollmentTask: an evening time stays on its New York day", async () => {
   const { enrollmentTask } = await sources();
   // 03:30 UTC on Nov 13 is 10:30 pm on Nov 12.
   assert.deepEqual(enrollmentTask("2026-11-13T03:30:00Z", TZ), enrollment("2026-11-12", "22:30"));
 });
 
-test("enrollmentTask: in daylight time too", todo, async () => {
+test("enrollmentTask: in daylight time too", async () => {
   const { enrollmentTask } = await sources();
   // April 6, 2027 is EDT (UTC-4).
   assert.deepEqual(enrollmentTask("2027-04-06T13:00:00Z", TZ), enrollment("2027-04-06", "09:00"));
 });
 
-test("enrollmentTask: no enrollment time, no task", todo, async () => {
+test("enrollmentTask: no enrollment time, no task", async () => {
   const { enrollmentTask } = await sources();
   assert.equal(enrollmentTask(null, TZ), null);
 });
