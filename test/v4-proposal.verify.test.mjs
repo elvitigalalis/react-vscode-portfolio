@@ -74,6 +74,17 @@ const rows = (extra = {}) => ({
 });
 const sixOhSeven = new Date("2026-11-04T11:07:00Z"); // 6:07 am EST
 
+// v5 adds fields to read_planner (docs/sheet-v5.md, "proposal.mjs"); the shape test below pins
+// v4's fields only, so it holds unchanged as they are added.
+const V4_FIELDS = ["now", "time_zone", "plan_day", "shutdown", "tasks", "blocks", "busy", "busy_as_of", "interests", "campus", "proposal", "needs_you_open", "accounts"];
+const V4_TASK = ["id", "title", "est_min", "at_time", "due", "tag", "source", "day", "list", "at_risk"];
+const pick = (o, keys) => Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]]));
+const v4Fields = (s) => ({
+  ...pick(s, V4_FIELDS),
+  tasks: s.tasks.map((t) => pick(t, V4_TASK)),
+  proposal: s.proposal && pick(s.proposal, ["status", "created_at"]),
+});
+
 test("planSnapshot: the whole shape read_planner returns", async () => {
   const { planSnapshot } = await load();
   const r = rows({
@@ -103,7 +114,7 @@ test("planSnapshot: the whole shape read_planner returns", async () => {
       kind: "reply", due: "2026-11-05", done: false, created_at: "2026-11-03T11:08:00Z",
     }],
   });
-  assert.deepEqual(planSnapshot(r, sixOhSeven), {
+  assert.deepEqual(v4Fields(planSnapshot(r, sixOhSeven)), {
     now: "2026-11-04T11:07:00.000Z",
     time_zone: TZ,
     plan_day: DAY,

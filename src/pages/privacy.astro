@@ -1,6 +1,7 @@
 ---
-// The privacy policy for The Sheet (docs/sheet.md, docs/sheet-sources.md), the page Google's
-// consent screen links to. Keep it in step with what the planner actually reads and stores.
+// The privacy policy for The Sheet (docs/sheet.md, docs/sheet-sources.md, docs/sheet-v5.md), the
+// page Google's consent screen links to. Keep it in step with what the planner actually reads and
+// stores.
 import Base from "../layouts/Base.astro";
 import { siteConfig } from "../config";
 
@@ -31,26 +32,110 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
           read in my browser; only their busy times are stored (see below).
         </li>
         <li>
+          <strong>Free/busy, every 10 minutes:</strong> with a separate grant that can only see
+          when I'm busy ("See the availability on Google Calendars"), the planner's server reads
+          the busy times on my calendars for the week ahead, never an event's title, guests or
+          notes.
+        </li>
+        <li>
           <strong>Gmail, read-only:</strong> for the mail accounts I connect, it can list, search
           and read messages, only when Claude plans my day: when I ask, or each morning as a
           scheduled Claude task that runs on my own Claude account. It can't send, change,
           label or delete mail.
+        </li>
+        <li>
+          <strong>Gmail, checked every 5 minutes:</strong> the planner's server reads each new
+          message's labels, date and a few headers (who it's from and to, and whether it's from a
+          mailing list or an auto-reply), never its text, to tell which threads wait on a reply
+          from me and which I'm waiting on. Promotions, updates, social and forum mail is skipped.
+        </li>
+      </ul>
+
+      <h2>What it reads from other sources</h2>
+      <p>
+        Each of these is read-only, uses a token or link of my own kept as a server secret, and is
+        off until I set it up. Everything it brings in stays private: none of it reaches the
+        public page.
+      </p>
+      <ul>
+        <li>
+          <strong>Slack, once an hour:</strong> it searches my Slack for messages that mention me
+          and direct messages to me, with a token that can only search. For each one, Needs you
+          keeps the channel, the sender's username and a link to the message, never the message
+          text, until I mark it done or for up to 14 days; after that only the message's id is
+          kept, so it isn't shown again. It can't post, react or change anything in Slack.
+        </li>
+        <li>
+          <strong>GitHub, once an hour:</strong> the open pull requests waiting on my review and
+          the open issues assigned to me, in the organizations I choose, become private tasks:
+          their title, link and milestone due date, never their text.
+        </li>
+        <li>
+          <strong>Jira, once an hour:</strong> my open tickets become private tasks: their key,
+          summary and due date, never their description.
+        </li>
+        <li>
+          <strong>Handshake, once an hour:</strong> from my private Handshake calendar link, only
+          interviews and appointments are kept, as busy times with a start and end and nothing
+          else.
+        </li>
+        <li>
+          <strong>The academic calendar, once an hour:</strong> Stony Brook's public calendar, for
+          the day's entries such as "No classes".
+        </li>
+        <li>
+          <strong>Weather, once an hour:</strong> the National Weather Service's public hourly
+          forecast and alerts for one point on campus. It needs no account and sends nothing
+          about me.
         </li>
       </ul>
 
       <h2>Where it's kept</h2>
       <p>
         My tasks, plan and settings live in my own Supabase database, which only my account can
-        read. The keys that let it read a connected mailbox are kept encrypted there and used only
-        by its server. Message bodies aren't stored: mail is fetched when Claude asks and passed to
-        my own Claude app.
+        read. The keys that let it read a connected mailbox or my free/busy are kept encrypted
+        there and used only by its server; the other sources' tokens and links are secrets of
+        the server itself. Message bodies aren't stored: mail is fetched when Claude asks and
+        passed to my own Claude app.
       </p>
-      <p>
-        For each email that needs me, the planner's Needs you list keeps the sender, the subject
-        and a one-line note for up to 14 days, then deletes it. The busy times it plans around
-        are saved from my calendar as start and end only, never titles, and deleted once they
-        end.
-      </p>
+      <ul>
+        <li>
+          <strong>Needs you:</strong> for each email that needs me, the list keeps the sender, the
+          subject and a one-line note for up to 14 days, then deletes it.
+        </li>
+        <li>
+          <strong>Busy times:</strong> from my calendars and Handshake, saved as start and end
+          only, never titles, and deleted once they end.
+        </li>
+        <li>
+          <strong>From the 5-minute mail check:</strong> for up to 14 days, each received
+          message's sender address (so I can hide a sender from Needs you) and, for each thread
+          waiting on a reply, the other person's name and the date. The people I've sent mail to
+          are kept only as salted hashes, never as addresses, so the planner can tell a reply
+          from someone I know.
+        </li>
+        <li>
+          <strong>Finished? answers:</strong> when I answer a Finished? check on Telegram, it keeps
+          how long the task took against my estimate, and what kind of task it was, for 120 days,
+          so it can learn my pace.
+        </li>
+        <li>
+          <strong>Feedback:</strong> what I tap (approving or skipping a plan, turning a block
+          down, marking mail done or not needed, each Finished? answer) is kept for 120 days as
+          ids, with the sender's address for mail, so the planner learns what needs me. The
+          senders and domains I choose to always or never show are kept until I remove them.
+        </li>
+        <li>
+          <strong>Changes and replans:</strong> what kind of thing changed during the day (new
+          mail, a busy time, a course task) and each replan it started, as kinds, counts and ids,
+          for 14 days. When the day is replanned, the scheduled Claude task is told only how
+          many of each kind changed.
+        </li>
+        <li>
+          <strong>Sources:</strong> the weather forecast and the academic calendar's entries are
+          kept until the next hourly read replaces them.
+        </li>
+      </ul>
 
       <h2>Google's rules</h2>
       <p>
@@ -61,8 +146,14 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
 
       <h2>Removing access</h2>
       <p>
-        Remove a mail account in the planner's Settings, which deletes its key, or revoke The Sheet
-        at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>.
+        Remove a mail account, or disconnect the calendar, in the planner's Settings, which deletes
+        its key, or revoke The Sheet at
+        <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>.
+      </p>
+      <p>
+        Slack, GitHub and Jira: removing the token from the server, or revoking it in that
+        service, stops the reads at once. Handshake: resetting the calendar link there does the
+        same.
       </p>
 
       <h2>Contact</h2>

@@ -396,9 +396,9 @@ test("check-in: at most 3 titles, with the full count", async () => {
   assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 4 due (HW3, Lab 4, Essay draft).");
 });
 
-test("check-in: \"Mail: 1 still needs you.\" while a needs_you row isn't done", async () => {
+test("check-in: \"Needs you: 1.\" while a needs_you row isn't done", async () => {
   const text = await checkinText({ tasks: sixTasks, needsOpen: [openNeed("19a4f2c3b5d6e701")] });
-  assert.equal(text, "Shutdown time. 4 done, 2 left.\nMail: 1 still needs you.");
+  assert.equal(text, "Shutdown time. 4 done, 2 left.\nNeeds you: 1.");
 });
 
 test("check-in: both lines, tomorrow first", async () => {
@@ -406,7 +406,7 @@ test("check-in: both lines, tomorrow first", async () => {
     tasks: [...sixTasks, task("h", "HW3", { day: null, list: "Brightspace", due: "2026-11-05" }), task("l", "Lab 4", { day: "2026-11-05", due: "2026-11-05" })],
     needsOpen: [openNeed("19a4f2c3b5d6e701")],
   });
-  assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 2 due (HW3, Lab 4).\nMail: 1 still needs you.");
+  assert.equal(text, "Shutdown time. 4 done, 2 left.\nTomorrow: 2 due (HW3, Lab 4).\nNeeds you: 1.");
 });
 
 test("check-in: nothing due tomorrow and no open mail leaves it as it was", async () => {
