@@ -987,6 +987,24 @@ do $$ begin
   raise notice '✓ v5: known_senders hashes only; reply tracking private and server-written; sheet-mail every 5 minutes';
 end $$;
 
+-- M1, beyond the verification checks: nightly_roll keeps 14 days of reply_state and message_senders.
+do $$ begin
+  if to_regclass('public.reply_state') is null or to_regclass('public.message_senders') is null then return; end if;
+  insert into reply_state (account, thread_id, state, since, message_id, who) values
+    ('owner@example.com', 'm1-old', 'owed', now() - interval '15 days', 'm1-old-1', 'Ana Ruiz'),
+    ('owner@example.com', 'm1-new', 'awaiting', now() - interval '4 days', 'm1-new-1', 'Prof. Kim');
+  insert into message_senders (account, message_id, thread_id, from_address, at) values
+    ('owner@example.com', 'm1-old-1', 'm1-old', 'ana.ruiz@example.edu', now() - interval '15 days'),
+    ('owner@example.com', 'm1-new-0', 'm1-new', 'kim@cs.example.edu', now() - interval '5 days');
+  perform nightly_roll();
+  if exists (select 1 from reply_state where thread_id = 'm1-old') or not exists (select 1 from reply_state where thread_id = 'm1-new')
+    or exists (select 1 from message_senders where message_id = 'm1-old-1') or not exists (select 1 from message_senders where message_id = 'm1-new-0')
+    then raise exception 'nightly_roll should keep 14 days of reply_state and message_senders'; end if;
+  delete from reply_state where thread_id like 'm1-%';
+  delete from message_senders where thread_id like 'm1-%';
+  raise notice '✓ v5: reply_state and message_senders kept 14 days';
+end $$;
+
 -- --- SRC1, GitHub and Jira tasks ------------------------------------------------------------------
 do $$ begin
   if not exists (select 1 from information_schema.columns where table_name = 'settings' and column_name = 'github_orgs') then
