@@ -117,7 +117,7 @@ function refused(result, ...patterns) {
 // read_planner: the day's habits
 // =============================================================================================
 
-test("planSnapshot: plan_day's habits, firm first, then flexible, each by ideal time", todo, async () => {
+test("planSnapshot: plan_day's habits, firm first, then flexible, each by ideal time", async () => {
   const { planSnapshot } = await proposal();
   const row = (id, name, days, ideal, minutes, flex_min, defence, position) => ({ id, name, days, ideal, minutes, flex_min, defence, position, created_at: "2026-11-01T12:00:00Z" });
   const rows = {
@@ -141,7 +141,7 @@ test("planSnapshot: plan_day's habits, firm first, then flexible, each by ideal 
   ]);
 });
 
-test("planSnapshot: with no habits rows, habits is empty", todo, async () => {
+test("planSnapshot: with no habits rows, habits is empty", async () => {
   const { planSnapshot } = await proposal();
   const rows = { settings: { time_zone: TZ }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] };
   assert.deepEqual(planSnapshot(rows, new Date("2026-11-04T11:07:00Z")).habits, []);
@@ -151,7 +151,7 @@ test("planSnapshot: with no habits rows, habits is empty", todo, async () => {
 // checkProposal: habit blocks
 // =============================================================================================
 
-test("habits: a habit inside its window becomes a habit block in rows", todo, async () => {
+test("habits: a habit inside its window becomes a habit block in rows", async () => {
   const { checkProposal } = await proposal();
   // Lunch at 12:50-1:20 pm: 20 minutes after Gym, 40 before the travel gap at 1:50.
   const r = checkProposal(good([{ habit_id: H1, start: "12:50" }]), snap());
@@ -163,26 +163,26 @@ test("habits: a habit inside its window becomes a habit block in rows", todo, as
   ]);
 });
 
-test("habits: the window is ideal ± flex, both ends included", todo, async () => {
+test("habits: the window is ideal ± flex, both ends included", async () => {
   const { checkProposal } = await proposal();
   // Lunch: 1:05 pm ± 15. 1:20-1:50 pm ends exactly where the travel gap before 2:00 starts.
   assert.equal(checkProposal(good([{ habit_id: H1, start: "12:50" }]), snap()).ok, true);
   assert.equal(checkProposal(good([{ habit_id: H1, start: "13:20" }]), snap()).ok, true);
 });
 
-test("habits: a start outside ideal ± flex is refused, naming the habit", todo, async () => {
+test("habits: a start outside ideal ± flex is refused, naming the habit", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good([{ habit_id: H1, start: "12:45" }]), snap()), /habits\[0\]/);
   // Without the busy time, so only the window is wrong.
   refused(checkProposal(good([{ habit_id: H1, start: "13:21" }]), snap({ busy: [] })), /habits\[0\]/);
 });
 
-test("habits: an id that isn't one of the day's habits is refused", todo, async () => {
+test("habits: an id that isn't one of the day's habits is refused", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good([{ habit_id: "7a1c2a3b-0000-4000-8000-0000000000ff", start: "12:50" }]), snap()), /habits\[0\]/);
 });
 
-test("habits: a habit placed twice is refused at the second", todo, async () => {
+test("habits: a habit placed twice is refused at the second", async () => {
   const { checkProposal } = await proposal();
   // Water may start any time from 9:00 am to 5:00 pm; 4:20-4:35 pm follows HW3 within the break rule.
   const r = checkProposal(good([{ habit_id: H6, start: "12:50" }, { habit_id: H6, start: "16:20" }]), snap());
@@ -190,43 +190,43 @@ test("habits: a habit placed twice is refused at the second", todo, async () => 
   assert.equal(r.errors.some((e) => /habits\[0\]/.test(e)), false, JSON.stringify(r.errors));
 });
 
-test("habits: start must be \"HH:MM\"", todo, async () => {
+test("habits: start must be \"HH:MM\"", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good([{ habit_id: H1, start: "1:00 pm" }]), snap()), /habits\[0\]/);
 });
 
-test("habits: a habit block must lie inside the plan window", todo, async () => {
+test("habits: a habit block must lie inside the plan window", async () => {
   const { checkProposal } = await proposal();
   // Review at 10:00 am is within 10:00 ± 15, but the replan's window starts at 10:15.
   refused(checkProposal(good([{ habit_id: H5, start: "10:00" }]), snap()), /habits\[0\]/, /10:15/);
 });
 
-test("habits: a habit block over an approved block is refused", todo, async () => {
+test("habits: a habit block over an approved block is refused", async () => {
   const { checkProposal } = await proposal();
   // Stretch at noon, inside Gym's 11:30 am-12:30 pm.
   refused(checkProposal(good([{ habit_id: H4, start: "12:00" }]), snap()), /habits\[0\]/, /approved/);
 });
 
-test("habits: a habit block over one of the proposal's blocks is refused", todo, async () => {
+test("habits: a habit block over one of the proposal's blocks is refused", async () => {
   const { checkProposal } = await proposal();
   // Water at 3:45 pm, inside HW3's 3:30-4:15 pm.
   refused(checkProposal(good([{ habit_id: H6, start: "15:45" }]), snap()), /habits\[0\]/);
 });
 
-test("habits: a habit block needs the travel gap around a busy time", todo, async () => {
+test("habits: a habit block needs the travel gap around a busy time", async () => {
   const { checkProposal } = await proposal();
   // Coffee 1:40-1:55 pm runs into the 10 minutes before the 2:00 pm busy time.
   refused(checkProposal(good([{ habit_id: H3, start: "13:40" }]), snap()), /habits\[0\]/, /travel/);
 });
 
-test("habits: a habit block counts in the break rule", todo, async () => {
+test("habits: a habit block counts in the break rule", async () => {
   const { checkProposal } = await proposal();
   // Walk 11:00-11:30 am joins OS homework (10:15) and Gym (to 12:30) into 135 minutes in a row.
   // The approved Gym block carries it past 90, so the latest proposed block, the walk, is named.
   refused(checkProposal(good([{ habit_id: H2, start: "11:00" }]), snap()), /habits\[0\]/, /90/);
 });
 
-test("habits: habit blocks count toward the workload cap", todo, async () => {
+test("habits: habit blocks count toward the workload cap", async () => {
   const { checkProposal } = await proposal();
   const cap = (m) => snap({ day_rules: { ...snap().day_rules, workload_cap_min: m } });
   const lunch = [{ habit_id: H1, start: "12:50" }];
@@ -237,7 +237,7 @@ test("habits: habit blocks count toward the workload cap", todo, async () => {
   assert.equal(checkProposal(good(lunch), cap(240)).ok, true);
 });
 
-test("habits: absent, the list is empty", todo, async () => {
+test("habits: absent, the list is empty", async () => {
   const { checkProposal } = await proposal();
   const { habits, ...none } = good([]);
   const r = checkProposal(none, snap());

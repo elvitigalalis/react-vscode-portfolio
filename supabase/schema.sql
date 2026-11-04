@@ -852,6 +852,35 @@ alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
   check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
 
+-- --- v5 H1, habits (docs/sheet-v5.md) ----------------------------------------------------------
+-- Things Lisul does on set weekdays (gym, lunch, a weekly review), edited in /plan's Settings.
+-- read_planner gives the day's; the morning task places each within ideal ± flex_min, firm ones
+-- before tasks and flexible ones after hard deadlines, or leaves it out that day. Owner-only, in
+-- no public view.
+create table if not exists habits (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 40),
+  days int[] not null check (days <@ '{1,2,3,4,5,6,7}' and cardinality(days) > 0),  -- ISO, 1 = Monday
+  ideal time not null,
+  minutes int not null check (minutes between 15 and 240 and minutes % 5 = 0),
+  flex_min int not null default 30 check (flex_min between 0 and 240),
+  defence text not null default 'flexible' check (defence in ('flexible', 'firm')),
+  position double precision not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table habits enable row level security;
+drop policy if exists owner_all on habits;
+create policy owner_all on habits for all using (is_owner()) with check (is_owner());
+revoke all on habits from anon;
+
+-- A block is a task's or a habit's. public_now joins blocks to tasks, so a habit block never
+-- reaches /now.
+alter table blocks add column if not exists habit_id uuid references habits on delete cascade;
+alter table blocks alter column task_id drop not null;
+alter table blocks drop constraint if exists blocks_task_or_habit;
+alter table blocks add constraint blocks_task_or_habit check ((task_id is null) <> (habit_id is null));
+create index if not exists blocks_habit on blocks (habit_id);
+
 -- --- v5 R1, replans during the day (docs/sheet-v5.md) -----------------------------------------
 -- Syncs log each change they find, with a weight (REASON_WORDS in src/sheet/replan.mjs); the
 -- telegram minute tick decides from them when a replan is worth a run (shouldReplan) and logs
