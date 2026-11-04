@@ -136,3 +136,28 @@ export function accountPatch(outcome, now) {
   if (outcome.status === 400 || outcome.status === 404) return null;
   return { last_error: String(outcome.error ?? "failed").slice(0, 300) };
 }
+
+// --- v5 A1: assessment and interview senders (docs/sheet-v5.md, "mail.mjs") ------------------
+
+const ASSESSMENT_DOMAINS = {
+  "hackerrank.com": "assessment",
+  "codesignal.com": "assessment",
+  "codility.com": "assessment",
+  "hirevue.com": "assessment",
+  "karat.com": "interview",
+  "calendly.com": "interview",
+  "goodtime.io": "interview",
+};
+
+// 'assessment' or 'interview' when a bare From address is at one of those domains or a
+// subdomain of one (any case), otherwise null. Only the part after the last "@" counts, so
+// "hackerrank.com@gmail.com" and "a@hackerrank.com.evil.io" are null.
+export function assessmentSender(from) {
+  const at = String(from ?? "").lastIndexOf("@");
+  if (at < 0) return null;
+  const domain = String(from).slice(at + 1).toLowerCase();
+  for (const [d, kind] of Object.entries(ASSESSMENT_DOMAINS)) {
+    if (domain === d || domain.endsWith(`.${d}`)) return kind;
+  }
+  return null;
+}
