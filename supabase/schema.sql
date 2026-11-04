@@ -674,3 +674,133 @@ select cron.schedule('sheet-busy', '*/10 * * * *', $job$
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_busy_url')
 $job$);
+
+-- --- v5 V1, revisions and locked blocks (docs/sheet-v5.md, "Schema → Revisions") -----------
+-- Every plan for a day is a numbered revision. The newest pending one is current; a newer one
+-- supersedes it. Approved blocks are locked: no revision moves or removes them.
+alter table proposals add column if not exists rev int not null default 1 check (rev between 1 and 999);
+alter table proposals add column if not exists run_trigger text not null default 'morning'
+  check (run_trigger in ('morning', 'replan'));
+alter table proposals add column if not exists reasons text[] not null default '{}';
+-- couldnt_fit came with D2, above.
+alter table proposals add column if not exists suggested jsonb not null default '[]';
+-- The revision's proposed blocks as written: [{ task_id | habit_id, starts_at, ends_at }].
+alter table proposals add column if not exists blocks jsonb not null default '[]';
+alter table proposals drop constraint if exists proposals_pkey;
+alter table proposals add constraint proposals_pkey primary key (day, rev);
+alter table proposals drop constraint if exists proposals_status_check;
+alter table proposals add constraint proposals_status_check
+  check (status in ('pending', 'approved', 'skipped', 'lapsed', 'superseded'));
+
+-- Tasks Lisul turned down on a day: later revisions that day don't offer them again.
+alter table days add column if not exists turned_down uuid[] not null default '{}';
+
+-- Write revision replaces + 1 of day d and return it. It refuses unless `replaces` is d's newest
+-- revision (null when there is none), and refuses a day whose newest is skipped or lapsed, or
+-- that is shut down. A pending newest is superseded; an approved one stays approved. d's proposed
+-- blocks are replaced; a block with proposed = false is never touched. checkProposal
+-- (src/sheet/proposal.mjs) checks everything else first. Parameters are qualified, since blocks,
+-- picks, note, couldnt_fit, suggested, run_trigger and reasons are also column names.
+-- Habit blocks need H1's blocks.habit_id and the changes rows R1's table: plpgsql plans each
+-- statement when it first runs, so those stay unread until there is something to write.
+drop function if exists apply_proposal(date, jsonb, jsonb, jsonb, text);
+create or replace function apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
+  needs jsonb default '[]', picks jsonb default '[]', note text default null,
+  couldnt_fit uuid[] default '{}', suggested jsonb default '[]',
+  run_trigger text default 'morning', reasons text[] default '{}') returns int
+language plpgsql security invoker set search_path = public as $$
+declare
+  newest proposals%rowtype;
+  tz text := (select time_zone from settings);
+  r int := coalesce(replaces, 0) + 1;
+begin
+  perform 1 from proposals p where p.day = d for update;
+  select * into newest from proposals p where p.day = d order by p.rev desc limit 1;
+  if newest.rev is distinct from replaces then
+    raise exception 'the newest revision for % is %, not %', d, coalesce(newest.rev, 0), coalesce(replaces, 0);
+  end if;
+  if newest.status in ('skipped', 'lapsed') then
+    raise exception 'the plan for % is already %', d, newest.status;
+  end if;
+  if exists (select 1 from days x where x.day = d and x.shutdown) then
+    raise exception 'the plan for % is already lapsed', d;
+  end if;
+  update proposals p set status = 'superseded' where p.day = d and p.rev = newest.rev and p.status = 'pending';
+  delete from public.blocks b where b.proposed and (b.starts_at at time zone tz)::date = d;
+  insert into public.blocks (task_id, starts_at, ends_at, proposed)
+  select x.task_id, x.starts_at, x.ends_at, true
+  from jsonb_to_recordset(coalesce(apply_proposal.blocks, '[]')) as x(task_id uuid, starts_at timestamptz, ends_at timestamptz);
+  if jsonb_array_length(coalesce(apply_proposal.habit_blocks, '[]')) > 0 then
+    insert into public.blocks (habit_id, starts_at, ends_at, proposed)
+    select x.habit_id, x.starts_at, x.ends_at, true
+    from jsonb_to_recordset(apply_proposal.habit_blocks) as x(habit_id uuid, starts_at timestamptz, ends_at timestamptz);
+  end if;
+  insert into proposals (day, rev, created_at, status, note, picks, blocks, couldnt_fit, suggested, run_trigger, reasons)
+  values (d, r, clock_timestamp(), 'pending', apply_proposal.note, coalesce(apply_proposal.picks, '[]'),
+    (select coalesce(jsonb_agg(x order by x->>'starts_at'), '[]')
+     from jsonb_array_elements(coalesce(apply_proposal.blocks, '[]') || coalesce(apply_proposal.habit_blocks, '[]')) x),
+    coalesce(apply_proposal.couldnt_fit, '{}'), coalesce(apply_proposal.suggested, '[]'),
+    coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'));
+  -- As in v4: a new revision replaces the day's open items, skipping any message already there.
+  delete from needs_you n where n.day = d and not n.done;
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due)
+  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due
+  from jsonb_to_recordset(coalesce(apply_proposal.needs, '[]'))
+    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date)
+  on conflict (account, message_id) do nothing;
+  if to_regclass('public.changes') is not null then
+    update changes c set consumed_day = d, consumed_rev = r
+    where c.consumed_day is null and c.consumed_rev is null and c.at <= now();
+  end if;
+  return r;
+end $$;
+revoke execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[]) from public, anon;
+grant execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[]) to authenticated;
+
+-- Approve all and Skip, from Telegram or /plan, act on revision `rev` only while it is d's newest
+-- and pending, so a tap never decides a plan he hasn't seen.
+create or replace function approve_proposal(d date, rev int) returns int
+language plpgsql security invoker set search_path = public as $$
+declare
+  newest proposals%rowtype;
+  n int;
+begin
+  perform 1 from proposals p where p.day = d for update;
+  select * into newest from proposals p where p.day = d order by p.rev desc limit 1;
+  if newest.rev is distinct from approve_proposal.rev or newest.status <> 'pending' then
+    raise exception 'revision % of % is not the pending one', approve_proposal.rev, d;
+  end if;
+  update blocks b set proposed = false
+  where b.proposed and (b.starts_at at time zone (select time_zone from settings))::date = d;
+  get diagnostics n = row_count;
+  update proposals p set status = 'approved' where p.day = d and p.rev = newest.rev;
+  return n;
+end $$;
+create or replace function skip_proposal(d date, rev int) returns void
+language plpgsql security invoker set search_path = public as $$
+declare newest proposals%rowtype;
+begin
+  perform 1 from proposals p where p.day = d for update;
+  select * into newest from proposals p where p.day = d order by p.rev desc limit 1;
+  if newest.rev is distinct from skip_proposal.rev or newest.status <> 'pending' then
+    raise exception 'revision % of % is not the pending one', skip_proposal.rev, d;
+  end if;
+  delete from blocks b where b.proposed and (b.starts_at at time zone (select time_zone from settings))::date = d;
+  update proposals p set status = 'skipped' where p.day = d and p.rev = newest.rev;
+end $$;
+-- The telegram function calls these with the service key.
+revoke execute on function approve_proposal(date, int), skip_proposal(date, int) from public, anon;
+grant execute on function approve_proposal(date, int), skip_proposal(date, int) to authenticated, service_role;
+
+-- /plan's × on a proposed block: it goes, and its task stays turned down for the rest of the day.
+create or replace function turn_down(d date, task uuid) returns void
+language plpgsql security invoker set search_path = public as $$
+begin
+  delete from blocks b where b.proposed and b.task_id = task
+    and (b.starts_at at time zone (select time_zone from settings))::date = d;
+  insert into days (day, turned_down) values (d, array[task])
+  on conflict (day) do update
+  set turned_down = case when task = any(days.turned_down) then days.turned_down else days.turned_down || task end;
+end $$;
+revoke execute on function turn_down(date, uuid) from public, anon;
+grant execute on function turn_down(date, uuid) to authenticated;

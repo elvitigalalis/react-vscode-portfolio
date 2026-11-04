@@ -19,6 +19,28 @@ const dayRules = (settings) => ({ workload_cap_min: settings.workload_cap_min ??
 // Whether an ISO span overlaps the local day `day` in `timeZone`.
 const onDay = (s, day, timeZone) => minutesOn(s.ends_at, day, timeZone) > 0 && minutesOn(s.starts_at, day, timeZone) < 1440;
 
+// v5 (docs/sheet-v5.md, "proposal.mjs"). The plan window starts at 07:00, or on today at the
+// later of that and now rounded up to the quarter hour, so a replan never plans the past.
+function windowFrom(now, day, tz) {
+  const here = localNow(now, tz);
+  if (here.day !== day) return "07:00";
+  const m = Math.max(EARLIEST, Math.ceil(Math.floor(here.minutes) / 15) * 15);
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+// A replan the server started for this run: started, after the newest revision and under 30
+// minutes old. Otherwise this is the morning run. The changes since the newest revision go in as
+// kinds and counts only.
+const REPLAN_FRESH = 30 * 60_000;
+function runOf(rows, now) {
+  const r = rows.replan;
+  const after = rows.proposal ? Date.parse(rows.proposal.created_at) : -Infinity;
+  const replan = r && r.result === "started" && Date.parse(r.at) > after && now - Date.parse(r.at) < REPLAN_FRESH;
+  const changes = {};
+  for (const c of list(rows.changes)) changes[c.kind] = (changes[c.kind] ?? 0) + 1;
+  return { trigger: replan ? "replan" : "morning", reasons: replan ? [...r.reasons] : [], changes };
+}
+
 // What read_planner returns, from the rows planner-mcp reads:
 //   settings   the settings row
 //   tasks, blocks, busy, days, campus   table rows
@@ -39,16 +61,23 @@ export function planSnapshot(rows, now) {
     undone.filter(risky),
     undone.filter((t) => t.source && t.due && t.due <= addDays(day, COURSE_AHEAD)),
   ];
-  const seen = new Set();
+  // v5: a task turned down today leaves the list, so the planner doesn't offer it again.
+  const turnedDown = list(rows.turnedDown ?? rows.days.find((d) => d.day === day)?.turned_down);
+  const seen = new Set(turnedDown);
   const tasks = groups.flat().filter((t) => !seen.has(t.id) && seen.add(t.id)).map((t) => ({
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
     source: t.source, day: t.day, list: t.list, at_risk: risky(t),
   }));
+  const shutdown = line ? line.slice(0, 5) : DEFAULT_SHUTDOWN;
   return {
+    version: 5,
     now: now.toISOString(),
     time_zone: tz,
     plan_day: day,
-    shutdown: line ? line.slice(0, 5) : DEFAULT_SHUTDOWN,
+    shutdown,
+    run: runOf(rows, now),
+    window: { from: windowFrom(now, day, tz), to: shutdown },
+    turned_down: turnedDown,
     tasks,
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
       .map((b) => ({ task_id: b.task_id, starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
@@ -60,7 +89,9 @@ export function planSnapshot(rows, now) {
       uid: e.uid, title: e.title, starts_at: e.starts_at, ends_at: e.ends_at, group_name: e.group_name,
       tags: e.tags, free_food: freeFood(e), rsvp_count: e.rsvp_count ?? null,
     })),
-    proposal: rows.proposal ? { status: rows.proposal.status, created_at: rows.proposal.created_at } : null,
+    proposal: rows.proposal
+      ? { rev: rows.proposal.rev ?? 1, status: rows.proposal.status, created_at: rows.proposal.created_at, run_trigger: rows.proposal.run_trigger ?? "morning" }
+      : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
     day_rules: dayRules(settings),
@@ -183,14 +214,27 @@ function couldntFitIds(input, snapshot, errors) {
 // a sentence starting with the field it names, so Claude can fix them all and submit again.
 // When there is none, `rows` holds apply_proposal's arguments: { d, blocks: [{ task_id,
 // starts_at, ends_at }], needs, picks, note }, times in UTC.
+//
+// v5 (docs/sheet-v5.md, "proposal.mjs"): with `snapshot.version` 5, `input` also names the
+// revision it `replaces` (null for the day's first), and blocks must sit inside the plan window
+// and not be for a task turned down today. A replan may follow an approved revision. `rows`
+// gains apply_proposal's v5 arguments, and the result gains `dropped`.
 export function checkProposal(input, snapshot) {
   const errors = [];
-  const v5 = snapshot.version === 5;
   const tz = snapshot.time_zone;
   const day = snapshot.plan_day;
+  const v5 = snapshot.version === 5;
+  const status = snapshot.proposal?.status;
   if (input?.day !== day) errors.push(`day: must be ${day}, the day being planned`);
-  else if (snapshot.proposal && snapshot.proposal.status !== "pending") {
-    errors.push(`day: the proposal for ${day} is already ${snapshot.proposal.status}`);
+  else if (status && status !== "pending" && !(v5 && status === "approved")) {
+    errors.push(`day: the proposal for ${day} is already ${status}`);
+  }
+  const newest = snapshot.proposal?.rev ?? null;
+  const replaces = input?.replaces ?? null;
+  if (v5 && replaces !== newest) {
+    errors.push(newest == null
+      ? `replaces: must be null, since ${day} has no revision yet`
+      : `replaces: must be ${newest}, the newest revision for ${day}`);
   }
 
   // Blocks.
@@ -201,6 +245,8 @@ export function checkProposal(input, snapshot) {
   else {
     const tasks = new Map(snapshot.tasks.map((t) => [t.id, t]));
     const shutdown = toMinutes(snapshot.shutdown);
+    const turnedDown = new Set(v5 ? list(snapshot.turned_down) : []);
+    const win = v5 ? { from: toMinutes(snapshot.window.from), to: toMinutes(snapshot.window.to) } : null;
     const taken = (spans, label) => spans.map((s) => ({ start: minutesOn(s.starts_at, day, tz), end: minutesOn(s.ends_at, day, tz), label }));
     const fixed = [
       ...taken(snapshot.busy, "a busy time"),
@@ -211,18 +257,21 @@ export function checkProposal(input, snapshot) {
       const name = `blocks[${i}]`;
       const before = errors.length;
       const task = tasks.get(b?.task_id);
-      if (!task) errors.push(`${name}: task_id is not one of the tasks read_planner gave`);
+      if (turnedDown.has(b?.task_id)) errors.push(`${name}: turned down today, so it can't be planned again today`);
+      else if (!task) errors.push(`${name}: task_id is not one of the tasks read_planner gave`);
       const { minutes, start } = b ?? {};
       if (!Number.isInteger(minutes) || minutes < 15 || minutes > 240 || minutes % 5) {
         errors.push(`${name}: minutes must be 15 to 240, a multiple of 5`);
       }
       if (typeof start !== "string" || !HHMM.test(start)) return errors.push(`${name}: start must be "HH:MM", 24-hour`);
       const from = toMinutes(start);
-      if (from < EARLIEST) errors.push(`${name}: starts before 07:00`);
+      if (win && from < win.from) errors.push(`${name}: starts before ${snapshot.window.from}, the start of the plan window`);
+      else if (!win && from < EARLIEST) errors.push(`${name}: starts before 07:00`);
       if (task?.at_time && task.at_time.slice(0, 5) !== start) errors.push(`${name}: this task is fixed at ${task.at_time.slice(0, 5)}, so it must start then`);
       if (errors.length > before && !Number.isInteger(minutes)) return;
       const to = from + minutes;
-      if (to > shutdown) errors.push(`${name}: ends after the ${snapshot.shutdown} shutdown line`);
+      if (win && to > win.to) errors.push(`${name}: ends after ${snapshot.window.to}, the end of the plan window`);
+      else if (!win && to > shutdown) errors.push(`${name}: ends after the ${snapshot.shutdown} shutdown line`);
       // A block may end exactly when the next one starts.
       const hit = fixed.find((s) => from < s.end && s.start < to);
       if (hit) errors.push(`${name}: overlaps ${hit.label} ${clockSpan(hit.start, hit.end)}`);
@@ -283,10 +332,15 @@ export function checkProposal(input, snapshot) {
   const note = input?.note == null ? null : text(input.note, "note", 280, errors);
   const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
 
-  if (errors.length) return { ok: false, errors, rows: null };
-  const rows = { d: day, blocks, needs, picks, note };
-  if (v5) rows.couldnt_fit = couldntFit;
-  return { ok: true, errors: [], rows };
+  if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
+  if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
+  // Habit blocks (H1) and suggested tasks (A1) come with their tickets.
+  const { trigger: run_trigger, reasons } = snapshot.run;
+  return {
+    ok: true, errors: [],
+    rows: { d: day, replaces, blocks, habit_blocks: [], needs, picks, note, couldnt_fit: couldntFit, suggested: [], run_trigger, reasons },
+    dropped: [],
+  };
 }
 
 // --- The brief -------------------------------------------------------------------------------

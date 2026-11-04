@@ -189,62 +189,63 @@ do $$ begin
 end $$;
 
 -- The owner, as planner-mcp calls it: a first proposal, then a resubmission that replaces it.
+-- Since v5 (V1) each submission is a revision, named by the one it replaces.
 select pg_temp.as_user('authenticated', 'owner@example.com');
 create temp table v4_first as select now() as at;
-select apply_proposal(sheet_today(),
+select apply_proposal(d => sheet_today(), replaces => null, blocks =>
   jsonb_build_array(
     jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '2 hours', 'ends_at', now() + interval '3 hours'),
     jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '4 hours', 'ends_at', now() + interval '5 hours')),
-  '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
+  needs => '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
      "sender": "Ana", "subject": "Demo moved", "why": "Reply by Thursday.", "kind": "reply", "due": "2026-11-05"}]',
-  '[{"uid": "e1", "why": "Bagels."}]', 'Gym did not fit.');
+  picks => '[{"uid": "e1", "why": "Bagels."}]', note => 'Gym did not fit.');
 update proposals set created_at = created_at - interval '1 hour';  -- so the resubmission's is newer
 update needs_you set done = true;
-select apply_proposal(sheet_today(),
+select apply_proposal(d => sheet_today(), replaces => 1, blocks =>
   jsonb_build_array(jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '6 hours', 'ends_at', now() + interval '7 hours')),
-  '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
+  needs => '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
      "sender": "Ana", "subject": "Demo moved", "why": "Reply by Thursday.", "kind": "reply"},
     {"account": "a@example.com", "message_id": "def456", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/def456",
-     "sender": "Bursar", "subject": "Spring bill", "why": "Pay it.", "kind": "admin"}]',
-  '[]', null);
+     "sender": "Bursar", "subject": "Spring bill", "why": "Pay it.", "kind": "admin"}]');
 do $$ begin
   if (select count(*) from blocks where proposed) <> 1
     or not exists (select 1 from blocks where proposed and starts_at > now() + interval '5 hours')
     then raise exception 'resubmission did not replace the proposed blocks'; end if;
   if (select count(*) from blocks where not proposed) <> 1 then raise exception 'apply_proposal touched an approved block'; end if;
-  if (select count(*) from proposals) <> 1
-    or (select status from proposals) <> 'pending'
-    or (select note from proposals) is not null
-    or (select picks from proposals) <> '[]'::jsonb
-    or (select created_at from proposals) < (select at from v4_first)
-    then raise exception 'resubmission did not replace the proposals row'; end if;
+  if (select count(*) from proposals where status = 'pending') <> 1
+    or (select status from proposals where rev = 1) <> 'superseded'
+    or (select status from proposals where rev = 2) <> 'pending'
+    or (select note from proposals where rev = 2) is not null
+    or (select picks from proposals where rev = 2) <> '[]'::jsonb
+    or (select created_at from proposals where rev = 2) < (select at from v4_first)
+    then raise exception 'resubmission did not supersede the proposal'; end if;
   if (select count(*) from needs_you) <> 2 or not (select done from needs_you where message_id = 'abc123')
     then raise exception 'needs_you: a message already there was added again'; end if;
   raise notice '✓ apply_proposal replaces a pending proposal';
 end $$;
 
--- An approved proposal is refused, and nothing changes.
-update proposals set status = 'approved';
+-- A skipped proposal is refused, and nothing changes. (Since v5 an approved one takes a replan.)
+update proposals set status = 'skipped' where rev = 2;
 do $$ begin
   begin
-    perform apply_proposal(sheet_today(), '[]', '[]', '[]', null);
-    raise exception 'apply_proposal replaced an approved proposal';
+    perform apply_proposal(d => sheet_today(), replaces => 2, blocks => '[]');
+    raise exception 'apply_proposal replaced a skipped proposal';
   exception when raise_exception then
-    if sqlerrm not like '%already approved%' then raise; end if;
+    if sqlerrm not like '%already skipped%' then raise; end if;
   end;
   if (select count(*) from blocks where proposed) <> 1 then raise exception 'a refused apply changed blocks'; end if;
-  raise notice '✓ apply_proposal refuses an approved proposal';
+  raise notice '✓ apply_proposal refuses a skipped proposal';
 end $$;
 
 -- A resubmission replaces the day's open Needs you items (done ones stay), and shutting a day
 -- down lapses its proposal, which apply_proposal then refuses.
-update proposals set status = 'pending';
-select apply_proposal(sheet_today(), '[]',
+update proposals set status = 'pending' where rev = 2;
+select apply_proposal(d => sheet_today(), replaces => 2, blocks => '[]', needs =>
   '[{"account": "a@example.com", "message_id": "aaa111", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/aaa111",
-     "sender": "Ana", "subject": "One", "why": "Reply.", "kind": "reply"}]', '[]', null);
-select apply_proposal(sheet_today(), '[]',
+     "sender": "Ana", "subject": "One", "why": "Reply.", "kind": "reply"}]');
+select apply_proposal(d => sheet_today(), replaces => 3, blocks => '[]', needs =>
   '[{"account": "a@example.com", "message_id": "bbb222", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/bbb222",
-     "sender": "Ana", "subject": "Two", "why": "Reply.", "kind": "reply"}]', '[]', null);
+     "sender": "Ana", "subject": "Two", "why": "Reply.", "kind": "reply"}]');
 do $$ begin
   if exists (select 1 from needs_you where message_id = 'aaa111') then raise exception 'an open needs_you item survived a resubmission'; end if;
   if not exists (select 1 from needs_you where message_id = 'bbb222') then raise exception 'the resubmitted needs_you item is missing'; end if;
@@ -253,22 +254,22 @@ do $$ begin
 end $$;
 select shut_down(sheet_today(), null);
 do $$ begin
-  if (select status from proposals where day = sheet_today()) <> 'lapsed' then raise exception 'shutting down left the proposal pending'; end if;
+  if (select status from proposals where day = sheet_today() and rev = 4) <> 'lapsed' then raise exception 'shutting down left the proposal pending'; end if;
   begin
-    perform apply_proposal(sheet_today(), '[]', '[]', '[]', null);
+    perform apply_proposal(d => sheet_today(), replaces => 4, blocks => '[]');
     raise exception 'apply_proposal reopened a lapsed proposal';
   exception when raise_exception then
     if sqlerrm not like '%already lapsed%' then raise; end if;
   end;
   raise notice '✓ a shut-down day lapses its proposal and stays closed';
 end $$;
-update proposals set status = 'approved';
+update proposals set status = 'approved' where day = sheet_today() and rev = 4;
 
 -- Someone else signed in can't write a proposal: RLS refuses the row.
 select pg_temp.as_user('authenticated', 'stranger@example.com');
 do $$ begin
   begin
-    perform apply_proposal(sheet_today() + 1, '[]', '[]', '[]', null);
+    perform apply_proposal(d => sheet_today() + 1, replaces => null, blocks => '[]');
     raise exception 'a non-owner wrote a proposal';
   exception when insufficient_privilege then null; end;
   raise notice '✓ a non-owner cannot apply a proposal';
@@ -284,7 +285,7 @@ select nightly_roll();
 do $$ begin
   if (select status from proposals where day = sheet_today() - 1) <> 'lapsed'
     or (select status from proposals where day = sheet_today() - 2) <> 'skipped'
-    or (select status from proposals where day = sheet_today()) <> 'approved'
+    or (select status from proposals where day = sheet_today() and rev = 4) <> 'approved'
     then raise exception 'nightly_roll: proposal statuses'; end if;
   if (select count(*) from busy) <> 1 or exists (select 1 from busy where ends_at <= now())
     then raise exception 'nightly_roll: ended busy times kept'; end if;
@@ -424,6 +425,31 @@ begin
   end;
   raise notice '✓ v5: a shut-down day lapses its revision and stays closed';
 end $$;
+
+do $$
+declare
+  tz text := (select time_zone from settings);
+  d date := sheet_today() + 7;
+  t uuid := '00000000-0000-4000-8000-0000000000a2';
+begin
+  if to_regprocedure('turn_down(date, uuid)') is null then
+    raise notice '- v5 turn_down: skipped, not there yet';
+    return;
+  end if;
+  -- Turning a task down deletes its proposed blocks that day and remembers it, once.
+  insert into tasks (id, title, day) values (t, 'Laundry', d);
+  insert into blocks (task_id, starts_at, ends_at, proposed)
+    values (t, (d + time '09:00') at time zone tz, (d + time '09:30') at time zone tz, true),
+           (t, (d + time '12:00') at time zone tz, (d + time '12:30') at time zone tz, false);
+  perform turn_down(d, t);
+  perform turn_down(d, t);
+  if exists (select 1 from blocks where task_id = t and proposed)
+    or (select count(*) from blocks where task_id = t and not proposed) <> 1
+    then raise exception 'turn_down: blocks'; end if;
+  if (select turned_down from days where day = d) <> array[t] then raise exception 'turn_down: days.turned_down'; end if;
+  raise notice '✓ v5: turn_down deletes proposed blocks and remembers the task';
+end $$;
+
 -- --- v5 S1, busy times saved by the server (docs/sheet-v5.md, "Schema") ----------------------
 reset role;
 do $$ begin

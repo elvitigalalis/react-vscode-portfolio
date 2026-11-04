@@ -107,7 +107,7 @@ function refused(result, ...patterns) {
   assert.ok(result.errors.some((e) => patterns.every((p) => p.test(e))), `no error matching ${patterns.join(" and ")}: ${JSON.stringify(result.errors)}`);
 }
 
-test("checkProposal v5: a valid replan gives apply_proposal's named arguments", todo, async () => {
+test("checkProposal v5: a valid replan gives apply_proposal's named arguments", async () => {
   const { checkProposal } = await proposal();
   assert.deepEqual(checkProposal(good(), snap()), {
     ok: true,
@@ -133,7 +133,7 @@ test("checkProposal v5: a valid replan gives apply_proposal's named arguments", 
   });
 });
 
-test("checkProposal v5: a snapshot without version 5 is checked and shaped as in v4", todo, async () => {
+test("checkProposal v5: a snapshot without version 5 is checked and shaped as in v4", async () => {
   const { checkProposal } = await proposal();
   const { version, ...v4 } = snap();
   const r = checkProposal(good(), v4);
@@ -144,25 +144,25 @@ test("checkProposal v5: a snapshot without version 5 is checked and shaped as in
 
 // --- The plan window -------------------------------------------------------------------------
 
-test("window: a block starting before the window's start is refused, naming it", todo, async () => {
+test("window: a block starting before the window's start is refused, naming it", async () => {
   const { checkProposal } = await proposal();
   // 10:00 am is after 07:00 (v4's rule) but before 10:15, the replan's window.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "10:00" }) }), snap()), /blocks\[0\]/, /10:15/);
 });
 
-test("window: a block may start exactly at the window's start", todo, async () => {
+test("window: a block may start exactly at the window's start", async () => {
   const { checkProposal } = await proposal();
   assert.equal(checkProposal(good(), snap()).ok, true); // OS homework at 10:15
 });
 
-test("window: a block ending after the window's end is refused", todo, async () => {
+test("window: a block ending after the window's end is refused", async () => {
   const { checkProposal } = await proposal();
   // Shutdown moved to 4:00 pm: HW3 at 3:30-4:15 pm runs past it.
   const early = snap({ shutdown: "16:00", window: { from: "10:15", to: "16:00" } });
   refused(checkProposal(good(), early), /blocks\[2\]/, /16:00/);
 });
 
-test("window: a morning plan made at 6:07 am may use the whole day from 07:00", todo, async () => {
+test("window: a morning plan made at 6:07 am may use the whole day from 07:00", async () => {
   const { checkProposal } = await proposal();
   const morning = snap({
     now: "2026-11-04T11:07:00.000Z",
@@ -180,13 +180,13 @@ test("window: a morning plan made at 6:07 am may use the whole day from 07:00", 
 
 // --- Locked blocks ---------------------------------------------------------------------------
 
-test("locked: a block over an approved block is refused, naming the block and the approved block", todo, async () => {
+test("locked: a block over an approved block is refused, naming the block and the approved block", async () => {
   const { checkProposal } = await proposal();
   // OS homework at 11:45 am-12:30 pm, over Gym's approved 11:30 am-12:30 pm.
   refused(checkProposal(good({ blocks: withBlock(0, { start: "11:45" }) }), snap()), /blocks\[0\]/, /approved block/, /11:30 am/);
 });
 
-test("locked: a block over the pending revision's own proposed blocks is allowed, since it replaces them", todo, async () => {
+test("locked: a block over the pending revision's own proposed blocks is allowed, since it replaces them", async () => {
   const { checkProposal } = await proposal();
   // HW3 at 3:30-4:15 pm sits exactly on revision 1's proposed OS homework block.
   const r = checkProposal(good(), snap());
@@ -196,13 +196,13 @@ test("locked: a block over the pending revision's own proposed blocks is allowed
 
 // --- Turned down -----------------------------------------------------------------------------
 
-test("turned down: a block for a task turned down today is refused", todo, async () => {
+test("turned down: a block for a task turned down today is refused", async () => {
   const { checkProposal } = await proposal();
   const blocks = [...good().blocks, { task_id: T6, start: "16:15", minutes: 45 }];
   refused(checkProposal(good({ blocks }), snap()), /blocks\[3\]/, /turned down/);
 });
 
-test("turned down: the check holds even if the task is still in the task list", todo, async () => {
+test("turned down: the check holds even if the task is still in the task list", async () => {
   const { checkProposal } = await proposal();
   const s = snap({ tasks: [...snap().tasks, task(T6, "Laundry", 45, 45)] });
   const blocks = [...good().blocks, { task_id: T6, start: "16:15", minutes: 45 }];
@@ -211,7 +211,7 @@ test("turned down: the check holds even if the task is still in the task list", 
 
 // --- Revisions -------------------------------------------------------------------------------
 
-test("replaces: it must name the newest revision", todo, async () => {
+test("replaces: it must name the newest revision", async () => {
   const { checkProposal } = await proposal();
   refused(checkProposal(good({ replaces: 2 }), snap()), /replaces/);
   refused(checkProposal(good({ replaces: 0 }), snap()), /replaces/);
@@ -220,7 +220,7 @@ test("replaces: it must name the newest revision", todo, async () => {
   refused(checkProposal(missing, snap()), /replaces/);
 });
 
-test("replaces: with no revision yet it is null, and rows say so", todo, async () => {
+test("replaces: with no revision yet it is null, and rows say so", async () => {
   const { checkProposal } = await proposal();
   const first = snap({ proposal: null, blocks: snap().blocks.slice(0, 2) });
   const r = checkProposal(good({ replaces: null }), first);
@@ -228,7 +228,7 @@ test("replaces: with no revision yet it is null, and rows say so", todo, async (
   assert.equal(r.rows.replaces, null);
 });
 
-test("replaces: a replan after the newest revision was approved is accepted", todo, async () => {
+test("replaces: a replan after the newest revision was approved is accepted", async () => {
   const { checkProposal } = await proposal();
   // Revision 2 was approved; its blocks are the approved ones.
   const approved = snap({ proposal: { rev: 2, status: "approved", created_at: "2026-11-04T13:30:00Z", run_trigger: "replan" }, blocks: snap().blocks.slice(0, 2) });
@@ -237,7 +237,7 @@ test("replaces: a replan after the newest revision was approved is accepted", to
   assert.equal(r.rows.replaces, 2);
 });
 
-test("replaces: a day whose newest revision was skipped or has lapsed is refused", todo, async () => {
+test("replaces: a day whose newest revision was skipped or has lapsed is refused", async () => {
   const { checkProposal } = await proposal();
   const skipped = snap({ proposal: { rev: 1, status: "skipped", created_at: "2026-11-04T11:09:00Z", run_trigger: "morning" } });
   refused(checkProposal(good(), skipped), /day/, /skipped/);
@@ -271,7 +271,7 @@ const snapshot = (extra = {}) => ({ settings, day: null, tasks, blocks: planBloc
 const openPlan = { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" };
 const briefSent = { block_id: null, kind: "brief", day, send_at: "2026-11-04T13:00:00.000Z", sent_at: "2026-11-04T13:00:01Z" };
 
-test("brief: Approve all and Skip carry the day and the revision", todo, async () => {
+test("brief: Approve all and Skip carry the day and the revision", async () => {
   const { whatToSend } = await nudges();
   const [brief] = whatToSend(snapshot(), new Date("2026-11-04T13:00:00Z"));
   assert.equal(brief.kind, "brief");
@@ -282,7 +282,7 @@ test("brief: Approve all and Skip carry the day and the revision", todo, async (
   ]);
 });
 
-test("proposal message: a morning revision 2 made after the brief carries revision 2", todo, async () => {
+test("proposal message: a morning revision 2 made after the brief carries revision 2", async () => {
   const { whatToSend } = await nudges();
   const snap2 = snapshot({ proposal: revision(2, { created_at: "2026-11-04T15:42:00Z" }), log: [briefSent] });
   const out = whatToSend(snap2, new Date("2026-11-04T15:42:30Z"));
@@ -296,14 +296,14 @@ test("proposal message: a morning revision 2 made after the brief carries revisi
 
 const update = (data, chat = 42) => ({ callback_query: { id: "q1", data, message: { message_id: 7, chat: { id: chat } } } });
 
-test("readTap: pa: and ps: with a revision name the action, the day and the revision", todo, async () => {
+test("readTap: pa: and ps: with a revision name the action, the day and the revision", async () => {
   const { readTap } = await nudges();
   assert.deepEqual(readTap(update("pa:2026-11-04:2"), settings), { action: "pa", day, rev: 2, query_id: "q1", chat_id: 42, message_id: 7 });
   assert.deepEqual(readTap(update("ps:2026-11-04:13"), settings), { action: "ps", day, rev: 13, query_id: "q1", chat_id: 42, message_id: 7 });
   assert.deepEqual(readTap(update("pa:2026-11-04:999"), settings), { action: "pa", day, rev: 999, query_id: "q1", chat_id: 42, message_id: 7 });
 });
 
-test("readTap: a revision that isn't 1-999 without leading zeros is ignored", todo, async () => {
+test("readTap: a revision that isn't 1-999 without leading zeros is ignored", async () => {
   const { readTap } = await nudges();
   for (const data of ["pa:2026-11-04:0", "pa:2026-11-04:02", "pa:2026-11-04:1000", "pa:2026-11-04:x", "pa:2026-11-04:", "pa:2026-11-04:2:3", "ps:2026-11-04:-1"]) {
     assert.equal(readTap(update(data), settings), null, data);
@@ -313,7 +313,7 @@ test("readTap: a revision that isn't 1-999 without leading zeros is ignored", to
 
 const tapAt = new Date("2026-11-04T13:05:00Z");
 
-test("Approve all on the current revision approves it through approve_proposal", todo, async () => {
+test("Approve all on the current revision approves it through approve_proposal", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "pa", day, rev: 2 }, snapshot({ proposal: revision(2) }), tapAt), {
     changes: [{ rpc: "approve_proposal", args: { d: day, rev: 2 } }],
@@ -321,7 +321,7 @@ test("Approve all on the current revision approves it through approve_proposal",
   });
 });
 
-test("Skip on the current revision skips it through skip_proposal", todo, async () => {
+test("Skip on the current revision skips it through skip_proposal", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "ps", day, rev: 2 }, snapshot({ proposal: revision(2) }), tapAt), {
     changes: [{ rpc: "skip_proposal", args: { d: day, rev: 2 } }],
@@ -329,7 +329,7 @@ test("Skip on the current revision skips it through skip_proposal", todo, async 
   });
 });
 
-test("a tap on an older revision says a newer plan is out and changes nothing", todo, async () => {
+test("a tap on an older revision says a newer plan is out and changes nothing", async () => {
   const { handleTap } = await nudges();
   const newer = { changes: [], text: "A newer plan is out" };
   assert.deepEqual(handleTap({ action: "pa", day, rev: 1 }, snapshot({ proposal: revision(2) }), tapAt), newer);
@@ -338,13 +338,13 @@ test("a tap on an older revision says a newer plan is out and changes nothing", 
   assert.deepEqual(handleTap({ action: "pa", day, rev: 1 }, snapshot({ proposal: revision(2, { status: "approved" }) }), tapAt), newer);
 });
 
-test("a v4 button with no revision acts as revision 1", todo, async () => {
+test("a v4 button with no revision acts as revision 1", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "pa", day }, snapshot({ proposal: revision(2) }), tapAt), { changes: [], text: "A newer plan is out" });
   assert.deepEqual(handleTap({ action: "pa", day }, snapshot(), tapAt), { changes: [{ rpc: "approve_proposal", args: { d: day, rev: 1 } }], text: "✓ Approved 3 blocks" });
 });
 
-test("a tap on the current revision once decided says so; a lapsed or missing plan says it lapsed", todo, async () => {
+test("a tap on the current revision once decided says so; a lapsed or missing plan says it lapsed", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "pa", day, rev: 2 }, snapshot({ proposal: revision(2, { status: "approved" }) }), tapAt), { changes: [], text: "Already approved" });
   assert.deepEqual(handleTap({ action: "pa", day, rev: 2 }, snapshot({ proposal: revision(2, { status: "skipped" }) }), tapAt), { changes: [], text: "Already skipped" });

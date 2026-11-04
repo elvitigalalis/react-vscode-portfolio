@@ -111,7 +111,7 @@ function brief(day) {
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
   if (wx) lines.push(wx);
   const send_at = zonedIso(today, BRIEF_AT, tz);
-  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan].join("\n"), buttons: planButtons(today) };
+  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan].join("\n"), buttons: planButtons(today, day.proposal?.rev) };
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
@@ -120,8 +120,12 @@ function brief(day) {
   return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
 }
 
-// Approve all and Skip carry the plan's day; the webhook reads them back on a tap.
-const planButtons = (d) => [{ text: "Approve all", callback_data: `pa:${d}` }, { text: "Open /plan", url: PLAN_URL }, { text: "Skip", callback_data: `ps:${d}` }];
+// Approve all and Skip carry the plan's day, and its revision when it has one (v5,
+// docs/sheet-v5.md), so a tap acts on the plan it showed; the webhook reads them back on a tap.
+const planButtons = (d, rev) => {
+  const r = rev == null ? "" : `:${rev}`;
+  return [{ text: "Approve all", callback_data: `pa:${d}${r}` }, { text: "Open /plan", url: PLAN_URL }, { text: "Skip", callback_data: `ps:${d}${r}` }];
+};
 
 // The plan on its own, when today's proposal is pending and the brief went out before it was
 // made: once per created_at (a resubmission is sent again). Outside the budget, like the brief.
@@ -130,7 +134,7 @@ function planMessage({ plan, proposal, log, today }) {
   const made = Date.parse(proposal.created_at);
   const briefOut = log.some((n) => n.kind === "brief" && n.day === today && n.sent_at && Date.parse(n.sent_at) < made);
   if (!briefOut) return [];
-  return [{ kind: "proposal", block_id: null, day: today, send_at: new Date(made).toISOString(), text: plan.join("\n"), buttons: planButtons(today) }];
+  return [{ kind: "proposal", block_id: null, day: today, send_at: new Date(made).toISOString(), text: plan.join("\n"), buttons: planButtons(today, proposal.rev) }];
 }
 
 // Done and Snooze carry the block they belong to; the webhook reads them back on a tap.
@@ -203,8 +207,8 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // A Telegram update, read as a tap on a nudge's Done or Snooze:
 //   { action: "done" | "snooze", block_id, query_id, chat_id, message_id }
-// or on a plan's Approve all or Skip:
-//   { action: "pa" | "ps", day, query_id, chat_id, message_id }
+// or on a plan's Approve all or Skip ("pa:<day>:<rev>", or v4's "pa:<day>" with no rev):
+//   { action: "pa" | "ps", day, rev?, query_id, chat_id, message_id }
 // or null for anything else, which the webhook ignores without a word: any other update, a chat
 // that isn't Lisul's, or callback data that isn't "done:" or "snooze:" and a block's UUID, or
 // "pa:" or "ps:" and a plain date.
@@ -212,8 +216,9 @@ export function readTap(update, settings) {
   const q = update.callback_query;
   if (!q?.message || String(q.message.chat.id) !== String(settings.telegram_chat_id)) return null;
   const from = { query_id: q.id, chat_id: q.message.chat.id, message_id: q.message.message_id };
-  const [, plan, day] = /^(pa|ps):(.+)$/.exec(q.data ?? "") ?? [];
-  if (plan) return DATE.test(day) ? { action: plan, day, ...from } : null;
+  // v5: an optional revision after the day, 1-999 with no leading zeros.
+  const [, plan, day, rev] = /^(pa|ps):([^:]+)(?::([1-9]\d{0,2}))?$/.exec(q.data ?? "") ?? [];
+  if (plan) return DATE.test(day) ? { action: plan, day, ...(rev ? { rev: Number(rev) } : {}), ...from } : null;
   const [, action, block_id] = /^(done|snooze):(.+)$/.exec(q.data ?? "") ?? [];
   if (!action || !UUID.test(block_id)) return null;
   return { action, block_id, ...from };
@@ -233,6 +238,7 @@ const GONE = "That block is no longer on the plan.";
 // the same snapshot whatToSend takes. Returns the changes for the Edge Function to make and the
 // tapped message's new text:
 //   { table, insert: row } | { table, id, update: fields } | { table, id, delete: true }
+//   | { rpc, args }   (v5: a database function, called through PostgREST)
 // Telegram can't edit Google Calendar, so a block whose event changes leaves a gcal_pending row
 // ({ gcal_id, ends_at }, ends_at null for a deleted event) for /plan to apply when it opens.
 //
@@ -278,11 +284,21 @@ function done(task, { blocks }, now) {
 // way the proposal is decided. Blocks approved or turned down in /plan since are left as they
 // are. Approved blocks get their Google events when /plan next opens (googleStep). A proposal
 // already decided, lapsed or gone changes nothing.
+// v5 (docs/sheet-v5.md): a proposal with a `rev` is the day's newest revision. A tap on an older
+// one (a v4 button counts as revision 1) changes nothing, and the current one is decided by
+// approve_proposal or skip_proposal, which refuse it again if it moved on in the meantime.
 function planDecision(tap, { proposal, blocks, settings }) {
   if (proposal?.day !== tap.day || proposal.status === "lapsed") return { changes: [], text: "That plan has lapsed" };
+  if (proposal.rev != null && (tap.rev ?? 1) < proposal.rev) return { changes: [], text: "A newer plan is out" };
   if (proposal.status !== "pending") return { changes: [], text: `Already ${proposal.status}` };
   const left = proposedOn(blocks, tap.day, settings.time_zone);
   const approve = tap.action === "pa";
+  if (proposal.rev != null) {
+    const args = { d: tap.day, rev: proposal.rev };
+    return approve
+      ? { changes: [{ rpc: "approve_proposal", args }], text: `✓ Approved ${plural(left.length, "block")}` }
+      : { changes: [{ rpc: "skip_proposal", args }], text: "Skipped. Plan in /plan when you're ready." };
+  }
   const changes = left.map((b) => (approve ? { table: "blocks", id: b.id, update: { proposed: false } } : { table: "blocks", id: b.id, delete: true }));
   changes.push({ table: "proposals", id: tap.day, update: { status: approve ? "approved" : "skipped" } });
   return { changes, text: approve ? `✓ Approved ${plural(left.length, "block")}` : "Skipped. Plan in /plan when you're ready." };
