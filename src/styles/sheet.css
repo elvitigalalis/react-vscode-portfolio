@@ -96,14 +96,6 @@
   flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
   padding: 0; cursor: text; overflow-wrap: anywhere;
 }
-/* A timed row's time: its own fixed column, so titles line up down the day; a long span wraps
-   inside it at the dash. Done rows dim and strike it with the title. */
-.sheet-when {
-  flex: none; width: 5.25rem; font-size: 0.8125rem; font-weight: 500;
-  font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1.35;
-}
-.sheet-row:has(> .sheet-when) { align-items: baseline; }
-@media (min-width: 48.0625rem) { .sheet-when { width: 4.5rem; font-size: 0.75rem; } }
 .sheet-meta { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .sheet-clash { color: var(--warn); font-size: 0.8125rem; cursor: help; }
 .sheet-risk { color: var(--warn); cursor: help; }
@@ -312,6 +304,19 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
+}
+
+/* A timed row's time (task and event rows alike): a label of its own before the title, in the
+   accent ink, tabular and a step smaller. On phones it is a fixed column on the left and the
+   title wraps under itself beside it (.sheet-body); in the week's narrow columns it is a line of
+   its own above the title. Done rows dim and strike it with the title. */
+.sheet-when { flex: none; font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1.172rem; }
+.sheet-body { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; }
+.sheet-row:has(> .sheet-when) { align-items: baseline; }
+@media (max-width: 48rem) { .sheet-when { width: 6rem; } }
+@media (min-width: 48.0625rem) {
+  .sheet-row:has(> .sheet-when) { flex-wrap: wrap; align-content: flex-start; }
+  .sheet-when { flex-basis: 100%; font-size: 0.75rem; line-height: 1.2; }
 }
 
 /* Sources look like sources (docs/sheet-glance.md, change 3): a course task has a 3px --stem
