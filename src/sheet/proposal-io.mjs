@@ -73,3 +73,15 @@ export function paceQueries(now, timeZone) {
 // v5 H1, habits (docs/sheet-v5.md, "planSnapshot"): every habits row; planSnapshot keeps
 // plan_day's weekday's and orders them.
 export const habitsQuery = () => ({ table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence,position", order: "position" });
+
+// v5 R1, replans (docs/sheet-v5.md, "planSnapshot"): plan_day's newest replans row, and the
+// changes since `proposal` (the newest revision, or plan_day's start without one) up to now, as
+// kinds only. planSnapshot turns them into `run`.
+export function replanQueries(now, timeZone, proposal) {
+  const plan_day = planningDay(localNow(now, timeZone));
+  const since = proposal?.created_at ?? zonedIso(plan_day, 0, timeZone);
+  return {
+    replan: { table: "replans", select: "at,reasons,result", filters: [["day", "eq", plan_day]], order: "at.desc" },
+    changes: { table: "changes", select: "at,kind", filters: [["at", "gt", since], ["at", "lte", now.toISOString()]], order: "at" },
+  };
+}

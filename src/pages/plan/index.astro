@@ -172,6 +172,13 @@ import "../../styles/sheet.css";
         </form>
       </section>
 
+      <!-- Replans (docs/sheet-v5.md, "/plan"): src/sheet/replan-settings.mjs fills and saves it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-replans-title">
+        <h3 id="sheet-replans-title">Replans</h3>
+        <p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. You still approve every change.</p>
+        <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
+      </section>
+
       <!-- Enrollment time (docs/sheet-v5.md, "/plan"): src/sheet/enrollment-settings.mjs fills and saves it. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-enroll-title">
         <h3 id="sheet-enroll-title">Enrollment</h3>
@@ -266,6 +273,7 @@ import "../../styles/sheet.css";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
   import { setupHabitSettings } from "../../sheet/habit-settings.mjs";
+  import { setupReplanSettings } from "../../sheet/replan-settings.mjs";
   import { setupEnrollmentSettings } from "../../sheet/enrollment-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupEnrollmentSettings, setupHabitSettings]);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupEnrollmentSettings, setupReplanSettings, setupHabitSettings]);
 </script>

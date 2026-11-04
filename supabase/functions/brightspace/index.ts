@@ -17,7 +17,8 @@
 // SUPABASE_SERVICE_ROLE_KEY are provided by Supabase and read in ../_shared/server.ts, with the
 // shared-secret check and the database calls.
 import { parseIcs } from "../../../src/sheet/ical.mjs";
-import { courseTaskChanges } from "../../../src/sheet/feeds.mjs";
+import { courseChanges, courseTaskChanges } from "../../../src/sheet/feeds.mjs";
+import { localNow } from "../../../src/sheet/logic.mjs";
 import { calendarText, db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -64,7 +65,8 @@ async function sync(now: Date) {
   // past item keeps the due date it last had. Brightspace lists the term ahead, so half a year
   // covers it.
   const events = parseIcs(text, { from: new Date(+now - DAY), to: new Date(+now + 183 * DAY) });
-  const changes = courseTaskChanges(events, { tasks, seen, timeZone: settings?.time_zone ?? "America/New_York" }) as Changes;
+  const timeZone = settings?.time_zone ?? "America/New_York";
+  const changes = courseTaskChanges(events, { tasks, seen, timeZone }) as Changes;
 
   // Tasks first, then their UIDs: if the run dies between the two, the task holding the UID
   // still counts as seen next time. The unique (source, source_uid) index turns away a repeat.
@@ -85,5 +87,8 @@ async function sync(now: Date) {
   for (const u of changes.update) {
     await db(`tasks?id=eq.${u.id}&done=is.false`, { method: "PATCH", body: JSON.stringify({ title: u.title, due: u.due }) });
   }
+  // v5 R1: what the replan decision weighs (docs/sheet-v5.md, "replan.mjs"), once the tasks are in.
+  const logged = courseChanges(changes, tasks, localNow(now, timeZone).day);
+  if (logged.length) await db("changes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(logged) });
   return { items: events.length, inserted: changes.insert.length, updated: changes.update.length };
 }
