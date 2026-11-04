@@ -76,3 +76,30 @@ export function neverOffers(feedback, rules) {
   }
   return [...count].filter(([a, n]) => n >= 2 && !(rules ?? []).some((r) => ruleMatches(r, a))).map(([a]) => a).sort();
 }
+
+// --- The feedback log -------------------------------------------------------------------------
+// Rows for `feedback` (docs/sheet-v5.md, "Feedback refs"): ids only, never mail or task text.
+
+const FINISHED = new Set(["finished", "more", "nostart", "tomorrow"]);
+
+// The row a Telegram tap logs, or null when it decides nothing: Approve all or Skip on the day's
+// pending revision (a v4 proposal is revision 1), and each Finished? answer on a block whose task
+// isn't done. A nudge's Done and Snooze aren't decisions the planner learns from. `snapshot` is
+// handleTap's (nudges.mjs).
+export function tapFeedback(tap, { proposal, blocks, tasks }) {
+  if (tap.action === "pa" || tap.action === "ps") {
+    const rev = proposal?.rev ?? 1;
+    if (proposal?.day !== tap.day || proposal.status !== "pending" || (tap.rev ?? 1) < rev) return null;
+    return { item: "proposal", action: tap.action === "pa" ? "approve" : "skip", ref: { day: tap.day, rev } };
+  }
+  if (!FINISHED.has(tap.action)) return null;
+  const b = blocks.find((x) => x.id === tap.block_id);
+  const task = b && tasks.find((t) => t.id === b.task_id);
+  if (!task || task.done) return null;
+  return { item: "finished", action: tap.action, ref: { block_id: b.id, task_id: task.id } };
+}
+
+// The row a Needs you tap in /plan logs: done, not_needed or undo.
+export const needsFeedback = (row, action) => ({
+  item: "needs_you", action, ref: { account: row.account, message_id: row.message_id, from_address: row.from_address ?? null },
+});
