@@ -90,3 +90,13 @@ test("planner-mcp: submit_proposal writes only through apply_proposal, after che
   assert.ok(submit.indexOf("checkProposal(") < submit.indexOf('rpc("apply_proposal"'));
   assert.match(submit, /if \(!check\.ok \|\| !rows\) return/);
 });
+
+test("replanQueries: plan_day's newest replan and the changes since the newest revision", async () => {
+  const { replanQueries } = await import("../src/sheet/proposal-io.mjs");
+  const at1002 = new Date("2026-11-04T15:02:00Z");
+  const q = replanQueries(at1002, TZ, { created_at: "2026-11-04T11:09:00Z" });
+  assert.equal(queryPath(q.replan), "replans?select=at,reasons,result&day=eq.2026-11-04&order=at.desc");
+  assert.equal(queryPath(q.changes), "changes?select=at,kind&at=gt.2026-11-04T11:09:00Z&at=lte.2026-11-04T15:02:00.000Z&order=at");
+  // No revision yet: from plan_day's midnight.
+  assert.equal(queryPath(replanQueries(at1002, TZ, null).changes), "changes?select=at,kind&at=gt.2026-11-04T05:00:00.000Z&at=lte.2026-11-04T15:02:00.000Z&order=at");
+});
