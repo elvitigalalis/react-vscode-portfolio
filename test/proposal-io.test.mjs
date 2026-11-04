@@ -23,7 +23,7 @@ test("snapshotQueries: at 6:07 am it reads today's rows, in New York's day bound
     days: "days?select=*&day=eq.2026-11-04",
     campus: "campus_events?select=uid,title,starts_at,ends_at,all_day,group_name,event_type,tags,rsvp_count" +
       "&starts_at=gte.2026-11-04T05:00:00.000Z&starts_at=lt.2026-11-05T05:00:00.000Z&order=starts_at",
-    proposal: "proposals?select=*&day=eq.2026-11-04",
+    proposal: "proposals?select=*&day=eq.2026-11-04&order=rev.desc",
     needsOpen: "needs_you?select=account,message_id&done=is.false&order=created_at",
     accounts: "mail_accounts?select=email&order=connected_at",
   });
@@ -43,7 +43,7 @@ test("snapshotQueries: from 3 pm it reads tomorrow, and tomorrow's 7 days", () =
   const q = snapshotQueries(new Date("2026-11-04T20:00:00Z"), TZ); // 3:00 pm
   assert.equal(q.plan_day, "2026-11-05");
   assert.equal(queryPath(q.queries.tasks), "tasks?select=*&done=is.false&or=(day.eq.2026-11-05,due.lte.2026-11-12)&order=position");
-  assert.equal(queryPath(q.queries.proposal), "proposals?select=*&day=eq.2026-11-05");
+  assert.equal(queryPath(q.queries.proposal), "proposals?select=*&day=eq.2026-11-05&order=rev.desc");
 });
 
 test("snapshotQueries: a daylight-saving day is 25 hours long", () => {

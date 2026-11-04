@@ -70,6 +70,8 @@ const failed = (message: string) => ({ content: [text(message)], isError: true }
 const line = z.string().max(2000);
 const ProposalInput = z.object({
   day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // v5: the revision this one replaces, null for the day's first (checkProposal checks it).
+  replaces: z.number().int().nullish(),
   blocks: z.array(z.object({ task_id: z.string().max(64), start: z.string().max(5), minutes: z.number().int() })).max(50).default([]),
   needs_you: z.array(z.object({
     account: z.string().max(320),
@@ -92,11 +94,12 @@ function plannerServer(db: Db) {
   const server = new McpServer({ name: "the-sheet-planner", version: "1.0.0" });
 
   server.registerTool("read_planner", {
-    description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm), its shutdown time, its tasks " +
-      "(with tasks at risk and course tasks due within 7 days), blocks, busy times, campus events, Lisul's " +
-      "interests, the day's proposal, the Needs you rows still open, the connected mail accounts, the day " +
-      "rules (workload cap, breaks, travel time) and the hourly weather (7 am to 11 pm: °F, chance of " +
-      `precipitation %, short forecast). ${UNTRUSTED}`,
+    description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm), its shutdown time, the plan " +
+      "window (blocks go only inside it), its tasks (with tasks at risk and course tasks due within 7 days; tasks " +
+      "turned down today are left out), blocks (proposed: false is approved and locked, treat it as busy), busy " +
+      "times, campus events, Lisul's interests, the day's newest proposal revision, the Needs you rows still open, " +
+      "the connected mail accounts, the day rules (workload cap, breaks, travel time) and the hourly weather " +
+      `(7 am to 11 pm: °F, chance of precipitation %, short forecast). ${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
@@ -108,13 +111,15 @@ function plannerServer(db: Db) {
   });
 
   server.registerTool("submit_proposal", {
-    description: "Submit the morning plan for plan_day: blocks ({ task_id, start: \"HH:MM\", minutes }), Needs you " +
-      "rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, kind, due? }), " +
-      "campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of at-risk tasks " +
-      "that couldn't fit. Blocks keep the day rules from read_planner's day_rules: the workload cap, a break after " +
-      "every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
+    description: "Submit a plan revision for plan_day: replaces (the proposal's rev from read_planner, or null when " +
+      "there is none), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
+      "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
+      "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
+      "at-risk tasks that couldn't fit. Blocks keep the day rules from read_planner's day_rules: the workload cap, " +
+      "a break after every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
-      "{ ok: true } the proposal waits for Lisul to approve it; submitting again replaces it. " + UNTRUSTED,
+      "{ ok: true, rev } the revision waits for Lisul to approve it; submitting again (replaces: that rev) " +
+      "supersedes it. " + UNTRUSTED,
     inputSchema: ProposalInput,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async (input: Proposal) => {
@@ -123,10 +128,13 @@ function plannerServer(db: Db) {
       const rows = check.rows;
       if (!check.ok || !rows) return { content: [text({ ok: false, errors: check.errors })], isError: true };
       // apply_proposal (supabase/schema.sql) is security invoker and does it all in one
-      // transaction; it refuses a day already approved or skipped.
-      const { error } = await db.rpc("apply_proposal", rows);
+      // transaction; it refuses anything but the newest revision, and a day skipped or lapsed.
+      const { data: rev, error } = await db.rpc("apply_proposal", rows);
       if (error) return failed(`apply_proposal: ${error.message}`);
-      return { content: [text({ ok: true, blocks: rows.blocks.length, needs_you: rows.needs.length })] };
+      return { content: [text({
+        ok: true, rev, blocks: rows.blocks.length, habits: rows.habit_blocks.length, needs_you: rows.needs.length,
+        dropped: check.dropped.map((x: { message_id: string }) => x.message_id),
+      })] };
     } catch (e) {
       return failed((e as Error).message);
     }
@@ -161,7 +169,12 @@ async function read(db: Db, { table, select, filters = [], or, order }: Query): 
   let query = db.from(table).select(select);
   for (const [column, op, value] of filters) query = query.filter(column, op, value);
   if (or) query = query.or(or);
-  if (order) query = query.order(order);
+  // "rev.desc" orders newest first: .order(column, { ascending })
+  // (https://supabase.com/docs/reference/javascript/order).
+  if (order) {
+    const [column, dir] = order.split(".");
+    query = query.order(column, { ascending: dir !== "desc" });
+  }
   const { data, error } = await query;
   if (error) throw new Error(`${table}: ${error.message}`);
   return data;
