@@ -7,6 +7,8 @@
 // internalDate (epoch milliseconds, as a string) and a MessagePart tree with base64url bodies.
 // https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages
 
+import { addDays, localNow } from "./logic.mjs";
+
 // A message's summary, for the account (its email address) it was read from. `link` opens the
 // thread in Gmail signed in as that account.
 export function messageSummary(message, account) {
@@ -160,4 +162,21 @@ export function assessmentSender(from) {
     if (domain === d || domain.endsWith(`.${d}`)) return kind;
   }
   return null;
+}
+
+// --- v5 M1: reply tracking from metadata (docs/sheet-v5.md, "mail.mjs") ----------------------
+// The mail sync (supabase/functions/mail-sync) reads labels, dates and a few headers only, never
+// mail text; these work out Reply owed and Awaiting reply from them.
+
+// The Mondays to Fridays after fromIso's local date, up to and including toIso's.
+export function businessDays(fromIso, toIso, timeZone) {
+  let day = localNow(new Date(fromIso), timeZone).day;
+  const last = localNow(new Date(toIso), timeZone).day;
+  let n = 0;
+  while (day < last) {
+    day = addDays(day, 1);
+    const wd = new Date(`${day}T12:00:00Z`).getUTCDay();
+    if (wd !== 0 && wd !== 6) n++;
+  }
+  return n;
 }
