@@ -730,6 +730,36 @@ weather_cache id boolean pk default true check (id), point text not null,
   `public_now`, and GitHub and Jira tasks are private.
 - /plan stamps `settings.plan_edited_at` at most once a minute while it writes tasks or blocks.
 
+### Event to-dos
+
+Lisul plans from one list, so every Google Calendar event is also a row in its day's list on
+/plan, in time order (`dayRows`, src/sheet/event-todos.mjs): all-day events first; then events
+by start, tasks by `at_time` and tasks by their first approved block, together; then the untimed
+tasks in their order. The events are the ones /plan already reads (his main calendar, his extra
+calendars, and "Time blocks" for the events a message made), minus The Sheet's own block events
+(a block's `gcal_id`), whose tasks are already on the list. A row reads "9–10:15 am · Dentist"
+with the calendar icon and a checkbox; its menu has Open in Calendar and Hide. The gray event
+list above the tasks is gone; the calendar still shows on Plan today's timeline and the strip.
+
+```
+event_todos  cal_event_key text primary key      -- calendar ID ":" event ID ("primary:abc123")
+             day date not null                   -- the event's day; nightly_roll keeps 30 days after
+             title_ai text (1-80)                -- Claude's concise title; no raw title is stored
+             done boolean, hidden boolean        -- written only by /plan (an upsert of those fields)
+             updated_at timestamptz
+set_event_titles(d date, titles jsonb) -> int    -- upserts title_ai only; done, hidden and day stay
+```
+
+- Owner-only like every v5 table, in no public view.
+- `submit_proposal` and `answer_messages` take `event_todos: [{ calendar_id, event_id, title }]`.
+  `checkEventTodos` keeps titles of 1 to 60 characters, one line, with no link, at most 80 items;
+  the saved ones are written after the revision or the answers, under plan_day (or today), and
+  never block them: the result carries `event_todos` (the count) and `event_todo_errors`.
+- /plan shows title_ai, else the raw title trimmed. Claude may read the main calendar under his
+  address rather than "primary", so a title_ai also matches by event ID; done and hidden match the
+  browser's own key only.
+- Deploy in order: the schema, then planner-mcp, then /plan, then the prompt (its step 5b).
+
 ### The morning task
 
 - `docs/sheet-morning-task.md` gains, by ticket: the window and locked blocks, `replaces` (V1);
