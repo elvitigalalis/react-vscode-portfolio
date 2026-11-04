@@ -18,7 +18,7 @@
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../../../src/sheet/nudges.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
-import { rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
+import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
@@ -86,38 +86,41 @@ async function picked(proposal: { picks?: { uid: string }[] } | null) {
 }
 
 // --- Replans (v5 R1, docs/sheet-v5.md "The replan tick") ------------------------------------
-// shouldReplan decides from the changes no replan or revision has taken yet. On fire the replans
-// row goes in first (result null), the changes are tied to it, and only then is the routine
-// fired, once: a fire is never retried without a new row (routine-fire.mjs). The run reads the
-// replan back through read_planner, and its revision marks the changes consumed. A run that
-// fails or never submits leaves the plan as it was.
+// shouldReplan decides from the changes no replan or revision has taken yet. On fire,
+// claim_replan inserts the replans row (result null) and ties the changes to it in one
+// transaction, and returns nothing when another tick claimed one already. Only then is the
+// routine fired, once: a fire is never retried without a new row (routine-fire.mjs). The run
+// reads the replan back through read_planner, and its revision marks the changes consumed. A
+// fire that fails, is rate limited or throws records why and unties its changes, so the next tick
+// weighs them again (fireOutcome). A run that fails or never submits leaves the plan as it was.
 async function replanTick(now: Date) {
   if (!ROUTINE_ID || !ROUTINE_TOKEN) return { hold: "not connected" };
   const [settings] = await db("settings?select=*");
   const { day: today } = localNow(now, settings.time_zone);
   const [[day = null], proposals, replans, changes] = await Promise.all([
     db(`days?select=*&day=eq.${today}`),
-    db(`proposals?select=rev,run_trigger,created_at&day=eq.${today}`),
-    db(`replans?select=at,retry_after&day=eq.${today}`),
+    db(`proposals?select=rev,status,run_trigger,created_at&day=eq.${today}`),
+    db(`replans?select=at,result,retry_after&day=eq.${today}`),
     db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
   ]);
   if (rateLimited(replans, now)) return { hold: "rate_limited" };
   const r = shouldReplan(changes, replanState({ settings, day, proposals, replans }), now) as
     { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
   if (!r.fire) return { hold: r.hold };
-  const [row] = await db("replans", {
+  const id = await db("rpc/claim_replan", {
     method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({ day: today, reasons: r.reasons, counts: r.counts }),
+    body: JSON.stringify({ d: today, reasons: r.reasons, counts: r.counts, ids: r.ids }),
   });
-  await db(`changes?id=in.(${r.ids.join(",")})`, { method: "PATCH", body: JSON.stringify({ replan_id: row.id }) });
-  const out = await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "replan", counts: r.counts }, now) as
-    { ok: boolean; status?: number; error?: string; session_id?: string; retry_at?: string };
-  const result = out.ok ? { result: "started", session_id: out.session_id }
-    : out.status === 429 ? { result: "rate_limited", error: out.error, retry_after: out.retry_at }
-    : { result: "failed", error: out.error };
-  await db(`replans?id=eq.${row.id}`, { method: "PATCH", body: JSON.stringify(result) });
-  return { fired: result.result };
+  if (!id) return { hold: "claimed" };
+  let outcome;
+  try {
+    outcome = fireOutcome(await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "replan", counts: r.counts }, now));
+  } catch (e) {
+    outcome = fireOutcome(null, e);
+  }
+  await db(`replans?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(outcome.patch) });
+  if (outcome.untie) await db(`changes?replan_id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ replan_id: null }) });
+  return { fired: outcome.patch.result };
 }
 
 // --- Sending ------------------------------------------------------------------------------

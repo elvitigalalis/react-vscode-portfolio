@@ -92,3 +92,35 @@ test("stampsEdit: writes to tasks, blocks and turn_down count; reads and other t
   assert.equal(stampsEdit("POST", "busy"), false);
   assert.equal(stampsEdit("POST", "tasks_extra"), false);
 });
+
+// --- Fix: a replan that never started ---------------------------------------------------------
+
+test("replanState: a failed or rate-limited replan counts toward neither plans_today nor too_soon", async () => {
+  const { replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const proposals = [{ rev: 1, run_trigger: "morning", created_at: "2026-11-04T11:09:00Z" }];
+  const replans = [
+    { at: "2026-11-04T15:00:00Z", result: "started" },
+    { at: "2026-11-04T16:00:00Z", result: "failed" },
+    { at: "2026-11-04T16:30:00Z", result: "rate_limited", retry_after: "2026-11-04T17:30:00Z" },
+    { at: "2026-11-04T16:40:00Z", result: null }, // still sending
+  ];
+  const s = replanState({ settings, day: null, proposals, replans });
+  assert.equal(s.plans_today, 3);
+  assert.equal(s.last_plan_at, "2026-11-04T16:40:00.000Z");
+  const failedOnly = replanState({ settings, day: null, proposals, replans: replans.slice(1, 3) });
+  assert.equal(failedOnly.plans_today, 1);
+  assert.equal(failedOnly.last_plan_at, "2026-11-04T11:09:00.000Z");
+});
+
+test("fireOutcome: started keeps the changes tied; a 429, a failure or a throw unties them and records why", async () => {
+  const { fireOutcome } = await import("../src/sheet/replan.mjs");
+  assert.deepEqual(fireOutcome({ ok: true, session_id: "s1", session_url: "https://x" }),
+    { patch: { result: "started", session_id: "s1" }, untie: false });
+  assert.deepEqual(fireOutcome({ ok: false, status: 429, error: "rate_limit_error", retry_at: "2026-11-04T17:00:00.000Z" }),
+    { patch: { result: "rate_limited", error: "rate_limit_error", retry_after: "2026-11-04T17:00:00.000Z" }, untie: true });
+  assert.deepEqual(fireOutcome({ ok: false, status: 500, error: "api_error" }), { patch: { result: "failed", error: "api_error" }, untie: true });
+  // A throw (fireRoutine refusing its input, say) is a failure too, its message cut to 300.
+  assert.deepEqual(fireOutcome(null, new Error("fire: bad routine id")), { patch: { result: "failed", error: "fire: bad routine id" }, untie: true });
+  assert.equal(fireOutcome(null, new Error("x".repeat(400))).patch.error.length, 300);
+});

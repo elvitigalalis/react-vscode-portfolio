@@ -93,16 +93,28 @@ export function shouldReplan(changes, state, now) {
 // line is the day's, or the default; a morning revision counts as one plan and each replan as
 // another; the last plan is the newest of either.
 export function replanState({ settings, day, proposals, replans }) {
-  const times = [...proposals.map((p) => p.created_at), ...replans.map((r) => r.at)].filter(Boolean);
+  // A replan that failed or was rate limited never ran, so it counts for neither.
+  const fired = replans.filter((r) => r.result == null || r.result === "started");
+  const times = [...proposals.map((p) => p.created_at), ...fired.map((r) => r.at)].filter(Boolean);
   const last = times.length ? Math.max(...times.map((x) => Date.parse(x))) : null;
   return {
     settings: { time_zone: settings.time_zone, replans_on: !!settings.replans_on, morning_on: !!settings.morning_on },
     day: day ?? null,
     shutdown: String(day?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5),
-    plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + replans.length,
+    plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length,
     last_plan_at: last == null ? null : new Date(last).toISOString(),
     last_edit_at: settings.plan_edited_at ?? null,
   };
+}
+
+// What the tick writes after a fire: the replans row's patch, and whether to untie its changes
+// (replan_id back to null) so the next tick weighs them again. `out` is fireRoutine's result;
+// `thrown` an error it threw instead, which is recorded as a failure.
+export function fireOutcome(out, thrown = null) {
+  if (thrown) return { patch: { result: "failed", error: String(thrown?.message ?? thrown).slice(0, 300) }, untie: true };
+  if (out.ok) return { patch: { result: "started", session_id: out.session_id }, untie: false };
+  if (out.status === 429) return { patch: { result: "rate_limited", error: out.error, retry_after: out.retry_at }, untie: true };
+  return { patch: { result: "failed", error: out.error }, untie: true };
 }
 
 // Whether a 429 still holds: no replan fires before a replans row's retry_after.
