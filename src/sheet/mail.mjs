@@ -303,7 +303,8 @@ export async function senderHashes(address, salt) {
 // developers.google.com/workspace/gmail/api/guides/performance#partial), which leaves the snippet,
 // the size and any body out of the reply altogether. metadataHeaders ("When given and format is
 // METADATA, only include headers specified", …/users.messages/get) keeps the headers to these.
-export const SYNC_HEADERS = ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"];
+export const SYNC_HEADERS = ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence",
+  "Cc", "Sender", "Reply-To", "List-Unsubscribe-Post", "X-Auto-Response-Suppress", "Feedback-ID", "Return-Path"];
 const MESSAGE_FIELDS = "id,threadId,labelIds,internalDate,payload/headers";
 
 // The query for users.messages.get (`thread: false`) or users.threads.get (`thread: true`).
@@ -314,9 +315,18 @@ export function metadataQuery(thread = false) {
   return q.toString();
 }
 
-// A metadata message as replyState reads it, plus its thread and From address. Drafts aren't
-// mail anyone has seen, so syncThread leaves them out.
-export function syncMessage(message) {
+// Whether the account (its email address) is in a message's To ("to"), else its Cc ("cc"),
+// else "none" (Bcc, a list). Compared in memory; only the word is ever kept.
+export function addressedTo(headers, account) {
+  const me = String(account ?? "").trim().toLowerCase();
+  if (!me) return "none";
+  const has = (name) => parseAddresses(headerOf(headers, name)).some((a) => a.address === me);
+  return has("To") ? "to" : has("Cc") ? "cc" : "none";
+}
+
+// A metadata message as replyState reads it, plus its thread and From address. `account` is the
+// mailbox it was read from, for `addressed`.
+export function syncMessage(message, account) {
   const headers = message.payload?.headers ?? [];
   const from = headerOf(headers, "From");
   return {
@@ -326,15 +336,20 @@ export function syncMessage(message) {
     labels: message.labelIds ?? [],
     from,
     to: headerOf(headers, "To"),
+    cc: headerOf(headers, "Cc"),
     from_address: parseAddresses(from)[0]?.address ?? null,
     automated: automatedSender(headers),
+    demerit: automationDemerit(headers),
+    addressed: addressedTo(headers, account),
   };
 }
 
-// A users.threads.get reply (metadata) as replyState's thread.
+// A users.threads.get reply (metadata) as replyState's thread. A draft isn't mail anyone has
+// seen, so it is left out, but `draft` says the thread has one: his reply may be sitting unsent.
 export function syncThread(thread, account) {
-  const messages = (thread.messages ?? []).map(syncMessage).filter((m) => !m.labels.includes("DRAFT"));
-  return { account, thread_id: thread.id, messages };
+  const all = (thread.messages ?? []).map((m) => syncMessage(m, account));
+  const messages = all.filter((m) => !m.labels.includes("DRAFT"));
+  return { account, thread_id: thread.id, draft: messages.length < all.length, messages };
 }
 
 // What users.history.list pages say changed: the threads touched and the messages added, each

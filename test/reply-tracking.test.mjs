@@ -44,12 +44,14 @@ test("brief: an address-like name is left out, the thread still counted", () => 
 
 // --- The mail sync's reads ---------------------------------------------------------------------
 
-test("metadataQuery: metadata with the six headers and named fields, never a body or snippet", async () => {
+test("metadataQuery: metadata with the sender and automation headers and named fields, never a body or snippet", async () => {
   const { metadataQuery } = await import("../src/sheet/mail.mjs");
   for (const thread of [false, true]) {
     const q = new URLSearchParams(metadataQuery(thread));
     assert.equal(q.get("format"), "metadata");
-    assert.deepEqual(q.getAll("metadataHeaders"), ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"]);
+    assert.deepEqual(q.getAll("metadataHeaders"), ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence",
+      "Cc", "Sender", "Reply-To", "List-Unsubscribe-Post", "X-Auto-Response-Suppress", "Feedback-ID", "Return-Path"]);
+    assert.ok(!q.getAll("metadataHeaders").includes("Subject"));
     assert.doesNotMatch(q.get("fields"), /snippet|raw|body|parts|sizeEstimate/);
   }
   assert.equal(new URLSearchParams(metadataQuery()).get("fields"), "id,threadId,labelIds,internalDate,payload/headers");
@@ -61,19 +63,31 @@ const gmailMessage = (id, ms, labels, from, extra = []) => ({
   payload: { headers: [{ name: "From", value: from }, { name: "To", value: "Sample Owner <owner@example.com>" }, ...extra] },
 });
 
-test("syncThread: messages as replyState reads them, drafts left out", async () => {
+test("syncThread: messages as replyState reads them; a draft is left out but flagged", async () => {
   const { syncThread } = await import("../src/sheet/mail.mjs");
   const t = syncThread({ id: "18f3a1c2d4e5f000", messages: [
     gmailMessage("18f3a1c2d4e5f001", Date.parse("2026-11-06T20:00:00Z"), ["INBOX"], "Ana Ruiz <Ana.Ruiz@example.edu>"),
     gmailMessage("18f3a1c2d4e5f002", Date.parse("2026-11-06T21:00:00Z"), ["INBOX"], "News <news@example.com>", [{ name: "List-Id", value: "<news.example.com>" }]),
     gmailMessage("18f3a1c2d4e5f003", Date.parse("2026-11-07T21:00:00Z"), ["DRAFT"], "Sample Owner <owner@example.com>"),
   ] }, "owner@example.com");
-  assert.deepEqual(t, { account: "owner@example.com", thread_id: "18f3a1c2d4e5f000", messages: [
-    { id: "18f3a1c2d4e5f001", thread_id: "18f3a1c2d4e5f000", date: "2026-11-06T20:00:00.000Z", labels: ["INBOX"],
-      from: "Ana Ruiz <Ana.Ruiz@example.edu>", to: "Sample Owner <owner@example.com>", from_address: "ana.ruiz@example.edu", automated: false },
-    { id: "18f3a1c2d4e5f002", thread_id: "18f3a1c2d4e5f000", date: "2026-11-06T21:00:00.000Z", labels: ["INBOX"],
-      from: "News <news@example.com>", to: "Sample Owner <owner@example.com>", from_address: "news@example.com", automated: true },
+  const common = { thread_id: "18f3a1c2d4e5f000", labels: ["INBOX"], to: "Sample Owner <owner@example.com>", cc: "", addressed: "to", demerit: false };
+  assert.deepEqual(t, { account: "owner@example.com", thread_id: "18f3a1c2d4e5f000", draft: true, messages: [
+    { id: "18f3a1c2d4e5f001", date: "2026-11-06T20:00:00.000Z", ...common,
+      from: "Ana Ruiz <Ana.Ruiz@example.edu>", from_address: "ana.ruiz@example.edu", automated: false },
+    { id: "18f3a1c2d4e5f002", date: "2026-11-06T21:00:00.000Z", ...common,
+      from: "News <news@example.com>", from_address: "news@example.com", automated: true },
   ] });
+  assert.equal(syncThread({ id: "18f3a1c2d4e5f000", messages: [] }, "owner@example.com").draft, false);
+});
+
+test("syncMessage: addressed is to, cc or none for the account, worked out in memory", async () => {
+  const { syncMessage } = await import("../src/sheet/mail.mjs");
+  const m = (to, cc) => ({ ...gmailMessage("18f3a1c2d4e5f001", 0, ["INBOX"], "Ana Ruiz <ana.ruiz@example.edu>"),
+    payload: { headers: [{ name: "From", value: "Ana Ruiz <ana.ruiz@example.edu>" }, { name: "To", value: to }, { name: "Cc", value: cc }] } });
+  assert.equal(syncMessage(m("Sample Owner <Owner@Example.com>", ""), "owner@example.com").addressed, "to");
+  assert.equal(syncMessage(m("team@example.edu", "owner@example.com, b@example.edu"), "owner@example.com").addressed, "cc");
+  assert.equal(syncMessage(m("team@example.edu", ""), "owner@example.com").addressed, "none");
+  assert.equal(syncMessage(m("owner@example.com", "")).addressed, "none");
 });
 
 test("historyChanges: the threads touched and messages added, each once", async () => {
