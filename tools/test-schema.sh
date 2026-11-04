@@ -1317,5 +1317,56 @@ do $$ begin
   delete from messages where text = 'new one';
   raise notice '✓ messages kept 30 days';
 end $$;
+-- Event to-dos (docs/sheet-v5.md, "Event to-dos"): owner-only, set_event_titles writes only
+-- title_ai, and nightly_roll keeps 30 days.
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from event_todos; raise exception 'anon read event_todos';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  insert into event_todos (cal_event_key, day, done) values ('primary:stranger', '2026-11-04', true);
+  raise exception 'a stranger wrote event_todos';
+exception when insufficient_privilege then null;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  begin insert into event_todos (cal_event_key, day, title_ai) values ('primary:long', '2026-11-04', repeat('a', 81));
+    raise exception 'event_todos took an 81-character title';
+  exception when check_violation then null; end;
+  -- /plan checks an event off and hides another, as PostgREST's merge-duplicates upsert does.
+  insert into event_todos (cal_event_key, day, done) values ('primary:e1', '2026-11-04', true)
+    on conflict (cal_event_key) do update set done = excluded.done;
+  insert into event_todos (cal_event_key, day, hidden) values ('primary:e2', '2026-11-04', true)
+    on conflict (cal_event_key) do update set hidden = excluded.hidden;
+  -- Claude's titles: one for an event already checked, one new; done and hidden stay.
+  perform set_event_titles('2026-11-04', '[{"cal_event_key": "primary:e1", "title_ai": "Go to CSE 416 lecture"},
+    {"cal_event_key": "primary:e2", "title_ai": "Weekly sync"}, {"cal_event_key": "primary:e3", "title_ai": "Dentist"}]');
+  if (select not done or hidden or title_ai <> 'Go to CSE 416 lecture' from event_todos where cal_event_key = 'primary:e1')
+    then raise exception 'set_event_titles changed done or hidden'; end if;
+  if (select done or not hidden from event_todos where cal_event_key = 'primary:e2')
+    then raise exception 'set_event_titles unhid an event'; end if;
+  if (select done or hidden or title_ai <> 'Dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
+    then raise exception 'set_event_titles did not add a new title'; end if;
+  perform set_event_titles('2026-11-05', '[{"cal_event_key": "primary:e3", "title_ai": "See the dentist"}]');
+  if (select title_ai <> 'See the dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
+    then raise exception 'a second title should replace the first and keep the day'; end if;
+  raise notice '✓ event_todos: owner-only, and titles never touch done or hidden';
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from information_schema.role_table_grants where table_name = 'event_todos' and grantee = 'anon')
+    then raise exception 'anon has a grant on event_todos'; end if;
+  if exists (select 1 from pg_views where schemaname = 'public' and definition like '%event_todos%')
+    then raise exception 'a view reads event_todos'; end if;
+  delete from event_todos;
+  insert into event_todos (cal_event_key, day) values ('primary:old', sheet_today() - 31), ('primary:kept', sheet_today() - 30);
+  perform nightly_roll();
+  if exists (select 1 from event_todos where cal_event_key = 'primary:old') or not exists (select 1 from event_todos where cal_event_key = 'primary:kept')
+    then raise exception 'nightly_roll should keep event_todos 30 days after their day'; end if;
+  delete from event_todos;
+  raise notice '✓ event_todos kept 30 days';
+end $$;
 SQL
 echo "✓ all schema checks passed"
