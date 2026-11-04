@@ -4,9 +4,9 @@
 // field goes in through textContent, and only a Gmail link becomes a link.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { dueLabel, localNow } from "./logic.mjs";
+import { dayLabel, dueLabel, localNow } from "./logic.mjs";
 import { el, icon, state, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
-import { needsGroups, gmailLink } from "./morning.mjs";
+import { needsGroups, gmailLink, threadLink } from "./morning.mjs";
 import { needsFeedback, neverOffers } from "./triage.mjs";
 
 let root, dialog;
@@ -14,10 +14,12 @@ let rows = [];          // needs_you rows not done when read; Done flips them he
 let names = new Map();  // account email → its label, or the email
 let note = null;        // "Done: …", while its undo lasts
 let offers = [];        // v5 L1: From addresses to offer a never-show rule for
+let awaiting = [];      // v5 M1: reply_state rows he's awaiting a reply on
 
 async function refresh() {
-  const [needs, accounts] = await Promise.all([api.listNeeds(), api.listMailAccounts().catch(() => [])]);
+  const [needs, accounts, waits] = await Promise.all([api.listNeeds(), api.listMailAccounts().catch(() => []), api.listAwaiting().catch(() => [])]);
   rows = needs;
+  awaiting = waits;
   names = new Map(accounts.map((a) => [a.email, a.label || a.email]));
   draw();
   if (dialog.open) await refreshOffers();
@@ -65,6 +67,16 @@ function offerLine(address) {
   return el("p", { className: "sheet-notice" }, "Never show mail from ", el("strong", { textContent: address }), "? ", b);
 }
 
+// v5 M1: an Awaiting reply row: who, since when, and the thread in Gmail. `who` is a display name
+// from a mail header, so it goes in as text.
+function waitItem(r) {
+  const link = threadLink(r.account, r.thread_id);
+  return el("li", { className: "sheet-needs-item" },
+    el("p", { className: "sheet-needs-head" }, el("strong", { textContent: r.who })),
+    el("p", { className: "sheet-meta", textContent: `${names.get(r.account) ?? r.account} · you wrote ${dayLabel(localNow(new Date(r.since), SHEET.timeZone).day).date}` }),
+    link ? el("p", { className: "sheet-needs-acts" }, el("a", { className: "sheet-link", href: link, target: "_blank", rel: "noopener noreferrer", textContent: "Open in Gmail" })) : null);
+}
+
 // The page's toast sits behind the modal dialog, so the dialog offers the same undo.
 function undoButton() {
   const b = el("button", { type: "button", className: "sheet-link", textContent: "Undo" });
@@ -80,10 +92,13 @@ function draw() {
     el("h2", { id: "sheet-needs-title", textContent: "Needs you" }),
     note ? el("p", { className: "sheet-notice", role: "status" }, note, " ", undoButton()) : null,
     ...offers.map(offerLine),
-    groups.length ? null : el("p", { className: "sheet-notice", textContent: "Nothing needs you right now." }),
+    groups.length || awaiting.length ? null : el("p", { className: "sheet-notice", textContent: "Nothing needs you right now." }),
     ...groups.map((g) => el("section", { className: "sheet-needs-group" },
       el("h3", { textContent: g.title }),
       el("ul", { className: "sheet-needs-list" }, ...g.rows.map(item)))),
+    awaiting.length ? el("section", { className: "sheet-needs-group" },
+      el("h3", { textContent: "Awaiting reply" }),
+      el("ul", { className: "sheet-needs-list" }, ...awaiting.map(waitItem))) : null,
     el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn", textContent: "Close" })),
   ].filter(Boolean));
 }

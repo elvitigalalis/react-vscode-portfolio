@@ -611,6 +611,13 @@ weather_cache id boolean pk default true check (id), point text not null,
   `users.getProfile`), then `messages.get` with `format=metadata` and `metadataHeaders` From, To,
   List-Id, List-Unsubscribe, Auto-Submitted and Precedence, never `full` or `raw`. It skips
   `CATEGORY_PROMOTIONS`, `CATEGORY_UPDATES`, `CATEGORY_SOCIAL` and `CATEGORY_FORUMS`.
+  **Decided (M1):** every Gmail read also names its `fields` (mail.mjs's `metadataQuery`), since
+  metadata replies otherwise carry `snippet`, a piece of the text. History is read whole per
+  touched thread (`threads.get`, format=metadata). Business days pass only at local midnight, so
+  the first good run of each local day (and a full sync) also sweeps: `messages.list` with
+  `newer_than:14d -in:drafts`, then each thread's newest message. A full sync logs no changes.
+  mail.mjs adds `parseAddresses`, `metadataQuery`, `syncMessage`, `syncThread`,
+  `historyChanges`, `newestPerThread`, `replyDiff` and `searchMarks` for it and mail-mcp.
 - **The replan tick** in `telegram`'s send job: it reads the state, runs `shouldReplan`, and on
   fire inserts the `replans` row first (result null), sets `replan_id` on `ids`, then calls
   routine-fire.mjs's `fireRoutine(fetch, { routineId: SHEET_ROUTINE_ID, token:

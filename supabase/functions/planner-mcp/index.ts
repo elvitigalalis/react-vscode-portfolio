@@ -117,7 +117,9 @@ function plannerServer(db: Db) {
       "morning or replan, the replan's reason names, and the changes since the newest revision as kinds and counts. " +
       "triage_rules are Lisul's always-show and never-show rules by sender address or domain: " +
       "submit_proposal drops a Needs you item from a never-show sender, and an always-show sender's mail belongs " +
-      `in Needs you. ${UNTRUSTED}`,
+      "in Needs you. reply_state lists the mail threads where a reply is owed (someone wrote 2+ business days ago) " +
+      "and where Lisul is awaiting a reply (he wrote last, 3+ business days ago), by thread and display name. " +
+      `${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
@@ -192,8 +194,10 @@ async function snapshot(db: Db, now: Date) {
   const [[replan = null], changes] = await Promise.all([read(db, r.replan), read(db, r.changes)]);
   // v5 L1: the triage rules.
   const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
+  // v5 M1: Reply owed and Awaiting reply, which the mail sync keeps.
+  const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who", order: "since" });
   return planSnapshot({
-    actuals, past, habits, replan, changes, triage,
+    actuals, past, habits, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
     academic: academicDay?.entries ?? [],

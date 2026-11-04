@@ -68,21 +68,26 @@ break_min) and habits.
   mail.example.com matches example.com); action is "always" or "never". Use them in step 3.
 - weather is D's hourly forecast from 07:00 to 23:00, [{ at, temp_f, pop, short }]: pop is the
   chance of precipitation in percent. It may be empty; then plan as if it were dry.
+- reply_state is what the mail sync worked out from his mail's labels and dates: { owed,
+  awaiting }, each [{ account, thread_id, who, since }]. owed threads wait for a reply from him
+  (someone wrote 2 or more business days ago); awaiting threads wait on someone else (he wrote
+  last, 3 or more business days ago). Use owed in step 3.
 
 STEP 3: INBOX SWEEP (Needs you)
 Run these search_mail queries with no account (that covers every account) and max 25:
   a. is:unread newer_than:14d
   b. newer_than:3d
-  c. in:inbox -from:me older_than:2d newer_than:14d      (reply owed candidates)
-  d. in:sent newer_than:14d                               (his replies, for c)
+  c. in:inbox -from:me older_than:2d newer_than:14d
 Merge a-c, dropping duplicates (same account and id) and anything already in needs_you_open
 (same account and message_id). Decide from the from, subject and snippet; call read_message
 only when those can't tell you what a message wants, and never more than 15 times.
 
 An item goes in when the mail needs something from Lisul:
-- kind "reply": someone asked him something or is waiting on an answer. Reply owed: a message
-  from c, from a person (not an automated sender), where no message in d has the same account
-  and thread_id with a later date. Those threads still wait for him.
+- kind "reply": someone asked him something or is waiting on an answer. Reply owed is
+  reply_state.owed, already worked out; don't work it out yourself. A summary whose
+  reply_state is "owed" is one of those threads (same account and thread_id); one with known
+  true is from someone he has written to, so weigh it higher. Awaiting reply threads
+  (reply_state "awaiting") are his to wait on, not to act on: they never go in.
 - kind "deadline": a due date, form, payment or application with a date.
 - kind "meeting": a time to be somewhere, an interview, an RSVP.
 - kind "admin": school or account business he must act on, with no fixed date.
