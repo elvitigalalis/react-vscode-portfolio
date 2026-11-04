@@ -44,6 +44,14 @@ function runOf(rows, now) {
   return { trigger: replan ? "replan" : "morning", reasons: replan ? [...r.reasons] : [], changes };
 }
 
+// v5 M1: the reply_state rows by state, oldest first, as { account, thread_id, who, since }.
+function replyStateOf(rows) {
+  const sorted = list(rows).slice().sort((a, b) => Date.parse(a.since) - Date.parse(b.since));
+  const of = (state) => sorted.filter((r) => r.state === state)
+    .map((r) => ({ account: r.account, thread_id: r.thread_id, who: r.who, since: r.since }));
+  return { owed: of("owed"), awaiting: of("awaiting") };
+}
+
 // What read_planner returns, from the rows planner-mcp reads:
 //   settings   the settings row
 //   tasks, blocks, busy, days, campus   table rows
@@ -54,6 +62,7 @@ function runOf(rows, now) {
 //   past       v5 P1: the approved blocks of the 14 days before plan_day, each with its task's
 //              done as `task: { done }` (paceQueries, proposal-io.mjs)
 //   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
+//   replyState v5 M1: the reply_state rows
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -109,6 +118,8 @@ export function planSnapshot(rows, now) {
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
     // v5 L1: the triage rules, which submit_proposal enforces for never.
     triage_rules: list(rows.triage).map((r) => ({ match: r.match, pattern: r.pattern, action: r.action })),
+    // v5 M1: Reply owed and Awaiting reply from the mail sync's reply_state rows, oldest first.
+    reply_state: replyStateOf(rows.replyState),
     // v5 SRC3: plan_day's academic calendar entries (academic_days), [] without them.
     academic: (rows.academic ?? []).map((e) => ({ title: e.title, all_day: e.all_day })),
     // v5 P1.

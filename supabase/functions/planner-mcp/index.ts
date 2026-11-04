@@ -185,8 +185,10 @@ async function snapshot(db: Db, now: Date) {
   const [[replan = null], changes] = await Promise.all([read(db, r.replan), read(db, r.changes)]);
   // v5 L1: the triage rules.
   const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
+  // v5 M1: Reply owed and Awaiting reply, which the mail sync keeps.
+  const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who", order: "since" });
   return planSnapshot({
-    actuals, past, replan, changes, triage,
+    actuals, past, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
     academic: academicDay?.entries ?? [],
