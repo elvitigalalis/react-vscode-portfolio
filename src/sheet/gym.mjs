@@ -67,3 +67,62 @@ export function prsFor(s, before, baselines = []) {
   }
   return prs;
 }
+
+// --- The suggestion -------------------------------------------------------------------------
+
+export const range = (text) => String(text ?? "").replace(/-/g, "–");
+export const roundTo = (x, step) => Math.round(x / step) * step;
+const GAP_DAYS = 14;
+
+// An exercise's sessions, newest first, each { id, day_key, started_at, sets } with its working
+// sets in order. `dayKeys` maps a program day's id to its key ('push1'); `skip` leaves out one
+// session (today's).
+export function historyFor(exerciseId, sessions, sets, dayKeys, skip = null) {
+  const by = new Map();
+  for (const s of sets) {
+    if (s.exercise_id !== exerciseId || s.warmup || s.session_id === skip) continue;
+    (by.get(s.session_id) ?? by.set(s.session_id, []).get(s.session_id)).push(s);
+  }
+  return sessions.filter((x) => by.has(x.id))
+    .map((x) => ({ id: x.id, day_key: dayKeys[x.program_day_id] ?? null, started_at: x.started_at, sets: by.get(x.id).sort((a, b) => a.set_index - b.set_index) }))
+    .sort((a, b) => b.started_at.localeCompare(a.started_at));
+}
+
+// Double progression with an RPE check (docs/sheet-gym.md, "Suggestion rule"), from the last
+// session the exercise was done in, on the same program day if it has one:
+//   every working set at rep_max and RPE ≤ target + 0.5 → + step_lb;
+//   any set under rep_min, or RPE ≥ target + 1.5 → hold (− step_lb when the one before was short too);
+//   otherwise the same weight, one more rep on the weakest set.
+// No history: only the target (and the sheet's number). 14+ days since it was last done: about
+// 90% of the last weight. Returns { kind, weight_lb, reps, reason }.
+export function suggest(rx, exercise, history, { dayKey, now = new Date(), baseline = null }) {
+  const step = Number(exercise.step_lb) || 5;
+  const target = rx.rpe_target ?? 10;
+  if (!history.length) {
+    const sheet = baseline?.weight_lb != null ? ` · From your sheet: ${baseline.weight_lb} lb` : "";
+    return { kind: "first", weight_lb: null, reps: rx.rep_min, reason: `First time: ${range(rx.reps)} @ RPE ${range(rx.rpe)}${sheet}` };
+  }
+  const same = history.filter((h) => h.day_key === dayKey);
+  const [last, before] = same.length ? same : history;
+  const top = (h) => Math.max(...h.sets.map((s) => Number(s.weight_lb) || 0));
+  const days = (now - new Date(history[0].started_at)) / 864e5;
+  if (days >= GAP_DAYS) {
+    return { kind: "gap", weight_lb: roundTo(top(history[0]) * 0.9, step), reps: rx.rep_min, reason: `Back after ${Math.floor(days / 7)} weeks` };
+  }
+  const weight = top(last);
+  const reps = last.sets.map((s) => s.reps);
+  const short = (h) => h.sets.some((s) => s.reps < rx.rep_min || (s.rpe != null && s.rpe >= target + 1.5));
+  if (last.sets.every((s) => s.reps >= rx.rep_max && (s.rpe == null || s.rpe <= target + 0.5))) {
+    const n = reps.length;
+    const sets = n === 1 ? "your set" : n === 2 ? "both sets" : `all ${n} sets`;
+    return { kind: "up", weight_lb: weight + step, reps: rx.rep_min, reason: `You hit ${reps.join("/")} on ${sets}, +${step} lb` };
+  }
+  if (short(last)) {
+    if (before && short(before)) return { kind: "down", weight_lb: weight - step, reps: rx.rep_min, reason: `Short two sessions in a row: ${weight - step} lb (−${step})` };
+    const hard = last.sets.find((s) => s.rpe != null && s.rpe >= target + 1.5);
+    const why = hard && !reps.some((r) => r < rx.rep_min) ? `RPE ${hard.rpe} last time, over ${target}` : `${reps.join("/")} last time, under ${rx.rep_min}`;
+    return { kind: "hold", weight_lb: weight, reps: rx.rep_min, reason: `${why}: hold ${weight} lb` };
+  }
+  const aim = Math.min(rx.rep_max, Math.min(...reps) + 1);
+  return { kind: "same", weight_lb: weight, reps: aim, reason: `Same weight, aim for ${aim}` };
+}
