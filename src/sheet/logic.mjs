@@ -200,6 +200,11 @@ export const finishAt = (nowMinutes, total) => nowMinutes + total;
 // Planning after 3 pm plans tomorrow.
 export const planningDay = ({ day, minutes }) => (minutes >= 15 * 60 ? addDays(day, 1) : day);
 
+// The Plan dialog's day: today while today has time left before its shutdown (`shutdown`, minutes
+// past midnight) and isn't shut down (`shutDown`), else tomorrow. The morning routine keeps
+// planningDay's 3 pm rule.
+export const dialogDay = ({ day, minutes }, shutdown, shutDown) => (shutDown || minutes >= shutdown ? addDays(day, 1) : day);
+
 export const snap = (mins, step = 15) => Math.round(mins / step) * step;
 
 // A block's length in minutes.

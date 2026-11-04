@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { seedSql, parseSlot, barFor } from "../tools/gym-seed.mjs";
+import { seedSql, parseSlot, barFor, bodyFor } from "../tools/gym-seed.mjs";
 
 const fixture = (f) => JSON.parse(readFileSync(new URL(`fixtures/gym/${f}`, import.meta.url), "utf8"));
 const sql = seedSql(fixture("program.json"), fixture("baselines.json"));
@@ -22,6 +22,12 @@ test("gym-seed: barbell lifts get a 45 lb bar, others none", () => {
   assert.equal(barFor("DB Bench Press"), null);
   assert.equal(barFor("Smith Machine Squat"), null);
   assert.equal(barFor("Widget Press"), null);
+});
+
+test("gym-seed: pull-ups, chin-ups, dips and push-ups are bodyweight, others not", () => {
+  for (const n of ["Pull-Up", "Weighted Chin-ups", "Dips", "Push Ups"]) assert.equal(bodyFor(n), true, n);
+  for (const n of ["Lat Pulldown", "Widget Press", "Cable Pushdown"]) assert.equal(bodyFor(n), false, n);
+  assert.match(seedSql({ program: "P", weeks: [{ week: 1, days: [{ key: "pull1", name: "Pull #1", exercises: [{ order: 1, name: "Pull-Up", working_sets: 3, reps: "8" }] }] }] }), /\('Pull-Up', null, true\)/);
 });
 
 test("gym-seed: every exercise and substitute, every day, every slot", () => {

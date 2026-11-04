@@ -752,12 +752,18 @@ weather_cache id boolean pk default true check (id), point text not null,
 
 Lisul plans from one list, so every Google Calendar event is also a row in its day's list on
 /plan, in time order (`dayRows`, src/sheet/event-todos.mjs): all-day events first; then events
-by start, tasks by `at_time` and tasks by their first approved block, together; then the untimed
+by start, tasks by `at_time` and tasks by their first approved block (else pending block), together; then the untimed
 tasks in their order. The events are the ones /plan already reads (his main calendar, his extra
 calendars, and "Time blocks" for the events a message made), minus The Sheet's own block events
-(a block's `gcal_id`), whose tasks are already on the list. A row reads "9–10:15 am · Dentist"
-with the calendar icon and a checkbox; its menu has Open in Calendar and Hide. The gray event
+(a block's `gcal_id`), whose tasks are already on the list. A row reads "9–10:15 am  Dentist"
+with the calendar icon after the title and a checkbox; its menu has Open in Calendar and Hide. The gray event
 list above the tasks is gone; the calendar still shows on Plan today's timeline and the strip.
+
+A timed task reads the same way: its time "7–7:20 pm" is a label of its own before the title, in a
+fixed column so titles line up, on task and event rows alike (screen readers hear "7 to 7:20 pm,
+Register for classes"). It uses `taskSpan`, on the week's days and in Plan today. It starts at its `at_time`, else its approved
+block's start, else its pending block's; it ends at that block's end, else `est_min` later, else
+30 minutes later. The other details (source, clash ⚠, estimate, due date, lock) stay beside it.
 
 ```
 event_todos  cal_event_key text primary key      -- calendar ID ":" event ID ("primary:abc123")

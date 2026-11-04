@@ -89,12 +89,12 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
           about me.
         </li>
         <li>
-          <strong>Oura, every 10 minutes:</strong> with a grant limited to daily summaries, when
-          each of my sleeps started and ended, and each day's readiness score and hours slept, so
-          the plan starts after I wake and goes lighter after a rough night. Nothing else from my
-          ring is kept, it's kept 60 days, it never reaches the public page, and it is never
+          <strong>Oura, every 10 minutes:</strong> with a grant limited to daily summaries, so
+          the plan starts after I wake and goes lighter after a rough night. Only my sleep start
+          and end times and each day's readiness score and hours slept are kept, for 60 days.
+          Nothing else from my ring is kept; it never reaches the public page, and it is never
           shared or used to train or evaluate any AI model, as Oura's API terms require.
-          Disconnecting Oura in Settings deletes its key and every sleep time.
+          Disconnecting Oura in Settings deletes its key and all of these.
         </li>
       </ul>
 
@@ -121,6 +121,14 @@ const policy = "https://developers.google.com/terms/api-services-user-data-polic
           waiting on a reply, the other person's name and the date. The people I've sent mail to
           are kept only as salted hashes, never as addresses, so the planner can tell a reply
           from someone I know.
+        </li>
+        <li>
+          <strong>Tell Claude messages:</strong> what I type or paste into /plan's message box,
+          and what Claude added from it, for 30 days. Only my account can read them.
+        </li>
+        <li>
+          <strong>Gym logs:</strong> my lift program, sets, records and swaps, owner-only and never
+          on the public page, kept until I delete them.
         </li>
         <li>
           <strong>Finished? answers:</strong> when I answer a Finished? check on Telegram, it keeps

@@ -72,6 +72,7 @@ the base spec is [sheet.md](sheet.md).
    - The word "private" becomes the lock icon, with "Only you see this" as its hover text.
    - "due Wed" becomes the flag icon and "Wed".
    - A fixed time becomes the clock icon and "5:30 pm", in 12-hour time like the rest of the UI.
+     (v5: on a day, a timed task shows its span in the title instead, "5:30–6 pm · Title".)
    - ✓ and ⋯ become the check and more icons.
    - *Why:* NN/g says icons need labels, which we keep, except for well-known marks. Things 3
      is about 95 % neutral, with colour and icons only for meaning.

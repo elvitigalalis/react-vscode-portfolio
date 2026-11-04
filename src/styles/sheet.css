@@ -112,7 +112,8 @@
 .sheet-task:hover .sheet-check, .sheet-task:hover .sheet-more, .sheet-check:focus-visible, .sheet-more:focus-visible { opacity: 1; }
 .sheet-check:hover { color: var(--accent); }
 @media (hover: none) {
-  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; }
+  /* A 44 px tap area (WCAG 2.5.5) with the same small mark; the negative margin keeps the row's height. */
+  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; width: 2.75rem; height: 2.75rem; margin-block: -0.6rem; background: transparent; }
 }
 .sheet-task:hover { border-bottom-color: var(--accent); }
 .sheet-task.is-done .sheet-title { color: var(--muted); text-decoration: line-through; }
@@ -126,6 +127,8 @@ textarea.sheet-add {
   display: block; flex: 1; min-width: 0; line-height: inherit; resize: none; overflow: hidden;
   field-sizing: content;
 }
+/* Under 16 px, iOS Safari zooms the page when a field takes focus. */
+@media (hover: none), (max-width: 48rem) { .sheet-add { font-size: 1rem; } }
 .sheet-row.is-empty { cursor: text; }
 /* The add row's hint shows on hover and focus, and always on touch screens. */
 .sheet-add::placeholder { color: transparent; }
@@ -301,6 +304,19 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
+}
+
+/* A timed row's time (task and event rows alike): a label of its own before the title, in the
+   accent ink, tabular and a step smaller. On phones it is a fixed column on the left and the
+   title wraps under itself beside it (.sheet-body); in the week's narrow columns it is a line of
+   its own above the title. Done rows dim and strike it with the title. */
+.sheet-when { flex: none; font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1.172rem; }
+.sheet-body { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; }
+.sheet-row:has(> .sheet-when) { align-items: baseline; }
+@media (max-width: 48rem) { .sheet-when { width: 6rem; } }
+@media (min-width: 48.0625rem) {
+  .sheet-row:has(> .sheet-when) { flex-wrap: wrap; align-content: flex-start; }
+  .sheet-when { flex-basis: 100%; font-size: 0.75rem; line-height: 1.2; }
 }
 
 /* Sources look like sources (docs/sheet-glance.md, change 3): a course task has a 3px --stem

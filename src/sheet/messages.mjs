@@ -87,7 +87,7 @@ const whyOf = (item, name, errors) => {
 };
 
 // One task: the tasks row it becomes ({ title, day, list, due, at_time, est_min }), or null with
-// errors pushed. No day puts it on the Inbox Someday list; a fixed time needs a day.
+// errors pushed. No day puts it on the Inbox Someday list; a fixed time needs a day and a length.
 function taskRow(t, name, errors) {
   const before = errors.length;
   const title = text(t?.title, `${name}.title`, 120, errors);
@@ -97,6 +97,8 @@ function taskRow(t, name, errors) {
   if (at !== null && (typeof at !== "string" || !HHMM.test(at))) errors.push(`${name}.at_time: must be "HH:MM", 24-hour, or null`);
   else if (at !== null && day === null) errors.push(`${name}.at_time: a fixed time needs a day`);
   if (est !== null && (!Number.isInteger(est) || est < 15 || est > 480)) errors.push(`${name}.est_min: must be 15 to 480 minutes, or null`);
+  // A timed task shows its end on the day list ("7–7:20 pm"), so it always has a length.
+  else if (est === null && typeof at === "string" && HHMM.test(at) && day !== null) errors.push(`${name}.est_min: a task with at_time needs est_min (15 to 480): estimate a reasonable length if none was given`);
   const why = whyOf(t, name, errors);
   if (errors.length > before) return null;
   return { title, day, list: day ? null : "Inbox", due, at_time: at, est_min: est, ...why };

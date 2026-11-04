@@ -81,6 +81,36 @@ test("outbox: Undo turns a queued set into a delete, sent after the upserts", as
   assert.deepEqual(send.calls.at(-1), { op: "upsert", table: "gym_sets", rows: [aSet("b", 5)] });
 });
 
+test("outbox: a new set deleted before it went up sends nothing; a synced one sends one delete", async () => {
+  const box = outbox(memory());
+  const send = server();
+  // Logged on the phone (fresh: the server never had it), changed, then deleted, all before a sync.
+  box.put("gym_sets", aSet("a", 5), { fresh: true });
+  box.put("gym_sets", aSet("a", 6));
+  box.drop("gym_sets", "a");
+  assert.equal(box.pending(), 0);
+  await box.flush(send);
+  assert.deepEqual(send.calls, []);
+  // Logged and synced, then deleted: one delete by id, and nothing more on later flushes.
+  box.put("gym_sets", aSet("b", 5), { fresh: true });
+  await box.flush(send);
+  box.drop("gym_sets", "b");
+  box.drop("gym_sets", "b");
+  await box.flush(send);
+  await box.flush(send);
+  assert.deepEqual(send.calls.map((c) => [c.op, c.rows?.map((r) => r.id) ?? c.ids]), [["upsert", ["b"]], ["delete", ["b"]]]);
+});
+
+test("outbox: a new set deleted while its upsert is on the way still sends the delete", async () => {
+  const box = outbox(memory());
+  const calls = [];
+  const slow = async (call) => { calls.push(structuredClone(call)); if (calls.length === 1) box.drop("gym_sets", "a"); };
+  box.put("gym_sets", aSet("a", 5), { fresh: true });
+  await box.flush(slow);
+  assert.deepEqual(calls.map((c) => c.op), ["upsert", "delete"]);
+  assert.equal(box.pending(), 0);
+});
+
 test("outbox: a baseline is keyed by its exercise, and two flushes at once send once", async () => {
   const box = outbox(memory());
   box.put("gym_baselines", { exercise_id: "wp", weight_lb: 100, confirmed: true });
