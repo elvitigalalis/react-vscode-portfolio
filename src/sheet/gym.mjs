@@ -184,3 +184,36 @@ export function plateText(total, bar = 45) {
   const off = tenth(total - p.bar - 2 * p.perSide.reduce((a, b) => a + b, 0));
   return `${p.bar} bar | ${p.perSide.join(" ")} / side${p.exact ? "" : ` (+${off})`}`;
 }
+
+// --- The card -------------------------------------------------------------------------------
+
+const clock = (s) => (s % 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}` : String(s / 60));
+const restText = (a, b) => (a == null ? "" : b == null || a === b ? `${clock(a)}${a % 60 ? "" : " min"}` : `${clock(a)}–${clock(b)}${a % 60 || b % 60 ? "" : " min"}`);
+
+// "2 × 4–6 @ RPE 10 · rest 3–4 min · warm-up 3"
+export const rxLine = (p) => [
+  `${p.working_sets} × ${range(p.reps)}${p.rpe ? ` @ RPE ${range(p.rpe)}` : ""}`,
+  p.rest_min_s != null ? `rest ${restText(p.rest_min_s, p.rest_max_s)}` : "",
+  p.warmup_sets ? `warm-up ${range(p.warmup_sets)}` : "",
+].filter(Boolean).join(" · ");
+
+// The warm-up rows, prefilled: as many as the slot's lower count, climbing from half the working
+// weight to about 85%, to the step and never under the bar. No working weight yet: blank weights.
+export function warmups(p, work, exercise) {
+  const n = Number(String(p.warmup_sets ?? "").match(/\d+/)?.[0] ?? 0);
+  const step = Number(exercise.step_lb) || 5;
+  return Array.from({ length: n }, (_, i) => ({
+    weight_lb: work == null ? null : Math.max(Number(exercise.bar_lb) || 0, roundTo(work * (n === 1 ? 0.6 : 0.5 + (0.35 * i) / (n - 1)), step)),
+    reps: Math.max(2, [8, 5, 3][i] ?? 2),
+  }));
+}
+
+// The exercise done in slot `p`: today's swap for this session, else the latest rest-of-phase
+// swap on the same slot (slotOf: a prescription id → "day_key|position|exercise_id", so a swap
+// made in week 1 holds in every week), else the program's.
+export function activeExercise(p, swaps, slotOf, sessionId) {
+  const latest = (list) => list.sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const today = latest(swaps.filter((s) => s.scope === "today" && s.session_id === sessionId && s.prescription_id === p.id));
+  const phase = latest(swaps.filter((s) => s.scope === "phase" && slotOf(s.prescription_id) === slotOf(p.id)));
+  return (today ?? phase)?.exercise_id ?? p.exercise_id;
+}
