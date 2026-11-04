@@ -51,7 +51,7 @@ async function snapshot(now: Date) {
   const blocks = await db(`blocks?select=*&or=(and(starts_at.gte.${from},starts_at.lt.${to})${ids ? `,task_id.in.(${ids})` : ""})`);
   const [day = null] = await db(`days?select=*&day=eq.${today}`);
   const log = await db(`nudges?select=*&day=eq.${today}`);
-  const [proposal = null] = await db(`proposals?select=*&day=eq.${today}`);
+  const [proposal = null] = await db(`proposals?select=*&day=eq.${today}&order=rev.desc&limit=1`);
   const needsOpen = await db("needs_you?select=*&done=is.false");
   return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal) };
 }
@@ -127,7 +127,7 @@ const PLAIN = { link_preview_options: { is_disabled: true } };
 
 // --- Taps ---------------------------------------------------------------------------------
 
-type Change = { table: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean };
+type Change = { table?: string; id?: string; insert?: unknown; update?: unknown; delete?: boolean; rpc?: string; args?: unknown };
 
 // A second tap on the same button meets the row the first one wrote: a snooze stays as logged,
 // and a pending Google edit takes the latest end.
@@ -149,7 +149,7 @@ async function tap(update: unknown, now: Date) {
   // A plan tap acts on its own day's proposal and proposed blocks, which may not be today's
   // (readTap lets only a plain date through).
   if (planTap(t) && t.day !== snap.proposal?.day) {
-    [snap.proposal = null] = await db(`proposals?select=*&day=eq.${t.day}`);
+    [snap.proposal = null] = await db(`proposals?select=*&day=eq.${t.day}&order=rev.desc&limit=1`);
     const from = new Date(Date.parse(`${t.day}T00:00:00Z`) - 86_400_000).toISOString();
     const to = new Date(Date.parse(`${t.day}T00:00:00Z`) + 2 * 86_400_000).toISOString();
     snap.blocks.push(...(await db(`blocks?select=*&proposed=is.true&starts_at=gte.${from}&starts_at=lt.${to}`))
@@ -162,9 +162,19 @@ async function tap(update: unknown, now: Date) {
       snap.tasks.push(...(await db(`tasks?select=*&id=eq.${b.task_id}`)));
     }
   }
-  const { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
+  let { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
   for (const c of changes) {
-    if (c.insert) {
+    if (c.rpc) {
+      // v5: approve_proposal and skip_proposal, as PostgREST rpc calls
+      // (docs.postgrest.org/en/stable/references/api/functions.html). They refuse a revision
+      // that moved on since the snapshot was read, and then nothing changed.
+      try {
+        await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
+      } catch {
+        text = "A newer plan is out";
+        break;
+      }
+    } else if (c.insert) {
       await db(`${c.table}?${UPSERT[c.table]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
     } else if (c.update) {
       await db(`${c.table}?${KEY[c.table] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
