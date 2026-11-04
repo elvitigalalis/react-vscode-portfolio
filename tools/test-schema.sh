@@ -1086,6 +1086,24 @@ do $$ begin
   raise notice '✓ v5: known_senders hashes only; reply tracking private and server-written; sheet-mail every 5 minutes';
 end $$;
 
+-- Reply owed's evidence: basis is thread, known, cc or null; draft defaults to false.
+do $$ begin
+  if to_regclass('public.reply_state') is null then return; end if;
+  insert into reply_state (account, thread_id, state, since, message_id, who, basis)
+    values ('owner@example.com', 'ro-1', 'owed', now(), '18f3a1c2d4e5f002', 'Ana Ruiz', 'thread');
+  insert into reply_state (account, thread_id, state, since, message_id, who)
+    values ('owner@example.com', 'ro-2', 'awaiting', now(), '18f3a1c2d4e5f003', 'Ana Ruiz');
+  if (select draft from reply_state where thread_id = 'ro-1') is distinct from false
+    or (select basis from reply_state where thread_id = 'ro-2') is not null
+    then raise exception 'reply_state basis and draft defaults wrong'; end if;
+  begin insert into reply_state (account, thread_id, state, since, message_id, who, basis)
+      values ('owner@example.com', 'ro-3', 'owed', now(), '18f3a1c2d4e5f004', 'Ana Ruiz', 'guess');
+    raise exception 'reply_state took basis guess';
+  exception when check_violation then null; end;
+  delete from reply_state where thread_id like 'ro-%';
+  raise notice '✓ reply_state keeps basis (thread, known, cc) and draft';
+end $$;
+
 -- Fix: no From address in plain text (docs/sheet-v5.md, "Sender hashes").
 do $$ begin
   if to_regclass('public.message_senders') is null then return; end if;

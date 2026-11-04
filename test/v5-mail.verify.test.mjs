@@ -118,11 +118,12 @@ const mon = new Date("2026-11-09T14:00:00Z"); // 9 am Monday
 const tue = new Date("2026-11-10T14:00:00Z");
 const wed = new Date("2026-11-11T14:00:00Z");
 
-test("replyState: Reply owed after 2 business days from a person", async () => {
+// Revised with the reply-owed fix: owed needs evidence of a conversation and then holds at once
+// (mail.mjs, replyState). He wrote in this thread, so Ana's answer is owed from the start.
+test("replyState: Reply owed at once when a person answers his thread", async () => {
   const { replyState } = await mail();
-  assert.equal(replyState(owedThread, TZ, mon), null); // Friday → Monday is 1
-  assert.deepEqual(replyState(owedThread, TZ, tue), {
-    state: "owed", since: "2026-11-06T20:00:00.000Z", message_id: "18f3a1c2d4e5f002", who: "Ana Ruiz",
+  assert.deepEqual(replyState(owedThread, TZ, mon), {
+    state: "owed", since: "2026-11-06T20:00:00.000Z", message_id: "18f3a1c2d4e5f002", who: "Ana Ruiz", basis: "thread", draft: false,
   });
 });
 
@@ -155,11 +156,10 @@ test("replyState: the state clears when the thread moves", async () => {
   // He answers Ana on Tuesday morning: nothing owed, and too soon to be awaiting.
   const answered = { ...owedThread, messages: [...owedThread.messages, msg("18f3a1c2d4e5f003", "2026-11-10T13:30:00.000Z", ["SENT"], OWNER, ANA)] };
   assert.equal(replyState(answered, TZ, tue), null);
-  // Prof. Kim answers on Monday: not awaiting any more; owed once 2 business days pass.
+  // Prof. Kim answers on Monday: not awaiting any more; owed at once, since he wrote in the thread.
   const kimAnswered = { ...awaitingThread, messages: [...awaitingThread.messages, msg("18f3a1c2d4e5f013", "2026-11-09T18:00:00.000Z", ["INBOX", "UNREAD"], "Prof. Kim <kim@cs.example.edu>", OWNER)] };
-  assert.equal(replyState(kimAnswered, TZ, tue), null);
-  assert.deepEqual(replyState(kimAnswered, TZ, wed), {
-    state: "owed", since: "2026-11-09T18:00:00.000Z", message_id: "18f3a1c2d4e5f013", who: "Prof. Kim",
+  assert.deepEqual(replyState(kimAnswered, TZ, tue), {
+    state: "owed", since: "2026-11-09T18:00:00.000Z", message_id: "18f3a1c2d4e5f013", who: "Prof. Kim", basis: "thread", draft: false,
   });
 });
 
@@ -169,14 +169,17 @@ test("replyState: automated senders never make a reply owed", async () => {
   assert.equal(replyState(t, TZ, wed), null);
 });
 
+// Revised with the reply-owed fix: Ana is someone he has written to (known), writing To him.
+const toHim = (m) => ({ ...m, from_address: "ana.ruiz@example.edu", addressed: "to" });
+const knownAna = { known: new Set(["ana.ruiz@example.edu"]) };
 test("replyState: Promotions, Updates, Social and Forums are skipped", async () => {
   const { replyState } = await mail();
   for (const category of ["CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"]) {
-    const t = thread(msg("18f3a1c2d4e5f041", "2026-11-02T15:00:00.000Z", ["INBOX", category], ANA, OWNER));
-    assert.equal(replyState(t, TZ, wed), null, category);
+    const t = thread(toHim(msg("18f3a1c2d4e5f041", "2026-11-02T15:00:00.000Z", ["INBOX", category], ANA, OWNER)));
+    assert.equal(replyState(t, TZ, wed, knownAna), null, category);
   }
-  const personal = thread(msg("18f3a1c2d4e5f042", "2026-11-02T15:00:00.000Z", ["INBOX", "CATEGORY_PERSONAL"], ANA, OWNER));
-  assert.equal(replyState(personal, TZ, wed).state, "owed");
+  const personal = thread(toHim(msg("18f3a1c2d4e5f042", "2026-11-02T15:00:00.000Z", ["INBOX", "CATEGORY_PERSONAL"], ANA, OWNER)));
+  assert.equal(replyState(personal, TZ, wed, knownAna).state, "owed");
 });
 
 test("replyState: spam and trash are passed over", async () => {
@@ -190,7 +193,7 @@ test("replyState: spam and trash are passed over", async () => {
 
 test("replyState: who is a display name, unquoted, or else the local part", async () => {
   const { replyState } = await mail();
-  const owedFrom = (from) => replyState(thread(msg("18f3a1c2d4e5f061", "2026-11-02T15:00:00.000Z", ["INBOX"], from, OWNER)), TZ, wed).who;
+  const owedFrom = (from) => replyState(thread(toHim(msg("18f3a1c2d4e5f061", "2026-11-02T15:00:00.000Z", ["INBOX"], from, OWNER))), TZ, wed, knownAna).who;
   assert.equal(owedFrom('"Ruiz, Ana" <ana.ruiz@example.edu>'), "Ruiz, Ana");
   assert.equal(owedFrom("ana.ruiz@example.edu"), "ana.ruiz");
   assert.equal(owedFrom("<ana.ruiz@example.edu>"), "ana.ruiz");
