@@ -117,7 +117,7 @@ function refused(result, ...patterns) {
 // read_planner: the day's habits
 // =============================================================================================
 
-test("planSnapshot: plan_day's habits, firm first, then flexible, each by ideal time", todo, async () => {
+test("planSnapshot: plan_day's habits, firm first, then flexible, each by ideal time", async () => {
   const { planSnapshot } = await proposal();
   const row = (id, name, days, ideal, minutes, flex_min, defence, position) => ({ id, name, days, ideal, minutes, flex_min, defence, position, created_at: "2026-11-01T12:00:00Z" });
   const rows = {
@@ -141,7 +141,7 @@ test("planSnapshot: plan_day's habits, firm first, then flexible, each by ideal 
   ]);
 });
 
-test("planSnapshot: with no habits rows, habits is empty", todo, async () => {
+test("planSnapshot: with no habits rows, habits is empty", async () => {
   const { planSnapshot } = await proposal();
   const rows = { settings: { time_zone: TZ }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] };
   assert.deepEqual(planSnapshot(rows, new Date("2026-11-04T11:07:00Z")).habits, []);

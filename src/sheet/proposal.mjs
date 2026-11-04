@@ -51,6 +51,7 @@ function runOf(rows, now) {
 //   actuals    v5 P1: the actuals rows (pace)
 //   past       v5 P1: the approved blocks of the 14 days before plan_day, each with its task's
 //              done as `task: { done }` (paceQueries, proposal-io.mjs)
+//   habits     v5 H1: the habits rows
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -87,7 +88,7 @@ export function planSnapshot(rows, now) {
     turned_down: turnedDown,
     tasks,
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
-      .map((b) => ({ task_id: b.task_id, starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
+      .map((b) => ({ task_id: b.task_id, ...(b.habit_id ? { habit_id: b.habit_id } : {}), starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
     busy: rows.busy.filter((b) => onDay(b, day, tz)).map((b) => ({ starts_at: b.starts_at, ends_at: b.ends_at })),
     busy_as_of: settings.busy_as_of ?? null,
     interests: settings.interests ?? null,
@@ -107,7 +108,24 @@ export function planSnapshot(rows, now) {
     // v5 P1.
     pace,
     planned_vs_done: plannedVsDone(past, past.map((b) => ({ id: b.task_id, done: Boolean(b.task?.done) })), day, tz),
+    // v5 H1.
+    habits: dayHabits(rows.habits, day),
   };
+}
+
+// --- v5 H1: habits (docs/sheet-v5.md, "planSnapshot" and "checkProposal") ------------------
+
+// ISO weekday of a "YYYY-MM-DD" date, 1 = Monday.
+const isoWeekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay() || 7;
+
+// The habits on `day`'s weekday: firm ones first, then flexible, each by ideal time, then
+// position. The morning task places them in this order.
+function dayHabits(habits, day) {
+  const wd = isoWeekday(day);
+  return list(habits).filter((h) => list(h.days).includes(wd))
+    .sort((a, b) => (a.defence === "firm" ? 0 : 1) - (b.defence === "firm" ? 0 : 1)
+      || a.ideal.localeCompare(b.ideal) || (a.position ?? 0) - (b.position ?? 0))
+    .map((h) => ({ id: h.id, name: h.name, ideal: h.ideal.slice(0, 5), minutes: h.minutes, flex_min: h.flex_min, defence: h.defence }));
 }
 
 // --- submit_proposal -------------------------------------------------------------------------
