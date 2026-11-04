@@ -6,19 +6,34 @@
 // browser (ADR 0001): on the reply, and on load for any left over from a closed tab.
 // Text goes in through textContent only.
 import * as api from "./api.mjs";
-import { addedLine } from "./messages.mjs";
+import { addedLine, MAX_TEXT, messageText } from "./messages.mjs";
 import { el, load, failed } from "./planner.mjs";
 
 const POLL_MS = 5_000;
 const POLL_FOR_MS = 3 * 60_000;
 
-let form, input, log;
+let form, input, count, log;
+
+// The box grows with its text, up to the CSS max-height, and says how much room is left.
+function grow() {
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+  count.textContent = `${(MAX_TEXT - input.value.length).toLocaleString("en-US")} characters left`;
+}
 
 export function setupMessages(root) {
   form = root.querySelector("[data-message-form]");
-  input = form.querySelector("input");
+  input = form.querySelector("textarea");
+  count = form.querySelector("[data-message-count]");
   log = root.querySelector("[data-message-log]");
   form.addEventListener("submit", (e) => { e.preventDefault(); send(); });
+  // A textarea, since pasted announcements run many lines: Enter adds a line, and Cmd or Ctrl
+  // with Enter sends, as the Send button does (the only way on a phone).
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.isComposing) { e.preventDefault(); send(); }
+  });
+  input.addEventListener("input", grow);
+  grow();
   // Only the owner gets a settings row; anyone else signed in sees no box.
   api.settings().then((row) => {
     if (!row) return;
@@ -34,9 +49,10 @@ const SENT = {
 };
 
 async function send() {
-  const text = input.value.replace(/\s+/g, " ").trim();
+  const text = messageText(input.value);
   if (!text) return;
   input.value = "";
+  grow();
   const status = el("span", { className: "sheet-message-status", textContent: "Sending to Claude…" });
   const li = el("li", {}, el("span", { className: "sheet-message-text", textContent: text }), " ", status);
   log.prepend(li);
@@ -47,6 +63,7 @@ async function send() {
     console.error(e);
     status.textContent = "Not sent. Try again.";
     input.value ||= text;
+    grow();
     return;
   }
   status.textContent = SENT[out.fired ? "true" : out.why] ?? "Saved. Claude picks it up on its next run.";

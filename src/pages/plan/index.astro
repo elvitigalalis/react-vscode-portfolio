@@ -42,8 +42,9 @@ import "../../styles/sheet.css";
          shows the replies. Hidden until the owner's settings load. -->
     <form class="sheet-message" data-message-form hidden>
       <label class="visually-hidden" for="sheet-message">Message to Claude</label>
-      <input id="sheet-message" type="text" maxlength="500" autocomplete="off" enterkeyhint="send" required placeholder="Tell Claude: dentist Thu 3pm, lab report due Fri…">
+      <textarea id="sheet-message" rows="1" maxlength="8000" autocomplete="off" required aria-describedby="sheet-message-hint" placeholder="Tell Claude, or paste a class announcement: dentist Thu 3pm, Project 2 due Nov 14…"></textarea>
       <button type="submit" class="sheet-btn primary">Send<span class="visually-hidden"> to Claude</span></button>
+      <p class="sheet-message-hint" id="sheet-message-hint"><kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends; <span data-message-count></span></p>
     </form>
     <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
     <p class="sheet-status" data-status>Loading…</p>
