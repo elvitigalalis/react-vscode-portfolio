@@ -25,6 +25,10 @@ _Avoid_: Urgent
 An undone task whose due date has passed.
 _Avoid_: Late, past due
 
+**Message**:
+A plain line Lisul types to Claude in /plan, such as "dentist Thu 3pm". Claude answers it with tasks, events and a one-line reply, and nothing else.
+_Avoid_: Chat, prompt, command
+
 **Block**:
 A stretch of time on a day reserved for one task, mirrored to the "Time blocks" calendar.
 _Avoid_: Event, slot, session

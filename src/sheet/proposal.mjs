@@ -46,12 +46,21 @@ function runOf(rows, now, day) {
   return { trigger: replan ? "replan" : "morning", reasons: replan ? [...r.reasons] : [], changes };
 }
 
+// Whether a message run may go on as a replan of today: `message` is the newest fired messages
+// row ({ fired_at }), fired under 30 minutes ago and after `proposal`, today's newest revision.
+// planner-mcp passes it only while replans are on (docs/sheet-morning-task.md, step 2b).
+export const messageRunOf = (now, message, proposal) => Boolean(message?.fired_at
+  && now - Date.parse(message.fired_at) < REPLAN_FRESH
+  && Date.parse(message.fired_at) > (proposal ? Date.parse(proposal.created_at) : -Infinity));
+
 // The day a run plans: today when a replan started this run (`replan`, today's newest replans
-// row, fresh and after `proposal`, today's newest revision), since a replan plans the rest of
-// today even from 3 pm; otherwise the 3 pm rule's planningDay.
-export function planDayOf(now, timeZone, replan, proposal) {
+// row, fresh and after `proposal`, today's newest revision), or a message run may go on as a
+// replan of today (`message`, messageRunOf), since a replan plans the rest of today even from
+// 3 pm; otherwise the 3 pm rule's planningDay.
+export function planDayOf(now, timeZone, replan, proposal, message = null) {
   const here = localNow(now, timeZone);
-  return replan?.day === here.day && freshReplan(replan, proposal, now) ? here.day : planningDay(here);
+  const today = (replan?.day === here.day && freshReplan(replan, proposal, now)) || messageRunOf(now, message, proposal);
+  return today ? here.day : planningDay(here);
 }
 
 // v5 M1: the reply_state rows by state, oldest first, as { account, thread_id, who, since }.

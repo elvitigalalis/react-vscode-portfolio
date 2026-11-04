@@ -84,12 +84,14 @@ export function replanQueries(now, timeZone, proposal, plan_day = planningDay(lo
   };
 }
 
-// What planDayOf (proposal.mjs) decides plan_day from: today's newest replans row and today's
-// newest revision. Replans are only ever for today, so a replan run plans the rest of today.
+// What planDayOf (proposal.mjs) decides plan_day from: today's newest replans row, today's
+// newest revision and the newest fired message. Replans are only ever for today, so a replan run plans the rest of today.
 export function todayReplanQueries(now, timeZone) {
   const today = localNow(now, timeZone).day;
   return {
     replan: { table: "replans", select: "day,at,reasons,result", filters: [["day", "eq", today]], order: "at.desc" },
     proposal: { table: "proposals", select: "created_at", filters: [["day", "eq", today]], order: "rev.desc" },
+    // The newest fired message: a message run may go on as a replan of today (messageRunOf).
+    message: { table: "messages", select: "fired_at", filters: [["fired_at", "not.is", "null"]], order: "fired_at.desc" },
   };
 }

@@ -32,9 +32,10 @@ export function fireRequest(routineId, token, text) {
   };
 }
 
-// The only words the text can hold. Triggers: the morning plan, a replan, and the one-off test
-// fire (ticket 50). Reasons are the change kinds of spec 47's changes table, in its order.
-export const TRIGGERS = ["morning", "replan", "test"];
+// The only words the text can hold. Triggers: the morning plan, a replan, the one-off test fire
+// (ticket 50) and a message to Claude (docs/sheet-messages.md). Reasons are the change kinds of
+// spec 47's changes table, in its order.
+export const TRIGGERS = ["morning", "replan", "test", "message"];
 export const REASONS = ["mail", "busy", "course", "campus", "github", "jira", "slack", "handshake"];
 
 // The text for one fire, such as "trigger: replan\nreasons: busy 2, course 1". `counts` maps a

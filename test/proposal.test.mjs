@@ -221,3 +221,18 @@ test("planSnapshot v5: read_at is when the snapshot was read; checkProposal pass
   assert.match(checkProposal({ ...input, read_at: "soon" }, fresh).errors.join(" "), /^read_at/);
   assert.match(checkProposal({ ...input, read_at: "2026-11-04T14:12:00.000Z" }, fresh).errors.join(" "), /^read_at/);
 });
+
+test("planDayOf: a message run that goes on as a replan of today plans today from 3 pm too", async () => {
+  const { planDayOf, messageRunOf } = await import("../src/sheet/proposal.mjs");
+  const four = new Date("2026-11-04T21:00:00Z"); // 4:00 pm
+  const morning = { created_at: "2026-11-04T11:09:00Z" };
+  // The newest fired message, answered by now (submit_proposal's fresh read comes after it).
+  const message = { fired_at: "2026-11-04T20:55:00Z" };
+  assert.equal(messageRunOf(four, message, morning), true);
+  assert.equal(planDayOf(four, "America/New_York", null, morning, message), DAY);
+  // Fired over 30 minutes ago, before today's newest revision, or none: the 3 pm rule.
+  assert.equal(planDayOf(new Date("2026-11-04T21:30:00Z"), "America/New_York", null, morning, message), "2026-11-05");
+  assert.equal(planDayOf(four, "America/New_York", null, { created_at: "2026-11-04T20:58:00Z" }, message), "2026-11-05");
+  assert.equal(planDayOf(four, "America/New_York", null, morning, null), "2026-11-05");
+  assert.equal(messageRunOf(four, { fired_at: null }, morning), false);
+});
