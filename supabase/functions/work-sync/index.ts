@@ -5,7 +5,7 @@
 // (src/sheet/sources.mjs), the functions the tests cover, decide what changes; this file only
 // fetches and writes what they say. Only titles, links and due dates are ever stored.
 //
-// - GitHub: GET /search/issues for `is:open review-requested:@me` and `is:open assignee:@me`
+// - GitHub: GET /user for the login, then GET /search/issues for PRs awaiting his review and PRs and issues assigned to him
 //   (https://docs.github.com/en/rest/search/search#search-issues-and-pull-requests: at most 100
 //   per page and 30 requests a minute when signed in; `incomplete_results` is true when the search
 //   timed out). Only repositories in settings.github_orgs count. Recorded in feed_state as
@@ -130,9 +130,8 @@ async function save(c: Changes, whole: boolean) {
 
 // --- GitHub -----------------------------------------------------------------------------------
 
-async function githubSearch(q: string) {
-  const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&per_page=${PER_PAGE}`;
-  const res = await fetch(url, {
+async function githubGet(path: string) {
+  const res = await fetch(`https://api.github.com${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${GITHUB_TOKEN}`,
@@ -140,17 +139,35 @@ async function githubSearch(q: string) {
       "User-Agent": "the-sheet-work-sync",
     },
   });
-  if (!res.ok) throw new Error(`github: HTTP ${res.status}`);
-  const body = await res.json();
+  const body = await res.json().catch(() => null);
+  // GitHub's own message ("Validation Failed: The listed users cannot be searched…") holds no
+  // token or mail text, so it goes into feed_state to say why.
+  if (!res.ok) {
+    const why = [body?.message, body?.errors?.[0]?.message].filter(Boolean).join(": ").slice(0, 160);
+    throw new Error(`github: HTTP ${res.status}${why ? ` ${why}` : ""}`);
+  }
+  return body;
+}
+
+async function githubSearch(q: string) {
+  const body = await githubGet(`/search/issues?q=${encodeURIComponent(q)}&per_page=${PER_PAGE}`);
   const items = Array.isArray(body?.items) ? body.items : [];
   return { items, whole: body?.incomplete_results === false && Number(body?.total_count) <= items.length };
 }
 
 // Both searches, merged; githubTaskChanges counts an item in both once.
+// Search by login, not @me: a fine-grained token owned by an org gets 422 "The listed users
+// cannot be searched" for @me (https://docs.github.com/en/rest/users/users#get-the-authenticated-user).
 async function githubItems() {
-  const review = await githubSearch("is:open review-requested:@me");
-  const assigned = await githubSearch("is:open assignee:@me");
-  return { items: [...review.items, ...assigned.items], whole: review.whole && assigned.whole };
+  const login = String((await githubGet("/user"))?.login ?? "");
+  if (!/^[A-Za-z\d-]{1,39}$/.test(login)) throw new Error("github: no login for this token");
+  // Each search must name is:issue or is:pull-request, or GitHub answers 422.
+  const parts = await Promise.all([
+    `is:open is:pull-request review-requested:${login}`,
+    `is:open is:pull-request assignee:${login}`,
+    `is:open is:issue assignee:${login}`,
+  ].map(githubSearch));
+  return { items: parts.flatMap((p) => p.items), whole: parts.every((p) => p.whole) };
 }
 
 // --- Jira -------------------------------------------------------------------------------------
