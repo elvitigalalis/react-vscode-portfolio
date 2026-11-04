@@ -658,14 +658,32 @@ weather_cache id boolean pk default true check (id), point text not null,
   `github`, `jira`, `slack`, `handshake`, `academic`, `weather`), never with a URL or token in
   `error`. One with no secret returns `{ ok: true, skipped: "not connected" }` and writes
   `feed_state` with `ok = null, error = 'not connected'`.
-- **calendar-connect** asks for `openid email https://www.googleapis.com/auth/calendar.freebusy`
-  with `access_type=offline`, `prompt=consent` and `login_hint` the owner's email, and accepts
+- **calendar-connect** asks for `openid email https://www.googleapis.com/auth/calendar.freebusy
+  https://www.googleapis.com/auth/calendar.events.readonly
+  https://www.googleapis.com/auth/calendar.app.created` (the last two are /plan's sign-in scopes,
+  `SCOPES` in api.mjs) with `access_type=offline`, `prompt=consent` and `login_hint` the owner's email, and accepts
   the grant only when the ID token's verified email is `settings.owner_email`. **Decided:** the
   identity scopes are there only to prove whose account it is.
   **Decided (S1):** it shares mail-connect's `MAIL_STATE_SECRET` and `mail_connect_states`, its
   state carries `grant: 'calendar'`, and it returns to `/plan/?calendar=connected` or
   `?calendar=error&reason=…`. A calendar Google answers with `errors` makes the `freebusy` feed
   fail ("1 calendar couldn't be read") while the other rows are still saved.
+  **Fix (Google token):** the Google token from /plan's sign-in lasts an hour and Supabase never
+  refreshes it, so /plan used to show "needs reconnecting" an hour after every Connect.
+  calendar-connect's `POST /token` (the owner's session token in `Authorization`, checked as
+  `/start`; CORS for the site) refreshes the stored grant and answers `{ access_token, expires_in }`
+  only, with `Cache-Control: no-store`: never the refresh token, and tokens are never logged.
+  It answers 403 `not-owner`, 409 `not-connected`, 409 `needs-scopes` (the grant lacks
+  `calendar.events.readonly` or `calendar.app.created`: a grant from before this fix, or one
+  unticked), or 502 `refused` (which sets `calendar_account.last_error`). The rules are
+  `serveToken` in `src/sheet/calendartoken.mjs`. In the browser, `src/sheet/gtoken.mjs` uses the
+  sign-in's token while it lasts, then `/token` (one call however many requests want it, kept
+  5 minutes short of `expires_in`, no new ask for a minute after a failure), and on a Google 401
+  drops the token and retries once with a fresh one. The stale-events banner shows only when no
+  token can be had; its button, "Reconnect Google Calendar in Settings", opens Settings and goes
+  to calendar-connect's consent screen. Settings → Calendar says "Reconnect to let /plan read
+  events." while `/token` answers `needs-scopes`. busy-sync is unchanged: the callback still
+  requires `calendar.freebusy`, and freebusy.query works the same with the wider grant.
 - **busy-sync** refreshes the token, posts `freeBusyRequest`, then in one call replaces the
   `calendar` busy rows from now to 7 days ahead with `freeBusyRows`, stamps `busy_as_of`, and
   writes `busyChange`'s row. A refused refresh sets `calendar_account.last_error` and a failed
@@ -907,7 +925,9 @@ SB="npx -y supabase@latest"
      `https://bmbsvvprpfdbvalnkowp.supabase.co/functions/v1/calendar-connect/callback`, keeping
      the mail-connect and Auth ones.
    - Google Auth Platform → Data Access: add `https://www.googleapis.com/auth/calendar.freebusy`
-     (with `openid` and `email`).
+     (with `openid` and `email`). `calendar.events.readonly` and `calendar.app.created`, which
+     calendar-connect also asks for, are listed already: /plan's sign-in uses the same client
+     and asks for them (docs/sheet.md, setup step 2).
    - Audience: **In production**. In Testing, refresh tokens die after 7 days. Expect the
      "unverified app" screen at consent (ADR 0004).
 
