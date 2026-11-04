@@ -136,25 +136,33 @@ export function checkAnswers(input, pending, timeZone) {
 // --- Reading (planner-mcp's read_planner) ----------------------------------------------------
 
 export const MAX_READ = 10;
+// The most message text one read gives, so a few long pastes don't swamp the run. Past it the
+// oldest wait for the next run (by then the newer ones are answered); one is always given.
+export const READ_BUDGET = 20_000;
 // A run starts within seconds of its fire; a fired message older than this that is still pending
 // was missed (or rate limited), and the next run of any kind answers it.
 const MESSAGE_FRESH = 10 * 60_000;
 
 // What read_planner adds to planSnapshot for messages, from the pending messages rows ({ id, at,
 // text, fired_at }) and the settings row: today (Lisul's date, which plan_day is not after 3 pm),
-// replans_on, and the pending messages, oldest first and at most 10, as { id, at, text }. A
+// replans_on, and the pending messages, oldest first and at most 10, as { id, at, text }, within
+// READ_BUDGET characters, with messages_held, how many pending ones wait for a later run. A
 // message fired under 10 minutes ago and still pending makes a morning run a "message" run; a
 // replan stays a replan.
 export function withMessages(snapshot, rows, settings, now) {
   const pending = list(rows).slice().sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   const fresh = pending.some((m) => m.fired_at && now.getTime() - Date.parse(m.fired_at) < MESSAGE_FRESH);
+  const messages = pending.slice(0, MAX_READ).map((m) => ({ id: m.id, at: m.at, text: m.text }));
+  let size = messages.reduce((n, m) => n + m.text.length, 0);
+  while (messages.length > 1 && size > READ_BUDGET) size -= messages.shift().text.length;
   const run = fresh && snapshot.run?.trigger === "morning" ? { ...snapshot.run, trigger: "message" } : snapshot.run;
   return {
     ...snapshot,
     run,
     today: localNow(now, snapshot.time_zone).day,
     replans_on: Boolean(settings?.replans_on),
-    messages: pending.slice(0, MAX_READ).map((m) => ({ id: m.id, at: m.at, text: m.text })),
+    messages,
+    messages_held: pending.length - messages.length,
   };
 }
 

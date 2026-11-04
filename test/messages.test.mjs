@@ -197,6 +197,18 @@ test("withMessages: read_planner gains the pending messages, oldest first and at
   assert.equal(out.plan_day, "2026-11-04");
 });
 
+test("withMessages: past 20,000 characters in all, the oldest messages wait for the next run, and messages_held says how many", () => {
+  const long = (n, at, len) => ({ ...row(n, at), text: "x".repeat(len) });
+  const rows = [long(1, ago(30), 8000), long(2, ago(20), 8000), long(3, ago(10), 8000), long(4, ago(5), 5000)];
+  const out = withMessages(snap(), rows, {}, NOW);
+  assert.deepEqual(out.messages.map((m) => m.id), [row(3).id, row(4).id]);
+  assert.equal(out.messages_held, 2);
+  // Under the budget nothing is held.
+  assert.equal(withMessages(snap(), [row(1, ago(5))], {}, NOW).messages_held, 0);
+  // One message is always read, however long.
+  assert.equal(withMessages(snap(), [long(1, ago(5), 8000)], {}, NOW).messages.length, 1);
+});
+
 test("withMessages: a message fired under 10 minutes ago and still pending makes the run a message run", () => {
   assert.equal(withMessages(snap(), [row(1, ago(4), ago(4))], {}, NOW).run.trigger, "message");
   assert.equal(withMessages(snap(), [row(1, ago(40), ago(40))], {}, NOW).run.trigger, "morning");
