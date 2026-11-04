@@ -260,3 +260,101 @@ export async function senderHash(address, salt) {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+// --- v5 M1: the mail sync's reads (supabase/functions/mail-sync) -----------------------------
+// Gmail's message formats (developers.google.com/workspace/gmail/api/reference/rest/v1/Format):
+// `metadata` "Returns only email message ID, labels, and email headers", while `full` and `raw`
+// return the body. Even metadata responses carry `snippet` ("A short part of the message text",
+// …/rest/v1/users.messages#Message), so every read also names its `fields` (a partial response,
+// developers.google.com/workspace/gmail/api/guides/performance#partial), which leaves the snippet,
+// the size and any body out of the reply altogether. metadataHeaders ("When given and format is
+// METADATA, only include headers specified", …/users.messages/get) keeps the headers to these.
+export const SYNC_HEADERS = ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"];
+const MESSAGE_FIELDS = "id,threadId,labelIds,internalDate,payload/headers";
+
+// The query for users.messages.get (`thread: false`) or users.threads.get (`thread: true`).
+export function metadataQuery(thread = false) {
+  const q = new URLSearchParams({ format: "metadata" });
+  for (const h of SYNC_HEADERS) q.append("metadataHeaders", h);
+  q.set("fields", thread ? `id,messages(${MESSAGE_FIELDS})` : MESSAGE_FIELDS);
+  return q.toString();
+}
+
+// A metadata message as replyState reads it, plus its thread and From address. Drafts aren't
+// mail anyone has seen, so syncThread leaves them out.
+export function syncMessage(message) {
+  const headers = message.payload?.headers ?? [];
+  const from = headerOf(headers, "From");
+  return {
+    id: message.id,
+    thread_id: message.threadId,
+    date: new Date(Number(message.internalDate)).toISOString(),
+    labels: message.labelIds ?? [],
+    from,
+    to: headerOf(headers, "To"),
+    from_address: parseAddresses(from)[0]?.address ?? null,
+    automated: automatedSender(headers),
+  };
+}
+
+// A users.threads.get reply (metadata) as replyState's thread.
+export function syncThread(thread, account) {
+  const messages = (thread.messages ?? []).map(syncMessage).filter((m) => !m.labels.includes("DRAFT"));
+  return { account, thread_id: thread.id, messages };
+}
+
+// What users.history.list pages say changed: the threads touched and the messages added, each
+// once and in order. A history record's messages carry only id and threadId
+// (developers.google.com/workspace/gmail/api/reference/rest/v1/users.history/list).
+export function historyChanges(pages) {
+  const threads = new Set();
+  const added = new Set();
+  for (const page of pages) {
+    for (const h of page.history ?? []) {
+      for (const m of h.messagesAdded ?? []) { added.add(m.message.id); threads.add(m.message.threadId); }
+      for (const key of ["messagesDeleted", "labelsAdded", "labelsRemoved"]) {
+        for (const m of h[key] ?? []) threads.add(m.message.threadId);
+      }
+    }
+  }
+  return { threads: [...threads], added: [...added] };
+}
+
+// The daily sweep's messages: users.messages.list gives ids and thread ids, newest first, so the
+// first message seen of each thread is its newest.
+export function newestPerThread(messages) {
+  const seen = new Set();
+  return messages.filter((m) => !seen.has(m.threadId) && seen.add(m.threadId));
+}
+
+// How one account's reply_state rows move. before: its rows now; after: [{ thread_id, state:
+// replyState(...) | null, from_address }] for the threads read this sync; known: the From
+// addresses (lowercased) he has written to. Gives the rows to upsert, the thread ids to delete,
+// and the threads that turned owed (not owed at that message before), for mailChanges.
+export function replyDiff(account, before, after, known) {
+  const old = new Map(before.map((r) => [r.thread_id, r]));
+  const upserts = [];
+  const deletes = [];
+  const owed = [];
+  for (const { thread_id, state, from_address } of after) {
+    const prev = old.get(thread_id);
+    if (!state) { if (prev) deletes.push(thread_id); continue; }
+    upserts.push({ account, thread_id, ...state });
+    if (state.state === "owed" && !(prev?.state === "owed" && prev.message_id === state.message_id)) {
+      owed.push({ message_id: state.message_id, known: Boolean(from_address && known.has(from_address)) });
+    }
+  }
+  return { upserts, deletes, owed };
+}
+
+// search_mail's summaries with `known` (he has sent mail to the From address) and the thread's
+// `reply_state` ('owed' | 'awaiting' | null). known: lowercased addresses; states: reply_state
+// rows, matched on account and thread.
+export function searchMarks(summaries, known, states) {
+  const state = new Map(states.map((r) => [`${r.account} ${r.thread_id}`, r.state]));
+  return summaries.map((s) => ({
+    ...s,
+    known: known.has(parseAddresses(s.from)[0]?.address ?? ""),
+    reply_state: state.get(`${s.account} ${s.thread_id}`) ?? null,
+  }));
+}

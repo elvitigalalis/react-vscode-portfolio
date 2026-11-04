@@ -41,3 +41,92 @@ test("brief: an address-like name is left out, the thread still counted", () => 
   const brief = whatToSend(snap, new Date("2026-11-04T13:00:00Z")).find((m) => m.kind === "brief");
   assert.equal(brief.text, "Nothing on today.\nAwaiting reply: 1.");
 });
+
+// --- The mail sync's reads ---------------------------------------------------------------------
+
+test("metadataQuery: metadata with the six headers and named fields, never a body or snippet", async () => {
+  const { metadataQuery } = await import("../src/sheet/mail.mjs");
+  for (const thread of [false, true]) {
+    const q = new URLSearchParams(metadataQuery(thread));
+    assert.equal(q.get("format"), "metadata");
+    assert.deepEqual(q.getAll("metadataHeaders"), ["From", "To", "List-Id", "List-Unsubscribe", "Auto-Submitted", "Precedence"]);
+    assert.doesNotMatch(q.get("fields"), /snippet|raw|body|parts|sizeEstimate/);
+  }
+  assert.equal(new URLSearchParams(metadataQuery()).get("fields"), "id,threadId,labelIds,internalDate,payload/headers");
+  assert.equal(new URLSearchParams(metadataQuery(true)).get("fields"), "id,messages(id,threadId,labelIds,internalDate,payload/headers)");
+});
+
+const gmailMessage = (id, ms, labels, from, extra = []) => ({
+  id, threadId: "18f3a1c2d4e5f000", labelIds: labels, internalDate: String(ms),
+  payload: { headers: [{ name: "From", value: from }, { name: "To", value: "Sample Owner <owner@example.com>" }, ...extra] },
+});
+
+test("syncThread: messages as replyState reads them, drafts left out", async () => {
+  const { syncThread } = await import("../src/sheet/mail.mjs");
+  const t = syncThread({ id: "18f3a1c2d4e5f000", messages: [
+    gmailMessage("18f3a1c2d4e5f001", Date.parse("2026-11-06T20:00:00Z"), ["INBOX"], "Ana Ruiz <Ana.Ruiz@example.edu>"),
+    gmailMessage("18f3a1c2d4e5f002", Date.parse("2026-11-06T21:00:00Z"), ["INBOX"], "News <news@example.com>", [{ name: "List-Id", value: "<news.example.com>" }]),
+    gmailMessage("18f3a1c2d4e5f003", Date.parse("2026-11-07T21:00:00Z"), ["DRAFT"], "Sample Owner <owner@example.com>"),
+  ] }, "owner@example.com");
+  assert.deepEqual(t, { account: "owner@example.com", thread_id: "18f3a1c2d4e5f000", messages: [
+    { id: "18f3a1c2d4e5f001", thread_id: "18f3a1c2d4e5f000", date: "2026-11-06T20:00:00.000Z", labels: ["INBOX"],
+      from: "Ana Ruiz <Ana.Ruiz@example.edu>", to: "Sample Owner <owner@example.com>", from_address: "ana.ruiz@example.edu", automated: false },
+    { id: "18f3a1c2d4e5f002", thread_id: "18f3a1c2d4e5f000", date: "2026-11-06T21:00:00.000Z", labels: ["INBOX"],
+      from: "News <news@example.com>", to: "Sample Owner <owner@example.com>", from_address: "news@example.com", automated: true },
+  ] });
+});
+
+test("historyChanges: the threads touched and messages added, each once", async () => {
+  const { historyChanges } = await import("../src/sheet/mail.mjs");
+  const m = (id, threadId) => ({ message: { id, threadId } });
+  const pages = [
+    { history: [{ id: "1", messagesAdded: [m("a1", "t1"), m("a2", "t2")] }, { id: "2", labelsAdded: [{ ...m("a0", "t3"), labelIds: ["TRASH"] }] }] },
+    { history: [{ id: "3", messagesAdded: [m("a1", "t1")], labelsRemoved: [m("a2", "t2")], messagesDeleted: [m("a9", "t4")] }] },
+    {},
+  ];
+  assert.deepEqual(historyChanges(pages), { threads: ["t1", "t2", "t3", "t4"], added: ["a1", "a2"] });
+});
+
+test("newestPerThread: the first message listed of each thread", async () => {
+  const { newestPerThread } = await import("../src/sheet/mail.mjs");
+  assert.deepEqual(newestPerThread([{ id: "m3", threadId: "t1" }, { id: "m2", threadId: "t2" }, { id: "m1", threadId: "t1" }]),
+    [{ id: "m3", threadId: "t1" }, { id: "m2", threadId: "t2" }]);
+});
+
+test("replyDiff: upserts, deletes, and owed only when it turns owed at a new message", async () => {
+  const { replyDiff } = await import("../src/sheet/mail.mjs");
+  const owed = (message_id, who) => ({ state: "owed", since: "2026-11-06T20:00:00.000Z", message_id, who });
+  const before = [
+    { thread_id: "t1", state: "owed", message_id: "m1" },
+    { thread_id: "t2", state: "awaiting", message_id: "m2" },
+    { thread_id: "t3", state: "owed", message_id: "m3" },
+  ];
+  const after = [
+    { thread_id: "t1", state: owed("m1", "Ana Ruiz"), from_address: "ana.ruiz@example.edu" },   // still owed
+    { thread_id: "t2", state: owed("m2b", "Prof. Kim"), from_address: "kim@cs.example.edu" },  // Kim answered
+    { thread_id: "t3", state: null, from_address: null },                                       // he replied
+    { thread_id: "t4", state: owed("m4", "Dana Lee"), from_address: "dana.lee@example.com" },  // new, unknown
+    { thread_id: "t5", state: null, from_address: null },                                       // nothing before or now
+  ];
+  const known = new Set(["kim@cs.example.edu", "ana.ruiz@example.edu"]);
+  assert.deepEqual(replyDiff("owner@example.com", before, after, known), {
+    upserts: [
+      { account: "owner@example.com", thread_id: "t1", ...owed("m1", "Ana Ruiz") },
+      { account: "owner@example.com", thread_id: "t2", ...owed("m2b", "Prof. Kim") },
+      { account: "owner@example.com", thread_id: "t4", ...owed("m4", "Dana Lee") },
+    ],
+    deletes: ["t3"],
+    owed: [{ message_id: "m2b", known: true }, { message_id: "m4", known: false }],
+  });
+});
+
+test("searchMarks: known by From address, reply_state by account and thread", async () => {
+  const { searchMarks } = await import("../src/sheet/mail.mjs");
+  const s = (account, thread_id, from) => ({ account, id: `${thread_id}-m`, thread_id, from });
+  const out = searchMarks(
+    [s("owner@example.com", "t1", "Ana Ruiz <Ana.Ruiz@example.edu>"), s("other@example.com", "t1", "x@example.com"), s("owner@example.com", "t2", "")],
+    new Set(["ana.ruiz@example.edu"]),
+    [{ account: "owner@example.com", thread_id: "t1", state: "owed" }],
+  );
+  assert.deepEqual(out.map((r) => [r.known, r.reply_state]), [[true, "owed"], [false, null], [false, null]]);
+});
