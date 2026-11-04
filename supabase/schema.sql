@@ -845,3 +845,63 @@ revoke insert, update, delete on actuals from authenticated;
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
   check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
+
+-- --- v5 SRC3, Handshake, the academic calendar and enrollment (docs/sheet-v5.md) ---------------
+-- When spring enrollment opens, entered once in /plan Settings; ical-sync turns it into one task
+-- (enrollmentTask in src/sheet/sources.mjs). The feed links are function secrets
+-- (SHEET_HANDSHAKE_ICS, SHEET_ACADEMIC_ICS), never columns here.
+alter table settings add column if not exists enrollment_at timestamptz;
+
+-- The academic calendar's entries per day ([{ title, all_day }], academicEntries), written by
+-- ical-sync for today and the days ahead, for the brief and read_planner. Owner-only; only the
+-- server writes it.
+create table if not exists academic_days (
+  day date primary key,
+  entries jsonb not null default '[]',
+  fetched_at timestamptz not null default now()
+);
+alter table academic_days enable row level security;
+drop policy if exists owner_all on academic_days;
+create policy owner_all on academic_days for all using (is_owner()) with check (is_owner());
+revoke all on academic_days from anon;
+revoke insert, update, delete on academic_days from authenticated;
+
+-- ical-sync's Handshake write, in one transaction: the handshake busy rows overlapping from_at to
+-- to_at replaced by `rows` ([{ starts_at, ends_at }]), leaving the calendar's alone, and a
+-- handshake_change (weight 3) inserted when the set changed and the changes table (R1) exists.
+-- Service key only.
+create or replace function handshake_sync_save(from_at timestamptz, to_at timestamptz, rows jsonb)
+returns void language plpgsql security invoker set search_path = public as $$
+declare
+  before jsonb;
+  after jsonb;
+begin
+  select coalesce(jsonb_agg(jsonb_build_array(b.starts_at, b.ends_at) order by b.starts_at, b.ends_at), '[]') into before
+  from busy b where b.source = 'handshake' and b.starts_at < to_at and b.ends_at > from_at;
+  delete from busy b where b.source = 'handshake' and b.starts_at < to_at and b.ends_at > from_at;
+  insert into busy (source, starts_at, ends_at)
+  select 'handshake', x.starts_at, x.ends_at
+  from jsonb_to_recordset(coalesce(handshake_sync_save.rows, '[]')) as x(starts_at timestamptz, ends_at timestamptz)
+  where x.starts_at < to_at and x.ends_at > from_at
+  on conflict do nothing;
+  select coalesce(jsonb_agg(jsonb_build_array(b.starts_at, b.ends_at) order by b.starts_at, b.ends_at), '[]') into after
+  from busy b where b.source = 'handshake' and b.starts_at < to_at and b.ends_at > from_at;
+  if before <> after and to_regclass('public.changes') is not null then
+    execute 'insert into changes (kind, reason, weight, ref) values ($1, $2, $3, $4)'
+      using 'handshake', 'handshake_change', 3, null::text;
+  end if;
+end $$;
+revoke execute on function handshake_sync_save(timestamptz, timestamptz, jsonb) from public, anon, authenticated;
+
+-- At :25 every hour, call ical-sync (Handshake and the academic calendar). Like
+-- sheet-brightspace, it does nothing until its URL and the shared secret are in Vault.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-ical';
+select cron.schedule('sheet-ical', '25 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_ical_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "ical"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_ical_url')
+$job$);

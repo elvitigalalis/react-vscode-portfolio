@@ -7,7 +7,7 @@ import { plural } from "./logic.mjs";
 import { el, icon, settingsHooks } from "./planner.mjs";
 import { feedAlert } from "./glance.mjs";
 
-const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar" };
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // "Brightspace: ok, 12 items, Nov 3, 2:20 PM", or the error. A row with no fetch yet says so.

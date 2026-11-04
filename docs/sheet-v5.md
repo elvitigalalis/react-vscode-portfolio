@@ -110,6 +110,8 @@ reply_state account text, thread_id text, primary key (account, thread_id),
            message_id text not null,                     -- the newest message
            who text not null check (char_length(who) <= 80),   -- display name only, never an address
            updated_at timestamptz not null default now()
+academic_days day date pk, entries jsonb not null default '[]',   -- academicEntries for the day (SRC3)
+           fetched_at timestamptz not null default now()
 weather_cache id boolean pk default true check (id), point text not null,
            forecast_url text,                            -- the point's forecastHourly, cached
            periods jsonb not null default '[]',          -- weatherPeriods output
@@ -120,7 +122,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **Feedback `ref`s:** proposal `{ day, rev }`; block `{ day, task_id }`; needs_you
   `{ account, message_id, from_address }`; finished `{ block_id, task_id }`.
 - **Writers.** Server functions (service key) write `calendar_account`, `changes`, `replans`,
-  `known_senders`, `message_senders`, `reply_state` and `weather_cache`; the browser may read
+  `known_senders`, `message_senders`, `reply_state`, `weather_cache` and `academic_days`; the browser may read
   them, and delete `calendar_account`. `apply_proposal` runs as the owner (`security invoker`),
   so `changes` keeps `grant update (consumed_day, consumed_rev) … to authenticated` for it to
   mark the changes a revision read. /plan writes `habits` and `triage_rules`. Telegram and
@@ -136,6 +138,10 @@ weather_cache id boolean pk default true check (id), point text not null,
     returns void` (S1, service key only) is busy-sync's one call: it replaces the `calendar` busy
     rows overlapping `from_at` to `to_at`, sets `busy_as_of = from_at`, and inserts `change` into
     `changes` when given and the table exists.
+  - `handshake_sync_save(from_at timestamptz, to_at timestamptz, rows jsonb) returns void`
+    (SRC3, service key only) is ical-sync's Handshake write: it replaces the `handshake` busy rows
+    overlapping `from_at` to `to_at`, and when that set changed inserts `{ kind: 'handshake',
+    reason: 'handshake_change', weight: 3, ref: null }` into `changes` when the table exists.
 - **Revisions.** Each function is `security invoker`, takes a row lock on `d`'s proposals
   rows, and raises with the exact text shown:
   - `apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
@@ -546,7 +552,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 | `mail-sync` | `sheet-mail` | `x-sheet-cron` | history → `reply_state`, `message_senders`, `known_senders`, mail changes |
 | `work-sync` | `sheet-work` | `x-sheet-cron` | GitHub and Jira → tasks, changes |
 | `slack-sync` | `sheet-slack` | `x-sheet-cron` | Slack → `needs_you` rows, changes |
-| `ical-sync` | `sheet-ical` | `x-sheet-cron` | Handshake → `busy` (source handshake); academic → `feed_state` items |
+| `ical-sync` | `sheet-ical` | `x-sheet-cron` | Handshake → `busy` (source handshake, `handshake_sync_save`); academic → `academic_days`; `enrollment_at` → its task |
 | `weather` | `sheet-weather` | `x-sheet-cron` | NWS → `weather_cache` |
 | `telegram` | as before | as before | plus the replan decision and fire, Finished?, replan messages, rpc changes |
 | `planner-mcp` | as before | as before | read_planner and submit_proposal with the v5 fields |
