@@ -233,7 +233,7 @@ const lineTasks = [{ id: T1, title: "OS homework" }, { id: T5, title: "Lab 4" }]
 const pendingRow = (extra = {}) => ({ day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], ...extra });
 const oneBlock = [{ id: "p1", task_id: T1, starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true }];
 
-test("proposalLines: one \"Task to add\" line per suggestion, after \"Couldn't fit\"", todo, async () => {
+test("proposalLines: one \"Task to add\" line per suggestion, after \"Couldn't fit\"", async () => {
   const { proposalLines } = await proposal();
   const p = pendingRow({
     note: "Gym got squeezed.",
@@ -255,7 +255,7 @@ test("proposalLines: one \"Task to add\" line per suggestion, after \"Couldn't f
   ]);
 });
 
-test("proposalLines: no suggestions, no \"Task to add\" line", todo, async () => {
+test("proposalLines: no suggestions, no \"Task to add\" line", async () => {
   const { proposalLines } = await proposal();
   assert.deepEqual(proposalLines(pendingRow(), oneBlock, lineTasks, [], [], [], TZ), [
     "Morning plan: 1 block, 9:30–10:15 am.",
