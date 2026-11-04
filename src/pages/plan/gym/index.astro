@@ -1,0 +1,54 @@
+---
+// The Sheet's lift tracker (docs/sheet-gym.md): today's session from his program, behind the
+// same Google sign-in as /plan. Its own page, so /plan's first load stays small. The script is
+// src/sheet/gym-ui.mjs; the styles src/styles/gym.css on top of sheet.css.
+import Base from "../../../layouts/Base.astro";
+import { siteConfig } from "../../../config";
+import { SHEET } from "../../../site.mjs";
+import "../../../styles/sheet.css";
+import "../../../styles/gym.css";
+---
+
+<Base title={`Gym · ${siteConfig.title}`} description="Lisul Elvitigala's lift tracker. Only he can sign in." path="/plan/gym/" noindex>
+  {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
+  <!-- Add to Home Screen: a standalone app over /plan/ (it signs in once on its own). -->
+  <link slot="head" rel="manifest" href="/plan/gym/manifest.webmanifest" />
+  <link slot="head" rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta slot="head" name="apple-mobile-web-app-title" content="Gym" />
+  <section class="sheet-page gym">
+    <div class="sheet-bar-top">
+      <h1>Gym</h1>
+      <nav class="gym-tools" data-gym-tools aria-label="Gym" hidden>
+        <a class="sheet-btn" href="/plan/">‹ Plan</a>
+        <button type="button" class="sheet-btn" data-view="today" aria-pressed="true">Today</button>
+        <button type="button" class="sheet-btn" data-view="records" aria-pressed="false">Records</button>
+        <button type="button" class="sheet-btn" data-view="edit" aria-pressed="false">Edit</button>
+      </nav>
+    </div>
+    <p class="sheet-status" data-status>Loading…</p>
+    <p class="sheet-notice" role="status" data-gym-offline hidden>Saved on phone, syncing</p>
+    <div class="gym-main" data-gym-main></div>
+
+    <!-- Read out: rest started and over, and PRs. The timer itself is role="timer", which is quiet. -->
+    <p class="visually-hidden" aria-live="polite" data-gym-live></p>
+    <p class="gym-pr" aria-hidden="true" data-gym-pr hidden></p>
+    <div class="sheet-toast gym-toast" role="status" data-gym-toast hidden>
+      <span data-gym-toast-text></span> <button type="button" class="sheet-link">Undo</button>
+    </div>
+    <div class="gym-rest" data-gym-rest hidden>
+      <span class="gym-rest-label">Rest</span>
+      <span class="gym-rest-time" role="timer" data-gym-rest-time>0:00</span>
+      <button type="button" class="gym-step" data-act="rest-minus" aria-label="15 seconds less">−15</button>
+      <button type="button" class="gym-step" data-act="rest-plus" aria-label="15 seconds more">+15</button>
+      <button type="button" class="gym-step" data-act="rest-skip">Skip</button>
+    </div>
+
+    <dialog class="sheet-dialog" data-gym-swap aria-labelledby="gym-swap-title"></dialog>
+    <dialog class="sheet-dialog" data-gym-summary aria-labelledby="gym-summary-title"></dialog>
+  </section>
+</Base>
+
+<script>
+  import { start } from "../../../sheet/gym-ui.mjs";
+  start(document.querySelector(".gym"));
+</script>

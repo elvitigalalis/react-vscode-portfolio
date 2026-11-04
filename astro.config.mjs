@@ -8,5 +8,5 @@ export default defineConfig({
   build: { inlineStylesheets: "always" },
   // Every page, write-ups included, lands in sitemap-index.xml without a list to maintain.
   // The Sheet's pages (/plan, /now, /oauth/consent) are noindex, so they stay out of it.
-  integrations: [sitemap({ filter: (page) => !/\/(plan|now|oauth\/consent)\/$/.test(page) })],
+  integrations: [sitemap({ filter: (page) => !/\/(plan(\/gym)?|now|oauth\/consent)\/$/.test(page) })],
 });
