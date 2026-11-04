@@ -51,30 +51,37 @@ export function scoreTriage(items, labels) {
   };
 }
 
-// Whether a triage rule ({ match, pattern }) covers a From address. Both are lowercase already
-// (the table's check and the server's lowercasing). A domain rule matches the address's domain
-// and its parents: mail.acme.com matches acme.com, never me.com or x.mail.acme.com.
-export function ruleMatches(rule, address) {
-  if (typeof address !== "string" || !rule) return false;
-  if (rule.match === "address") return address === rule.pattern;
-  if (rule.match !== "domain") return false;
-  const domain = address.slice(address.lastIndexOf("@") + 1);
-  return domain === rule.pattern || domain.endsWith(`.${rule.pattern}`);
+// Whether a triage rule ({ match, pattern }) covers a sender, by hashes only (fix: no From
+// address is kept in plain text). `sender` is what message_senders keeps, { address, domains }:
+// the salted hash of the address and of its domain and each parent. `hashOf(pattern)` hashes a
+// rule's pattern with the same salt (null without one). An address rule matches the address's
+// hash; a domain rule its domain's or a parent's, so acme.com matches mail.acme.com, never me.com
+// or x.mail.acme.com; a sender rule (made from a /plan offer) holds the address hash itself.
+export function ruleCovers(rule, sender, hashOf) {
+  if (!rule || !sender?.address) return false;
+  if (rule.match === "sender") return rule.pattern === sender.address;
+  const h = hashOf?.(rule.pattern);
+  if (!h) return false;
+  if (rule.match === "address") return h === sender.address;
+  return rule.match === "domain" && (sender.domains ?? []).includes(h);
 }
 
-// The never-show rule that drops mail from `address`, or null. An always rule never drops.
-export const neverRule = (rules, address) => (rules ?? []).find((r) => r.action === "never" && ruleMatches(r, address)) ?? null;
+// The never-show rule that drops mail from `sender`, or null. An always rule never drops.
+export const neverRule = (rules, sender, hashOf) => (rules ?? []).find((r) => r.action === "never" && ruleCovers(r, sender, hashOf)) ?? null;
 
-// The From addresses /plan offers "Never show mail from <address>" for, sorted: those with at
-// least two messages now labelled not needed, unless a rule of either action already covers it.
-// Rows without a from_address count for nothing.
+// The senders /plan offers "Never show mail from <name>" for, as their sender hashes, sorted:
+// those with at least two messages now labelled not needed, unless a sender rule of either
+// action already holds the hash. (Address and domain rules are plain text the browser can't
+// hash without the server's salt; a never one drops the mail at submit anyway.) Rows without a
+// sender_hash count for nothing.
 export function neverOffers(feedback, rules) {
   const count = new Map();
   for (const rows of byMessage(feedback).values()) {
-    const from = rows.findLast((f) => f.ref.from_address)?.ref.from_address;
+    const from = rows.findLast((f) => f.ref.sender_hash)?.ref.sender_hash;
     if (from && labelOf(rows) === false) count.set(from, (count.get(from) ?? 0) + 1);
   }
-  return [...count].filter(([a, n]) => n >= 2 && !(rules ?? []).some((r) => ruleMatches(r, a))).map(([a]) => a).sort();
+  const held = new Set((rules ?? []).filter((r) => r.match === "sender").map((r) => r.pattern));
+  return [...count].filter(([h, n]) => n >= 2 && !held.has(h)).map(([h]) => h).sort();
 }
 
 // --- The feedback log -------------------------------------------------------------------------
@@ -101,5 +108,5 @@ export function tapFeedback(tap, { proposal, blocks, tasks }) {
 
 // The row a Needs you tap in /plan logs: done, not_needed or undo.
 export const needsFeedback = (row, action) => ({
-  item: "needs_you", action, ref: { account: row.account, message_id: row.message_id, from_address: row.from_address ?? null },
+  item: "needs_you", action, ref: { account: row.account, message_id: row.message_id, sender_hash: row.sender_hash ?? null },
 });

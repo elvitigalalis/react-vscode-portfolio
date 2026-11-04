@@ -41,10 +41,24 @@ test("tapFeedback: no row for a nudge's Done or Snooze, a gone block or a task a
   assert.equal(tapFeedback({ action: "finished", block_id: B1 }, snap({ tasks: [{ id: T1, done: true }] })), null);
 });
 
-test("needsFeedback: a needs_you row's ids, with its From address", () => {
-  const row = { id: "x", account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", from_address: "jobs@acme.com", subject: "Hi" };
-  assert.deepEqual(needsFeedback(row, "not_needed"), { item: "needs_you", action: "not_needed", ref: { account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", from_address: "jobs@acme.com" } });
-  assert.deepEqual(needsFeedback({ ...row, from_address: undefined }, "done").ref.from_address, null);
+test("needsFeedback: a needs_you row's ids, with its sender hash, never an address", () => {
+  const row = { id: "x", account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", sender_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", subject: "Hi" };
+  assert.deepEqual(needsFeedback(row, "not_needed"), { item: "needs_you", action: "not_needed", ref: { account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", sender_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } });
+  assert.deepEqual(needsFeedback({ ...row, sender_hash: undefined }, "done").ref.sender_hash, null);
+});
+
+test("ruleCovers: address and domain rules by their patterns' hashes, sender rules by their own", async () => {
+  const { ruleCovers } = await import("../src/sheet/triage.mjs");
+  const h = (x) => `h(${x})`;
+  const sender = { address: h("jobs@mail.acme.com"), domains: [h("mail.acme.com"), h("acme.com"), h("com")] };
+  assert.equal(ruleCovers({ match: "address", pattern: "jobs@mail.acme.com" }, sender, h), true);
+  assert.equal(ruleCovers({ match: "domain", pattern: "acme.com" }, sender, h), true);
+  assert.equal(ruleCovers({ match: "domain", pattern: "x.mail.acme.com" }, sender, h), false);
+  assert.equal(ruleCovers({ match: "sender", pattern: h("jobs@mail.acme.com") }, sender, h), true);
+  assert.equal(ruleCovers({ match: "sender", pattern: h("hr@mail.acme.com") }, sender, h), false);
+  // Without the salt nothing hashes, so only sender rules can match.
+  assert.equal(ruleCovers({ match: "domain", pattern: "acme.com" }, sender, () => null), false);
+  assert.equal(ruleCovers({ match: "domain", pattern: "acme.com" }, null, h), false);
 });
 
 // --- tools/triage-score.mjs ---------------------------------------------------------------------

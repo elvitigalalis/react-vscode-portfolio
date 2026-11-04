@@ -159,3 +159,14 @@ test("threadsToRead: at most 50 threads a run; cutting any off makes the next ru
   // More history pages than a run reads is a full sync already.
   assert.equal(threadsToRead(ids(2), true).full, true);
 });
+
+test("senderHashes: the salted hash of the address, and of its domain and every parent", async () => {
+  const { senderHashes } = await import("../src/sheet/mail.mjs");
+  const { createHash } = await import("node:crypto");
+  const sha = (x) => createHash("sha256").update(`pepper${x}`).digest("hex");
+  assert.deepEqual(await senderHashes("  Jobs@Mail.Acme.com ", "pepper"), {
+    address_hash: sha("jobs@mail.acme.com"),
+    domain_hashes: [sha("mail.acme.com"), sha("acme.com"), sha("com")],
+  });
+  assert.equal(await senderHashes("not an address", "pepper"), null);
+});

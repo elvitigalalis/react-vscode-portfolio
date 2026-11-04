@@ -55,7 +55,8 @@ busy       + source text not null default 'calendar' check (source in ('calendar
 tasks      + link text check (link is null or link ~ '^https://')   -- GitHub/Jira page; never public
 needs_you  + source text not null default 'mail' check (source in ('mail','slack'))
            + not_needed boolean not null default false   -- done = true as well
-           + from_address text                           -- lowercased From address, set by the server
+           + sender_hash text                            -- the From address's salted hash, set by
+                                                         --   the server (fix: was from_address)
 nudges     kind adds 'finished', 'replan'
 mail_accounts + history_id text                          -- the mail sync's Gmail history position
 settings   + replans_on boolean not null default false
@@ -97,13 +98,16 @@ feedback   id uuid pk default gen_random_uuid(), at timestamptz not null default
            ref jsonb not null                            -- ids only (below); append-only:
                                                          -- revoke update, delete from authenticated
 triage_rules id uuid pk default gen_random_uuid(),
-           match text not null check (match in ('address','domain')),
+           match text not null check (match in ('address','domain','sender')),   -- fix: sender
            pattern text not null check (pattern = lower(pattern) and char_length(pattern) between 3 and 254),
            action text not null check (action in ('always','never')),
-           created_at timestamptz not null default now(), unique (match, pattern)
+           created_at timestamptz not null default now(), unique (match, pattern),
+           label text check (char_length(label) <= 80)  -- fix: a sender rule's display name;
+                                                         --   its pattern is a sender hash
 known_senders hash text pk check (hash ~ '^[0-9a-f]{64}$'), last_sent_at timestamptz not null
 message_senders account text, message_id text, thread_id text not null,
-           from_address text not null, at timestamptz not null, primary key (account, message_id)
+           address_hash text not null, domain_hashes text[] not null default '{}',   -- fix: hashes
+           at timestamptz not null, primary key (account, message_id)                --   only
 reply_state account text, thread_id text, primary key (account, thread_id),
            state text not null check (state in ('owed','awaiting')),
            since timestamptz not null,                   -- the newest message's date
@@ -120,7 +124,15 @@ weather_cache id boolean pk default true check (id), point text not null,
 ```
 
 - **Feedback `ref`s:** proposal `{ day, rev }`; block `{ day, task_id }`; needs_you
-  `{ account, message_id, from_address }`; finished `{ block_id, task_id }`.
+  `{ account, message_id, sender_hash }`; finished `{ block_id, task_id }`.
+- **Sender hashes (fix).** No From address is kept in plain text, as spec 47 says of
+  known_senders. mail.mjs's `senderHashes(address, salt)` gives `{ address_hash, domain_hashes }`:
+  `senderHash` (below) of the address, and of its domain and each parent, longest first
+  (`mail.acme.com`, `acme.com`, `com`). mail-sync writes them to `message_senders`; Needs you rows
+  and their feedback carry `sender_hash` (the address hash). The schema deletes `message_senders`
+  rows without hashes, drops `message_senders.from_address` and `needs_you.from_address`, and
+  strips `from_address` from feedback refs; every check is safe to re-run. `reply_state.who`
+  stays a display name, which spec 47 allows ("sender names only").
 - **Writers.** Server functions (service key) write `calendar_account`, `changes`, `replans`,
   `known_senders`, `message_senders`, `reply_state`, `weather_cache` and `academic_days`; the browser may read
   them, and delete `calendar_account`. `apply_proposal` runs as the owner (`security invoker`),
@@ -349,8 +361,10 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **`checkProposal(input, snapshot, senders = {})`**. With `version: 5`, `input` also takes
   `replaces` (int or null), `couldnt_fit` ([task_id]), `suggested` ([{ account, message_id,
   title, due, kind }]) and `habits` ([{ habit_id, start: "HH:MM" }]); absent lists are `[]`.
-  `senders` maps `"<account> <message_id>"` to the message's From address (planner-mcp reads it
-  from `message_senders`). With `version: 5` it returns `{ ok, errors, rows, dropped }`
+  `senders` maps `"<account> <message_id>"` to the message's sender hashes, `{ address,
+  domains }` (planner-mcp reads them from `message_senders`), and a fourth argument
+  `hashOf(pattern)` hashes a rule's pattern the same way (planner-mcp, with `SHEET_SENDER_SALT`;
+  null without it). With `version: 5` it returns `{ ok, errors, rows, dropped }`
   (`rows` null and `dropped` `[]` when it fails), and v4's rules hold, plus:
   - **day and revision:** the proposal may be absent, `pending` or `approved` (a replan after
     approval). `skipped` and `lapsed` are refused as in v4 (field `day`). `replaces` must equal
@@ -385,9 +399,10 @@ weather_cache id boolean pk default true check (id), point text not null,
     `needs_you`, at most one suggestion each; `title` is free text (v4's `text` rule) of at most 80
     characters; `due` is a date and required; `kind` is `assessment` or `interview`. Errors name
     `suggested[i]`.
-  - **never-show rules:** a `needs_you` item whose From address (`senders`) matches a `never`
-    rule in `snapshot.triage_rules` (address: equal; domain: equal to the address's domain or a
-    parent of it, so `mail.example.com` matches `example.com`) is dropped, not an error.
+  - **never-show rules:** a `needs_you` item whose sender (`senders`) a `never` rule in
+    `snapshot.triage_rules` covers (`ruleCovers`: address, the pattern's hash equals the address
+    hash; domain, it is one of the domain hashes, so `example.com` covers `mail.example.com`;
+    sender, the pattern is the address hash) is dropped, not an error.
     `dropped` lists `[{ index, message_id, pattern }]`, and a suggestion for a dropped item is
     dropped with it. An `always` rule never drops anything.
   - **read_at** (fix): optional; `planSnapshot` returns `read_at` (its `now`), and a submitted
@@ -395,7 +410,7 @@ weather_cache id boolean pk default true check (id), point text not null,
     When given, `rows.read_at` carries it (ISO, UTC); without it `rows` has no `read_at`.
   - **rows**, when ok, are `apply_proposal`'s named arguments: `{ d, replaces, blocks,
     habit_blocks, needs, picks, note, couldnt_fit, suggested, run_trigger, reasons }`, where
-    `run_trigger` and `reasons` are `snapshot.run`'s, `needs` carries `from_address` from
+    `run_trigger` and `reasons` are `snapshot.run`'s, `needs` carries `sender_hash` from
     `senders` (null when unknown), and `habit_blocks` are `[{ habit_id, starts_at, ends_at }]`.
 - **`proposalLines`** adds, after "Didn't fit": `"Couldn't fit: HW3, Lab 4."` (titles from
   `tasks`, cut to 30 characters, at most 3, then `" +2 more"` before the period), and one line
@@ -603,15 +618,17 @@ weather_cache id boolean pk default true check (id), point text not null,
   keys, once each: `caught` the items labelled needed, `missed` the labels needed that no item
   matches (label order), `wrongly_shown` the items labelled not needed (item order). Unlabelled
   items are in none. A small CLI (`tools/triage-score.mjs`) runs it on the live tables read-only.
-- `neverOffers(feedback, rules)` returns the From addresses /plan offers "Never show mail from
-  <address>" for, sorted: those with at least two different messages whose label (as
-  `triageLabels`) is not needed, unless a rule already covers the address (an `address` rule
-  equal to it, or a `domain` rule matching it as the never-show rules do, either action). Rows
-  with no `from_address` count for nothing.
+- `neverOffers(feedback, rules)` returns the sender hashes /plan offers "Never show mail from
+  <name>" for, sorted: those with at least two different messages whose label (as
+  `triageLabels`) is not needed, unless a `sender` rule (either action) holds the hash. Address
+  and domain rules are plain text the browser can't hash without the server's salt, so they
+  don't count here (a never one drops the mail at submit anyway). Rows with no `sender_hash`
+  count for nothing.
 - **Decided (L1):** `tapFeedback(tap, snapshot)` gives the row a Telegram tap logs (Approve all or
   Skip on the pending revision, each Finished? answer), or null; telegram inserts it after the
   tap's changes, and not when a newer plan refused it. `needsFeedback(row, action)` gives /plan's
-  Needs you row. `ruleMatches` and `neverRule` are the match checkProposal drops by.
+  Needs you row. `ruleCovers(rule, sender, hashOf)` and `neverRule(rules, sender, hashOf)` are
+  the match checkProposal drops by.
   `tools/triage-score.mjs <run.json> [days]` scores a run file (a list of `{ account, message_id
   }`, or a submit_proposal input) against the labels of the last 14 days' feedback; done
   `needs_you` rows go hourly, so the live table can't give a past run's items.
@@ -689,8 +706,9 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **Needs you** gains Not needed (with undo) beside Done, Slack rows with their icon, a link
   only when it starts with `https://` and holds `.slack.com/` for Slack rows, an "Awaiting reply"
   group, and on a row with a suggestion, "Add task". After two `not_needed` feedback rows with the
-  same `from_address`, it offers "Never show mail from <address>", which adds a `never` rule on
-  confirm.
+  same `sender_hash`, it offers "Never show mail from <name>" (the name its Needs you rows carry),
+  which adds a `never` rule `{ match: "sender", pattern: <hash>, label: <name> }` on confirm.
+  Settings lists a sender rule by its label.
 - **The proposal banner** shows "Revision 2" beside "Claude proposed 3 blocks", and the couldn't
   fit titles. **Fix:** while the revision is pending, its notes also list each suggested task,
   `"Task to add: HackerRank assessment (due Nov 7)"` (`suggestedLine`, as the brief's).
@@ -803,7 +821,7 @@ SB="npx -y supabase@latest"
 
    | Function | Function secrets it reads | Vault URL (job) |
    |---|---|---|
-   | `planner-mcp` | none of its own | — |
+   | `planner-mcp` | `SHEET_SENDER_SALT` (fix: hashes triage rule patterns at submit) | — |
    | `telegram` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHEET_CRON_SECRET`, `SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN` | `sheet_telegram_url` (`sheet-telegram`) |
    | `mail-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SHEET_SENDER_SALT` | — |
    | `mail-connect` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAIL_STATE_SECRET` | — |

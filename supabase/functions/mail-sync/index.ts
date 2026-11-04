@@ -1,6 +1,6 @@
 // The mail-sync Edge Function (docs/sheet-v5.md, "Edge Functions"; ADR 0004): every 5 minutes
 // (supabase/schema.sql, "sheet-mail") it reads each connected mail account's Gmail history and
-// keeps reply_state (Reply owed, Awaiting reply), message_senders and known_senders, and logs mail
+// keeps reply_state (Reply owed, Awaiting reply), message_senders and known_senders (hashes only), and logs mail
 // changes for replans. It never fetches mail text: only labels, dates and the headers in
 // SYNC_HEADERS, with `fields` naming the reply's fields so not even the snippet comes back
 // (metadataQuery, src/sheet/mail.mjs, which the tests cover with the rest of the rules).
@@ -33,7 +33,7 @@
 // (mail_refresh_token) and are never logged or written anywhere.
 import {
   accountPatch, gmailError, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
-  replyDiff, replyState, senderHash, syncMessage, syncThread, threadsToRead,
+  replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead,
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
@@ -208,12 +208,18 @@ async function accessToken(email: string) {
 
 // --- Senders --------------------------------------------------------------------------------------
 
-// message_senders gets each received message's From address (14 days, for never-show rules), and
-// known_senders the salted hash of every To address of his sent mail.
+// message_senders gets each received message's sender hashes (14 days, for never-show rules):
+// the salted hash of its From address and of the address's domain and parents (senderHashes),
+// never the address. known_senders gets the salted hash of every To address of his sent mail.
+// Without the salt neither is written.
 async function saveSenders(account: string, messages: Msg[], now: Date) {
+  if (!SALT) return;
   const cutoff = +now - 14 * 86_400_000;
-  const received = messages.filter((m) => !m.labels.includes("SENT") && m.from_address && Date.parse(m.date) > cutoff)
-    .map((m) => ({ account, message_id: m.id, thread_id: m.thread_id, from_address: m.from_address, at: m.date }));
+  const received = [];
+  for (const m of messages.filter((m) => !m.labels.includes("SENT") && m.from_address && Date.parse(m.date) > cutoff)) {
+    const hashes = await senderHashes(m.from_address, SALT);
+    if (hashes) received.push({ account, message_id: m.id, thread_id: m.thread_id, ...hashes, at: m.date });
+  }
   if (received.length) {
     await db("message_senders?on_conflict=account,message_id", {
       method: "POST",
@@ -221,7 +227,6 @@ async function saveSenders(account: string, messages: Msg[], now: Date) {
       body: JSON.stringify(received),
     });
   }
-  if (!SALT) return;
   const latest = new Map<string, string>();
   for (const m of messages.filter((m) => m.labels.includes("SENT"))) {
     for (const { address } of parseAddresses(m.to)) {
