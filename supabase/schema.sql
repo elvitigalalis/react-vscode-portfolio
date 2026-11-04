@@ -531,3 +531,40 @@ alter table settings drop constraint if exists settings_workload_cap_min_check;
 alter table settings add constraint settings_workload_cap_min_check check (workload_cap_min between 60 and 960);
 -- The at-risk tasks a revision couldn't fit, as task ids; apply_proposal (V1) writes it.
 alter table proposals add column if not exists couldnt_fit uuid[] not null default '{}';
+
+-- --- v5 W1, weather (docs/sheet-v5.md) -------------------------------------------------------
+-- The NWS forecast for campus, kept by the weather Edge Function (supabase/functions/weather):
+-- one row, the hourly periods and active alerts as sources.mjs shapes them. forecast_url is the
+-- point's forecastHourly link, cached so each run skips the /points lookup. The brief and
+-- read_planner read it; only the function writes it.
+alter table settings add column if not exists weather_point text not null default '40.9126,-73.1234';
+alter table settings drop constraint if exists settings_weather_point_check;
+alter table settings add constraint settings_weather_point_check
+  check (weather_point ~ '^-?\d{1,2}\.\d{1,4},-?\d{1,3}\.\d{1,4}$');
+
+create table if not exists weather_cache (
+  id boolean primary key default true check (id),
+  point text not null,
+  forecast_url text,
+  periods jsonb not null default '[]',
+  alerts jsonb not null default '[]',
+  fetched_at timestamptz
+);
+alter table weather_cache enable row level security;
+drop policy if exists owner_all on weather_cache;
+create policy owner_all on weather_cache for all using (is_owner()) with check (is_owner());
+revoke all on weather_cache from anon;
+revoke insert, update, delete on weather_cache from authenticated;
+
+-- At :50 every hour, call the weather Edge Function. Like sheet-brightspace, it does nothing
+-- until its URL and the shared secret are in Vault.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-weather';
+select cron.schedule('sheet-weather', '50 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_weather_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "weather"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_weather_url')
+$job$);

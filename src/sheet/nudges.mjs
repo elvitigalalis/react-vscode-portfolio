@@ -7,6 +7,7 @@
 // and the nudges log is what stops one going out twice.
 import { ORIGIN, SHEET } from "../site.mjs";
 import { proposalLines } from "./proposal.mjs";
+import { weatherLine } from "./sources.mjs";
 import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
@@ -106,12 +107,16 @@ function brief(day) {
   const n = blocksToday.length;
   const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
   if (risky.length) lines.push(`At risk: ${risky.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
+  // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
+  const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
+  if (wx) lines.push(wx);
   const send_at = zonedIso(today, BRIEF_AT, tz);
   if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan].join("\n"), buttons: planButtons(today) };
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
-  const text = todays.length || n || risky.length ? lines.join("\n") : missed ? `Nothing on today.\n${empty}` : "Nothing on today.";
+  const text = todays.length || n || risky.length ? lines.join("\n")
+    : ["Nothing on today.", wx, missed && empty].filter(Boolean).join("\n");
   return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
 }
 

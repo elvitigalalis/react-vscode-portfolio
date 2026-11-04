@@ -53,7 +53,9 @@ async function snapshot(now: Date) {
   const log = await db(`nudges?select=*&day=eq.${today}`);
   const [proposal = null] = await db(`proposals?select=*&day=eq.${today}`);
   const needsOpen = await db("needs_you?select=*&done=is.false");
-  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal) };
+  // v5 W1: the cached forecast, for the brief's weather line.
+  const [weather = null] = await db("weather_cache?select=periods,alerts");
+  return { settings, day, tasks, blocks, log, proposal, needsOpen, campus: await picked(proposal), weather };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
