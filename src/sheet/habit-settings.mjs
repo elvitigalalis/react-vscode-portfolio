@@ -21,7 +21,7 @@ async function add(e) {
   e.preventDefault();
   const form = $("[data-habit-form]");
   const f = new FormData(form);
-  const { habit, error } = readHabit({ ...Object.fromEntries(f), days: f.getAll("days") });
+  const { habit, error } = readHabit({ ...Object.fromEntries(f), days: f.getAll("days[]") });
   $("[data-habit-note]").textContent = error ?? "";
   if (error) return;
   try {
