@@ -49,7 +49,9 @@ export function dayRows({ day, timeZone, tasks, events, blocks, todos }) {
     if (own?.hidden) return [];
     const raw = String(e.title ?? "").replace(/\s+/g, " ").trim() || "Busy";
     const title = own?.title_ai ?? byEvent.get(e.id)?.title_ai ?? raw;
-    return [{ kind: "event", key, title, raw, allDay: e.allDay, start: Math.max(0, e.start), end: e.end, done: Boolean(own?.done), link: e.link ?? null }];
+    // A timed event that covers the whole day (a multi-day event's middle) reads as all day.
+    const allDay = e.allDay || (e.start <= 0 && e.end >= 1440);
+    return [{ kind: "event", key, title, raw, allDay, start: Math.max(0, e.start), end: e.end, done: Boolean(own?.done), link: e.link ?? null }];
   });
   const timed = [];
   const untimed = [];

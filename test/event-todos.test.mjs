@@ -185,3 +185,12 @@ test("dayRows: an approved block wins over a pending one for the same task", () 
   });
   assert.deepEqual(shape(rows), ["essay", "lab"]);
 });
+
+test("dayRows: a timed event covering the whole day reads as all day", () => {
+  const rows = dayRows({
+    day: DAY, timeZone: TZ, todos: [], tasks: [], blocks: [],
+    events: [ev("m1", "Hackathon", "2026-11-03T22:00:00Z", "2026-11-06T02:00:00Z")], // Tue 5 pm – Thu 9 pm
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].allDay, true);
+});
