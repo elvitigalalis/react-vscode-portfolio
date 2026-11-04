@@ -36,7 +36,7 @@
 // (mail_refresh_token) and are never logged or written anywhere.
 import {
   accountPatch, gmailError, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
-  replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead,
+  replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead, unsentOwn,
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
@@ -162,6 +162,8 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
       threads.push(...await inBatches(newest, async (m: { id: string; threadId: string }) => {
         if (whole.has(m.threadId)) return syncThread(await gmail(`threads/${m.threadId}?${metadataQuery(true)}`), email);
         const msg = syncMessage(await gmail(`messages/${m.id}?${metadataQuery()}`), email);
+        // His unsent message (scheduled, say) as the newest: read the thread for the one before it.
+        if (unsentOwn(msg, email)) return syncThread(await gmail(`threads/${m.threadId}?${metadataQuery(true)}`), email);
         return { account: email, thread_id: m.threadId, messages: [msg] };
       }));
     }
