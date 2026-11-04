@@ -2,6 +2,7 @@
 // each change they find as a `changes` row with a fixed reason and weight; the telegram minute
 // tick asks shouldReplan whether those changes matter enough to start the morning task again.
 // Kept free of the network so node --test covers it.
+import { SHEET } from "../site.mjs";
 import { localNow } from "./logic.mjs";
 
 // Every reason a change can carry: its kind (routine-fire.mjs's REASONS), weight and words.
@@ -86,3 +87,23 @@ export function shouldReplan(changes, state, now) {
   const reasons = Object.keys(weight).sort((a, b) => weight[b] - weight[a] || (a < b ? -1 : 1));
   return { fire: true, reasons, counts, ids: left.map((c) => c.id) };
 }
+
+// The `state` shouldReplan takes, from today's rows as the telegram tick reads them: settings,
+// today's days row (or null), today's proposals rows and today's replans rows. The shutdown
+// line is the day's, or the default; a morning revision counts as one plan and each replan as
+// another; the last plan is the newest of either.
+export function replanState({ settings, day, proposals, replans }) {
+  const times = [...proposals.map((p) => p.created_at), ...replans.map((r) => r.at)].filter(Boolean);
+  const last = times.length ? Math.max(...times.map((x) => Date.parse(x))) : null;
+  return {
+    settings: { time_zone: settings.time_zone, replans_on: !!settings.replans_on, morning_on: !!settings.morning_on },
+    day: day ?? null,
+    shutdown: String(day?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5),
+    plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + replans.length,
+    last_plan_at: last == null ? null : new Date(last).toISOString(),
+    last_edit_at: settings.plan_edited_at ?? null,
+  };
+}
+
+// Whether a 429 still holds: no replan fires before a replans row's retry_after.
+export const rateLimited = (replans, now) => replans.some((r) => r.retry_after && Date.parse(r.retry_after) > now.getTime());
