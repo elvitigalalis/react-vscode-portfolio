@@ -63,3 +63,10 @@ test("paceQueries: every actuals row, and the approved blocks of the 14 days bef
   assert.equal(queryPath(q.past),
     "blocks?select=task_id,starts_at,ends_at,proposed,task:tasks(done)&proposed=is.false&starts_at=gte.2026-10-21T04:00:00.000Z&starts_at=lt.2026-11-04T05:00:00.000Z&order=starts_at");
 });
+
+test("paceLine: Settings shows a kind's pace and samples, or how many it still needs", async () => {
+  const { paceLine } = await import("../src/sheet/pace.mjs");
+  assert.equal(paceLine("course", { pace: 1.4, n: 12 }), "Course ×1.4 (12)");
+  assert.equal(paceLine("github", { pace: null, n: 3 }), "GitHub: 3 of 5 needed");
+  assert.equal(paceLine("other", { pace: null, n: 0 }), "Other: 0 of 5 needed");
+});
