@@ -1,0 +1,5 @@
+{
+  "Widget Press": { "best_weight_lb": 125, "note_on_meaning": "Read as 125 total.", "raw": ["SECRET RAW CELL"], "confidence": "med" },
+  "Gizmo Pulldown": { "best_weight_lb": null, "note_on_meaning": "No number.", "confidence": "low" },
+  "Not In The Program": { "best_weight_lb": 50, "note_on_meaning": "x", "confidence": "low" }
+}
