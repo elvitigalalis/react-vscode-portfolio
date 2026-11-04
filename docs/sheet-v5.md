@@ -55,7 +55,8 @@ busy       + source text not null default 'calendar' check (source in ('calendar
 tasks      + link text check (link is null or link ~ '^https://')   -- GitHub/Jira page; never public
 needs_you  + source text not null default 'mail' check (source in ('mail','slack'))
            + not_needed boolean not null default false   -- done = true as well
-           + from_address text                           -- lowercased From address, set by the server
+           + sender_hash text                            -- the From address's salted hash, set by
+                                                         --   the server (fix: was from_address)
 nudges     kind adds 'finished', 'replan'
 mail_accounts + history_id text                          -- the mail sync's Gmail history position
 settings   + replans_on boolean not null default false
@@ -97,13 +98,16 @@ feedback   id uuid pk default gen_random_uuid(), at timestamptz not null default
            ref jsonb not null                            -- ids only (below); append-only:
                                                          -- revoke update, delete from authenticated
 triage_rules id uuid pk default gen_random_uuid(),
-           match text not null check (match in ('address','domain')),
+           match text not null check (match in ('address','domain','sender')),   -- fix: sender
            pattern text not null check (pattern = lower(pattern) and char_length(pattern) between 3 and 254),
            action text not null check (action in ('always','never')),
-           created_at timestamptz not null default now(), unique (match, pattern)
+           created_at timestamptz not null default now(), unique (match, pattern),
+           label text check (char_length(label) <= 80)  -- fix: a sender rule's display name;
+                                                         --   its pattern is a sender hash
 known_senders hash text pk check (hash ~ '^[0-9a-f]{64}$'), last_sent_at timestamptz not null
 message_senders account text, message_id text, thread_id text not null,
-           from_address text not null, at timestamptz not null, primary key (account, message_id)
+           address_hash text not null, domain_hashes text[] not null default '{}',   -- fix: hashes
+           at timestamptz not null, primary key (account, message_id)                --   only
 reply_state account text, thread_id text, primary key (account, thread_id),
            state text not null check (state in ('owed','awaiting')),
            since timestamptz not null,                   -- the newest message's date
@@ -120,7 +124,15 @@ weather_cache id boolean pk default true check (id), point text not null,
 ```
 
 - **Feedback `ref`s:** proposal `{ day, rev }`; block `{ day, task_id }`; needs_you
-  `{ account, message_id, from_address }`; finished `{ block_id, task_id }`.
+  `{ account, message_id, sender_hash }`; finished `{ block_id, task_id }`.
+- **Sender hashes (fix).** No From address is kept in plain text, as spec 47 says of
+  known_senders. mail.mjs's `senderHashes(address, salt)` gives `{ address_hash, domain_hashes }`:
+  `senderHash` (below) of the address, and of its domain and each parent, longest first
+  (`mail.acme.com`, `acme.com`, `com`). mail-sync writes them to `message_senders`; Needs you rows
+  and their feedback carry `sender_hash` (the address hash). The schema deletes `message_senders`
+  rows without hashes, drops `message_senders.from_address` and `needs_you.from_address`, and
+  strips `from_address` from feedback refs; every check is safe to re-run. `reply_state.who`
+  stays a display name, which spec 47 allows ("sender names only").
 - **Writers.** Server functions (service key) write `calendar_account`, `changes`, `replans`,
   `known_senders`, `message_senders`, `reply_state`, `weather_cache` and `academic_days`; the browser may read
   them, and delete `calendar_account`. `apply_proposal` runs as the owner (`security invoker`),
@@ -163,7 +175,10 @@ weather_cache id boolean pk default true check (id), point text not null,
       is skipped.
       **Decided (SRC2):** only `source = 'mail'` items are replaced; Slack items stay until done.
     - It sets `consumed_day = d, consumed_rev = <new rev>` on every `changes` row with both null
-      and `at <= now()`.
+      and `at <= read_at`. **Fix:** `apply_proposal` takes a last argument `read_at timestamptz
+      default null`, read_planner's `read_at` passed back by submit_proposal; null (an older
+      prompt) means `now()`, as before, and a time after now reads as now. The revision keeps it
+      in `proposals.read_at`, so a change logged while the run worked waits for the next replan.
     - The v4 `apply_proposal(date, jsonb, jsonb, jsonb, text)` is dropped, and V1 moves the v4
       apply_proposal checks in tools/test-schema.sh to this signature.
   - `approve_proposal(d date, rev int) returns int` refuses `'revision % of % is not the pending
@@ -251,17 +266,23 @@ weather_cache id boolean pk default true check (id), point text not null,
 - `shouldReplan(changes, state, now)` returns `{ fire: true, reasons, counts, ids }` or
   `{ fire: false, hold }`.
   - `changes` are the rows with `replan_id` and `consumed_rev` null. Rows with `at` after `now`,
-    or at or before `state.last_plan_at`, are ignored (the plan already saw them, and the run's
-    own proposal never counts).
+    or at or before `state.seen_until`, are ignored (the plan already saw them, and the run's
+    own proposal never counts). **Fix:** `seen_until` is the newest revision's `read_at`, or its
+    `created_at` without one; a state without `seen_until` reads `last_plan_at` instead.
   - `state` is `{ settings: { time_zone, replans_on, morning_on }, day: today's days row | null,
     shutdown: "HH:MM", plans_today, last_plan_at, last_edit_at }`:
-    - `plans_today`: 1 when today has a `morning` revision, plus today's `replans` rows;
-    - `last_plan_at`: the later of the newest revision's `created_at` and the newest `replans.at`,
-      today, or null;
+    - `plans_today`: 1 when today has a `morning` revision, plus today's `replans` rows that
+      fired (result `started`, or null while sending); a `failed` or `rate_limited` row never
+      ran and counts for nothing;
+    - `last_plan_at`: the later of the newest revision's `created_at` and the newest such
+      `replans.at`, today, or null;
+    - `seen_until`: today's newest revision's `read_at ?? created_at`, or null;
+    - `closed`: today's newest revision is `skipped` or `lapsed`;
     - `last_edit_at`: `settings.plan_edited_at`.
   - The holds, checked in this order, give `hold`:
     `replans_off`, `morning_off`, `quiet` (before 8:00 or from 23:00), `shut_down`
-    (`day.shutdown`), `after_shutdown` (at or after the shutdown line), `daily_cap`
+    (`day.shutdown`), `closed` (fix: `state.closed`, today's newest revision is `skipped` or
+    `lapsed`, which apply_proposal would refuse anyway), `after_shutdown` (at or after the shutdown line), `daily_cap`
     (`plans_today` ≥ 8), `too_soon` (under 60 minutes since `last_plan_at`), `editing` (under 10
     minutes since `last_edit_at`).
   - Then the rules, over the changes left: fire when one has weight ≥ 8; or the weights add to
@@ -326,6 +347,18 @@ weather_cache id boolean pk default true check (id), point text not null,
   - `run.trigger` is `replan` when `replan` exists with result `started`, its `at` is after the
     newest revision's `created_at`, and it is under 30 minutes old; its `reasons` are then the
     replan's. Otherwise `morning` with `reasons: []`.
+  - **plan_day of a replan run** (fix): `rows.plan_day`, when given, is the day planned.
+    planner-mcp sets it with `planDayOf(now, time_zone, replan, todayRevision)`: today when
+    today's newest `replans` row is `started`, under 30 minutes old and after today's newest
+    revision, so a replan from 3 pm to shutdown plans the rest of today. The same holds for a
+    message run that may go on as a replan of today (docs/sheet-morning-task.md, step 2b): with
+    replans on, `planDayOf`'s fifth argument is the newest fired `messages` row, and
+    `messageRunOf` is true when it fired under 30 minutes ago and after today's newest revision;
+    read_planner then carries `message_run: true`, and submit_proposal records that run's
+    revision as a `replan` even though its messages are answered by then. Otherwise v4's 3 pm
+    rule. `snapshotQueries`, `paceQueries` and `replanQueries` take that plan_day, and
+    `todayReplanQueries(now, time_zone)` reads the two rows it is decided from. A `replan` row
+    of another day never makes a replan run.
   - `window.from` is 07:00, or, when plan_day is today, the later of 07:00 and now rounded up
     to the next quarter hour (9:07 → 09:15, 9:15 → 09:15). `window.to` is `shutdown`.
   - **Decided:** locked blocks stay in `blocks` with `proposed: false` rather than being copied
@@ -333,8 +366,10 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **`checkProposal(input, snapshot, senders = {})`**. With `version: 5`, `input` also takes
   `replaces` (int or null), `couldnt_fit` ([task_id]), `suggested` ([{ account, message_id,
   title, due, kind }]) and `habits` ([{ habit_id, start: "HH:MM" }]); absent lists are `[]`.
-  `senders` maps `"<account> <message_id>"` to the message's From address (planner-mcp reads it
-  from `message_senders`). With `version: 5` it returns `{ ok, errors, rows, dropped }`
+  `senders` maps `"<account> <message_id>"` to the message's sender hashes, `{ address,
+  domains }` (planner-mcp reads them from `message_senders`), and a fourth argument
+  `hashOf(pattern)` hashes a rule's pattern the same way (planner-mcp, with `SHEET_SENDER_SALT`;
+  null without it). With `version: 5` it returns `{ ok, errors, rows, dropped }`
   (`rows` null and `dropped` `[]` when it fails), and v4's rules hold, plus:
   - **day and revision:** the proposal may be absent, `pending` or `approved` (a replan after
     approval). `skipped` and `lapsed` are refused as in v4 (field `day`). `replaces` must equal
@@ -355,26 +390,32 @@ weather_cache id boolean pk default true check (id), point text not null,
       proposed block that carries the run past 90 minutes, or the latest proposed block in the
       run when that is an approved one. **Decided:** a single block longer than 90 minutes is
       allowed; the rule is about blocks in a row.
-    - **The workload cap:** the minutes of the day's approved blocks (past ones too), the
-      proposal's blocks and its habit blocks add up to at most `workload_cap_min`. The error
+    - **The workload cap:** the minutes of the day's approved task blocks (past ones too) and
+      the proposal's blocks add up to at most `workload_cap_min`. **Fix:** the cap is for work,
+      so habit blocks, approved or proposed, stay out of it; they still count for free time,
+      travel and breaks. The error
       names `blocks` and the cap ("blocks: 6h30 planned, over the 6h00 workload cap").
   - **habits:** each `habit_id` is in `snapshot.habits`, at most once; `start` is "HH:MM" and
     within `ideal ± flex_min` (inclusive); the block runs `minutes`, inside `window`, and obeys
-    the overlap, travel, break and cap rules. Errors name `habits[i]`.
+    the overlap, travel and break rules (not the cap). Errors name `habits[i]`.
   - **couldnt_fit:** at most 12 ids, each in `snapshot.tasks`, none twice, none also placed in
     `blocks`. Errors name `couldnt_fit[i]`.
   - **suggested:** at most 5. `account` and `message_id` match an item in this submit's
     `needs_you`, at most one suggestion each; `title` is free text (v4's `text` rule) of at most 80
     characters; `due` is a date and required; `kind` is `assessment` or `interview`. Errors name
     `suggested[i]`.
-  - **never-show rules:** a `needs_you` item whose From address (`senders`) matches a `never`
-    rule in `snapshot.triage_rules` (address: equal; domain: equal to the address's domain or a
-    parent of it, so `mail.example.com` matches `example.com`) is dropped, not an error.
+  - **never-show rules:** a `needs_you` item whose sender (`senders`) a `never` rule in
+    `snapshot.triage_rules` covers (`ruleCovers`: address, the pattern's hash equals the address
+    hash; domain, it is one of the domain hashes, so `example.com` covers `mail.example.com`;
+    sender, the pattern is the address hash) is dropped, not an error.
     `dropped` lists `[{ index, message_id, pattern }]`, and a suggestion for a dropped item is
     dropped with it. An `always` rule never drops anything.
+  - **read_at** (fix): optional; `planSnapshot` returns `read_at` (its `now`), and a submitted
+    `read_at` must be a time no later than the fresh snapshot's, or the error names `read_at`.
+    When given, `rows.read_at` carries it (ISO, UTC); without it `rows` has no `read_at`.
   - **rows**, when ok, are `apply_proposal`'s named arguments: `{ d, replaces, blocks,
     habit_blocks, needs, picks, note, couldnt_fit, suggested, run_trigger, reasons }`, where
-    `run_trigger` and `reasons` are `snapshot.run`'s, `needs` carries `from_address` from
+    `run_trigger` and `reasons` are `snapshot.run`'s, `needs` carries `sender_hash` from
     `senders` (null when unknown), and `habit_blocks` are `[{ habit_id, starts_at, ends_at }]`.
 - **`proposalLines`** adds, after "Didn't fit": `"Couldn't fit: HW3, Lab 4."` (titles from
   `tasks`, cut to 30 characters, at most 3, then `" +2 more"` before the period), and one line
@@ -419,13 +460,24 @@ weather_cache id boolean pk default true check (id), point text not null,
   ```
   `+` lines are blocks new in this revision, `−` lines blocks gone from the previous one, each
   earliest first, at most 6 of each. Its buttons are the plan buttons.
+  **Fix:** the first line says what changed where the stored rows allow. The snapshot gains
+  `replanChanges`, the `{ reason, ref }` rows the revision consumed (`consumed_day`,
+  `consumed_rev`). A `busy_overlap` row (its ref now the new busy time's span,
+  `"<starts_at>/<ends_at>"` in UTC, from `busyChange`) reads "Busy 2:00–3:00 pm now overlaps
+  Gym", naming the earliest approved or previous-revision block it overlaps ("Busy 2:00–3:00 pm
+  now" with none); a `*_due_soon` row (ref the task's `source_uid`) reads "HW3 due Thu". At most
+  3 such phrases, titles cut to 30; a reason with one loses its fixed words, and every other
+  reason, a title `linkish` refuses, or a ref with nothing stored keeps them: "Replan: Busy
+  2:00–3:00 pm now overlaps Gym, HW3 due Thu, new mail." No mail text or address is used, and
+  the fire payload stays fixed names and counts.
 - **The Finished? check** (`kind: "finished"`), for each of today's approved blocks:
   - due at the block's `ends_at`, when its start nudge went out (a `start` row at its current
     `starts_at`), its task isn't done, the day isn't shut down (`day.shutdown`), and `ends_at`
     is before 23:00;
   - sent up to 30 minutes late (`FINISHED_LATE`), once per `send_at`;
-  - it counts toward the nudge budget, like a repeat: it takes a slot only when
-    `used + held < BUDGET`;
+  - **Fix:** it has its own budget, `FINISHED_BUDGET` = 8 a day (Finished? rows in today's
+    log), and takes no slot of the nudge budget, so start nudges and snoozes using up theirs
+    never starve it;
   - text `"Finished? · OS homework"`, buttons **Finished** (`finished:<block id>`), **More
     time** (`more:<id>`), **Didn't start** (`nostart:<id>`) and **Tomorrow** (`tomorrow:<id>`).
   - `readTap` reads these four as `{ action, block_id, … }`, as "done:" and "snooze:" are.
@@ -571,15 +623,17 @@ weather_cache id boolean pk default true check (id), point text not null,
   keys, once each: `caught` the items labelled needed, `missed` the labels needed that no item
   matches (label order), `wrongly_shown` the items labelled not needed (item order). Unlabelled
   items are in none. A small CLI (`tools/triage-score.mjs`) runs it on the live tables read-only.
-- `neverOffers(feedback, rules)` returns the From addresses /plan offers "Never show mail from
-  <address>" for, sorted: those with at least two different messages whose label (as
-  `triageLabels`) is not needed, unless a rule already covers the address (an `address` rule
-  equal to it, or a `domain` rule matching it as the never-show rules do, either action). Rows
-  with no `from_address` count for nothing.
+- `neverOffers(feedback, rules)` returns the sender hashes /plan offers "Never show mail from
+  <name>" for, sorted: those with at least two different messages whose label (as
+  `triageLabels`) is not needed, unless a `sender` rule (either action) holds the hash. Address
+  and domain rules are plain text the browser can't hash without the server's salt, so they
+  don't count here (a never one drops the mail at submit anyway). Rows with no `sender_hash`
+  count for nothing.
 - **Decided (L1):** `tapFeedback(tap, snapshot)` gives the row a Telegram tap logs (Approve all or
   Skip on the pending revision, each Finished? answer), or null; telegram inserts it after the
   tap's changes, and not when a newer plan refused it. `needsFeedback(row, action)` gives /plan's
-  Needs you row. `ruleMatches` and `neverRule` are the match checkProposal drops by.
+  Needs you row. `ruleCovers(rule, sender, hashOf)` and `neverRule(rules, sender, hashOf)` are
+  the match checkProposal drops by.
   `tools/triage-score.mjs <run.json> [days]` scores a run file (a list of `{ account, message_id
   }`, or a submit_proposal input) against the labels of the last 14 days' feedback; done
   `needs_you` rows go hourly, so the live table can't give a past run's items.
@@ -626,16 +680,25 @@ weather_cache id boolean pk default true check (id), point text not null,
   touched thread (`threads.get`, format=metadata). Business days pass only at local midnight, so
   the first good run of each local day (and a full sync) also sweeps: `messages.list` with
   `newer_than:14d -in:drafts`, then each thread's newest message. A full sync logs no changes.
+  **Fix:** a run reads at most 50 touched threads (`threadsToRead(threads, more)`); when it cuts
+  any off, or history pages are left over, the run is a full sync (fresh `history_id`, a sweep),
+  so the threads it skipped are swept rather than lost.
   mail.mjs adds `parseAddresses`, `metadataQuery`, `syncMessage`, `syncThread`,
   `historyChanges`, `newestPerThread`, `replyDiff` and `searchMarks` for it and mail-mcp.
 - **The replan tick** in `telegram`'s send job: it reads the state, runs `shouldReplan`, and on
-  fire inserts the `replans` row first (result null), sets `replan_id` on `ids`, then calls
-  routine-fire.mjs's `fireRoutine(fetch, { routineId: SHEET_ROUTINE_ID, token:
-  SHEET_ROUTINE_TOKEN, trigger: "replan", counts }, now)`. It records `started` and the session
-  id, `failed` and the error type, or `rate_limited` with `retry_after` set to `retry_at`. No replan fires before `retry_after`, and a request is never retried without a
-  new `replans` row. The token lives only in the function's env.
+  fire claims the replan with `claim_replan(d, reasons, counts, ids) returns uuid` (service key
+  only), which in one transaction inserts the `replans` row (result null) and sets `replan_id` on
+  the open changes in `ids`, or returns null when another claim holds: a row for d still sending
+  or `started` under 60 minutes ago, or a `retry_after` still ahead. On null the tick holds
+  (`claimed`). Then it calls routine-fire.mjs's `fireRoutine(fetch, { routineId:
+  SHEET_ROUTINE_ID, token: SHEET_ROUTINE_TOKEN, trigger: "replan", counts }, now)` and writes
+  `fireOutcome(out, thrown)` (replan.mjs): `started` and the session id, `failed` and the error
+  type (a throw is `failed` with its message, cut to 300), or `rate_limited` with `retry_after`
+  set to `retry_at`. On `failed` or `rate_limited` it unties the row's changes (`replan_id`
+  null), so they are weighed again. No replan fires before `retry_after`, and a request is never
+  retried without a new `replans` row. The token lives only in the function's env.
 - **`read_planner()`** returns `planSnapshot` as above.
-- **`submit_proposal({ day, replaces, blocks, habits, needs_you, picks, note, couldnt_fit,
+- **`submit_proposal({ day, replaces, read_at, blocks, habits, needs_you, picks, note, couldnt_fit,
   suggested })`** reads `message_senders` for the submitted items, runs `checkProposal`, and on
   success calls `apply_proposal` and returns `{ ok: true, rev, blocks: n, habits: n,
   needs_you: n, dropped: [message_id] }`.
@@ -649,10 +712,17 @@ weather_cache id boolean pk default true check (id), point text not null,
 - **Needs you** gains Not needed (with undo) beside Done, Slack rows with their icon, a link
   only when it starts with `https://` and holds `.slack.com/` for Slack rows, an "Awaiting reply"
   group, and on a row with a suggestion, "Add task". After two `not_needed` feedback rows with the
-  same `from_address`, it offers "Never show mail from <address>", which adds a `never` rule on
-  confirm.
+  same `sender_hash`, it offers "Never show mail from <name>" (the name its Needs you rows carry),
+  which adds a `never` rule `{ match: "sender", pattern: <hash>, label: <name> }` on confirm.
+  Settings lists a sender rule by its label.
 - **The proposal banner** shows "Revision 2" beside "Claude proposed 3 blocks", and the couldn't
-  fit titles.
+  fit titles. **Fix:** while the revision is pending, its notes also list each suggested task,
+  `"Task to add: HackerRank assessment (due Nov 7)"` (`suggestedLine`, as the brief's).
+- **Approve all** (fix) on a pending revision calls `approve_proposal(d, rev)` (`approveAllCall`
+  in morning.mjs), as Telegram's Approve all does, so the revision becomes `approved` and its
+  suggested tasks are made; then the week and the notes reload, and the approved blocks get
+  their Google events as off-page approvals do. Without a pending revision it approves each
+  proposed block, as in v4. Approving or moving a single block is unchanged.
 - **Icons:** `repeat` (habit), `github` and `kanban` (Jira), from Lucide; GitHub and Jira tasks
   get source edges like course tasks.
 - **The load bar** takes `workload_cap_min` as its capacity.
@@ -757,7 +827,7 @@ SB="npx -y supabase@latest"
 
    | Function | Function secrets it reads | Vault URL (job) |
    |---|---|---|
-   | `planner-mcp` | none of its own | — |
+   | `planner-mcp` | `SHEET_SENDER_SALT` (fix: hashes triage rule patterns at submit) | — |
    | `telegram` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHEET_CRON_SECRET`, `SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN` | `sheet_telegram_url` (`sheet-telegram`) |
    | `mail-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SHEET_SENDER_SALT` | — |
    | `mail-connect` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAIL_STATE_SECRET` | — |

@@ -306,7 +306,7 @@ declare
   t1 uuid := '00000000-0000-4000-8000-0000000000a1';
   r int;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[])') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
     raise notice '- v5 revisions: skipped, apply_proposal(d, replaces, ...) is not there yet';
     return;
   end if;
@@ -410,7 +410,7 @@ do $$
 declare
   d date := sheet_today() + 6;
 begin
-  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[])') is null then
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
     return;
   end if;
   -- Shutting a day down lapses its pending revision, and the day takes no new one.
@@ -668,6 +668,82 @@ begin
   raise notice '✓ v5: changes and replans private, server-written, kept 14 days';
 end $$;
 
+-- --- Fix: claim_replan claims a replan once (docs/sheet-v5.md, "The replan tick") ---------------
+do $$
+declare
+  c1 uuid := gen_random_uuid();
+  c2 uuid := gen_random_uuid();
+  c3 uuid := gen_random_uuid();
+  a uuid;
+  b uuid;
+begin
+  if to_regprocedure('claim_replan(date, text[], jsonb, uuid[])') is null then
+    raise notice '- claim_replan: skipped, not there yet';
+    return;
+  end if;
+  if has_function_privilege('authenticated', 'claim_replan(date, text[], jsonb, uuid[])', 'execute')
+    or has_function_privilege('anon', 'claim_replan(date, text[], jsonb, uuid[])', 'execute')
+    or not has_function_privilege('service_role', 'claim_replan(date, text[], jsonb, uuid[])', 'execute')
+    then raise exception 'claim_replan should be the service role''s only'; end if;
+  delete from changes where true;
+  delete from replans where true;
+  insert into changes (id, kind, reason, weight) values (c1, 'busy', 'busy_overlap', 10), (c2, 'mail', 'mail_new', 2);
+  insert into changes (id, kind, reason, weight, consumed_day, consumed_rev) values (c3, 'mail', 'mail_new', 2, sheet_today(), 1);
+  a := claim_replan(sheet_today(), '{busy_overlap,mail_new}', '{"busy": 1, "mail": 1}', array[c1, c2, c3]);
+  if a is null or (select count(*) from replans) <> 1 then raise exception 'the first claim should insert one replans row'; end if;
+  if (select count(*) from changes where replan_id = a) <> 2 or exists (select 1 from changes where id = c3 and replan_id is not null)
+    then raise exception 'the claim should tie the open changes it names, and no consumed one'; end if;
+  -- A second tick a moment later gets nothing, and writes nothing.
+  b := claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]);
+  if b is not null or (select count(*) from replans) <> 1 then raise exception 'a second claim within the hold should get nothing'; end if;
+  -- A replan that failed holds nothing; a 429 holds until its retry_after; a started one 60 minutes.
+  update replans set result = 'failed' where id = a;
+  update changes set replan_id = null where replan_id = a;
+  b := claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]);
+  if b is null then raise exception 'a failed replan should not hold the next claim'; end if;
+  update replans set result = 'rate_limited', retry_after = now() + interval '5 minutes' where id = b;
+  if claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]) is not null
+    then raise exception 'a 429 should hold claims until its retry_after'; end if;
+  update replans set retry_after = now() - interval '1 minute' where id = b;
+  a := claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]);
+  if a is null then raise exception 'a passed retry_after should not hold'; end if;
+  update replans set result = 'started', at = now() - interval '61 minutes' where id = a;
+  if claim_replan(sheet_today(), '{busy_overlap}', '{"busy": 1}', array[c1]) is null
+    then raise exception 'a started replan over 60 minutes old should not hold'; end if;
+  delete from changes where true;
+  delete from replans where true;
+  raise notice '✓ claim_replan: one claim per hold, ties only open changes, service role only';
+end $$;
+
+-- --- Fix: a revision consumes only the changes its run read (apply_proposal's read_at) ----------
+do $$
+declare
+  d date := sheet_today() + 8;
+  r int;
+begin
+  if to_regprocedure('apply_proposal(date, integer, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz)') is null then
+    raise notice '- apply_proposal read_at: skipped, not there yet';
+    return;
+  end if;
+  delete from changes where true;
+  -- One change before the run read the day, one while it ran.
+  insert into changes (at, kind, reason, weight) values
+    (now() - interval '10 minutes', 'mail', 'mail_new', 2), (now() - interval '2 minutes', 'busy', 'busy_overlap', 10);
+  r := apply_proposal(d => d, replaces => null, blocks => '[]', read_at => now() - interval '5 minutes');
+  if (select count(*) from changes where consumed_rev = r and consumed_day = d) <> 1
+    or exists (select 1 from changes where reason = 'busy_overlap' and consumed_rev is not null)
+    then raise exception 'a revision should consume only the changes at or before its read_at'; end if;
+  if (select read_at from proposals where day = d and rev = r) is distinct from now() - interval '5 minutes'
+    then raise exception 'the revision should keep its read_at'; end if;
+  -- Without read_at, everything up to now, as before.
+  r := apply_proposal(d => d, replaces => r, blocks => '[]');
+  if exists (select 1 from changes where consumed_rev is null) then raise exception 'without read_at a revision should consume every change so far'; end if;
+  if (select read_at from proposals where day = d and rev = r) is null then raise exception 'a revision without read_at should keep its own time'; end if;
+  delete from changes where true;
+  delete from proposals where day = d;
+  raise notice '✓ apply_proposal: consumes the changes up to read_at, or now without it';
+end $$;
+
 -- --- H1, habits ---------------------------------------------------------------------------------
 do $$
 declare
@@ -810,7 +886,7 @@ do $$ begin
   -- nightly_roll keeps feedback 120 days.
   insert into feedback (at, item, action, ref) values
     (now() - interval '121 days', 'proposal', 'approve', '{"day": "2026-01-01", "rev": 1}'),
-    (now() - interval '119 days', 'needs_you', 'not_needed', '{"account": "owner@example.com", "message_id": "18f2a3b4c5d6e7f1", "from_address": "jobs@acme.com"}');
+    (now() - interval '119 days', 'needs_you', 'not_needed', '{"account": "owner@example.com", "message_id": "18f2a3b4c5d6e7f1", "sender_hash": "b2d1910ecb638f419ce06372f8393efff2ab1f90e03954509117859182151af9"}');
   perform nightly_roll();
   if exists (select 1 from feedback where item = 'proposal') or not exists (select 1 from feedback where item = 'needs_you')
     then raise exception 'nightly_roll should keep feedback for 120 days, no longer'; end if;
@@ -998,7 +1074,7 @@ do $$ begin
     raise exception 'reply_state took a thread twice';
   exception when unique_violation then null; end;
   begin insert into message_senders (account, message_id, thread_id, at) values ('owner@example.com', '18f3a1c2d4e5f002', '18f3a1c2d4e5f000', now());
-    raise exception 'message_senders took a row with no from_address';
+    raise exception 'message_senders took a row with no address_hash';
   exception when not_null_violation then null; end;
   if (select data_type from information_schema.columns where table_name = 'mail_accounts' and column_name = 'history_id')
      is distinct from 'text' then raise exception 'mail_accounts.history_id missing'; end if;
@@ -1010,15 +1086,46 @@ do $$ begin
   raise notice '✓ v5: known_senders hashes only; reply tracking private and server-written; sheet-mail every 5 minutes';
 end $$;
 
+-- Fix: no From address in plain text (docs/sheet-v5.md, "Sender hashes").
+do $$ begin
+  if to_regclass('public.message_senders') is null then return; end if;
+  if exists (select 1 from information_schema.columns where table_name in ('message_senders', 'needs_you') and column_name = 'from_address')
+    then raise exception 'message_senders or needs_you still has from_address'; end if;
+  begin insert into message_senders (account, message_id, thread_id, address_hash, at)
+      values ('owner@example.com', 'fx-1', 'fx', 'jobs@acme.com', now());
+    raise exception 'message_senders took an address as its hash';
+  exception when check_violation then null; end;
+  begin insert into message_senders (account, message_id, thread_id, address_hash, domain_hashes, at)
+      values ('owner@example.com', 'fx-1', 'fx', repeat('a', 64), array['acme.com'], now());
+    raise exception 'message_senders took a domain as a domain hash';
+  exception when check_violation then null; end;
+  insert into message_senders (account, message_id, thread_id, address_hash, domain_hashes, at)
+    values ('owner@example.com', 'fx-1', 'fx', repeat('a', 64), array[repeat('b', 64), repeat('c', 64)], now());
+  delete from message_senders where thread_id = 'fx';
+  begin insert into needs_you (day, account, message_id, link, sender, subject, why, kind, sender_hash)
+      values (sheet_today(), 'owner@example.com', 'fx-2', 'x', 'Acme', 'Hi', 'Why', 'reply', 'jobs@acme.com');
+    raise exception 'needs_you took an address as its sender_hash';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action) values ('sender', 'jobs@acme.com', 'never');
+    raise exception 'triage_rules took a sender rule that is not a hash';
+  exception when check_violation then null; end;
+  begin insert into triage_rules (match, pattern, action, label) values ('sender', repeat('a', 64), 'never', repeat('x', 81));
+    raise exception 'triage_rules took an 81-character label';
+  exception when check_violation then null; end;
+  insert into triage_rules (match, pattern, action, label) values ('sender', repeat('a', 64), 'never', 'Acme Recruiting');
+  delete from triage_rules where match = 'sender';
+  raise notice '✓ fix: message_senders, needs_you and sender rules hold hashes, never a From address';
+end $$;
+
 -- M1, beyond the verification checks: nightly_roll keeps 14 days of reply_state and message_senders.
 do $$ begin
   if to_regclass('public.reply_state') is null or to_regclass('public.message_senders') is null then return; end if;
   insert into reply_state (account, thread_id, state, since, message_id, who) values
     ('owner@example.com', 'm1-old', 'owed', now() - interval '15 days', 'm1-old-1', 'Ana Ruiz'),
     ('owner@example.com', 'm1-new', 'awaiting', now() - interval '4 days', 'm1-new-1', 'Prof. Kim');
-  insert into message_senders (account, message_id, thread_id, from_address, at) values
-    ('owner@example.com', 'm1-old-1', 'm1-old', 'ana.ruiz@example.edu', now() - interval '15 days'),
-    ('owner@example.com', 'm1-new-0', 'm1-new', 'kim@cs.example.edu', now() - interval '5 days');
+  insert into message_senders (account, message_id, thread_id, address_hash, at) values
+    ('owner@example.com', 'm1-old-1', 'm1-old', repeat('a', 64), now() - interval '15 days'),
+    ('owner@example.com', 'm1-new-0', 'm1-new', repeat('b', 64), now() - interval '5 days');
   perform nightly_roll();
   if exists (select 1 from reply_state where thread_id = 'm1-old') or not exists (select 1 from reply_state where thread_id = 'm1-new')
     or exists (select 1 from message_senders where message_id = 'm1-old-1') or not exists (select 1 from message_senders where message_id = 'm1-new-0')

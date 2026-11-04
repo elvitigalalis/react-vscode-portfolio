@@ -1,6 +1,6 @@
 // The mail-sync Edge Function (docs/sheet-v5.md, "Edge Functions"; ADR 0004): every 5 minutes
 // (supabase/schema.sql, "sheet-mail") it reads each connected mail account's Gmail history and
-// keeps reply_state (Reply owed, Awaiting reply), message_senders and known_senders, and logs mail
+// keeps reply_state (Reply owed, Awaiting reply), message_senders and known_senders (hashes only), and logs mail
 // changes for replans. It never fetches mail text: only labels, dates and the headers in
 // SYNC_HEADERS, with `fields` naming the reply's fields so not even the snippet comes back
 // (metadataQuery, src/sheet/mail.mjs, which the tests cover with the rest of the rules).
@@ -33,18 +33,17 @@
 // (mail_refresh_token) and are never logged or written anywhere.
 import {
   accountPatch, gmailError, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
-  replyDiff, replyState, senderHash, syncMessage, syncThread,
+  replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead,
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
-import { googleToken } from "../_shared/google.ts";
+import { googleToken, refusedWhy } from "../_shared/google.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const SALT = env("SHEET_SENDER_SALT");
 const SOURCE = "gmail";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const HISTORY_PAGES = 10;   // 500 records a page
-const THREADS_MAX = 50;     // threads.get per account per run
 const SWEEP_MAX = 100;      // threads per sweep
 const PARALLEL = 5;
 
@@ -66,7 +65,7 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, skipped: "not connected" });
     }
     const [settings] = await db("settings?select=time_zone");
-    const tz = settings?.time_zone ?? "America/New_York";
+    const tz = settings.time_zone;
     // The sweep runs on the first good run of each local day, and again after a failed run.
     const [prev] = await db(`feed_state?select=fetched_at,ok&source=eq.${SOURCE}`);
     const sweep = !prev || prev.ok !== true || !prev.fetched_at
@@ -126,8 +125,11 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
           if (!pageToken) break;
         }
         changed = historyChanges(pages);
-        // More history than a run reads: start again from now, as after a 404.
-        if (pageToken) full = true;
+        // More history than a run reads, or more threads: start again from now, as after a 404,
+        // and sweep (threadsToRead).
+        const cut = threadsToRead(changed.threads, Boolean(pageToken));
+        changed = { ...changed, threads: cut.threads };
+        if (cut.full) full = true;
       } catch (e) {
         if (!(e instanceof GmailError && e.status === 404)) throw e;
         full = true;
@@ -136,7 +138,7 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
     if (full) historyId = (await gmail("profile?fields=historyId")).historyId;
 
     // The threads to work out again: those history touched, read whole.
-    const threads: Thread[] = await inBatches(changed.threads.slice(0, THREADS_MAX),
+    const threads: Thread[] = await inBatches(changed.threads,
       async (id) => {
         // A thread deleted since leaves nothing to track.
         try { return syncThread(await gmail(`threads/${id}?${metadataQuery(true)}`), email); }
@@ -199,19 +201,24 @@ async function accessToken(email: string) {
   const refresh = await db("rpc/mail_refresh_token", { method: "POST", body: JSON.stringify({ account_email: email }) });
   if (!refresh) throw new Error("not a connected mail account");
   const { ok, status, grant } = await googleToken({ refresh_token: refresh, grant_type: "refresh_token" });
-  // Google's error code (invalid_grant, say) never holds a token; its description is left out.
-  if (!ok) throw new Error(`token refresh refused: ${/^[\w-]{1,40}$/.test(grant.error ?? "") ? grant.error : `HTTP ${status}`}`);
+  if (!ok) throw new Error(refusedWhy(status, grant));
   return grant.access_token as string;
 }
 
 // --- Senders --------------------------------------------------------------------------------------
 
-// message_senders gets each received message's From address (14 days, for never-show rules), and
-// known_senders the salted hash of every To address of his sent mail.
+// message_senders gets each received message's sender hashes (14 days, for never-show rules):
+// the salted hash of its From address and of the address's domain and parents (senderHashes),
+// never the address. known_senders gets the salted hash of every To address of his sent mail.
+// Without the salt neither is written.
 async function saveSenders(account: string, messages: Msg[], now: Date) {
+  if (!SALT) return;
   const cutoff = +now - 14 * 86_400_000;
-  const received = messages.filter((m) => !m.labels.includes("SENT") && m.from_address && Date.parse(m.date) > cutoff)
-    .map((m) => ({ account, message_id: m.id, thread_id: m.thread_id, from_address: m.from_address, at: m.date }));
+  const received = [];
+  for (const m of messages.filter((m) => !m.labels.includes("SENT") && m.from_address && Date.parse(m.date) > cutoff)) {
+    const hashes = await senderHashes(m.from_address, SALT);
+    if (hashes) received.push({ account, message_id: m.id, thread_id: m.thread_id, ...hashes, at: m.date });
+  }
   if (received.length) {
     await db("message_senders?on_conflict=account,message_id", {
       method: "POST",
@@ -219,7 +226,6 @@ async function saveSenders(account: string, messages: Msg[], now: Date) {
       body: JSON.stringify(received),
     });
   }
-  if (!SALT) return;
   const latest = new Map<string, string>();
   for (const m of messages.filter((m) => m.labels.includes("SENT"))) {
     for (const { address } of parseAddresses(m.to)) {

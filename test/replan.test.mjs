@@ -62,6 +62,8 @@ test("replanState: plans today, the last plan and the shutdown line from today's
     shutdown: "18:30",
     plans_today: 3,
     last_plan_at: "2026-11-04T17:00:00.000Z",
+    seen_until: "2026-11-04T15:05:00.000Z",
+    closed: false,
     last_edit_at: "2026-11-04T14:00:00Z",
   });
   const none = replanState({ settings: { ...settings, plan_edited_at: null }, day: null, proposals: [], replans: [] });
@@ -91,4 +93,70 @@ test("stampsEdit: writes to tasks, blocks and turn_down count; reads and other t
   assert.equal(stampsEdit("PATCH", "settings?id=eq.true"), false);
   assert.equal(stampsEdit("POST", "busy"), false);
   assert.equal(stampsEdit("POST", "tasks_extra"), false);
+});
+
+// --- Fix: a replan that never started ---------------------------------------------------------
+
+test("replanState: a failed or rate-limited replan counts toward neither plans_today nor too_soon", async () => {
+  const { replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const proposals = [{ rev: 1, run_trigger: "morning", created_at: "2026-11-04T11:09:00Z" }];
+  const replans = [
+    { at: "2026-11-04T15:00:00Z", result: "started" },
+    { at: "2026-11-04T16:00:00Z", result: "failed" },
+    { at: "2026-11-04T16:30:00Z", result: "rate_limited", retry_after: "2026-11-04T17:30:00Z" },
+    { at: "2026-11-04T16:40:00Z", result: null }, // still sending
+  ];
+  const s = replanState({ settings, day: null, proposals, replans });
+  assert.equal(s.plans_today, 3);
+  assert.equal(s.last_plan_at, "2026-11-04T16:40:00.000Z");
+  const failedOnly = replanState({ settings, day: null, proposals, replans: replans.slice(1, 3) });
+  assert.equal(failedOnly.plans_today, 1);
+  assert.equal(failedOnly.last_plan_at, "2026-11-04T11:09:00.000Z");
+});
+
+test("fireOutcome: started keeps the changes tied; a 429, a failure or a throw unties them and records why", async () => {
+  const { fireOutcome } = await import("../src/sheet/replan.mjs");
+  assert.deepEqual(fireOutcome({ ok: true, session_id: "s1", session_url: "https://x" }),
+    { patch: { result: "started", session_id: "s1" }, untie: false });
+  assert.deepEqual(fireOutcome({ ok: false, status: 429, error: "rate_limit_error", retry_at: "2026-11-04T17:00:00.000Z" }),
+    { patch: { result: "rate_limited", error: "rate_limit_error", retry_after: "2026-11-04T17:00:00.000Z" }, untie: true });
+  assert.deepEqual(fireOutcome({ ok: false, status: 500, error: "api_error" }), { patch: { result: "failed", error: "api_error" }, untie: true });
+  // A throw (fireRoutine refusing its input, say) is a failure too, its message cut to 300.
+  assert.deepEqual(fireOutcome(null, new Error("fire: bad routine id")), { patch: { result: "failed", error: "fire: bad routine id" }, untie: true });
+  assert.equal(fireOutcome(null, new Error("x".repeat(400))).patch.error.length, 300);
+});
+
+test("shouldReplan: a change logged after the run read the day, but before its revision went in, still counts", async () => {
+  const { shouldReplan, replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  // The replan run read the day at 9:00 and submitted at 9:04; the mail came in at 9:02.
+  const proposals = [{ rev: 2, status: "pending", run_trigger: "replan", created_at: "2026-11-04T14:04:00Z", read_at: "2026-11-04T14:00:00Z" }];
+  const state = replanState({ settings, day: null, proposals, replans: [] });
+  assert.equal(state.seen_until, "2026-11-04T14:00:00.000Z");
+  const mail = [{ id: "c1", at: "2026-11-04T14:02:00Z", kind: "mail", reason: "mail_owed", weight: 8 }];
+  assert.equal(shouldReplan(mail, state, new Date("2026-11-04T15:05:00Z")).fire, true);
+  // A revision without read_at (an older one) sees up to its created_at, as before.
+  const old = replanState({ settings, day: null, proposals: [{ ...proposals[0], read_at: null }], replans: [] });
+  assert.equal(old.seen_until, "2026-11-04T14:04:00.000Z");
+  assert.deepEqual(shouldReplan(mail, old, new Date("2026-11-04T15:05:00Z")), { fire: false, hold: "nothing" });
+});
+
+test("shouldReplan: a day whose newest revision is skipped or lapsed holds as closed", async () => {
+  const { shouldReplan, replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const urgent = [{ id: "c1", at: "2026-11-04T15:01:00Z", kind: "busy", reason: "busy_overlap", weight: 10 }];
+  const now = new Date("2026-11-04T15:02:00Z");
+  const rows = (status) => [
+    { rev: 1, status: "superseded", run_trigger: "morning", created_at: "2026-11-04T11:09:00Z" },
+    { rev: 2, status, run_trigger: "replan", created_at: "2026-11-04T13:00:00Z" },
+  ];
+  for (const status of ["skipped", "lapsed"]) {
+    const state = replanState({ settings, day: null, proposals: rows(status), replans: [] });
+    assert.equal(state.closed, true);
+    assert.deepEqual(shouldReplan(urgent, state, now), { fire: false, hold: "closed" });
+  }
+  for (const status of ["pending", "approved"]) {
+    assert.equal(shouldReplan(urgent, replanState({ settings, day: null, proposals: rows(status), replans: [] }), now).fire, true);
+  }
 });

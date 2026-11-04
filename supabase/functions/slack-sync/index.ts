@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   }
   try {
     const [settings] = await db("settings?select=time_zone");
-    const timeZone = settings?.time_zone ?? "America/New_York";
+    const timeZone = settings.time_zone;
     // The last good sync, or a day ago the first time ("since yesterday", spec 47 story 65).
     const [last] = await db("feed_state?select=fetched_at,ok&source=eq.slack");
     const since = last?.ok === true && last.fetched_at ? new Date(last.fetched_at) : new Date(now.getTime() - DAY_MS);

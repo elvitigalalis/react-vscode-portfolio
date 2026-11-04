@@ -11,9 +11,11 @@ const WORDS = { always: "Always show", never: "Never show" };
 async function draw() {
   const rules = await api.listTriageRules();
   $("[data-triage-rules]").replaceChildren(...(rules.length ? rules.map((r) => {
-    const remove = el("button", { type: "button", className: "sheet-link", textContent: "Remove", ariaLabel: `Remove the rule for ${r.pattern}` });
+    // A sender rule (made from a Needs you offer) holds a hash; it shows the sender's name.
+    const shown = r.match === "sender" ? r.label || "a sender" : r.pattern;
+    const remove = el("button", { type: "button", className: "sheet-link", textContent: "Remove", ariaLabel: `Remove the rule for ${shown}` });
     remove.dataset.triageRemove = r.id;
-    return el("li", {}, `${WORDS[r.action]} · ${r.match === "domain" ? "domain" : "address"} `, el("strong", { textContent: r.pattern }), " ", remove);
+    return el("li", {}, `${WORDS[r.action]} · ${r.match === "sender" ? "sender" : r.match === "domain" ? "domain" : "address"} `, el("strong", { textContent: shown }), " ", remove);
   }) : [el("li", { className: "small", textContent: "No rules yet." })]));
 }
 

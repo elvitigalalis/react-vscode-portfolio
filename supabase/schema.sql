@@ -716,15 +716,21 @@ alter table days add column if not exists turned_down uuid[] not null default '{
 -- Habit blocks need H1's blocks.habit_id and the changes rows R1's table: plpgsql plans each
 -- statement when it first runs, so those stay unread until there is something to write.
 drop function if exists apply_proposal(date, jsonb, jsonb, jsonb, text);
+-- Fix: read_at, when its run read the day (read_planner's read_at): the revision consumes only
+-- the changes logged by then, so one logged while the run worked waits for the next replan.
+-- Without it, now() as before. The signature without it is dropped.
+alter table proposals add column if not exists read_at timestamptz;
+drop function if exists apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[]);
 create or replace function apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
   needs jsonb default '[]', picks jsonb default '[]', note text default null,
   couldnt_fit uuid[] default '{}', suggested jsonb default '[]',
-  run_trigger text default 'morning', reasons text[] default '{}') returns int
+  run_trigger text default 'morning', reasons text[] default '{}', read_at timestamptz default null) returns int
 language plpgsql security invoker set search_path = public as $$
 declare
   newest proposals%rowtype;
   tz text := (select time_zone from settings);
   r int := coalesce(replaces, 0) + 1;
+  cut timestamptz := least(coalesce(apply_proposal.read_at, now()), now());
 begin
   perform 1 from proposals p where p.day = d for update;
   select * into newest from proposals p where p.day = d order by p.rev desc limit 1;
@@ -747,29 +753,29 @@ begin
     select x.habit_id, x.starts_at, x.ends_at, true
     from jsonb_to_recordset(apply_proposal.habit_blocks) as x(habit_id uuid, starts_at timestamptz, ends_at timestamptz);
   end if;
-  insert into proposals (day, rev, created_at, status, note, picks, blocks, couldnt_fit, suggested, run_trigger, reasons)
+  insert into proposals (day, rev, created_at, status, note, picks, blocks, couldnt_fit, suggested, run_trigger, reasons, read_at)
   values (d, r, clock_timestamp(), 'pending', apply_proposal.note, coalesce(apply_proposal.picks, '[]'),
     (select coalesce(jsonb_agg(x order by x->>'starts_at'), '[]')
      from jsonb_array_elements(coalesce(apply_proposal.blocks, '[]') || coalesce(apply_proposal.habit_blocks, '[]')) x),
     coalesce(apply_proposal.couldnt_fit, '{}'), coalesce(apply_proposal.suggested, '[]'),
-    coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'));
+    coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'), cut);
   -- As in v4: a new revision replaces the day's open items, skipping any message already there.
   -- v5 SRC2: only mail rows; Slack rows are slack-sync's, and stay until he marks them done.
   delete from needs_you n where n.day = d and not n.done and n.source = 'mail';
-  -- v5 L1: each row carries the From address checkProposal looked up (null when unknown).
-  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due, from_address)
-  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due, x.from_address
+  -- v5 L1: each row carries the sender hash checkProposal looked up (null when unknown).
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due, sender_hash)
+  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due, x.sender_hash
   from jsonb_to_recordset(coalesce(apply_proposal.needs, '[]'))
-    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date, from_address text)
+    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date, sender_hash text)
   on conflict (account, message_id) do nothing;
   if to_regclass('public.changes') is not null then
     update changes c set consumed_day = d, consumed_rev = r
-    where c.consumed_day is null and c.consumed_rev is null and c.at <= now();
+    where c.consumed_day is null and c.consumed_rev is null and c.at <= cut;
   end if;
   return r;
 end $$;
-revoke execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[]) from public, anon;
-grant execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[]) to authenticated;
+revoke execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz) from public, anon;
+grant execute on function apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz) to authenticated;
 
 -- Approve all and Skip, from Telegram or /plan, act on revision `rev` only while it is d's newest
 -- and pending, so a tap never decides a plan he hasn't seen.
@@ -932,15 +938,36 @@ revoke all on changes, replans from anon;
 revoke insert, update, delete on changes, replans from authenticated;
 grant update (consumed_day, consumed_rev) on changes to authenticated;
 
+-- The telegram tick's claim on a replan (fix), in one transaction: it inserts the replans row and
+-- ties the open changes `ids` to it, or returns null when another claim holds: one still sending
+-- or started under 60 minutes ago (replan.mjs's PLAN_GAP), or a 429 whose retry_after is ahead.
+-- The advisory lock makes two ticks at once take turns, so a replan fires once.
+create or replace function claim_replan(d date, reasons text[], counts jsonb, ids uuid[]) returns uuid
+language plpgsql security invoker set search_path = public as $$
+declare rid uuid;
+begin
+  perform pg_advisory_xact_lock(hashtext('sheet.claim_replan'));
+  if exists (select 1 from replans r where r.day = d
+    and ((r.result is null or r.result = 'started') and r.at > now() - interval '60 minutes'
+      or r.retry_after > now())) then
+    return null;
+  end if;
+  insert into replans (day, reasons, counts) values (d, claim_replan.reasons, claim_replan.counts) returning id into rid;
+  update changes c set replan_id = rid
+  where c.id = any(ids) and c.replan_id is null and c.consumed_rev is null;
+  return rid;
+end $$;
+revoke execute on function claim_replan(date, text[], jsonb, uuid[]) from public, anon, authenticated;
+grant execute on function claim_replan(date, text[], jsonb, uuid[]) to service_role;
+
 -- --- v5 L1, learning from his taps (docs/sheet-v5.md, "Schema") -------------------------------
--- Needs you gains Not needed (a done row he says wasn't worth showing) and the sender's From
--- address, lowercased, which the server sets from message_senders.
+-- Needs you gains Not needed (a done row he says wasn't worth showing) and the sender's hash
+-- (sender_hash, below with message_senders), which the server sets from message_senders.
 alter table needs_you add column if not exists not_needed boolean not null default false;
-alter table needs_you add column if not exists from_address text;
 
 -- Every decision he makes, as ids only: Approve all or Skip by revision, turning down a block,
 -- Done, Not needed and Undo on Needs you, and each Finished? answer. Refs: proposal { day, rev },
--- block { day, task_id }, needs_you { account, message_id, from_address }, finished { block_id,
+-- block { day, task_id }, needs_you { account, message_id, sender_hash }, finished { block_id,
 -- task_id }. Append-only: the owner (/plan) and Telegram (service key) insert, nobody updates or
 -- deletes but nightly_roll, which keeps 120 days.
 create table if not exists feedback (
@@ -1061,8 +1088,9 @@ $job$);
 -- mail text, and keeps three things, all owner-only and written only by the server:
 --   known_senders    salted SHA-256 hashes (senderHash, src/sheet/mail.mjs) of the addresses he
 --                    has sent mail to, never an address;
---   message_senders  each received message's From address, lowercased, for submit_proposal's
---                    never-show rules (L1); 14 days, like Needs you;
+--   message_senders  each received message's sender hashes (senderHashes: the address's, its
+--                    domain's and each parent's), for submit_proposal's never-show rules (L1);
+--                    14 days, like Needs you; never an address;
 --   reply_state      per thread, Reply owed or Awaiting reply (replyState), with a display name.
 -- mail_accounts.history_id is where each account's next history read starts.
 alter table mail_accounts add column if not exists history_id text;
@@ -1076,7 +1104,8 @@ create table if not exists message_senders (
   account text,
   message_id text,
   thread_id text not null,
-  from_address text not null,
+  address_hash text not null,
+  domain_hashes text[] not null default '{}',
   at timestamptz not null,
   primary key (account, message_id)
 );
@@ -1103,6 +1132,29 @@ drop policy if exists owner_all on reply_state;
 create policy owner_all on reply_state for all using (is_owner()) with check (is_owner());
 revoke all on known_senders, message_senders, reply_state from anon;
 revoke insert, update, delete on known_senders, message_senders, reply_state from authenticated;
+
+-- Fix: no From address in plain text (docs/sheet-v5.md, "Sender hashes"). message_senders keeps
+-- hashes only, Needs you rows and their feedback a sender_hash, and a triage rule made from a
+-- /plan offer matches by hash (match 'sender', with the sender's display name as its label).
+-- Rows written with plain addresses before are deleted or stripped. Safe to re-run.
+alter table message_senders add column if not exists address_hash text;
+alter table message_senders add column if not exists domain_hashes text[] not null default '{}';
+delete from message_senders where address_hash is null;
+alter table message_senders drop column if exists from_address;
+alter table message_senders alter column address_hash set not null;
+alter table message_senders drop constraint if exists message_senders_hashes_check;
+alter table message_senders add constraint message_senders_hashes_check
+  check (address_hash ~ '^[0-9a-f]{64}$' and array_to_string(domain_hashes, ',') ~ '^([0-9a-f]{64}(,|$))*$');
+alter table needs_you add column if not exists sender_hash text;
+alter table needs_you drop column if exists from_address;
+alter table needs_you drop constraint if exists needs_you_sender_hash_check;
+alter table needs_you add constraint needs_you_sender_hash_check check (sender_hash is null or sender_hash ~ '^[0-9a-f]{64}$');
+update feedback set ref = ref - 'from_address' where item = 'needs_you' and ref ? 'from_address';
+alter table triage_rules add column if not exists label text check (label is null or char_length(label) <= 80);
+alter table triage_rules drop constraint if exists triage_rules_match_check;
+alter table triage_rules add constraint triage_rules_match_check check (match in ('address', 'domain', 'sender'));
+alter table triage_rules drop constraint if exists triage_rules_sender_check;
+alter table triage_rules add constraint triage_rules_sender_check check (match <> 'sender' or pattern ~ '^[0-9a-f]{64}$');
 
 -- Every 5 minutes from :02, call mail-sync. Like sheet-brightspace, it does nothing until its URL
 -- and the shared secret are in Vault.

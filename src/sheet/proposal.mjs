@@ -35,13 +35,32 @@ function windowFrom(now, day, tz) {
 // minutes old. Otherwise this is the morning run. The changes since the newest revision go in as
 // kinds and counts only.
 const REPLAN_FRESH = 30 * 60_000;
-function runOf(rows, now) {
+const freshReplan = (r, proposal, now) => Boolean(r && r.result === "started"
+  && Date.parse(r.at) > (proposal ? Date.parse(proposal.created_at) : -Infinity) && now - Date.parse(r.at) < REPLAN_FRESH);
+function runOf(rows, now, day) {
   const r = rows.replan;
-  const after = rows.proposal ? Date.parse(rows.proposal.created_at) : -Infinity;
-  const replan = r && r.result === "started" && Date.parse(r.at) > after && now - Date.parse(r.at) < REPLAN_FRESH;
+  // A replans row is for its own day (one without `day` reads as plan_day's).
+  const replan = freshReplan(r, rows.proposal, now) && (r.day == null || r.day === day);
   const changes = {};
   for (const c of list(rows.changes)) changes[c.kind] = (changes[c.kind] ?? 0) + 1;
   return { trigger: replan ? "replan" : "morning", reasons: replan ? [...r.reasons] : [], changes };
+}
+
+// Whether a message run may go on as a replan of today: `message` is the newest fired messages
+// row ({ fired_at }), fired under 30 minutes ago and after `proposal`, today's newest revision.
+// planner-mcp passes it only while replans are on (docs/sheet-morning-task.md, step 2b).
+export const messageRunOf = (now, message, proposal) => Boolean(message?.fired_at
+  && now - Date.parse(message.fired_at) < REPLAN_FRESH
+  && Date.parse(message.fired_at) > (proposal ? Date.parse(proposal.created_at) : -Infinity));
+
+// The day a run plans: today when a replan started this run (`replan`, today's newest replans
+// row, fresh and after `proposal`, today's newest revision), or a message run may go on as a
+// replan of today (`message`, messageRunOf), since a replan plans the rest of today even from
+// 3 pm; otherwise the 3 pm rule's planningDay.
+export function planDayOf(now, timeZone, replan, proposal, message = null) {
+  const here = localNow(now, timeZone);
+  const today = (replan?.day === here.day && freshReplan(replan, proposal, now)) || messageRunOf(now, message, proposal);
+  return today ? here.day : planningDay(here);
 }
 
 // v5 M1: the reply_state rows by state, oldest first, as { account, thread_id, who, since }.
@@ -69,7 +88,8 @@ function replyStateOf(rows) {
 export function planSnapshot(rows, now) {
   const { settings } = rows;
   const tz = settings.time_zone;
-  const day = planningDay(localNow(now, tz));
+  // A replan run's plan_day comes in as rows.plan_day (planDayOf); otherwise the 3 pm rule.
+  const day = rows.plan_day ?? planningDay(localNow(now, tz));
   const line = rows.days.find((d) => d.day === day)?.shutdown_at;
   const risky = (t) => atRisk(t, rows.blocks, day, tz);
   const undone = rows.tasks.filter((t) => !t.done);
@@ -93,10 +113,13 @@ export function planSnapshot(rows, now) {
   return {
     version: 5,
     now: now.toISOString(),
+    // When this snapshot was read: submit_proposal passes it back, so the revision consumes only
+    // the changes logged by then (apply_proposal's read_at).
+    read_at: now.toISOString(),
     time_zone: tz,
     plan_day: day,
     shutdown,
-    run: runOf(rows, now),
+    run: runOf(rows, now, day),
     window: { from: windowFrom(now, day, tz), to: shutdown },
     turned_down: turnedDown,
     tasks,
@@ -169,7 +192,7 @@ const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && 
 const list = (v) => (v == null ? [] : v);
 
 // "2:00–3:20 pm", "11:00 am–12:00 pm": the half of the day once when both ends share it.
-function clockSpan(start, end) {
+export function clockSpan(start, end) {
   const [a, b] = [formatClock(((start % 1440) + 1440) % 1440), formatClock(((end % 1440) + 1440) % 1440)];
   return a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
 }
@@ -231,7 +254,9 @@ function dayRuleErrors(spans, snapshot, errors) {
     errors.push(`${named.name}: makes ${run.end - run.start} minutes of blocks in a row; leave a ${rules.break_min}-minute break after every ${rules.break_after_min}`);
   }
 
-  const planned = approved.reduce((n, b) => n + blockMinutes(b), 0) + spans.reduce((n, s) => n + s.end - s.start, 0);
+  // The cap is for work: habit blocks (approved ones, and spans named habits[i]) stay out of it.
+  const planned = approved.filter((b) => !b.habit_id).reduce((n, b) => n + blockMinutes(b), 0)
+    + spans.filter((s) => !s.name.startsWith("habits[")).reduce((n, s) => n + s.end - s.start, 0);
   if (planned > rules.workload_cap_min) {
     errors.push(`blocks: ${hoursLabel(planned)} planned, over the ${hoursLabel(rules.workload_cap_min)} workload cap`);
   }
@@ -342,10 +367,11 @@ function suggestedTasks(input, errors) {
 // and not be for a task turned down today. A replan may follow an approved revision. `rows`
 // gains apply_proposal's v5 arguments, and the result gains `dropped`.
 //
-// v5 L1: `senders` maps "<account> <message_id>" to the message's From address (planner-mcp
-// reads message_senders). A Needs you item from a sender a never-show rule covers is dropped,
-// not refused, and each row carries its from_address (null when unknown).
-export function checkProposal(input, snapshot, senders = {}) {
+// v5 L1: `senders` maps "<account> <message_id>" to the message's sender hashes, { address,
+// domains } (planner-mcp reads message_senders), and `hashOf(pattern)` hashes a rule's pattern
+// the same way (fix: no From address in plain text). A Needs you item from a sender a never-show
+// rule covers is dropped, not refused, and each row carries its sender_hash (null when unknown).
+export function checkProposal(input, snapshot, senders = {}, hashOf = () => null) {
   const errors = [];
   const tz = snapshot.time_zone;
   const day = snapshot.plan_day;
@@ -464,30 +490,40 @@ export function checkProposal(input, snapshot, senders = {}) {
   const note = input?.note == null ? null : text(input.note, "note", 280, errors);
   const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
   const suggested = v5 ? suggestedTasks(input, errors) : null;
+  const readAt = v5 ? readAtOf(input, snapshot, errors) : null;
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
   const { trigger: run_trigger, reasons } = snapshot.run;
-  const kept = dropNeverShown(needs, suggested, snapshot, senders);
+  const kept = dropNeverShown(needs, suggested, snapshot, senders, hashOf);
   return {
     ok: true, errors: [],
-    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons },
+    rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons, ...(readAt ? { read_at: readAt } : {}) },
     dropped: kept.dropped,
   };
 }
 
-// v5 L1, never-show rules: the needs rows (all valid, so in input order) gain from_address, and
+// read_at, the read_planner snapshot's time the run submits against: optional (without it
+// apply_proposal uses its own clock), and never after this submit's fresh snapshot.
+function readAtOf(input, snapshot, errors) {
+  if (input?.read_at == null) return null;
+  const at = typeof input.read_at === "string" ? Date.parse(input.read_at) : NaN;
+  if (Number.isNaN(at) || at > Date.parse(snapshot.now)) return errors.push("read_at: must be the read_at read_planner gave"), null;
+  return new Date(at).toISOString();
+}
+
+// v5 L1, never-show rules: the needs rows (all valid, so in input order) gain sender_hash, and
 // those whose sender a `never` rule in snapshot.triage_rules covers go, with their suggestion.
 // `dropped` is [{ index, message_id, pattern }], index into the input's needs_you.
-function dropNeverShown(needs, suggested, snapshot, senders) {
+function dropNeverShown(needs, suggested, snapshot, senders, hashOf) {
   const rules = list(snapshot.triage_rules);
   const dropped = [];
   const kept = [];
   needs.forEach((n, index) => {
-    const from_address = senders?.[messageKey(n.account, n.message_id)] ?? null;
-    const rule = from_address && neverRule(rules, from_address);
+    const sender = senders?.[messageKey(n.account, n.message_id)] ?? null;
+    const rule = sender && neverRule(rules, sender, hashOf);
     if (rule) dropped.push({ index, message_id: n.message_id, pattern: rule.pattern });
-    else kept.push({ ...n, from_address });
+    else kept.push({ ...n, sender_hash: sender?.address ?? null });
   });
   const gone = new Set(dropped.map((d) => messageKey(needs[d.index].account, d.message_id)));
   return { needs: kept, suggested: suggested.filter((x) => !gone.has(messageKey(x.account, x.message_id))), dropped };
@@ -523,6 +559,10 @@ export function couldntFitLine(ids, tasks) {
   return `Couldn't fit: ${titles.slice(0, SHOWN_COULDNT_FIT).join(", ")}${more}.`;
 }
 
+// "Task to add: HackerRank assessment (due Nov 7)", for the brief and /plan. Titles passed
+// checkProposal; one that could become a link reads "A task" anyway.
+export const suggestedLine = (t) => `Task to add: ${linkish(t.title) ? "A task" : t.title} (due ${dayLabel(t.due).date})`;
+
 // The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
 // up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
 // may hold any blocks; only the proposal day's proposed ones count. `picks` is [{ uid, why }],
@@ -545,7 +585,7 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   if (unfit) lines.push(unfit);
   // v5 A1: one line per suggested task. Titles passed checkProposal; one that could become a link
   // reads "A task" anyway.
-  for (const t of proposal.suggested ?? []) lines.push(`Task to add: ${linkish(t.title) ? "A task" : t.title} (due ${dayLabel(t.due).date})`);
+  for (const t of proposal.suggested ?? []) lines.push(suggestedLine(t));
   const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).
