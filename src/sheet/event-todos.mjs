@@ -2,7 +2,7 @@
 // to-do in that day's list, so Lisul plans from one list in time order. The browser has the raw
 // titles from Google and never saves them; event_todos keeps only done, hidden and a concise
 // title Claude wrote (title_ai), by the event's key.
-import { eventsOnDay, minutesOn } from "./logic.mjs";
+import { eventsOnDay, minutesOn, DEFAULT_EST } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // An event's key: the calendar it was read from ("primary" for his main one) and its ID.
@@ -12,9 +12,26 @@ const eventIdOf = (key) => key.slice(key.lastIndexOf(":") + 1);
 
 const clock = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
-// A day's rows in order: all-day events first; then, by time, events (by start), tasks with an
-// at_time and tasks with an approved block that day (by its start); then the untimed tasks in
-// the order given. Ties keep events before tasks.
+// A timed task's time on the day, { start, end } in minutes past midnight, or null when it has no
+// time there. Start: its at_time, else its approved block's start that day, else its block in the
+// pending plan, so a task Claude placed sits among the day's other timed items. End: that block's
+// end (for an at_time, a block starting then), else start + est_min, else start + 30 minutes.
+export function taskSpan(t, day, timeZone, blocks) {
+  const on = (proposed) => blocks.filter((b) => b.task_id === t.id && Boolean(b.proposed) === proposed)
+    .map((b) => ({ start: minutesOn(b.starts_at, day, timeZone), end: minutesOn(b.ends_at, day, timeZone) }))
+    .filter((b) => b.start >= 0 && b.start < 1440).sort((a, b) => a.start - b.start);
+  const mine = on(false).length ? on(false) : on(true);
+  if (t.at_time) {
+    const start = clock(t.at_time);
+    const block = mine.find((b) => b.start === start);
+    return { start, end: block ? block.end : start + (t.est_min || DEFAULT_EST) };
+  }
+  return mine[0] ?? null;
+}
+
+// A day's rows in order: all-day events first; then, by time, events (by start), tasks with
+// a time (taskSpan, by its start); then the untimed tasks in the order given. Ties keep events
+// before tasks. A timed task's row also carries its span's start and end.
 // - events: calendarEvents' events ({ id, calendar, title, allDay, starts_at, ends_at, link }).
 //   The Sheet's own block events (a block's gcal_id) are left out: their tasks are on the list.
 // - tasks: the day's tasks, in their order. blocks: blocks rows. todos: event_todos rows.
@@ -34,20 +51,12 @@ export function dayRows({ day, timeZone, tasks, events, blocks, todos }) {
     const title = own?.title_ai ?? byEvent.get(e.id)?.title_ai ?? raw;
     return [{ kind: "event", key, title, raw, allDay: e.allDay, start: Math.max(0, e.start), end: e.end, done: Boolean(own?.done), link: e.link ?? null }];
   });
-  // A task sorts by its approved block on the day, else by its block in the pending plan, so a
-  // task Claude placed sits among the day's other timed items rather than at the end.
-  const blockStart = (id) => {
-    const on = (proposed) => blocks.filter((b) => b.task_id === id && Boolean(b.proposed) === proposed)
-      .map((b) => minutesOn(b.starts_at, day, timeZone)).filter((m) => m >= 0 && m < 1440);
-    const starts = on(false).length ? on(false) : on(true);
-    return starts.length ? Math.min(...starts) : null;
-  };
   const timed = [];
   const untimed = [];
   for (const t of tasks) {
-    const at = t.at_time ? clock(t.at_time) : blockStart(t.id);
-    if (at == null) untimed.push({ kind: "task", task: t });
-    else timed.push({ kind: "task", task: t, at });
+    const span = taskSpan(t, day, timeZone, blocks);
+    if (!span) untimed.push({ kind: "task", task: t });
+    else timed.push({ kind: "task", task: t, ...span, at: span.start });
   }
   const allDay = evRows.filter((r) => r.allDay);
   const withTime = [...evRows.filter((r) => !r.allDay).map((r) => ({ ...r, at: r.start })), ...timed]
