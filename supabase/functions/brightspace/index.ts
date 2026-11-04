@@ -1,5 +1,6 @@
 // The brightspace Edge Function (docs/sheet-sources.md, "Edge Functions"): turns Lisul's
-// Brightspace due dates into course tasks. pg_cron calls it at :20 every hour
+// Brightspace calendar into course tasks: due dates as tasks with due dates, and exams, quizzes
+// and other events as tasks on their day at their time. pg_cron calls it at :20 every hour
 // (supabase/schema.sql, "sheet-brightspace"). It fetches the calendar feed, and
 // src/sheet/ical.mjs and src/sheet/feeds.mjs, the modules the tests cover, decide what changes;
 // this file only reads the planner, fetches the feed and writes what they say, then records the
@@ -17,8 +18,8 @@
 // SUPABASE_SERVICE_ROLE_KEY are provided by Supabase and read in ../_shared/server.ts, with the
 // shared-secret check and the database calls.
 import { parseIcs } from "../../../src/sheet/ical.mjs";
-import { courseChanges, courseTaskChanges } from "../../../src/sheet/feeds.mjs";
-import { localNow } from "../../../src/sheet/logic.mjs";
+import { courseChanges, courseEventChanges, courseRemovals, courseTaskChanges } from "../../../src/sheet/feeds.mjs";
+import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { calendarText, db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -50,13 +51,13 @@ Deno.serve(async (req) => {
 
 type Changes = {
   insert: Record<string, unknown>[];
-  update: { id: string; title: string; due: string }[];
+  update: ({ id: string } & Record<string, unknown>)[];
   seen: { source: string; uid: string }[];
 };
 
 async function sync(now: Date) {
   const [settings] = await db("settings?select=time_zone");
-  const tasks = await db(`tasks?select=id,title,due,done,source,source_uid&source=eq.${SOURCE}`);
+  const tasks = await db(`tasks?select=id,title,day,list,due,at_time,est_min,done,source,source_uid&source=eq.${SOURCE}`);
   const seen = (await db(`feed_seen?select=uid&source=eq.${SOURCE}`)).map((r: { uid: string }) => r.uid);
 
   const text = await calendarText(await fetch(FEED_URL, { headers: { Accept: "text/calendar" } }));
@@ -64,9 +65,16 @@ async function sync(now: Date) {
   // From yesterday on: items already past when the sync first runs don't become tasks, and a
   // past item keeps the due date it last had. Brightspace lists the term ahead, so half a year
   // covers it.
-  const events = parseIcs(text, { from: new Date(+now - DAY), to: new Date(+now + 183 * DAY) });
+  const to = new Date(+now + 183 * DAY);
+  const events = parseIcs(text, { from: new Date(+now - DAY), to });
   const timeZone = settings.time_zone;
-  const changes = courseTaskChanges(events, { tasks, seen, timeZone }) as Changes;
+  const today = localNow(now, timeZone).day;
+  // Due dates, then the events (exams, quizzes, holidays) beside them; both are course tasks.
+  const due = courseTaskChanges(events, { tasks, seen, timeZone }) as Changes;
+  const timed = courseEventChanges(events, { tasks, seen, timeZone, today }) as Changes;
+  const changes: Changes = { insert: [...due.insert, ...timed.insert], update: [...due.update, ...timed.update], seen: [...due.seen, ...timed.seen] };
+  // Cancelled or gone from the feed, up to the day before the window's far edge.
+  const removed = courseRemovals(events, { tasks, today, until: addDays(localNow(to, timeZone).day, -1) }) as { id: string; uid: string }[];
 
   // Tasks first, then their UIDs: if the run dies between the two, the task holding the UID
   // still counts as seen next time. The unique (source, source_uid) index turns away a repeat.
@@ -84,11 +92,18 @@ async function sync(now: Date) {
       body: JSON.stringify(changes.seen),
     });
   }
-  for (const u of changes.update) {
-    await db(`tasks?id=eq.${u.id}&done=is.false`, { method: "PATCH", body: JSON.stringify({ title: u.title, due: u.due }) });
+  for (const { id, ...fields } of changes.update) {
+    await db(`tasks?id=eq.${id}&done=is.false`, { method: "PATCH", body: JSON.stringify(fields) });
+  }
+  // A removed item's task goes, and so does its UID, so the item comes back as new if reinstated.
+  // PostgREST filters: docs.postgrest.org/en/stable/references/api/tables_views.html#operators.
+  if (removed.length) {
+    await db(`tasks?id=in.(${removed.map((r) => r.id).join(",")})&done=is.false`, { method: "DELETE" });
+    const uids = removed.map((r) => `"${r.uid.replace(/["\\]/g, "\\$&")}"`).join(",");
+    await db(`feed_seen?source=eq.${SOURCE}&uid=in.(${encodeURIComponent(uids)})`, { method: "DELETE" });
   }
   // v5 R1: what the replan decision weighs (docs/sheet-v5.md, "replan.mjs"), once the tasks are in.
-  const logged = courseChanges(changes, tasks, localNow(now, timeZone).day);
+  const logged = courseChanges({ ...changes, removed }, tasks, today);
   if (logged.length) await db("changes", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(logged) });
-  return { items: events.length, inserted: changes.insert.length, updated: changes.update.length };
+  return { items: events.length, inserted: changes.insert.length, updated: changes.update.length, removed: removed.length };
 }
