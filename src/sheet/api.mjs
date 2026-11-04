@@ -158,7 +158,9 @@ export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
 export const listAwaiting = () => rest("reply_state?select=account,thread_id,who,since&state=eq.awaiting&order=since");
 export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
 // v5: a day's newest revision, and turning a proposed block's task down for the day.
-export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,rev,status,note,picks,couldnt_fit&order=rev.desc&limit=1`))[0] ?? null;
+export const proposalOn = async (day) => (await rest(`proposals?day=eq.${day}&select=day,rev,status,note,picks,couldnt_fit,suggested&order=rev.desc&limit=1`))[0] ?? null;
+// Approve all on a pending revision, as Telegram's: its blocks approved, its suggested tasks made.
+export const approveProposal = (d, rev) => rest("rpc/approve_proposal", { method: "POST", body: { d, rev } });
 export const turnDown = (d, task) => rest("rpc/turn_down", { method: "POST", body: { d, task } });
 // uids are quoted, so commas and parentheses in one stay inside it
 // (https://docs.postgrest.org/en/stable/references/api/url_grammar.html#reserved-characters).
@@ -184,8 +186,14 @@ export const deleteHabit = (id) => rest(`habits?id=eq.${id}`, { method: "DELETE"
 export const setNeedState = (id, done, not_needed) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done, not_needed } });
 export const logFeedback = (row) => rest("feedback", { method: "POST", body: row, prefer: "return=minimal" });
 export const listNeedsFeedback = () => rest("feedback?select=at,item,action,ref&item=eq.needs_you&order=at");
-export const listTriageRules = () => rest("triage_rules?select=id,match,pattern,action&order=created_at");
-export const addTriageRule = (match, pattern, action) => rest("triage_rules", { method: "POST", body: { match, pattern: pattern.trim().toLowerCase(), action } });
+export const listTriageRules = () => rest("triage_rules?select=id,match,pattern,action,label&order=created_at");
+// A sender rule (fix) matches a sender hash, labelled with the sender's display name.
+export const addTriageRule = (match, pattern, action, label = null) => rest("triage_rules", { method: "POST", body: { match, pattern: pattern.trim().toLowerCase(), action, ...(label ? { label } : {}) } });
+// The display names Needs you rows carry for sender hashes (fix: the offers name a sender, never
+// an address). Hashes are hex, so they go into in.() as they are.
+export const senderNames = async (hashes) => (hashes.length
+  ? new Map((await rest(`needs_you?select=sender_hash,sender&sender_hash=in.(${hashes.filter((h) => /^[0-9a-f]{64}$/.test(h)).join(",")})&order=created_at.desc`)).map((r) => [r.sender_hash, r.sender]).reverse())
+  : new Map());
 export const deleteTriageRule = (id) => rest(`triage_rules?id=eq.${id}`, { method: "DELETE" });
 
 // Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are

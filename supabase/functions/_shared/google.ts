@@ -19,3 +19,8 @@ export async function googleToken(fields: Record<string, string>): Promise<{ ok:
   const grant = await res.json().catch(() => ({}));
   return { ok: res.ok && Boolean(grant.access_token), status: res.status, grant };
 }
+
+// The error for a refused refresh: Google's error code (invalid_grant, say), which never holds a
+// token, or the HTTP status; its description is left out.
+export const refusedWhy = (status: number, grant: Grant) =>
+  `token refresh refused: ${/^[\w-]{1,40}$/.test(grant.error ?? "") ? grant.error : `HTTP ${status}`}`;

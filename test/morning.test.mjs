@@ -126,3 +126,27 @@ test("planNotes: no proposal, a skipped one, or one with nothing to say is no li
   assert.deepEqual(planNotes({ day: "2026-11-03", status: "skipped", note: "x", picks: [{ uid: "c1" }] }, campus, TZ), []);
   assert.deepEqual(planNotes({ day: "2026-11-03", status: "approved", note: null, picks: [{ uid: "gone" }] }, campus, TZ), []);
 });
+
+// ---------------------------------------------------------------- Fix: suggested tasks and Approve all on /plan
+
+test("planNotes: a pending revision's suggested tasks, one line each with the due date", () => {
+  const suggested = [
+    { account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", title: "Acme HackerRank assessment", due: "2026-11-07", kind: "assessment" },
+    { account: "a@b.com", message_id: "18f2a3b4c5d6e7f2", title: "Book a slot at evil.com", due: "2026-11-06", kind: "interview" },
+  ];
+  const p = { day: "2026-11-03", status: "pending", note: null, picks: [], suggested };
+  assert.deepEqual(planNotes(p, campus, TZ), [
+    "Task to add: Acme HackerRank assessment (due Nov 7)",
+    "Task to add: A task (due Nov 6)",
+  ]);
+  // Once approved they are tasks in Inbox, so the lines go.
+  assert.deepEqual(planNotes({ ...p, status: "approved" }, campus, TZ), []);
+});
+
+test("approveAllCall: Approve all on /plan approves the pending revision through approve_proposal", async () => {
+  const { approveAllCall } = await import("../src/sheet/morning.mjs");
+  assert.deepEqual(approveAllCall({ day: "2026-11-03", rev: 2, status: "pending" }), { d: "2026-11-03", rev: 2 });
+  // No pending revision (approved already, or a day planned by hand): the blocks one by one.
+  assert.equal(approveAllCall({ day: "2026-11-03", rev: 2, status: "approved" }), null);
+  assert.equal(approveAllCall(null), null);
+});

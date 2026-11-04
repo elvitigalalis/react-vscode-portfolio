@@ -172,3 +172,67 @@ test("planSnapshot: approved habit blocks keep their habit_id, and stay out of p
   assert.deepEqual(s.blocks, [{ task_id: null, habit_id: "h1", starts_at: "2026-11-04T17:30:00Z", ends_at: "2026-11-04T18:00:00Z", proposed: false }]);
   assert.deepEqual(s.planned_vs_done, []);
 });
+
+// --- Fix: a replan from 3 pm plans the rest of today ---------------------------------------------
+
+test("planDayOf: a fresh started replan from 3 pm plans today; otherwise the 3 pm rule", async () => {
+  const { planDayOf } = await import("../src/sheet/proposal.mjs");
+  const four = new Date("2026-11-04T21:00:00Z"); // 4:00 pm
+  const replan = { day: DAY, at: "2026-11-04T20:55:00Z", result: "started", reasons: ["busy_overlap"] };
+  const morning = { created_at: "2026-11-04T11:09:00Z" };
+  assert.equal(planDayOf(four, "America/New_York", replan, morning), DAY);
+  assert.equal(planDayOf(four, "America/New_York", replan, null), DAY);
+  assert.equal(planDayOf(four, "America/New_York", null, morning), "2026-11-05");
+  assert.equal(planDayOf(four, "America/New_York", { ...replan, result: "failed" }, morning), "2026-11-05");
+  // Its revision is in already, or it is over 30 minutes old: the 3 pm rule again.
+  assert.equal(planDayOf(four, "America/New_York", replan, { created_at: "2026-11-04T20:58:00Z" }), "2026-11-05");
+  assert.equal(planDayOf(new Date("2026-11-04T21:30:00Z"), "America/New_York", replan, morning), "2026-11-05");
+});
+
+test("planSnapshot v5: a replan run at 4 pm plans today from now, not tomorrow", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  const four = new Date("2026-11-04T21:02:00Z"); // 4:02 pm
+  const replan = { day: DAY, at: "2026-11-04T20:55:00Z", result: "started", reasons: ["busy_overlap"] };
+  const days = [{ day: DAY, shutdown_at: "18:30:00", turned_down: [] }];
+  const s = planSnapshot(v5Rows({ replan, days, plan_day: DAY }), four);
+  assert.equal(s.plan_day, DAY);
+  assert.deepEqual(s.window, { from: "16:15", to: "18:30" });
+  assert.equal(s.run.trigger, "replan");
+  // A replans row of another day never makes a replan run.
+  assert.equal(planSnapshot(v5Rows({ replan: { ...replan, day: "2026-11-03" } }), new Date("2026-11-04T14:20:00Z")).run.trigger, "morning");
+});
+
+// --- Fix: changes logged during a run stay for the next replan ------------------------------------
+
+test("planSnapshot v5: read_at is when the snapshot was read; checkProposal passes it on to apply_proposal", async () => {
+  const { planSnapshot, checkProposal } = await import("../src/sheet/proposal.mjs");
+  const read = new Date("2026-11-04T14:07:00Z");
+  const s = planSnapshot(v5Rows(), read);
+  assert.equal(s.read_at, "2026-11-04T14:07:00.000Z");
+  // Submitted four minutes later, against a fresh snapshot.
+  const fresh = planSnapshot(v5Rows(), new Date("2026-11-04T14:11:00Z"));
+  const input = { day: DAY, replaces: 2, blocks: [], read_at: s.read_at };
+  const r = checkProposal(input, fresh);
+  assert.equal(r.ok, true, JSON.stringify(r.errors));
+  assert.equal(r.rows.read_at, "2026-11-04T14:07:00.000Z");
+  // Without it, apply_proposal keeps its own clock (rows have no read_at).
+  assert.equal("read_at" in checkProposal({ ...input, read_at: undefined }, fresh).rows, false);
+  // Not a time, or after the fresh read: refused.
+  assert.match(checkProposal({ ...input, read_at: "soon" }, fresh).errors.join(" "), /^read_at/);
+  assert.match(checkProposal({ ...input, read_at: "2026-11-04T14:12:00.000Z" }, fresh).errors.join(" "), /^read_at/);
+});
+
+test("planDayOf: a message run that goes on as a replan of today plans today from 3 pm too", async () => {
+  const { planDayOf, messageRunOf } = await import("../src/sheet/proposal.mjs");
+  const four = new Date("2026-11-04T21:00:00Z"); // 4:00 pm
+  const morning = { created_at: "2026-11-04T11:09:00Z" };
+  // The newest fired message, answered by now (submit_proposal's fresh read comes after it).
+  const message = { fired_at: "2026-11-04T20:55:00Z" };
+  assert.equal(messageRunOf(four, message, morning), true);
+  assert.equal(planDayOf(four, "America/New_York", null, morning, message), DAY);
+  // Fired over 30 minutes ago, before today's newest revision, or none: the 3 pm rule.
+  assert.equal(planDayOf(new Date("2026-11-04T21:30:00Z"), "America/New_York", null, morning, message), "2026-11-05");
+  assert.equal(planDayOf(four, "America/New_York", null, { created_at: "2026-11-04T20:58:00Z" }, message), "2026-11-05");
+  assert.equal(planDayOf(four, "America/New_York", null, morning, null), "2026-11-05");
+  assert.equal(messageRunOf(four, { fired_at: null }, morning), false);
+});

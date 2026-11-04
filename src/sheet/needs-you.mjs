@@ -13,7 +13,7 @@ let root, dialog;
 let rows = [];          // needs_you rows not done when read; Done flips them here too
 let names = new Map();  // account email → its label, or the email
 let note = null;        // "Done: …", while its undo lasts
-let offers = [];        // v5 L1: From addresses to offer a never-show rule for
+let offers = [];        // v5 L1: [{ hash, name }], senders to offer a never-show rule for
 let awaiting = [];      // v5 M1: reply_state rows he's awaiting a reply on
 
 async function refresh() {
@@ -25,12 +25,15 @@ async function refresh() {
   if (dialog.open) await refreshOffers();
 }
 
-// v5 L1: after two Not needed from one sender, "Never show mail from <address>", which adds a
-// never rule once he confirms. Without the log or the rules, no offer.
+// v5 L1: after two Not needed from one sender, "Never show mail from <name>", which adds a
+// never rule on its sender hash once he confirms (fix: no address is kept to show). The name is
+// the one its Needs you rows carry. Without the log or the rules, no offer.
 async function refreshOffers() {
   try {
     const [feedback, rules] = await Promise.all([api.listNeedsFeedback(), api.listTriageRules()]);
-    offers = neverOffers(feedback, rules);
+    const hashes = neverOffers(feedback, rules);
+    const names = await api.senderNames(hashes);
+    offers = hashes.map((hash) => ({ hash, name: names.get(hash) ?? "this sender" }));
   } catch (e) { console.error(e); offers = []; }
   draw();
 }
@@ -63,10 +66,10 @@ function item(r) {
       done, " ", skip));
 }
 
-function offerLine(address) {
+function offerLine({ hash, name }) {
   const b = el("button", { type: "button", className: "sheet-btn", textContent: "Never show" });
-  b.dataset.needNever = address;
-  return el("p", { className: "sheet-notice" }, "Never show mail from ", el("strong", { textContent: address }), "? ", b);
+  b.dataset.needNever = hash;
+  return el("p", { className: "sheet-notice" }, "Never show mail from ", el("strong", { textContent: name }), "? ", b);
 }
 
 // v5 M1: an Awaiting reply row: who, since when, and the thread in Gmail. `who` is a display name
@@ -133,9 +136,10 @@ async function markDone(id, notNeeded = false) {
   (dialog.querySelector("[data-need-done]") ?? dialog.querySelector(".sheet-btn"))?.focus();
 }
 
-async function addNever(address) {
-  if (!confirm(`Never show mail from ${address} in Needs you?`)) return;
-  try { await api.addTriageRule("address", address, "never"); } catch (e) { failed(e); }
+async function addNever(hash) {
+  const name = offers.find((o) => o.hash === hash)?.name ?? "this sender";
+  if (!confirm(`Never show mail from ${name} in Needs you?`)) return;
+  try { await api.addTriageRule("sender", hash, "never", name.slice(0, 80)); } catch (e) { failed(e); }
   await refreshOffers();
 }
 

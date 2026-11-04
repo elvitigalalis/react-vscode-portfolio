@@ -9,9 +9,15 @@
 // test/v5-day.verify.test.mjs's, with Needs you items added to its valid proposal.
 //
 // Readings chosen where the contract leaves room (closest to its words):
-// - A needs row in `rows` is v4's, plus `from_address`.
+// - A needs row in `rows` is v4's, plus `sender_hash`.
 // - A rule's pattern and the From address are both lowercase already (the table's check and the
 //   server's lowercasing), so no test mixes case.
+//
+// Fix (docs/sheet-v5.md, "Sender hashes"): no From address is kept in plain text. Feedback refs
+// and needs rows carry `sender_hash`, the salted hash of the address; `senders` maps a message
+// to its address hash and its domain's and parents' hashes; checkProposal hashes each rule's
+// pattern with `hashOf` and compares hashes; neverOffers offers sender hashes. These tests stand
+// in `h(x)` for the salted hash of x. They replace the ones written for plain addresses.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
@@ -33,7 +39,8 @@ const M5 = "18f2a3b4c5d6e7f5";
 // triageLabels
 // =============================================================================================
 
-const fb = (at, action, account, message_id, from_address = null) => ({ at, item: "needs_you", action, ref: { account, message_id, from_address } });
+const h = (x) => `h(${x})`;
+const fb = (at, action, account, message_id, address = null) => ({ at, item: "needs_you", action, ref: { account, message_id, sender_hash: address && h(address) } });
 
 test("triageLabels: Done is needed, Not needed isn't, Undo leaves no label", async () => {
   const { triageLabels } = await triage();
@@ -131,7 +138,7 @@ test("neverOffers: two messages from one sender marked Not needed make an offer"
     fb("2026-11-04T15:00:00Z", "not_needed", PERSONAL, M2, "jobs@acme.com"),
     fb("2026-11-04T15:01:00Z", "not_needed", SBU, M3, "news@shop.com"), // only one
   ];
-  assert.deepEqual(neverOffers(feedback, []), ["jobs@acme.com"]);
+  assert.deepEqual(neverOffers(feedback, []), [h("jobs@acme.com")]);
 });
 
 test("neverOffers: several offers, sorted", async () => {
@@ -142,7 +149,7 @@ test("neverOffers: several offers, sorted", async () => {
     fb("2026-11-04T15:02:00Z", "not_needed", SBU, M3, "jobs@acme.com"),
     fb("2026-11-04T15:03:00Z", "not_needed", SBU, M4, "jobs@acme.com"),
   ];
-  assert.deepEqual(neverOffers(feedback, []), ["jobs@acme.com", "zed@digest.io"]);
+  assert.deepEqual(neverOffers(feedback, []), [h("jobs@acme.com"), h("zed@digest.io")]);
 });
 
 test("neverOffers: one message marked twice is one message", async () => {
@@ -164,19 +171,19 @@ test("neverOffers: an Undo or a later Done takes a message back out", async () =
   assert.deepEqual(neverOffers([fb("2026-11-04T15:00:00Z", "done", SBU, M1, "jobs@acme.com"), fb("2026-11-04T15:01:00Z", "done", SBU, M2, "jobs@acme.com")], []), []);
 });
 
-test("neverOffers: no offer for an address a rule already covers", async () => {
+test("neverOffers: no offer for a sender a sender rule already covers", async () => {
   const { neverOffers } = await triage();
   const feedback = [fb("2026-11-04T15:00:00Z", "not_needed", SBU, M1, "jobs@mail.acme.com"), fb("2026-11-04T15:01:00Z", "not_needed", SBU, M2, "jobs@mail.acme.com")];
-  assert.deepEqual(neverOffers(feedback, [{ match: "domain", pattern: "acme.com", action: "never" }]), []);
-  assert.deepEqual(neverOffers(feedback, [{ match: "domain", pattern: "mail.acme.com", action: "never" }]), []);
-  assert.deepEqual(neverOffers(feedback, [{ match: "address", pattern: "jobs@mail.acme.com", action: "always" }]), []);
-  // Rules that don't cover it: another address, a narrower domain, a look-alike domain.
+  assert.deepEqual(neverOffers(feedback, [{ match: "sender", pattern: h("jobs@mail.acme.com"), action: "never" }]), []);
+  assert.deepEqual(neverOffers(feedback, [{ match: "sender", pattern: h("jobs@mail.acme.com"), action: "always" }]), []);
+  // Another sender's rule doesn't cover it. Address and domain rules are plain text, which the
+  // browser can't hash without the server's salt, so they make no difference here; a never one
+  // drops the mail at submit anyway.
   const others = [
-    { match: "address", pattern: "hr@mail.acme.com", action: "never" },
-    { match: "domain", pattern: "x.mail.acme.com", action: "never" },
-    { match: "domain", pattern: "me.com", action: "never" },
+    { match: "sender", pattern: h("hr@mail.acme.com"), action: "never" },
+    { match: "domain", pattern: "acme.com", action: "never" },
   ];
-  assert.deepEqual(neverOffers(feedback, others), ["jobs@mail.acme.com"]);
+  assert.deepEqual(neverOffers(feedback, others), [h("jobs@mail.acme.com")]);
 });
 
 test("neverOffers: rows with no From address count for nothing", async () => {
@@ -254,18 +261,23 @@ const good = (needs_you, extra = {}) => ({
   couldnt_fit: [T5],
   ...extra,
 });
+// What mail-sync stores for a message: the address's hash and its domain's and parents' hashes.
+const stored = (address) => {
+  const labels = address.split("@")[1].split(".");
+  return { address: h(address), domains: labels.map((_, i) => h(labels.slice(i).join("."))) };
+};
 const senders = {
-  [`${SBU} ${M1}`]: "jobs@mail.acme.com",
-  [`${SBU} ${M2}`]: "prof.kim@stonybrook.edu",
+  [`${SBU} ${M1}`]: stored("jobs@mail.acme.com"),
+  [`${SBU} ${M2}`]: stored("prof.kim@stonybrook.edu"),
 };
 const rules = (...r) => snap({ triage_rules: r.map(([match, pattern, action]) => ({ match, pattern, action })) });
-const row = (message_id, from_address) => ({
-  account: SBU, message_id, link: LINK(message_id), sender: "Acme Recruiting", subject: "Next steps", why: "Asks for your availability", kind: "reply", due: null, from_address,
+const row = (message_id, address) => ({
+  account: SBU, message_id, link: LINK(message_id), sender: "Acme Recruiting", subject: "Next steps", why: "Asks for your availability", kind: "reply", due: null, sender_hash: address && h(address),
 });
 
 test("never-show: an item whose sender's domain has a never rule is dropped, not refused", async () => {
   const { checkProposal } = await proposal();
-  const r = checkProposal(good([need(M2), need(M1)]), rules(["domain", "acme.com", "never"]), senders);
+  const r = checkProposal(good([need(M2), need(M1)]), rules(["domain", "acme.com", "never"]), senders, h);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.deepEqual(r.rows.needs, [row(M2, "prof.kim@stonybrook.edu")]);
   assert.deepEqual(r.dropped, [{ index: 1, message_id: M1, pattern: "acme.com" }]);
@@ -273,7 +285,7 @@ test("never-show: an item whose sender's domain has a never rule is dropped, not
 
 test("never-show: a domain rule matches the domain itself and its parents only", async () => {
   const { checkProposal } = await proposal();
-  const dropped = (rule) => checkProposal(good([need(M1)]), rules(rule), senders).dropped.map((d) => d.message_id);
+  const dropped = (rule) => checkProposal(good([need(M1)]), rules(rule), senders, h).dropped.map((d) => d.message_id);
   assert.deepEqual(dropped(["domain", "mail.acme.com", "never"]), [M1]);
   assert.deepEqual(dropped(["domain", "acme.com", "never"]), [M1]);
   assert.deepEqual(dropped(["domain", "me.com", "never"]), []);
@@ -283,23 +295,23 @@ test("never-show: a domain rule matches the domain itself and its parents only",
 
 test("never-show: an address rule matches that address only", async () => {
   const { checkProposal } = await proposal();
-  const r = checkProposal(good([need(M1), need(M2)]), rules(["address", "jobs@mail.acme.com", "never"]), senders);
+  const r = checkProposal(good([need(M1), need(M2)]), rules(["address", "jobs@mail.acme.com", "never"]), senders, h);
   assert.deepEqual(r.dropped, [{ index: 0, message_id: M1, pattern: "jobs@mail.acme.com" }]);
   assert.deepEqual(r.rows.needs, [row(M2, "prof.kim@stonybrook.edu")]);
-  const other = checkProposal(good([need(M1)]), rules(["address", "obs@mail.acme.com", "never"]), senders);
+  const other = checkProposal(good([need(M1)]), rules(["address", "obs@mail.acme.com", "never"]), senders, h);
   assert.deepEqual(other.dropped, []);
 });
 
 test("never-show: an always rule drops nothing", async () => {
   const { checkProposal } = await proposal();
-  const r = checkProposal(good([need(M1)]), rules(["domain", "acme.com", "always"]), senders);
+  const r = checkProposal(good([need(M1)]), rules(["domain", "acme.com", "always"]), senders, h);
   assert.deepEqual(r.dropped, []);
   assert.deepEqual(r.rows.needs, [row(M1, "jobs@mail.acme.com")]);
 });
 
-test("never-show: an item with no known sender is kept, with from_address null", async () => {
+test("never-show: an item with no known sender is kept, with sender_hash null", async () => {
   const { checkProposal } = await proposal();
-  const r = checkProposal(good([need(M3)]), rules(["domain", "acme.com", "never"]), senders);
+  const r = checkProposal(good([need(M3)]), rules(["domain", "acme.com", "never"]), senders, h);
   assert.deepEqual(r.dropped, []);
   assert.deepEqual(r.rows.needs, [row(M3, null)]);
   // With no senders map at all, too.
@@ -309,7 +321,7 @@ test("never-show: an item with no known sender is kept, with from_address null",
 test("never-show: a suggestion for a dropped item is dropped with it", async () => {
   const { checkProposal } = await proposal();
   const suggestion = (id) => ({ account: SBU, message_id: id, title: "Acme assessment", due: "2026-11-07", kind: "assessment" });
-  const r = checkProposal(good([need(M1), need(M2)], { suggested: [suggestion(M1), suggestion(M2)] }), rules(["domain", "acme.com", "never"]), senders);
+  const r = checkProposal(good([need(M1), need(M2)], { suggested: [suggestion(M1), suggestion(M2)] }), rules(["domain", "acme.com", "never"]), senders, h);
   assert.equal(r.ok, true, JSON.stringify(r.errors));
   assert.deepEqual(r.rows.suggested, [suggestion(M2)]);
   assert.deepEqual(r.dropped, [{ index: 0, message_id: M1, pattern: "acme.com" }]);

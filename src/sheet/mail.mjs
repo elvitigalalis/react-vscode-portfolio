@@ -261,6 +261,21 @@ export async function senderHash(address, salt) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// What message_senders keeps of a From address (fix: never the address itself): its senderHash,
+// and the senderHash of its domain and of each parent domain, longest first ("mail.acme.com",
+// "acme.com", "com"), so a domain rule can be checked by hashing its pattern the same way. Null
+// for a value with no "@" and a domain after it.
+export async function senderHashes(address, salt) {
+  const a = String(address ?? "").trim().toLowerCase();
+  const domain = a.slice(a.lastIndexOf("@") + 1);
+  if (!a.includes("@") || !domain || /\s/.test(a)) return null;
+  const labels = domain.split(".");
+  return {
+    address_hash: await senderHash(a, salt),
+    domain_hashes: await Promise.all(labels.map((_, i) => senderHash(labels.slice(i).join("."), salt))),
+  };
+}
+
 // --- v5 M1: the mail sync's reads (supabase/functions/mail-sync) -----------------------------
 // Gmail's message formats (developers.google.com/workspace/gmail/api/reference/rest/v1/Format):
 // `metadata` "Returns only email message ID, labels, and email headers", while `full` and `raw`
@@ -318,6 +333,14 @@ export function historyChanges(pages) {
     }
   }
   return { threads: [...threads], added: [...added] };
+}
+
+// The threads one run reads again: at most THREADS_MAX of those history touched. Cutting any
+// off, or history pages left over (`more`), makes it a full sync: the run starts from a fresh
+// history position and sweeps, so the threads it skipped are read by the sweep, not lost.
+export const THREADS_MAX = 50;
+export function threadsToRead(threads, more) {
+  return { threads: threads.slice(0, THREADS_MAX), full: Boolean(more) || threads.length > THREADS_MAX };
 }
 
 // The daily sweep's messages: users.messages.list gives ids and thread ids, newest first, so the

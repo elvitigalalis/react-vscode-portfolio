@@ -46,7 +46,7 @@ memory. End with one line: "Morning plan not submitted: <tool> is missing (recon
 <planner|mail> connector)."
 
 STEP 2: READ THE PLANNER
-Call read_planner. It returns now, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
+Call read_planner. It returns now, read_at, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
 to }, "HH:MM"), tasks, blocks, busy, busy_as_of, interests, campus, proposal, turned_down,
 needs_you_open, accounts, day_rules (workload_cap_min, travel_min, break_after_min,
 break_min) and habits.
@@ -69,7 +69,9 @@ break_min) and habits.
   where they still fit, so Lisul sees only what changed.
 - triage_rules are Lisul's rules for Needs you, [{ match, pattern, action }]: match is
   "address" (a From address) or "domain" (a From address's domain or a parent of it, so
-  mail.example.com matches example.com); action is "always" or "never". Use them in step 3.
+  mail.example.com matches example.com); action is "always" or "never". Use them in step 3. A
+  rule with match "sender" has a hashed pattern you can't read: submit_proposal applies it
+  itself, so ignore it.
 - weather is D's hourly forecast from 07:00 to 23:00, [{ at, temp_f, pop, short }]: pop is the
   chance of precipitation in percent. It may be empty; then plan as if it were dry.
 - reply_state is what the mail sync worked out from his mail's labels and dates: { owed,
@@ -190,7 +192,8 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
 - Habits: place each habit in habits at most once, in the order given, as { habit_id, start:
   "HH:MM" }. It runs exactly its minutes and starts between ideal minus flex_min and ideal plus
   flex_min (both ends allowed), as near ideal as a free gap allows. A habit block follows every
-  rule a task block does: free time, travel, breaks and the workload cap all count it. A habit
+  rule a task block does: free time, travel and breaks all count it. Only the workload cap
+  leaves it out: the cap is for work. A habit
   that can't fit in its window is left out for the day: never move it outside the window,
   shorten it, or list it in couldnt_fit (that is for task ids only).
 - A block never overlaps a busy time, a block with proposed false or another block of yours,
@@ -203,8 +206,8 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
     proposed false. No run may span more than break_after_min (90) minutes from its first start
     to its last end, so leave a 10-minute gap after every 90 minutes of blocks in a row. A
     single block longer than 90 minutes is fine.
-  - Workload cap: the minutes of every block with proposed false on D (past ones too) plus
-    your blocks add up to at most workload_cap_min. When the next task would go over, stop
+  - Workload cap: the minutes of every task block with proposed false on D (past ones too)
+    plus your task blocks add up to at most workload_cap_min. Habit blocks don't count. When the next task would go over, stop
     placing.
 - At most 12 blocks and 12 habits. task_id is always an id from tasks, habit_id one from
   habits.
@@ -219,9 +222,10 @@ travel time included, and any habit left out), e.g. "Read ch. 4
 old, add "Busy times may be stale." Leave note out when everything fit and busy times are fresh.
 
 STEP 6: SUBMIT
-Call submit_proposal with { day: D, replaces, blocks, habits, needs_you, picks, note,
+Call submit_proposal with { day: D, replaces, read_at, blocks, habits, needs_you, picks, note,
 couldnt_fit, suggested },
-where replaces is proposal.rev from step 2, or null when proposal was null. Submit even when
+where replaces is proposal.rev from step 2, or null when proposal was null, and read_at is
+read_planner's read_at from step 2, exactly as given. Submit even when
 blocks is empty, so the Needs you items and the note still land. If it returns ok: false, each
 error names a field: fix exactly those and submit again. If an error names replaces, a newer
 plan came in while you worked: submit nothing more and say so in the summary. On ok: true, rev

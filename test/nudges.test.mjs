@@ -543,3 +543,37 @@ test("reading a tap: a block outside today's snapshot has to be looked up", () =
   assert.equal(needsTappedBlock(snap, { block_id: "b1" }), false);
   assert.equal(needsTappedBlock(snap, { block_id: ID }), true);
 });
+
+// --- Fix: the replan message says what changed, where the stored data allows ---------------------
+
+test("replan message: a busy time names the block it lands on, a due-soon task its title and day", async () => {
+  const { whatToSend } = await import("../src/sheet/nudges.mjs");
+  const D = "2026-11-04";
+  const t = (id, title, extra = {}) => ({ id, title, day: D, done: false, due: null, public: true, est_min: 45, ...extra });
+  const tasks = [t("t1", "OS homework"), t("t2", "Gym"), t("t3", "HW3", { day: null, due: "2026-11-05", source: "brightspace", source_uid: "uid-hw3" }), t("t4", "See evil.com", { source: "github", source_uid: "gh-1", due: "2026-11-05" })];
+  const GYM = { task_id: "t2", starts_at: "2026-11-04T19:00:00Z", ends_at: "2026-11-04T20:00:00Z" }; // 2:00-3:00 pm
+  const HW3 = { task_id: "t3", starts_at: "2026-11-04T21:00:00Z", ends_at: "2026-11-04T21:45:00Z" }; // 4:00 pm
+  const rev = (n, extra) => ({ day: D, rev: n, status: "pending", note: null, picks: [], couldnt_fit: [], suggested: [], run_trigger: "replan", reasons: [], blocks: [], ...extra });
+  const snap = (replanChanges, reasons) => ({
+    settings: { time_zone: "America/New_York", telegram_chat_id: 42, nudges_on: true, morning_on: true },
+    day: null, tasks, blocks: [{ id: "b3", ...HW3, proposed: true, gcal_id: null }],
+    log: [{ block_id: null, kind: "brief", day: D, send_at: "2026-11-04T13:00:00.000Z", sent_at: "2026-11-04T13:00:01Z" }],
+    proposal: rev(2, { created_at: "2026-11-04T15:05:00Z", reasons, blocks: [HW3] }),
+    previous: rev(1, { status: "superseded", created_at: "2026-11-04T11:09:00Z", run_trigger: "morning", blocks: [GYM] }),
+    replanSent: 0, needsOpen: [], campus: [], busy: [], academic: [], awaiting: [], replanChanges,
+  });
+  const first = (s) => whatToSend(s, new Date("2026-11-04T15:06:00Z"))[0].text.split("\n")[0];
+  const changes = [
+    { reason: "busy_overlap", ref: "2026-11-04T19:00:00.000Z/2026-11-04T20:00:00.000Z" },
+    { reason: "course_due_soon", ref: "uid-hw3" },
+    { reason: "mail_new", ref: "18f2a3b4c5d6e7f1" },
+  ];
+  assert.equal(first(snap(changes, ["busy_overlap", "course_due_soon", "mail_new"])),
+    "Replan: Busy 2:00–3:00 pm now overlaps Gym, HW3 due Thu, new mail.");
+  // A title that could become a link, a ref with nothing stored, or no rows: the fixed words.
+  assert.equal(first(snap([{ reason: "github_due_soon", ref: "gh-1" }], ["github_due_soon"])), "Replan: a GitHub item is due within 48 hours.");
+  assert.equal(first(snap([{ reason: "course_due_soon", ref: "gone" }], ["course_due_soon"])), "Replan: a course task is due within 48 hours.");
+  assert.equal(first(snap(undefined, ["busy_overlap", "mail_new"])), "Replan: a busy time landed on a block, new mail.");
+  // A busy time on no block still says when.
+  assert.equal(first(snap([{ reason: "busy_overlap", ref: "2026-11-04T23:00:00.000Z/2026-11-04T23:30:00.000Z" }], ["busy_overlap"])), "Replan: Busy 6:00–6:30 pm now.");
+});

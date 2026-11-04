@@ -226,15 +226,20 @@ test("habits: a habit block counts in the break rule", async () => {
   refused(checkProposal(good([{ habit_id: H2, start: "11:00" }]), snap()), /habits\[0\]/, /90/);
 });
 
-test("habits: habit blocks count toward the workload cap", async () => {
+// Fix (docs/sheet-v5.md, "The workload cap"): the cap is for work, so habit blocks, proposed or
+// approved, stay out of it; they still count for free time, travel and breaks. This replaces the
+// test that had them count toward it.
+test("habits: habit blocks don't count toward the workload cap", async () => {
   const { checkProposal } = await proposal();
-  const cap = (m) => snap({ day_rules: { ...snap().day_rules, workload_cap_min: m } });
+  const cap = (m, extra = {}) => snap({ day_rules: { ...snap().day_rules, workload_cap_min: m }, ...extra });
   const lunch = [{ habit_id: H1, start: "12:50" }];
-  // 210 minutes without the habit, 240 with it.
+  // 210 minutes of task blocks, with or without the 30-minute habit.
   assert.equal(checkProposal(good([]), cap(210)).ok, true);
-  refused(checkProposal(good(lunch), cap(210)), /^blocks/, /cap/i);
-  refused(checkProposal(good(lunch), cap(225)), /^blocks/, /cap/i);
-  assert.equal(checkProposal(good(lunch), cap(240)).ok, true);
+  assert.equal(checkProposal(good(lunch), cap(210)).ok, true);
+  refused(checkProposal(good(lunch), cap(205)), /^blocks/, /cap/i);
+  // An approved habit block (7:30-8:00 am) doesn't count either.
+  const walk = { task_id: null, habit_id: H2, starts_at: "2026-11-04T12:30:00Z", ends_at: "2026-11-04T13:00:00Z", proposed: false };
+  assert.equal(checkProposal(good([]), cap(210, { blocks: [...snap().blocks, walk] })).ok, true);
 });
 
 test("habits: absent, the list is empty", async () => {

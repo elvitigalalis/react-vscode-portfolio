@@ -1,7 +1,7 @@
 // /plan's side of the morning plan (docs/sheet-morning.md, "/plan"): the busy times it saves for
 // the morning task, and how the Needs you list is grouped and linked. Pure, so node --test covers
 // it; busy-sync.mjs and needs-you.mjs do the network and the drawing.
-import { couldntFitLine, pickedEvents, pickLine } from "./proposal.mjs";
+import { couldntFitLine, pickedEvents, pickLine, suggestedLine } from "./proposal.mjs";
 
 // --- Busy times ----------------------------------------------------------------------------
 
@@ -66,5 +66,13 @@ export function planNotes(proposal, campus, tz, tasks = []) {
   if (!proposal || proposal.status === "skipped" || proposal.status === "lapsed") return [];
   const picks = pickedEvents(proposal.picks, campus);
   const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
-  return [...(proposal.note ? [`Didn't fit: ${proposal.note}`] : []), ...(unfit ? [unfit] : []), ...picks.map((e) => pickLine(e, tz))];
+  // Suggested tasks show while the revision waits; approving it makes them Inbox tasks.
+  const suggested = proposal.status === "pending" ? (proposal.suggested ?? []).map(suggestedLine) : [];
+  return [...(proposal.note ? [`Didn't fit: ${proposal.note}`] : []), ...(unfit ? [unfit] : []), ...suggested, ...picks.map((e) => pickLine(e, tz))];
 }
+
+// What Approve all on /plan sends to approve_proposal: { d, rev } for the day's pending
+// revision, as Telegram's Approve all does, so the revision is approved and its suggested tasks
+// are made. Null without one; then the dialog approves the blocks one by one, as in v4.
+export const approveAllCall = (proposal) =>
+  (proposal?.status === "pending" && proposal.rev != null ? { d: proposal.day, rev: proposal.rev } : null);

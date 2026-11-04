@@ -3,9 +3,9 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, planningDay, snap, formatMinutes, formatClock, formatSpan, proposedOn, DEFAULT_EST, blockMinutes, weekdayName, plural } from "./logic.mjs";
-import { el, icon, state, render, taskRow, moveTask, dropTargets, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
+import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare } from "./glance.mjs";
-import { planNotes } from "./morning.mjs";
+import { approveAllCall, planNotes } from "./morning.mjs";
 import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock } from "./plan-today.mjs";
 
 let dialog;
@@ -13,6 +13,7 @@ let day;          // the day being planned
 let events = [];  // his Google events that day
 let notes = [];   // the day's proposal: "Didn't fit: …", "Couldn't fit: …", "Campus pick: …"
 let rev = null;   // its revision number (v5)
+let proposal = null; // the day's newest revision, for Approve all
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
 function meter(d) {
@@ -143,8 +144,10 @@ async function fetchEvents() {
 async function fetchNotes() {
   notes = [];
   rev = null;
+  proposal = null;
   try {
     const p = await api.proposalOn(day);
+    proposal = p;
     rev = p?.rev ?? null;
     const campus = p?.picks?.length ? await api.campusByUid(p.picks.map((x) => x.uid)) : [];
     notes = planNotes(p, campus, SHEET.timeZone, [...state.tasks.values()]);
@@ -189,9 +192,20 @@ async function removeBlock(id) {
   state.blocks = state.blocks.filter((x) => x.id !== id);
 }
 
+// Approve all on a pending revision goes through approve_proposal, as Telegram's does: the
+// revision is approved and its suggested tasks made. Then the week reloads, and the page's
+// off-page approvals give the blocks their Google events (plan-today.mjs, createMissed).
+// Without a pending revision, each proposed block is approved on its own, as in v4.
 const approveAll = async () => {
+  const call = approveAllCall(proposal);
+  if (call) {
+    await api.approveProposal(call.d, call.rev);
+    // v5 L1: Approve all is a decision on the revision shown.
+    api.logFeedback({ item: "proposal", action: "approve", ref: { day, rev: call.rev } }).catch(console.error);
+    await Promise.all([reload(), fetchNotes()]);
+    return;
+  }
   for (const b of proposedOn(state.blocks, day, SHEET.timeZone)) await saveBlock(b);
-  // v5 L1: Approve all is a decision on the revision shown.
   if (rev != null) api.logFeedback({ item: "proposal", action: "approve", ref: { day, rev } }).catch(console.error);
 };
 

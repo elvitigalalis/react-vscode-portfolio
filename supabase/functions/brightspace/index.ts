@@ -65,7 +65,7 @@ async function sync(now: Date) {
   // past item keeps the due date it last had. Brightspace lists the term ahead, so half a year
   // covers it.
   const events = parseIcs(text, { from: new Date(+now - DAY), to: new Date(+now + 183 * DAY) });
-  const timeZone = settings?.time_zone ?? "America/New_York";
+  const timeZone = settings.time_zone;
   const changes = courseTaskChanges(events, { tasks, seen, timeZone }) as Changes;
 
   // Tasks first, then their UIDs: if the run dies between the two, the task holding the UID
