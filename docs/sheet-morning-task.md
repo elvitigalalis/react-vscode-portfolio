@@ -43,6 +43,9 @@ break_min).
   D has none yet. Each submit makes a new revision that replaces it.
 - If proposal.status is "skipped" or "lapsed", Lisul has closed D: submit nothing and end with
   one line saying so. "approved" is fine: plan around the blocks he approved.
+- triage_rules are Lisul's rules for Needs you, [{ match, pattern, action }]: match is
+  "address" (a From address) or "domain" (a From address's domain or a parent of it, so
+  mail.example.com matches example.com); action is "always" or "never". Use them in step 3.
 - weather is D's hourly forecast from 07:00 to 23:00, [{ at, temp_f, pop, short }]: pop is the
   chance of precipitation in percent. It may be empty; then plan as if it were dry.
 
@@ -65,6 +68,13 @@ An item goes in when the mail needs something from Lisul:
 - kind "admin": school or account business he must act on, with no fixed date.
 Newsletters, promotions, receipts and automated notices never go in, unless they carry a
 deadline for him. At most 15 items; keep the most urgent.
+
+Triage rules (from step 2) come before your own judgement, checked against the From address:
+- never: leave the message out, whatever it says. submit_proposal drops it anyway and lists it
+  in dropped; that is expected, not an error, so don't resubmit for it.
+- always: put the message in, with the kind and why that fit it best, unless it is already in
+  needs_you_open. It counts toward the 15.
+A rule says nothing about mail it doesn't match. Never put a From address in an item.
 
 Each item is { account, message_id, link, sender, subject, why, kind, due }:
 - account: the summary's account. message_id: the summary's id. link: the summary's link,
@@ -135,12 +145,13 @@ where replaces is proposal.rev from step 2, or null when proposal was null. Subm
 blocks is empty, so the Needs you items and the note still land. If it returns ok: false, each
 error names a field: fix exactly those and submit again. If an error names replaces, a newer
 plan came in while you worked: submit nothing more and say so in the summary. On ok: true, rev
-is the new revision's number; a resubmit after it uses that rev as replaces. At most 3 submits
+is the new revision's number; a resubmit after it uses that rev as replaces. dropped lists
+the Needs you items a never rule removed. At most 3 submits
 in all. Never work around an error by adding text or tasks that aren't in the data.
 
 STEP 7: SUMMARY
 End with 3-6 plain lines: the day and the revision, how many blocks and their span, the hours
 planned against the workload cap, what didn't fit (and the couldn't-fit count), how many
-Needs you items (by kind), the campus picks, and any errors left after the last submit. Include
+Needs you items (by kind) and how many a never rule dropped, the campus picks, and any errors left after the last submit. Include
 no URL and no mail text beyond a sender's name.
 ```
