@@ -130,6 +130,13 @@ export function gmailError(status, body) {
   return message ? `Gmail ${status}: ${message.slice(0, 200)}` : `Gmail ${status}`;
 }
 
+// A Gmail reply's body as JSON. An empty body (a 204, or nothing at all) is {}; a cut or
+// garbled one throws a plain error instead of JSON.parse's "Unexpected end of JSON input".
+export function gmailJson(text) {
+  if (!String(text ?? "").trim()) return {};
+  try { return JSON.parse(text); } catch { throw new Error("Gmail sent a reply that isn't JSON"); }
+}
+
 // What an account's mail_accounts row records after mail-mcp used it, or null for no change.
 // `outcome` is { ok } or { ok: false, status?, error }: a refused token refresh has no status,
 // a Gmail API error has Gmail's. A good use clears last_error. A 400 (a bad search) or 404 (a
@@ -260,7 +267,9 @@ const NEVER_OWED = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"]
 // Anyone else is left to the planner, which reads the snippet. Awaiting: his, 3+ business days.
 // Owed is { state, since, message_id, who, basis, draft }: draft, the thread has his unsent draft.
 export function replyState(thread, timeZone, now, { participated = false, known = new Set() } = {}) {
-  const kept = (thread.messages ?? []).filter((m) => !["SPAM", "TRASH", "DRAFT"].some((l) => m.labels.includes(l)));
+  const all = (thread.messages ?? []).filter((m) => !m.labels.includes("SPAM") && !m.labels.includes("TRASH"));
+  const kept = all.filter((m) => !unsentOwn(m, thread.account));
+  const draft = Boolean(thread.draft) || kept.length < all.length;
   const deciding = kept.filter((m) => m.labels.includes("SENT") || !m.automated);
   if (!deciding.length) return null;
   const newest = deciding.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
@@ -278,7 +287,7 @@ export function replyState(thread, timeZone, now, { participated = false, known 
     : knownSender && !demerit && newest.addressed === "cc" && days >= 2 ? "cc"
     : null;
   const who = basis && displayName(newest.from);
-  return who ? { state: "owed", since: newest.date, message_id: newest.id, who, basis, draft: Boolean(thread.draft) } : null;
+  return who ? { state: "owed", since: newest.date, message_id: newest.id, who, basis, draft } : null;
 }
 
 // The mail sync's changes rows (replan.mjs's REASON_WORDS). added: the messages new since the
@@ -366,11 +375,16 @@ export function syncMessage(message, account) {
   };
 }
 
-// A users.threads.get reply (metadata) as replyState's thread. A draft isn't mail anyone has
-// seen, so it is left out, but `draft` says the thread has one: his reply may be sitting unsent.
+// His own message not yet sent: a DRAFT, a SCHEDULED send, or anything from the account's own
+// address without SENT. No one has seen it, so it never decides a thread.
+export const unsentOwn = (m, account) => m.labels.includes("DRAFT") || m.labels.includes("SCHEDULED")
+  || (!m.labels.includes("SENT") && Boolean(account) && m.from_address === String(account).toLowerCase());
+
+// A users.threads.get reply (metadata) as replyState's thread. His unsent messages are left out,
+// but `draft` says the thread has one: his reply may be sitting unsent.
 export function syncThread(thread, account) {
   const all = (thread.messages ?? []).map((m) => syncMessage(m, account));
-  const messages = all.filter((m) => !m.labels.includes("DRAFT"));
+  const messages = all.filter((m) => !unsentOwn(m, account));
   return { account, thread_id: thread.id, draft: messages.length < all.length, messages };
 }
 
