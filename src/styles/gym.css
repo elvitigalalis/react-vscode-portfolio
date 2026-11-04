@@ -60,7 +60,7 @@
 /* Weight takes the room left by reps; on the narrowest phones reps wrap below. */
 .gym-set-inputs { grid-area: in; display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .gym-stepper { flex: 1 1 9.5rem; display: flex; align-items: stretch; min-width: 0; }
-.gym-stepper + .gym-stepper { flex: 0 1 9.5rem; }
+.gym-stepper + .gym-stepper { flex: 0 0 auto; }
 .gym-step {
   flex: none; width: 3.5rem; min-height: 3.5rem; font: inherit; font-size: 1.5rem; line-height: 1; color: var(--fg);
   background: var(--chip); border: 1px solid var(--line-strong); cursor: pointer; touch-action: manipulation;
