@@ -93,6 +93,7 @@ function draw() {
     timeline.append(nowLine);
   }
   for (const b of blocksOn(day)) {
+    if (b.habit_id) { timeline.append(habitBox(b)); continue; }
     const t = state.tasks.get(b.task_id);
     if (!t) continue;
     const top = minutesOn(b.starts_at, day, SHEET.timeZone);
@@ -157,6 +158,25 @@ function draw() {
   if (scroll != null) dialog.querySelector(".sheet-timeline-wrap").scrollTop = scroll;
 }
 
+// v5 H1: a habit's block, with the habit icon and its name. It has no task, so no source, done or
+// Google event; it never reaches /now (public_now reads task blocks only).
+function habitBox(b) {
+  const name = b.habit?.name ?? "Habit";
+  const top = minutesOn(b.starts_at, day, SHEET.timeZone);
+  const end = minutesOn(b.ends_at, day, SHEET.timeZone);
+  const box = el("div", { className: `sheet-block is-habit${b.proposed ? " is-proposed" : ""}${end - top < 30 ? " is-short" : ""}` },
+    el("span", { className: "sheet-block-title", title: name },
+      icon("repeat", "Habit"), b.proposed ? icon("sparkles", "Proposed by Claude") : null, name),
+    b.proposed ? approveButton(`Approve block for ${name}`, "sheet-approve") : null,
+    el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `Remove block for ${name}` }),
+    el("span", { className: "sheet-resize", ariaHidden: "true" }));
+  box.dataset.block = b.id;
+  box.tabIndex = 0;
+  box.ariaLabel = `${name}, habit, ${formatSpan(top, end)}${b.proposed ? ", proposed" : ""}`;
+  Object.assign(box.style, { top: `${y(top)}px`, height: `${Math.max(15, end - top) * PX}px` });
+  return box;
+}
+
 async function fetchEvents() {
   events = [];
   if (!api.googleReady()) return;
@@ -199,7 +219,8 @@ async function addBlock(taskId, startMin) {
 // proposed blocks that day, and later revisions don't offer it again.
 async function removeBlock(id) {
   const b = state.blocks.find((x) => x.id === id);
-  if (b.proposed) {
+  // A habit block is only deleted: turning down is for tasks.
+  if (b.proposed && b.task_id) {
     await api.turnDown(day, b.task_id);
     const gone = new Set(proposedOn(state.blocks, day, SHEET.timeZone).filter((x) => x.task_id === b.task_id).map((x) => x.id));
     state.blocks = state.blocks.filter((x) => !gone.has(x.id));
@@ -216,7 +237,8 @@ async function saveBlock(b, times = {}) {
   const t = state.tasks.get(b.task_id);
   const { starts_at = b.starts_at, ends_at = b.ends_at } = times;
   const change = { ...times };
-  const step = api.googleReady() ? googleStep(b) : null;
+  // v5 H1: a habit block stays off Google Calendar.
+  const step = api.googleReady() && t ? googleStep(b) : null;
   if (step === "create") change.gcal_id = await api.createEvent(t.title, t.public, starts_at, ends_at);
   if (step === "patch") await api.patchEvent(b.gcal_id, api.eventTimes(starts_at, ends_at));
   if (b.proposed) change.proposed = false;
@@ -236,6 +258,7 @@ async function moveBlock(id, startMin) {
 async function resizeBlock(id, endMin) {
   const b = state.blocks.find((x) => x.id === id);
   await saveBlock(b, { ends_at: zonedIso(day, endMin, SHEET.timeZone) });
+  if (!b.task_id) return;
   const total = state.blocks.filter((x) => x.task_id === b.task_id && !x.proposed)
     .reduce((s, x) => s + blockMinutes(x), 0);
   state.tasks.set(b.task_id, await api.updateTask(b.task_id, { est_min: total }));

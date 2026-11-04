@@ -431,3 +431,14 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   width: 5rem; font: inherit; font-size: 0.9375rem; color: var(--fg); background: var(--bg);
   border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.35rem 0.5rem;
 }
+
+/* v5 H1: habit blocks, in the muted colour, and Settings' habit form. */
+.sheet-block.is-habit { background: color-mix(in srgb, var(--muted) 16%, var(--bg)); border-left: 3px solid var(--muted); }
+.sheet-block.is-habit.is-proposed { background: var(--bg); border: 1px dashed var(--muted); }
+.sheet-habit-form { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; font-size: 0.9375rem; }
+.sheet-habit-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.sheet-habit-form legend { float: left; margin-right: 0.5rem; }
+.sheet-habit-form input:not([type="checkbox"]), .sheet-habit-form select {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.3rem 0.45rem;
+}
+.sheet-habit-form .sheet-dialog-end { flex-basis: 100%; margin: 0; }
