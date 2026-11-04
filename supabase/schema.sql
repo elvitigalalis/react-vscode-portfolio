@@ -664,7 +664,7 @@ begin
   select 'calendar', x.starts_at, x.ends_at
   from jsonb_to_recordset(coalesce(busy_sync_save.rows, '[]')) as x(starts_at timestamptz, ends_at timestamptz)
   on conflict do nothing;
-  update settings set busy_as_of = from_at;
+  update settings set busy_as_of = from_at where id;  -- pg-safeupdate refuses an update with no where
   if change is not null and to_regclass('public.changes') is not null then
     execute 'insert into changes (kind, reason, weight, ref) values ($1, $2, $3, $4)'
       using change->>'kind', change->>'reason', (change->>'weight')::int, change->>'ref';
