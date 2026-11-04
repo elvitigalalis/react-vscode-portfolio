@@ -92,7 +92,8 @@ function plannerServer(db: Db) {
   server.registerTool("read_planner", {
     description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm), its shutdown time, its tasks " +
       "(with tasks at risk and course tasks due within 7 days), blocks, busy times, campus events, Lisul's " +
-      `interests, the day's proposal, the Needs you rows still open and the connected mail accounts. ${UNTRUSTED}`,
+      `interests, the day's proposal, the Needs you rows still open, the connected mail accounts and the hourly ` +
+      `weather (7 am to 11 pm: °F, chance of precipitation %, short forecast). ${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
@@ -140,9 +141,11 @@ async function snapshot(db: Db, now: Date) {
   const { tasks, busy, days, campus, proposal, needsOpen, accounts } = q.queries;
   const rows = await Promise.all([tasks, busy, days, campus, proposal, needsOpen, accounts].map((x) => read(db, x)));
   const blocks = await read(db, q.blocks(rows[0].map((t: { id: string }) => t.id)));
+  // v5 W1: the cached forecast; planSnapshot keeps plan_day's hours.
+  const [weather = null] = await read(db, { table: "weather_cache", select: "periods" });
   return planSnapshot({
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
-    proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6],
+    proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
   }, now);
 }
 

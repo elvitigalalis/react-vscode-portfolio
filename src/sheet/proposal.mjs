@@ -4,6 +4,7 @@
 // node --test covers it; the planner-mcp and telegram Edge Functions import it.
 import { localNow, zonedIso, minutesOn, planningDay, atRisk, addDays, formatClock, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { freeFood } from "./campus.mjs";
+import { weatherHours } from "./sources.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
 
@@ -59,6 +60,8 @@ export function planSnapshot(rows, now) {
     proposal: rows.proposal ? { status: rows.proposal.status, created_at: rows.proposal.created_at } : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
+    // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
+    weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
   };
 }
 
