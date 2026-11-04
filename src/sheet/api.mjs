@@ -156,6 +156,16 @@ export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,
 // v5 P1, pace (docs/sheet-v5.md): the actuals rows Telegram's Finished answer wrote. Read-only here.
 export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
 
+// v5 L1, learning from his taps (docs/sheet-v5.md): Done and Not needed on a Needs you row
+// (Not needed is done as well; Undo clears both), the append-only feedback log, and the triage
+// rules, which only /plan writes. Patterns are lowercased, as the table's check wants.
+export const setNeedState = (id, done, not_needed) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done, not_needed } });
+export const logFeedback = (row) => rest("feedback", { method: "POST", body: row, prefer: "return=minimal" });
+export const listNeedsFeedback = () => rest("feedback?select=at,item,action,ref&item=eq.needs_you&order=at");
+export const listTriageRules = () => rest("triage_rules?select=id,match,pattern,action&order=created_at");
+export const addTriageRule = (match, pattern, action) => rest("triage_rules", { method: "POST", body: { match, pattern: pattern.trim().toLowerCase(), action } });
+export const deleteTriageRule = (id) => rest(`triage_rules?id=eq.${id}`, { method: "DELETE" });
+
 // Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are
 // replaced by `rows`; Handshake's (source 'handshake', docs/sheet-v5.md) are left alone, and the
 // inserts take the default source, 'calendar'. The insert ignores rows already there, so two tabs
