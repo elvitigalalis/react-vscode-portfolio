@@ -39,6 +39,8 @@ busy, busy_as_of, interests, campus, proposal, needs_you_open and accounts.
   timestamps in blocks, busy and campus to that zone before comparing them.
 - If proposal.status is "approved" or "skipped", Lisul has decided D already: submit nothing
   and end with one line saying so.
+- weather is D's hourly forecast from 07:00 to 23:00, [{ at, temp_f, pop, short }]: pop is the
+  chance of precipitation in percent. It may be empty; then plan as if it were dry.
 
 STEP 3: INBOX SWEEP (Needs you)
 Run these search_mail queries with no account (that covers every account) and max 25:
@@ -99,6 +101,9 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
   starts at 07:00 or later and ends by shutdown. Never shorten a block to make it fit. A task
   that doesn't fit, or whose at_time isn't free, is left out.
 - At most 12 blocks. task_id is always an id from tasks.
+- Weather: Lisul walks between buildings. In hours with pop 40 or more, prefer a gap that
+  keeps him where he already is (right after or before a busy time) over one that has him walk
+  out and back. Weather never drops a task or moves a block past shutdown.
 note: one line, at most 280 characters, no URL: what didn't fit and why, e.g. "Read ch. 4
 (1 h): only 30 min free before 5:00 pm shutdown." If busy_as_of is null or more than a day
 old, add "Busy times may be stale." Leave note out when everything fit and busy times are fresh.
