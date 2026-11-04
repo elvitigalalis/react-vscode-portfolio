@@ -12,16 +12,22 @@ const rows = (extra = {}) => ({ settings, tasks: [], blocks: [], busy: [], days:
 const sixOhSeven = new Date("2026-11-04T11:07:00Z");
 const row = (state, who, since) => ({ account: "owner@example.com", thread_id: `t-${who}`, state, since, message_id: `m-${who}`, who, updated_at: since });
 
-test("planSnapshot: reply_state splits the rows into owed and awaiting, oldest first, without message ids", () => {
+test("planSnapshot: reply_state splits the rows into owed and awaiting, oldest first; owed rows carry what an item needs", () => {
+  const owedRow = (who, since, thread_id, message_id, basis, draft = false) => ({ ...row("owed", who, since), thread_id, message_id, basis, draft });
   const replyState = [
-    row("owed", "Ana Ruiz", "2026-10-30T15:00:00Z"),
+    owedRow("Ana Ruiz", "2026-11-03T20:00:00Z", "18f3a1c2d4e5f100", "18f3a1c2d4e5f109", "thread", true),
     row("awaiting", "Prof. Kim", "2026-10-29T15:00:00Z"),
-    row("owed", "Dana Lee", "2026-10-28T15:00:00Z"),
+    owedRow("Dana Lee", "2026-10-28T15:00:00Z", "javascript:alert(1)", "18f3a1c2d4e5f209", "known"),
   ];
   assert.deepEqual(planSnapshot(rows({ replyState }), sixOhSeven).reply_state, {
     owed: [
-      { account: "owner@example.com", thread_id: "t-Dana Lee", who: "Dana Lee", since: "2026-10-28T15:00:00Z" },
-      { account: "owner@example.com", thread_id: "t-Ana Ruiz", who: "Ana Ruiz", since: "2026-10-30T15:00:00Z" },
+      // Wed Oct 28 → Wed Nov 4 is 5 business days: overdue. A thread id that isn't hex gets no link.
+      { account: "owner@example.com", thread_id: "javascript:alert(1)", who: "Dana Lee", since: "2026-10-28T15:00:00Z",
+        message_id: "18f3a1c2d4e5f209", basis: "known", draft: false, overdue: true, link: null },
+      // Tue → Wed is 1: not overdue yet.
+      { account: "owner@example.com", thread_id: "18f3a1c2d4e5f100", who: "Ana Ruiz", since: "2026-11-03T20:00:00Z",
+        message_id: "18f3a1c2d4e5f109", basis: "thread", draft: true, overdue: false,
+        link: "https://mail.google.com/mail/?authuser=owner%40example.com#all/18f3a1c2d4e5f100" },
     ],
     awaiting: [{ account: "owner@example.com", thread_id: "t-Prof. Kim", who: "Prof. Kim", since: "2026-10-29T15:00:00Z" }],
   });
