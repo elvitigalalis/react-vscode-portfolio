@@ -27,11 +27,12 @@ test("shouldFire: holds off while a message fired under 3 minutes ago is still p
   assert.equal(shouldFire([{ id: M2, fired_at: null }, { id: M1, fired_at: ago(0.5) }], NOW), false);
 });
 
-test("messageText: one line of 1 to 500 characters, spaces collapsed; anything else is refused", () => {
-  assert.equal(messageText("  dentist   Thu\n3pm "), "dentist Thu 3pm");
-  assert.equal(messageText("x".repeat(500)), "x".repeat(500));
-  assert.equal(messageText("x".repeat(501)), null);
-  assert.equal(messageText("   "), null);
+test("messageText: 1 to 8000 characters, line breaks kept (a pasted announcement), spaces collapsed; anything else is refused", () => {
+  assert.equal(messageText("  dentist   Thu\t3pm "), "dentist Thu 3pm");
+  assert.equal(messageText("Project 2 due Nov 14  \r\n\r\n\r\n\n  quiz on ch. 5 Tue\u0007\n"), "Project 2 due Nov 14\n\nquiz on ch. 5 Tue");
+  assert.equal(messageText("x".repeat(8000)), "x".repeat(8000));
+  assert.equal(messageText("x".repeat(8001)), null);
+  assert.equal(messageText(" \n\n "), null);
   assert.equal(messageText(42), null);
   assert.equal(messageText(undefined), null);
 });

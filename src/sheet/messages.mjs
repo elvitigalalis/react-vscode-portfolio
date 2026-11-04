@@ -16,12 +16,21 @@ export const FIRE_GAP_MS = 3 * 60_000;
 export const shouldFire = (pending, now) =>
   !pending.some((m) => m.fired_at && now.getTime() - Date.parse(m.fired_at) < FIRE_GAP_MS);
 
-// A message as typed: one line (line breaks and runs of spaces become one space), 1 to 500
-// characters, or null. It reaches only the morning task, as data.
-export const MAX_TEXT = 500;
+// A message as typed or pasted ("Project 2 is due Nov 14 11:59pm, quiz on ch. 5 next Tuesday…"):
+// 1 to 8000 characters, or null. Line breaks stay, since a pasted announcement's lines help
+// tell its items apart; on each line runs of spaces and other control characters become one
+// space, and more than one blank line in a row becomes one. It reaches only the morning task, as
+// data.
+export const MAX_TEXT = 8000;
 export function messageText(value) {
   if (typeof value !== "string") return null;
-  const t = value.replace(/\s+/g, " ").trim();
+  const t = value
+    .replace(/\r\n?|[\u2028\u2029]/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return t && t.length <= MAX_TEXT ? t : null;
 }
 

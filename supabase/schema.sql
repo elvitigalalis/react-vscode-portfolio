@@ -1210,6 +1210,9 @@ create table if not exists messages (
   fired_at timestamptz
 );
 create index if not exists messages_pending on messages (at) where status = 'pending';
+-- Long messages: a pasted class announcement runs to thousands of characters (messageText).
+alter table messages drop constraint if exists messages_text_check;
+alter table messages add constraint messages_text_check check (char_length(text) between 1 and 8000);
 
 alter table messages enable row level security;
 drop policy if exists owner_all on messages;

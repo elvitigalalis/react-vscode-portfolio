@@ -1264,8 +1264,10 @@ declare
 begin
   begin insert into messages (text) values (''); raise exception 'messages took empty text';
   exception when check_violation then null; end;
-  begin insert into messages (text) values (repeat('a', 501)); raise exception 'messages took 501 characters';
+  begin insert into messages (text) values (repeat('a', 8001)); raise exception 'messages took 8001 characters';
   exception when check_violation then null; end;
+  insert into messages (text) values (repeat('a', 8000)) returning id into m;
+  delete from messages where id = m;
   insert into messages (text) values ('lab report due Friday, ~2h; dentist Thu 3pm') returning id into m;
   if (select status <> 'pending' or events <> '[]'::jsonb or created_in_calendar or tasks_added <> 0 from messages where id = m)
     then raise exception 'a new message is not pending and empty'; end if;
