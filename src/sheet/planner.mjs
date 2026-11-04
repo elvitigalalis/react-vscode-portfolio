@@ -433,8 +433,10 @@ export function render() {
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
 
+  // Reconnect only helps when there is no Google token at all; a read that failed with one
+  // (Google down, say) just shows the kept copy.
   const stale = $("[data-events-stale]");
-  stale.hidden = !state.eventsStale;
+  stale.hidden = !state.eventsStale || api.googleReady();
 
   const notice = $("[data-notice]");
   notice.hidden = !state.parked;
@@ -474,8 +476,8 @@ export async function load() {
 
 export const eventHooks = [];
 
-// Google's access lasts an hour. Until he reconnects, the week shows the last copy of its
-// events kept in this browser, and says so.
+// Without Google (no sign-in token and none from the server grant), the week shows the last copy
+// of its events kept in this browser, and says so.
 const EVENTS_KEY = "sheet.events.";
 
 // Event to-dos also read "Time blocks", for the events a message made there; the week's other
@@ -489,7 +491,7 @@ function setEvents(all) {
 async function loadEvents(days) {
   const key = EVENTS_KEY + days[0];
   const tb = state.settings?.gcal_calendar_id;
-  if (api.googleReady()) {
+  if (await api.ensureGoogle()) {
     try {
       setEvents(await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone),
         tb && !state.calendars.includes(tb) ? [...state.calendars, tb] : state.calendars));
@@ -510,7 +512,7 @@ async function loadEvents(days) {
 // A Done tap in Telegram shortens or deletes a block while the browser may be closed, and only
 // the browser can edit Google: bring those events in line on opening. Without Google, they wait.
 async function syncGoogle() {
-  if (!api.googleReady()) return;
+  if (!(await api.ensureGoogle())) return;
   try {
     for (const p of await api.listGcalPending()) {
       await (p.ends_at ? api.patchEvent(p.gcal_id, api.eventTimes(null, p.ends_at)) : api.deleteEvent(p.gcal_id));
@@ -781,7 +783,9 @@ function wire() {
       if (act === "evtodo-done") return toggleEventTodo(e.target);
       if (act === "evtodo-more") return openEventMenu(e.target);
       if (act === "evtodo-open" || act === "evtodo-hide") return eventMenuAction(act);
-      if (act === "connect") return api.signIn();
+      // The stale-events banner: the server grant (Settings, Calendar) is what keeps /plan's
+      // Google token, so Reconnect goes straight to its consent screen.
+      if (act === "connect") return openSettings().then(() => actHooks["cal-connect"]?.());
       if (act === "calendars") {
         $("#sheet-cal-ids").value = state.calendars.join("\n");
         return $("[data-calendars]").showModal();
