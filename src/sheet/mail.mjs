@@ -243,20 +243,42 @@ function displayName(value) {
   return name.slice(0, WHO_MAX);
 }
 
-// A thread's reply state, { state, since, message_id, who } or null, from its newest message
-// that isn't spam or trash. thread: { account, thread_id, messages: [{ id, date, labels, from,
-// to, automated }] }. Owed: from a person, not him, 2+ business days old. Awaiting: his, 3+.
-export function replyState(thread, timeZone, now) {
-  const kept = (thread.messages ?? []).filter((m) => !m.labels.includes("SPAM") && !m.labels.includes("TRASH"));
-  if (!kept.length) return null;
-  const newest = kept.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
-  if (skippedCategory(newest.labels)) return null;
+// Gmail categories that never make a reply owed; CATEGORY_UPDATES only counts against (Gmail
+// files some people's replies there, and one sender's mail moves between tabs).
+const NEVER_OWED = ["CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"];
+
+// A thread's reply state, or null. thread: { account, thread_id, draft?, messages: [{ id, date,
+// labels, from, to, from_address, automated, demerit, addressed }] }. opts.participated: he wrote
+// in the thread (the sweep's sent list; any SENT message in it counts too); opts.known: the From
+// addresses (lowercased, in memory) he has written to.
+// The deciding message is the newest that isn't spam, trash or a draft, and is his or a person's
+// (an auto-reply or a ticket acknowledgement doesn't answer him). Owed needs evidence of a
+// conversation, never just the lack of bulk headers:
+//   basis "thread": he wrote in the thread and they answered, at once;
+//   basis "known":  someone he has written to wrote To him, at once, with no Updates or demerit;
+//   basis "cc":     the same with him only in Cc, from 2 business days.
+// Anyone else is left to the planner, which reads the snippet. Awaiting: his, 3+ business days.
+// Owed is { state, since, message_id, who, basis, draft }: draft, the thread has his unsent draft.
+export function replyState(thread, timeZone, now, { participated = false, known = new Set() } = {}) {
+  const kept = (thread.messages ?? []).filter((m) => !["SPAM", "TRASH", "DRAFT"].some((l) => m.labels.includes(l)));
+  const deciding = kept.filter((m) => m.labels.includes("SENT") || !m.automated);
+  if (!deciding.length) return null;
+  const newest = deciding.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
   const days = businessDays(newest.date, now.toISOString(), timeZone);
-  const sent = newest.labels.includes("SENT");
-  if (sent ? days < 3 : newest.automated || days < 2) return null;
-  const who = displayName(sent ? newest.to : newest.from);
-  if (!who) return null;
-  return { state: sent ? "awaiting" : "owed", since: newest.date, message_id: newest.id, who };
+  if (newest.labels.includes("SENT")) {
+    const who = days >= 3 && displayName(newest.to);
+    return who ? { state: "awaiting", since: newest.date, message_id: newest.id, who } : null;
+  }
+  if (newest.labels.some((l) => NEVER_OWED.includes(l))) return null;
+  const wrote = participated || kept.some((m) => m.labels.includes("SENT"));
+  const demerit = newest.demerit || newest.labels.includes("CATEGORY_UPDATES");
+  const knownSender = Boolean(newest.from_address && known.has(newest.from_address));
+  const basis = wrote ? "thread"
+    : knownSender && !demerit && newest.addressed === "to" ? "known"
+    : knownSender && !demerit && newest.addressed === "cc" && days >= 2 ? "cc"
+    : null;
+  const who = basis && displayName(newest.from);
+  return who ? { state: "owed", since: newest.date, message_id: newest.id, who, basis, draft: Boolean(thread.draft) } : null;
 }
 
 // The mail sync's changes rows (replan.mjs's REASON_WORDS). added: the messages new since the
