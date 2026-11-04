@@ -176,6 +176,9 @@ begin
   delete from message_senders where at < now() - interval '14 days';
   -- Messages to Claude are kept 30 days.
   delete from messages where at < now() - interval '30 days';
+  -- Oura: sleep rows are kept 60 days.
+  delete from sleep_nights where bedtime_end < now() - interval '60 days';
+  delete from sleep_days where day < current_date - 60;
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -1256,3 +1259,163 @@ begin
   return result;
 end $$;
 revoke execute on function answer_message(uuid, jsonb, jsonb, text) from public, anon;
+
+-- --- Oura: the plan starts when he wakes (docs/sheet-v5.md, "Oura") -------------------------
+-- oura-connect connects his Oura account (OAuth2 with PKCE, scope daily); oura-sync reads his
+-- sleep periods and daily readiness every 10 minutes. Only these fields are kept, 60 days
+-- (nightly_roll), never shared and never used to train anything (Oura's API agreement,
+-- cloud.ouraring.com/legal/api-agreement): no scores but readiness, no heart rate, no stages.
+-- Oura's refresh tokens are single-use and rotate, so each refresh's new token is saved before
+-- its access token is used (oura_token_save); both tokens live only in Vault.
+create table if not exists oura_account (
+  id boolean primary key default true check (id),
+  refresh_secret_id uuid,
+  access_secret_id uuid,
+  access_expires_at timestamptz,
+  connected_at timestamptz not null default now(),
+  synced_at timestamptz,             -- the last good sync; null until the first (which reads 21 days)
+  last_error text                    -- a refused refresh: Settings shows Reconnect
+);
+-- One row per Oura sleep period, upserted by its Oura id (a period can be rewritten later).
+create table if not exists sleep_nights (
+  oura_id text primary key check (char_length(oura_id) <= 100),
+  day date not null,                 -- Oura's day: the morning the sleep belongs to
+  type text not null check (type in ('deleted', 'sleep', 'long_sleep', 'late_nap', 'rest')),
+  bedtime_start timestamptz not null,
+  bedtime_end timestamptz not null
+);
+create index if not exists sleep_nights_end on sleep_nights (bedtime_end);
+-- One row per day: readiness (0-100) and the main sleep's total seconds, for the day's cap.
+create table if not exists sleep_days (
+  day date primary key,
+  readiness int check (readiness between 0 and 100),
+  sleep_s int check (sleep_s between 0 and 86400)
+);
+alter table oura_account enable row level security;
+alter table sleep_nights enable row level security;
+alter table sleep_days enable row level security;
+drop policy if exists owner_all on oura_account;
+drop policy if exists owner_all on sleep_nights;
+drop policy if exists owner_all on sleep_days;
+create policy owner_all on oura_account for all using (is_owner()) with check (is_owner());
+create policy owner_all on sleep_nights for all using (is_owner()) with check (is_owner());
+create policy owner_all on sleep_days for all using (is_owner()) with check (is_owner());
+revoke all on oura_account, sleep_nights, sleep_days from anon;
+-- The owner reads all three and deletes oura_account (Disconnect); only the server writes.
+revoke insert, update on oura_account from authenticated;
+revoke insert, update, delete on sleep_nights, sleep_days from authenticated;
+
+-- Disconnecting deletes both tokens and every sleep row.
+create or replace function oura_account_forget() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from vault.secrets where id in (old.refresh_secret_id, old.access_secret_id);
+  delete from sleep_nights where true;
+  delete from sleep_days where true;
+  return old;
+end $$;
+drop trigger if exists oura_account_forget on oura_account;
+create trigger oura_account_forget after delete on oura_account for each row execute function oura_account_forget();
+revoke execute on function oura_account_forget() from public, anon, authenticated;
+
+-- Store a token pair: Vault secrets oura_refresh and oura_access, reused on every save. With
+-- `old_refresh` (a refresh), only while the stored refresh token is still that one, so two runs
+-- that rotate at once can't overwrite the newer token; it says whether it saved. Without it (a
+-- connect), always, and the grant is no longer broken. Service key only.
+create or replace function oura_token_save(refresh text, access text, expires_at timestamptz, old_refresh text default null)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare r uuid; a uuid;
+begin
+  perform pg_advisory_xact_lock(hashtext('sheet.oura_token'));
+  if old_refresh is not null and old_refresh is distinct from
+    (select s.decrypted_secret from oura_account o join vault.decrypted_secrets s on s.id = o.refresh_secret_id) then
+    return false;
+  end if;
+  select id into r from vault.secrets where name = 'oura_refresh';
+  select id into a from vault.secrets where name = 'oura_access';
+  if r is null then r := vault.create_secret(refresh, 'oura_refresh', 'Oura refresh token, scope daily (single-use)');
+  else perform vault.update_secret(r, refresh); end if;
+  if a is null then a := vault.create_secret(access, 'oura_access', 'Oura access token');
+  else perform vault.update_secret(a, access); end if;
+  insert into oura_account (id, refresh_secret_id, access_secret_id, access_expires_at, connected_at, last_error)
+  values (true, r, a, expires_at, now(), null)
+  on conflict (id) do update
+  set refresh_secret_id = r, access_secret_id = a, access_expires_at = expires_at,
+      connected_at = case when old_refresh is null then now() else oura_account.connected_at end,
+      last_error = case when old_refresh is null then null else oura_account.last_error end;
+  return true;
+end $$;
+revoke execute on function oura_token_save(text, text, timestamptz, text) from public, anon, authenticated;
+grant execute on function oura_token_save(text, text, timestamptz, text) to service_role;
+
+-- oura-sync's tokens: { refresh, access, expires_at, synced_at }, or null when nothing is connected.
+create or replace function oura_tokens() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return (select jsonb_build_object('refresh', r.decrypted_secret, 'access', a.decrypted_secret,
+            'expires_at', o.access_expires_at, 'synced_at', o.synced_at)
+          from oura_account o
+          join vault.decrypted_secrets r on r.id = o.refresh_secret_id
+          left join vault.decrypted_secrets a on a.id = o.access_secret_id);
+end $$;
+revoke execute on function oura_tokens() from public, anon, authenticated;
+grant execute on function oura_tokens() to service_role;
+
+-- oura-sync's write, in one transaction: the sleep periods upserted by oura_id ([{ oura_id, day,
+-- type, bedtime_start, bedtime_end }]), the days ([{ day, readiness, sleep_s }], a null keeps
+-- what was there), synced_at stamped, and the woke-late change inserted once per wake (its ref).
+-- Service key only.
+create or replace function oura_sync_save(nights jsonb, days jsonb default '[]', change jsonb default null)
+returns void language plpgsql security invoker set search_path = public as $$
+begin
+  insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end)
+  select x.oura_id, x.day, x.type, x.bedtime_start, x.bedtime_end
+  from jsonb_to_recordset(coalesce(nights, '[]')) as x(oura_id text, day date, type text, bedtime_start timestamptz, bedtime_end timestamptz)
+  on conflict (oura_id) do update
+  set day = excluded.day, type = excluded.type, bedtime_start = excluded.bedtime_start, bedtime_end = excluded.bedtime_end;
+  insert into sleep_days (day, readiness, sleep_s)
+  select x.day, x.readiness, x.sleep_s
+  from jsonb_to_recordset(coalesce(days, '[]')) as x(day date, readiness int, sleep_s int)
+  on conflict (day) do update
+  set readiness = coalesce(excluded.readiness, sleep_days.readiness), sleep_s = coalesce(excluded.sleep_s, sleep_days.sleep_s);
+  update oura_account set synced_at = now(), last_error = null where id;
+  if change is not null and not exists (select 1 from changes c where c.reason = change->>'reason' and c.ref = change->>'ref') then
+    insert into changes (kind, reason, weight, ref)
+    values (change->>'kind', change->>'reason', (change->>'weight')::int, change->>'ref');
+  end if;
+end $$;
+revoke execute on function oura_sync_save(jsonb, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function oura_sync_save(jsonb, jsonb, jsonb) to service_role;
+
+-- A refused refresh marks the grant broken (Settings shows Reconnect). Service key only.
+create or replace function oura_broken(why text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update oura_account set last_error = left(why, 300) where id;
+end $$;
+revoke execute on function oura_broken(text) from public, anon, authenticated;
+grant execute on function oura_broken(text) to service_role;
+
+-- oura-connect keeps the PKCE code verifier with the state's nonce, never in the URL.
+alter table mail_connect_states add column if not exists verifier text;
+
+-- The window start a revision was planned from ("HH:MM"), for the woke-late replan.
+alter table proposals add column if not exists window_from text check (window_from ~ '^([01]\d|2[0-3]):[0-5]\d$');
+
+-- A woke-late change has kind 'sleep' (replan.mjs's woke_late).
+alter table changes drop constraint if exists changes_kind_check;
+alter table changes add constraint changes_kind_check
+  check (kind in ('mail', 'busy', 'course', 'campus', 'github', 'jira', 'slack', 'handshake', 'sleep'));
+
+-- Every 10 minutes, call oura-sync. Like sheet-busy, its URL and the shared secret come from
+-- Vault; until both exist the job does nothing.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-oura';
+select cron.schedule('sheet-oura', '4-59/10 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_oura_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "oura"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_oura_url')
+$job$);
