@@ -9,6 +9,10 @@ covers planning a day and being reminded of the plan.
 One thing to do, either on a day or in a Someday list.
 _Avoid_: To-do, item, todo
 
+**Event to-do**:
+A Google Calendar event shown as a row in its day's list, in time order among the tasks, so Lisul plans from one list. He can check it off or hide it; it is not a task.
+_Avoid_: Calendar task, event row
+
 **Someday list**:
 A named column of tasks with no day. "Inbox" is the one that takes rolled-out tasks.
 _Avoid_: Backlog, capture list
