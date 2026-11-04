@@ -90,7 +90,7 @@ test("planner-mcp: only the owner's user-scoped client, and no fetch of its own"
 });
 
 test("planner-mcp: submit_proposal writes only through apply_proposal, after checkProposal", () => {
-  assert.deepEqual([...code.matchAll(/\.rpc\("(\w+)"/g)].map((m) => m[1]), ["is_owner", "apply_proposal", "answer_message", "add_message_step"]);
+  assert.deepEqual([...code.matchAll(/\.rpc\("(\w+)"/g)].map((m) => m[1]), ["is_owner", "apply_proposal", "answer_message", "add_message_step", "set_event_titles"]);
   assert.doesNotMatch(code, /\.(insert|update|upsert|delete)\(/);
   const submit = code.split('registerTool("submit_proposal"')[1];
   assert.ok(submit.indexOf("checkProposal(") < submit.indexOf('rpc("apply_proposal"'));
@@ -113,6 +113,15 @@ test("planner-mcp: report_step writes only checked steps, through add_message_st
   assert.ok(step.indexOf("checkStep(") < step.indexOf("logStep("));
   assert.match(step, /if \(check\.step\)/);
   assert.doesNotMatch(step, /isError/);
+});
+
+test("planner-mcp: event to-do titles are written only through set_event_titles, after checkEventTodos, once a submit or the answers are saved", () => {
+  const save = code.split("async function saveEventTitles(")[1].split("\n}\n")[0];
+  assert.ok(save.indexOf("checkEventTodos(") < save.indexOf('rpc("set_event_titles", { d: day, titles: rows })'));
+  const submit = code.split('registerTool("submit_proposal"')[1].split('registerTool("answer_messages"')[0];
+  assert.ok(submit.indexOf('rpc("apply_proposal"') < submit.indexOf("saveEventTitles(db, snap.plan_day, input.event_todos)"));
+  const answer = code.split('registerTool("answer_messages"')[1].split("return server;")[0];
+  assert.ok(answer.indexOf('rpc("answer_message"') < answer.indexOf("saveEventTitles(db,"));
 });
 
 test("planner-mcp: read_planner adds the pending messages through withMessages", () => {
