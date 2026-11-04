@@ -189,27 +189,28 @@ do $$ begin
 end $$;
 
 -- The owner, as planner-mcp calls it: a first proposal, then a resubmission that replaces it.
+-- The blocks sit at fixed times today, so a run late in the evening doesn't push them into tomorrow.
 -- Since v5 (V1) each submission is a revision, named by the one it replaces.
 select pg_temp.as_user('authenticated', 'owner@example.com');
 create temp table v4_first as select now() as at;
 select apply_proposal(d => sheet_today(), replaces => null, blocks =>
   jsonb_build_array(
-    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '2 hours', 'ends_at', now() + interval '3 hours'),
-    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '4 hours', 'ends_at', now() + interval '5 hours')),
+    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', (sheet_today() + time '09:00') at time zone (select time_zone from settings), 'ends_at', (sheet_today() + time '10:00') at time zone (select time_zone from settings)),
+    jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', (sheet_today() + time '11:00') at time zone (select time_zone from settings), 'ends_at', (sheet_today() + time '12:00') at time zone (select time_zone from settings))),
   needs => '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
      "sender": "Ana", "subject": "Demo moved", "why": "Reply by Thursday.", "kind": "reply", "due": "2026-11-05"}]',
   picks => '[{"uid": "e1", "why": "Bagels."}]', note => 'Gym did not fit.');
 update proposals set created_at = created_at - interval '1 hour';  -- so the resubmission's is newer
 update needs_you set done = true;
 select apply_proposal(d => sheet_today(), replaces => 1, blocks =>
-  jsonb_build_array(jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', now() + interval '6 hours', 'ends_at', now() + interval '7 hours')),
+  jsonb_build_array(jsonb_build_object('task_id', '00000000-0000-4000-8000-000000000001', 'starts_at', (sheet_today() + time '13:00') at time zone (select time_zone from settings), 'ends_at', (sheet_today() + time '14:00') at time zone (select time_zone from settings))),
   needs => '[{"account": "a@example.com", "message_id": "abc123", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/abc123",
      "sender": "Ana", "subject": "Demo moved", "why": "Reply by Thursday.", "kind": "reply"},
     {"account": "a@example.com", "message_id": "def456", "link": "https://mail.google.com/mail/?authuser=a%40example.com#all/def456",
      "sender": "Bursar", "subject": "Spring bill", "why": "Pay it.", "kind": "admin"}]');
 do $$ begin
   if (select count(*) from blocks where proposed) <> 1
-    or not exists (select 1 from blocks where proposed and starts_at > now() + interval '5 hours')
+    or not exists (select 1 from blocks where proposed and starts_at = (sheet_today() + time '13:00') at time zone (select time_zone from settings))
     then raise exception 'resubmission did not replace the proposed blocks'; end if;
   if (select count(*) from blocks where not proposed) <> 1 then raise exception 'apply_proposal touched an approved block'; end if;
   if (select count(*) from proposals where status = 'pending') <> 1
