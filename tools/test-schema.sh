@@ -914,4 +914,134 @@ do $$ begin
   raise notice '✓ v5: handshake_sync_save replaces Handshake rows only; academic_days owner-only';
 end $$;
 SQL
+psql_as postgres >/dev/null <<'SQL'
+-- --- v5 wave 3: M1, SRC1 and SRC2 (docs/sheet-v5.md, "Schema") -------------------------------
+-- Each block skips itself until the tables or columns it checks exist, so these pass before their
+-- tickets land.
+\set QUIET on
+\pset tuples_only on
+
+-- --- M1, reply tracking -------------------------------------------------------------------------
+do $$ begin
+  if to_regclass('public.known_senders') is null or to_regclass('public.message_senders') is null
+     or to_regclass('public.reply_state') is null then
+    raise notice '- v5 known_senders, message_senders and reply_state: skipped, not there yet';
+    return;
+  end if;
+  if (select bool_and(relrowsecurity) from pg_class
+      where oid in ('known_senders'::regclass, 'message_senders'::regclass, 'reply_state'::regclass)) is not true
+    then raise exception 'RLS off on a reply tracking table'; end if;
+  if has_table_privilege('anon', 'known_senders', 'select') or has_table_privilege('anon', 'message_senders', 'select')
+    or has_table_privilege('anon', 'reply_state', 'select')
+    then raise exception 'anon can read a reply tracking table'; end if;
+  if has_table_privilege('authenticated', 'known_senders', 'insert') or has_table_privilege('authenticated', 'known_senders', 'update')
+    or has_table_privilege('authenticated', 'known_senders', 'delete')
+    or has_table_privilege('authenticated', 'message_senders', 'insert') or has_table_privilege('authenticated', 'message_senders', 'update')
+    or has_table_privilege('authenticated', 'message_senders', 'delete')
+    or has_table_privilege('authenticated', 'reply_state', 'insert') or has_table_privilege('authenticated', 'reply_state', 'update')
+    or has_table_privilege('authenticated', 'reply_state', 'delete')
+    then raise exception 'the browser can write a reply tracking table'; end if;
+  if not has_table_privilege('authenticated', 'reply_state', 'select')
+    then raise exception 'the owner cannot read reply_state'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now')
+               and table_name in ('known_senders', 'message_senders', 'reply_state'))
+    then raise exception 'a public view reads a reply tracking table'; end if;
+  -- known_senders holds hashes only, never an address.
+  begin insert into known_senders (hash, last_sent_at) values ('ana.ruiz@example.edu', now());
+    raise exception 'known_senders took an address';
+  exception when check_violation then null; end;
+  begin insert into known_senders (hash, last_sent_at) values (repeat('A', 64), now());
+    raise exception 'known_senders took an uppercase hash';
+  exception when check_violation then null; end;
+  insert into known_senders (hash, last_sent_at)
+    values ('b2d1910ecb638f419ce06372f8393efff2ab1f90e03954509117859182151af9', now());
+  begin insert into known_senders (hash, last_sent_at)
+      values ('b2d1910ecb638f419ce06372f8393efff2ab1f90e03954509117859182151af9', now());
+    raise exception 'known_senders took the same hash twice';
+  exception when unique_violation then null; end;
+  begin insert into reply_state (account, thread_id, state, since, message_id, who)
+      values ('owner@example.com', '18f3a1c2d4e5f000', 'pending', now(), '18f3a1c2d4e5f002', 'Ana Ruiz');
+    raise exception 'reply_state took state pending';
+  exception when check_violation then null; end;
+  begin insert into reply_state (account, thread_id, state, since, message_id, who)
+      values ('owner@example.com', '18f3a1c2d4e5f000', 'owed', now(), '18f3a1c2d4e5f002', repeat('a', 81));
+    raise exception 'reply_state took an 81-character who';
+  exception when check_violation then null; end;
+  insert into reply_state (account, thread_id, state, since, message_id, who)
+    values ('owner@example.com', '18f3a1c2d4e5f000', 'owed', now(), '18f3a1c2d4e5f002', 'Ana Ruiz');
+  begin insert into reply_state (account, thread_id, state, since, message_id, who)
+      values ('owner@example.com', '18f3a1c2d4e5f000', 'awaiting', now(), '18f3a1c2d4e5f003', 'Ana Ruiz');
+    raise exception 'reply_state took a thread twice';
+  exception when unique_violation then null; end;
+  begin insert into message_senders (account, message_id, thread_id, at) values ('owner@example.com', '18f3a1c2d4e5f002', '18f3a1c2d4e5f000', now());
+    raise exception 'message_senders took a row with no from_address';
+  exception when not_null_violation then null; end;
+  if (select data_type from information_schema.columns where table_name = 'mail_accounts' and column_name = 'history_id')
+     is distinct from 'text' then raise exception 'mail_accounts.history_id missing'; end if;
+  if (select count(*) from cron.job where jobname = 'sheet-mail') <> 1
+    or (select schedule from cron.job where jobname = 'sheet-mail') <> '2-59/5 * * * *'
+    then raise exception 'sheet-mail not scheduled once, every 5 minutes from minute 2'; end if;
+  delete from reply_state;
+  delete from known_senders;
+  raise notice '✓ v5: known_senders hashes only; reply tracking private and server-written; sheet-mail every 5 minutes';
+end $$;
+
+-- --- SRC1, GitHub and Jira tasks ------------------------------------------------------------------
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name = 'settings' and column_name = 'github_orgs') then
+    raise notice '- v5 GitHub and Jira: skipped, not there yet';
+    return;
+  end if;
+  if (select github_orgs from settings) is distinct from '{}'::text[]
+    then raise exception 'settings.github_orgs should default to none'; end if;
+  begin insert into tasks (title, public, list, link) values ('SRC1 http link', false, 'GitHub', 'http://github.com/acme-robotics/planner/pull/41');
+    raise exception 'tasks took an http:// link';
+  exception when check_violation then null; end;
+  begin insert into tasks (title, public, list, link) values ('SRC1 script link', false, 'GitHub', 'javascript:alert(1)');
+    raise exception 'tasks took a javascript: link';
+  exception when check_violation then null; end;
+  insert into tasks (title, public, list, source, source_uid, link)
+    values ('Review: Add retry to the sync worker', false, 'GitHub', 'github', 'https://github.com/acme-robotics/planner/pull/41',
+            'https://github.com/acme-robotics/planner/pull/41');
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name = 'tasks' and column_name = 'link')
+    then raise exception 'a public view reads tasks.link'; end if;
+  delete from tasks where source = 'github';
+  if (select count(*) from cron.job where jobname = 'sheet-work') <> 1
+    or (select schedule from cron.job where jobname = 'sheet-work') <> '40 * * * *'
+    then raise exception 'sheet-work not scheduled once at minute 40'; end if;
+  raise notice '✓ v5: github_orgs, https-only task links kept out of public views, sheet-work at :40';
+end $$;
+
+-- --- SRC2, Slack in Needs you -----------------------------------------------------------------------
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name = 'needs_you' and column_name = 'source') then
+    raise notice '- v5 Slack in Needs you: skipped, not there yet';
+    return;
+  end if;
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind)
+    values (sheet_today(), 'owner@example.com', '18f3a1c2d4e5f0aa', 'https://mail.google.com/mail/?authuser=owner@example.com#all/18f3a1c2d4e5f0aa',
+            'Ana Ruiz', 'Lab 4', 'Asked a question', 'reply');
+  if (select source from needs_you where message_id = '18f3a1c2d4e5f0aa') <> 'mail'
+    then raise exception 'needs_you.source should default to mail'; end if;
+  begin insert into needs_you (day, account, message_id, link, sender, subject, why, kind, source)
+      values (sheet_today(), 'teams', 'x:1', 'https://example.com', 'dana.lee', 'Chat', 'Mentioned you', 'reply', 'teams');
+    raise exception 'needs_you took source teams';
+  exception when check_violation then null; end;
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, source)
+    values (sheet_today(), 'slack', 'C0EXAMPLE1:1762354800.000100', 'https://example-team.slack.com/archives/C0EXAMPLE1/p1762354800000100',
+            'dana.lee', '#team-backend', 'Mentioned you', 'reply', 'slack');
+  begin insert into needs_you (day, account, message_id, link, sender, subject, why, kind, source)
+      values (sheet_today(), 'slack', 'C0EXAMPLE1:1762354800.000100', 'https://example-team.slack.com/archives/C0EXAMPLE1/p1762354800000100',
+              'dana.lee', '#team-backend', 'Mentioned you', 'reply', 'slack');
+    raise exception 'needs_you took the same Slack message twice';
+  exception when unique_violation then null; end;
+  delete from needs_you where message_id in ('18f3a1c2d4e5f0aa', 'C0EXAMPLE1:1762354800.000100');
+  if (select count(*) from cron.job where jobname = 'sheet-slack') <> 1
+    or (select schedule from cron.job where jobname = 'sheet-slack') <> '42 * * * *'
+    then raise exception 'sheet-slack not scheduled once at minute 42'; end if;
+  raise notice '✓ v5: needs_you.source mail or slack, one row per Slack message, sheet-slack at :42';
+end $$;
+SQL
 echo "✓ all schema checks passed"
