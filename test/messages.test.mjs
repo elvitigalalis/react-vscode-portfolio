@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldFire } from "../src/sheet/messages.mjs";
+import { shouldFire, checkAnswers } from "../src/sheet/messages.mjs";
 import { fireText } from "../src/sheet/routine-fire.mjs";
 
 const NOW = new Date("2026-11-04T15:00:00Z"); // 10:00 am EST
@@ -29,4 +29,132 @@ test("shouldFire: holds off while a message fired under 3 minutes ago is still p
 
 test("fireText: a message fire says only its trigger", () => {
   assert.equal(fireText("message", {}), "trigger: message\nreasons: none");
+});
+
+// ---------------------------------------------------------------- checkAnswers
+
+const TZ = "America/New_York";
+const PENDING = [{ id: M1 }, { id: M2 }];
+const answer = (over = {}) => ({ id: M1, tasks: [], events: [], reply: "Added it.", ...over });
+
+test("checkAnswers: a task with no day goes to the Inbox list; one with a day goes on that day", () => {
+  const out = checkAnswers({ answers: [answer({
+    tasks: [
+      { title: "Lab report", day: null, due: "2026-11-06", at_time: null, est_min: 120 },
+      { title: "Gym", day: "2026-11-05", due: null, at_time: "07:00", est_min: 60 },
+    ],
+    reply: "Lab report is in your Inbox, due Fri; gym is on Thu at 7:00 am.",
+  })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.answers, [{
+    id: M1,
+    tasks: [
+      { title: "Lab report", day: null, list: "Inbox", due: "2026-11-06", at_time: null, est_min: 120 },
+      { title: "Gym", day: "2026-11-05", list: null, due: null, at_time: "07:00", est_min: 60 },
+    ],
+    events: [],
+    reply: "Lab report is in your Inbox, due Fri; gym is on Thu at 7:00 am.",
+  }]);
+});
+
+test("checkAnswers: an event's local start becomes an instant in the time zone, and runs its minutes", () => {
+  const out = checkAnswers({ answers: [answer({ events: [{ title: "Dentist", start: "2026-11-05T15:00", minutes: 60 }] })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.answers[0].events, [{ title: "Dentist", starts_at: "2026-11-05T20:00:00.000Z", ends_at: "2026-11-05T21:00:00.000Z" }]);
+});
+
+test("checkAnswers: daylight saving time: EDT before Nov 1, EST after, and a run across the change keeps its length", () => {
+  const events = [
+    { title: "Lab", start: "2026-10-30T09:00", minutes: 90 },          // EDT, UTC-4
+    { title: "Party", start: "2026-10-31T23:30", minutes: 180 },       // across 2 am on Nov 1
+    { title: "Lab", start: "2027-03-15T09:00", minutes: 90 },          // EDT again
+  ];
+  const out = checkAnswers({ answers: [answer({ events })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.answers[0].events, [
+    { title: "Lab", starts_at: "2026-10-30T13:00:00.000Z", ends_at: "2026-10-30T14:30:00.000Z" },
+    { title: "Party", starts_at: "2026-11-01T03:30:00.000Z", ends_at: "2026-11-01T06:30:00.000Z" },
+    { title: "Lab", starts_at: "2027-03-15T13:00:00.000Z", ends_at: "2027-03-15T14:30:00.000Z" },
+  ]);
+});
+
+test("checkAnswers: a start the clocks skip (2:30 am on Mar 14, 2027) is refused", () => {
+  const out = checkAnswers({ answers: [answer({ events: [{ title: "Late", start: "2027-03-14T02:30", minutes: 60 }] })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, ["answers[0].events[0].start: 02:30 doesn't happen on 2027-03-14 in America/New_York (the clocks skip it)"]);
+  assert.deepEqual(out.answers, []);
+});
+
+test("checkAnswers: an id that isn't a pending message fails that answer only", () => {
+  const gone = "0b6f3c1e-0000-4000-8000-000000000009";
+  const out = checkAnswers({ answers: [answer({ id: gone }), answer({ id: M2, reply: "Done." }), answer({ id: M2 })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, [
+    "answers[0].id: not a pending message (already answered, or not one read_planner gave)",
+    "answers[2].id: that message is already answered above",
+  ]);
+  assert.deepEqual(out.answers, [{ id: M2, tasks: [], events: [], reply: "Done." }]);
+});
+
+test("checkAnswers: titles over 120 characters, replies over 280, links and line breaks are refused", () => {
+  const out = checkAnswers({ answers: [answer({
+    tasks: [{ title: "x".repeat(121), day: null, due: null, at_time: null, est_min: null }],
+    events: [{ title: "Call\nnow", start: "2026-11-05T15:00", minutes: 30 }],
+    reply: "See www.example.com",
+  }), answer({ id: M2, reply: "y".repeat(281) })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, [
+    "answers[0].tasks[0].title: at most 120 characters, got 121",
+    "answers[0].events[0].title: must be one line, with no line breaks or control characters",
+    "answers[0].reply: must not hold a link or web address",
+    "answers[1].reply: at most 280 characters, got 281",
+  ]);
+  assert.deepEqual(out.answers, []);
+});
+
+test("checkAnswers: bad dates, times and lengths each name their field", () => {
+  const out = checkAnswers({ answers: [answer({
+    tasks: [
+      { title: "A", day: "2026-02-30", due: "Friday", at_time: "7am", est_min: 10 },
+      { title: "B", day: null, due: null, at_time: "07:00", est_min: 481 },
+    ],
+    events: [
+      { title: "C", start: "2026-11-05 15:00", minutes: 60 },
+      { title: "D", start: "2026-11-05T24:00", minutes: 721 },
+      { title: "E", start: "2026-11-05T15:00", minutes: 14 },
+    ],
+  })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, [
+    'answers[0].tasks[0].day: must be a date "YYYY-MM-DD" or null',
+    'answers[0].tasks[0].due: must be a date "YYYY-MM-DD" or null',
+    'answers[0].tasks[0].at_time: must be "HH:MM", 24-hour, or null',
+    "answers[0].tasks[0].est_min: must be 15 to 480 minutes, or null",
+    "answers[0].tasks[1].at_time: a fixed time needs a day",
+    "answers[0].tasks[1].est_min: must be 15 to 480 minutes, or null",
+    'answers[0].events[0].start: must be local "YYYY-MM-DDTHH:MM", 24-hour',
+    'answers[0].events[1].start: must be local "YYYY-MM-DDTHH:MM", 24-hour',
+    "answers[0].events[1].minutes: must be 15 to 720",
+    "answers[0].events[2].minutes: must be 15 to 720",
+  ]);
+});
+
+test("checkAnswers: past dates are fine (he may log what already happened); missing fields read as null", () => {
+  const out = checkAnswers({ answers: [answer({
+    tasks: [{ title: "Expense report", day: "2026-10-01", due: "2026-10-02" }, { title: "Read ch. 4" }],
+    events: [{ title: "Advisor meeting", start: "2026-10-01T10:00", minutes: 30 }],
+  })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.answers[0].tasks, [
+    { title: "Expense report", day: "2026-10-01", list: null, due: "2026-10-02", at_time: null, est_min: null },
+    { title: "Read ch. 4", day: null, list: "Inbox", due: null, at_time: null, est_min: null },
+  ]);
+  assert.equal(out.answers[0].events[0].starts_at, "2026-10-01T14:00:00.000Z");
+});
+
+test("checkAnswers: at most 10 answers, 10 tasks and 5 events an answer, and a reply is required", () => {
+  const many = (n, f) => Array.from({ length: n }, f);
+  assert.deepEqual(checkAnswers({ answers: many(11, () => answer()) }, PENDING, TZ).errors, ["answers: at most 10, got 11"]);
+  const out = checkAnswers({ answers: [answer({
+    tasks: many(11, () => ({ title: "T" })),
+    events: many(6, () => ({ title: "E", start: "2026-11-05T15:00", minutes: 30 })),
+    reply: undefined,
+  })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, ["answers[0].tasks: at most 10, got 11", "answers[0].events: at most 5, got 6", "answers[0].reply: must be text"]);
 });
