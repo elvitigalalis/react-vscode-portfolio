@@ -5,6 +5,7 @@
 import { localNow, zonedIso, minutesOn, planningDay, atRisk, addDays, formatClock, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { freeFood } from "./campus.mjs";
 import { weatherHours } from "./sources.mjs";
+import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
 
@@ -47,6 +48,9 @@ function runOf(rows, now) {
 //   proposal   plan_day's proposals row, or null
 //   needsOpen  the needs_you rows not done
 //   accounts   the mail_accounts rows
+//   actuals    v5 P1: the actuals rows (pace)
+//   past       v5 P1: the approved blocks of the 14 days before plan_day, each with its task's
+//              done as `task: { done }` (paceQueries, proposal-io.mjs)
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -64,9 +68,12 @@ export function planSnapshot(rows, now) {
   // v5: a task turned down today leaves the list, so the planner doesn't offer it again.
   const turnedDown = list(rows.turnedDown ?? rows.days.find((d) => d.day === day)?.turned_down);
   const seen = new Set(turnedDown);
+  // v5 P1: pace per kind, and each task's paced estimate.
+  const pace = paceByKind(rows.actuals ?? []);
+  const past = rows.past ?? [];
   const tasks = groups.flat().filter((t) => !seen.has(t.id) && seen.add(t.id)).map((t) => ({
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
-    source: t.source, day: t.day, list: t.list, at_risk: risky(t),
+    source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
   }));
   const shutdown = line ? line.slice(0, 5) : DEFAULT_SHUTDOWN;
   return {
@@ -97,6 +104,9 @@ export function planSnapshot(rows, now) {
     day_rules: dayRules(settings),
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
+    // v5 P1.
+    pace,
+    planned_vs_done: plannedVsDone(past, past.map((b) => ({ id: b.task_id, done: Boolean(b.task?.done) })), day, tz),
   };
 }
 
@@ -267,6 +277,10 @@ export function checkProposal(input, snapshot) {
       const from = toMinutes(start);
       if (win && from < win.from) errors.push(`${name}: starts before ${snapshot.window.from}, the start of the plan window`);
       else if (!win && from < EARLIEST) errors.push(`${name}: starts before 07:00`);
+      // v5 P1: a block runs the task's paced estimate.
+      if (snapshot.version === 5 && task && Number.isInteger(minutes) && minutes !== task.paced_min) {
+        errors.push(`${name}: minutes must be ${task.paced_min}, the task's paced estimate`);
+      }
       if (task?.at_time && task.at_time.slice(0, 5) !== start) errors.push(`${name}: this task is fixed at ${task.at_time.slice(0, 5)}, so it must start then`);
       if (errors.length > before && !Number.isInteger(minutes)) return;
       const to = from + minutes;

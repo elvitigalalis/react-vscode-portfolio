@@ -47,46 +47,46 @@ const finishedAt = (send_at) => ({ kind: "finished", block_id: B(1), day, send_a
 // When Finished? is sent
 // =============================================================================================
 
-test("Finished?: sent when a nudged block ends, with its four buttons", todo, async () => {
+test("Finished?: sent when a nudged block ends, with its four buttons", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot(), at("2026-11-04T15:15:00Z")), [finishedAt("2026-11-04T15:15:00.000Z")]);
 });
 
-test("Finished?: not before the block ends", todo, async () => {
+test("Finished?: not before the block ends", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot(), at("2026-11-04T15:14:00Z")), []);
 });
 
-test("Finished?: a late run still sends it within 30 minutes of the end, not after", todo, async () => {
+test("Finished?: a late run still sends it within 30 minutes of the end, not after", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot(), at("2026-11-04T15:44:00Z")), [finishedAt("2026-11-04T15:15:00.000Z")]);
   assert.deepEqual(whatToSend(snapshot(), at("2026-11-04T15:45:00Z")), []);
 });
 
-test("Finished?: once per block end", todo, async () => {
+test("Finished?: once per block end", async () => {
   const { whatToSend } = await nudges();
   const log = [...nudged, sent(B(1), "finished", "2026-11-04T15:15:00.000Z")];
   assert.deepEqual(whatToSend(snapshot({ log }), at("2026-11-04T15:20:00Z")), []);
 });
 
-test("Finished?: skipped for a block that was never nudged", todo, async () => {
+test("Finished?: skipped for a block that was never nudged", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot({ log: [briefSent] }), at("2026-11-04T15:15:00Z")), []);
 });
 
-test("Finished?: skipped when the task is already done", todo, async () => {
+test("Finished?: skipped when the task is already done", async () => {
   const { whatToSend } = await nudges();
   const tasks = [{ ...osHomework, done: true }, gym];
   assert.deepEqual(whatToSend(snapshot({ tasks }), at("2026-11-04T15:15:00Z")), []);
 });
 
-test("Finished?: skipped when the day is shut down", todo, async () => {
+test("Finished?: skipped when the day is shut down", async () => {
   const { whatToSend } = await nudges();
   const shut = { day, planned: true, shutdown: true, shutdown_at: null, reflection: null };
   assert.deepEqual(whatToSend(snapshot({ day: shut }), at("2026-11-04T15:15:00Z")), []);
 });
 
-test("Finished?: a block ending at 10:45 pm, before quiet hours, still gets one", todo, async () => {
+test("Finished?: a block ending at 10:45 pm, before quiet hours, still gets one", async () => {
   const { whatToSend } = await nudges();
   // 10:00-10:45 pm, nudged at 10:00 pm; the check-in went out at 5:00 pm.
   const late = block(B(5), "t1", "2026-11-05T03:00:00Z", "2026-11-05T03:45:00Z");
@@ -97,7 +97,7 @@ test("Finished?: a block ending at 10:45 pm, before quiet hours, still gets one"
   }]);
 });
 
-test("More time asks again at the new end", todo, async () => {
+test("More time asks again at the new end", async () => {
   const { whatToSend } = await nudges();
   // The block now runs to 10:45 am; the first Finished? went out at 10:15.
   const longer = { ...b1, ends_at: "2026-11-04T15:45:00Z" };
@@ -111,13 +111,13 @@ test("More time asks again at the new end", todo, async () => {
 
 const others = (n) => Array.from({ length: n }, (_, i) => sent(`x${i}`, "start", `2026-11-04T1${3 + i}:05:00.000Z`));
 
-test("budget: with all six slots used, Finished? isn't sent", todo, async () => {
+test("budget: with all six slots used, Finished? isn't sent", async () => {
   const { whatToSend } = await nudges();
   // OS homework's start and repeat, and four other nudges.
   assert.deepEqual(whatToSend(snapshot({ log: [...nudged, ...others(4)] }), at("2026-11-04T15:15:00Z")), []);
 });
 
-test("budget: Finished? takes only the slots left after the kept nudges still to go out", todo, async () => {
+test("budget: Finished? takes only the slots left after the kept nudges still to go out", async () => {
   const { whatToSend } = await nudges();
   // Gym's 2:00 pm block is one of the first six, so its nudge holds a slot.
   const gymBlock = block(B(2), "t2", "2026-11-04T19:00:00Z", "2026-11-04T20:00:00Z");
@@ -128,7 +128,7 @@ test("budget: Finished? takes only the slots left after the kept nudges still to
   assert.deepEqual(whatToSend(snapshot({ blocks, log: [...nudged, ...others(2)] }), at("2026-11-04T15:15:00Z")), [finishedAt("2026-11-04T15:15:00.000Z")]);
 });
 
-test("budget: a Finished? that went out counts toward it", todo, async () => {
+test("budget: a Finished? that went out counts toward it", async () => {
   const { handleTap } = await nudges();
   const gymBlock = block(B(2), "t2", "2026-11-04T19:00:00Z", "2026-11-04T20:00:00Z");
   const base = [...nudged, ...others(2), sent(B(2), "start", "2026-11-04T19:00:00.000Z")]; // 5 used
@@ -147,14 +147,14 @@ test("budget: a Finished? that went out counts toward it", todo, async () => {
 
 const update = (data, chat = 42) => ({ callback_query: { id: "q1", data, message: { message_id: 7, chat: { id: chat } } } });
 
-test("readTap: the four Finished? buttons name the action and the block", todo, async () => {
+test("readTap: the four Finished? buttons name the action and the block", async () => {
   const { readTap } = await nudges();
   for (const action of ["finished", "more", "nostart", "tomorrow"]) {
     assert.deepEqual(readTap(update(`${action}:${B(1)}`), settings), { action, block_id: B(1), query_id: "q1", chat_id: 42, message_id: 7 });
   }
 });
 
-test("readTap: a Finished? button without a block UUID, or from another chat, is ignored", todo, async () => {
+test("readTap: a Finished? button without a block UUID, or from another chat, is ignored", async () => {
   const { readTap } = await nudges();
   assert.equal(readTap(update("finished:abc"), settings), null);
   assert.equal(readTap(update("finish:" + B(1)), settings), null);
@@ -177,7 +177,7 @@ const b4 = block(B(4), "t1", "2026-11-03T20:00:00Z", "2026-11-03T20:30:00Z");
 const p1 = block(B(6), "t1", "2026-11-04T21:00:00Z", "2026-11-04T21:45:00Z", { proposed: true });
 const busyDay = () => snapshot({ blocks: [b1, b3, b4, p1] });
 
-test("Finished: marks the task done, applies the block rules, and records the minutes it took", todo, async () => {
+test("Finished: marks the task done, applies the block rules, and records the minutes it took", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(sorted(handleTap({ action: "finished", block_id: B(1) }, busyDay(), tapAt)), sorted({
     changes: [
@@ -192,7 +192,7 @@ test("Finished: marks the task done, applies the block rules, and records the mi
   }));
 });
 
-test("Finished: a course task records kind course; a task with no estimate records est_min null", todo, async () => {
+test("Finished: a course task records kind course; a task with no estimate records est_min null", async () => {
   const { handleTap } = await nudges();
   const hw = task("t4", "HW3", { day: null, list: "Brightspace", source: "brightspace", est_min: 30, due: "2026-11-09" });
   const chores = task("t5", "Laundry");
@@ -205,7 +205,7 @@ test("Finished: a course task records kind course; a task with no estimate recor
   assert.deepEqual(choreOut.changes.find((c) => c.table === "actuals"), { table: "actuals", insert: { day, task_id: "t5", block_id: B(8), kind: "other", est_min: null, minutes: 20 } });
 });
 
-test("More time: extends the block 30 minutes when that time is free, and its event with it", todo, async () => {
+test("More time: extends the block 30 minutes when that time is free, and its event with it", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(sorted(handleTap({ action: "more", block_id: B(1) }, snapshot(), at("2026-11-04T15:16:00Z"))), sorted({
     changes: [
@@ -216,7 +216,7 @@ test("More time: extends the block 30 minutes when that time is free, and its ev
   }));
 });
 
-test("More time: a proposed block in the way doesn't count, and a busy time starting at the new end is fine", todo, async () => {
+test("More time: a proposed block in the way doesn't count, and a busy time starting at the new end is fine", async () => {
   const { handleTap } = await nudges();
   const inTheWay = block(B(6), "t2", "2026-11-04T15:15:00Z", "2026-11-04T16:15:00Z", { proposed: true });
   const busy = [{ starts_at: "2026-11-04T15:45:00Z", ends_at: "2026-11-04T16:45:00Z" }]; // from 10:45 am
@@ -224,7 +224,7 @@ test("More time: a proposed block in the way doesn't count, and a busy time star
   assert.equal(r.text, "More time: until 10:45 am · OS homework");
 });
 
-test("More time: when a busy time or another approved block takes the next 30 minutes, it says so and changes nothing", todo, async () => {
+test("More time: when a busy time or another approved block takes the next 30 minutes, it says so and changes nothing", async () => {
   const { handleTap } = await nudges();
   const notFree = { changes: [], text: "The next 30 min aren't free · OS homework" };
   const busy = [{ starts_at: "2026-11-04T15:30:00Z", ends_at: "2026-11-04T16:30:00Z" }]; // 10:30-11:30 am
@@ -233,7 +233,7 @@ test("More time: when a busy time or another approved block takes the next 30 mi
   assert.deepEqual(handleTap({ action: "more", block_id: B(1) }, snapshot({ blocks: [b1, gymNext] }), at("2026-11-04T15:16:00Z")), notFree);
 });
 
-test("More time: not past 11 pm", todo, async () => {
+test("More time: not past 11 pm", async () => {
   const { handleTap } = await nudges();
   // 10:00-10:45 pm: 30 more would end at 11:15 pm.
   const late = block(B(5), "t1", "2026-11-05T03:00:00Z", "2026-11-05T03:45:00Z");
@@ -242,12 +242,12 @@ test("More time: not past 11 pm", todo, async () => {
   });
 });
 
-test("Didn't start: leaves the task open and records nothing", todo, async () => {
+test("Didn't start: leaves the task open and records nothing", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(handleTap({ action: "nostart", block_id: B(1) }, busyDay(), tapAt), { changes: [], text: "Left open · OS homework" });
 });
 
-test("Tomorrow: rolls the task at once and clears its blocks still to come today", todo, async () => {
+test("Tomorrow: rolls the task at once and clears its blocks still to come today", async () => {
   const { handleTap } = await nudges();
   assert.deepEqual(sorted(handleTap({ action: "tomorrow", block_id: B(1) }, busyDay(), tapAt)), sorted({
     changes: [
@@ -260,7 +260,7 @@ test("Tomorrow: rolls the task at once and clears its blocks still to come today
   }));
 });
 
-test("Tomorrow: a task from a Someday list moves onto tomorrow", todo, async () => {
+test("Tomorrow: a task from a Someday list moves onto tomorrow", async () => {
   const { handleTap } = await nudges();
   const hw = task("t4", "HW3", { day: null, list: "Brightspace", source: "brightspace", est_min: 30 });
   const hwBlock = block(B(7), "t4", "2026-11-04T14:30:00Z", "2026-11-04T15:15:00Z");
@@ -270,7 +270,7 @@ test("Tomorrow: a task from a Someday list moves onto tomorrow", todo, async () 
   });
 });
 
-test("the answers on a done task, or a block no longer there, change nothing", todo, async () => {
+test("the answers on a done task, or a block no longer there, change nothing", async () => {
   const { handleTap } = await nudges();
   const done = snapshot({ tasks: [{ ...osHomework, done: true }, gym] });
   for (const action of ["finished", "more", "nostart", "tomorrow"]) {
@@ -283,7 +283,7 @@ test("the answers on a done task, or a block no longer there, change nothing", t
 // Pace
 // =============================================================================================
 
-test("paceKind: course, campus, GitHub, Jira, or other", todo, async () => {
+test("paceKind: course, campus, GitHub, Jira, or other", async () => {
   const { paceKind } = await pace();
   assert.equal(paceKind({ source: "brightspace", tag: null }), "course");
   assert.equal(paceKind({ source: "brightspace", tag: "campus" }), "course");
@@ -302,27 +302,27 @@ const row = (kind, est_min, minutes) => {
 };
 const none = { pace: null, n: 0 };
 
-test("paceByKind: fewer than 5 finished tasks of a kind give no pace", todo, async () => {
+test("paceByKind: fewer than 5 finished tasks of a kind give no pace", async () => {
   const { paceByKind } = await pace();
   const rows = [row("course", 30, 60), row("course", 30, 60), row("course", 30, 60), row("course", 30, 60)];
   assert.deepEqual(paceByKind(rows), { course: { pace: null, n: 4 }, campus: none, github: none, jira: none, other: none });
 });
 
-test("paceByKind: 5 samples give the median of actual over estimate", todo, async () => {
+test("paceByKind: 5 samples give the median of actual over estimate", async () => {
   const { paceByKind } = await pace();
   // 1, 1.5, 2, 1.2 and 0.8: the median is 1.2.
   const rows = [row("course", 30, 30), row("course", 40, 60), row("course", 30, 60), row("course", 50, 60), row("course", 50, 40)];
   assert.deepEqual(paceByKind(rows).course, { pace: 1.2, n: 5 });
 });
 
-test("paceByKind: an even count takes the mean of the middle two", todo, async () => {
+test("paceByKind: an even count takes the mean of the middle two", async () => {
   const { paceByKind } = await pace();
   // 1, 2, 1.5, 0.5, 1 and 3, sorted 0.5 1 1 1.5 2 3: (1 + 1.5) / 2.
   const rows = [row("other", 60, 60), row("other", 30, 60), row("other", 40, 60), row("other", 60, 30), row("other", 45, 45), row("other", 20, 60)];
   assert.deepEqual(paceByKind(rows).other, { pace: 1.25, n: 6 });
 });
 
-test("paceByKind: pace is held between 0.5 and 3", todo, async () => {
+test("paceByKind: pace is held between 0.5 and 3", async () => {
   const { paceByKind } = await pace();
   const slow = Array.from({ length: 5 }, () => row("jira", 15, 60));   // 4 each
   const fast = Array.from({ length: 5 }, () => row("github", 60, 15)); // 0.25 each
@@ -331,20 +331,20 @@ test("paceByKind: pace is held between 0.5 and 3", todo, async () => {
   assert.deepEqual(out.github, { pace: 0.5, n: 5 });
 });
 
-test("paceByKind: rounded to 2 decimals", todo, async () => {
+test("paceByKind: rounded to 2 decimals", async () => {
   const { paceByKind } = await pace();
   // 1, 1, 40/30, 1.4 and 1.5: the median is 1.333…
   const rows = [row("campus", 30, 30), row("campus", 60, 60), row("campus", 30, 40), row("campus", 50, 70), row("campus", 40, 60)];
   assert.deepEqual(paceByKind(rows).campus, { pace: 1.33, n: 5 });
 });
 
-test("paceByKind: rows with no estimate don't count", todo, async () => {
+test("paceByKind: rows with no estimate don't count", async () => {
   const { paceByKind } = await pace();
   const rows = [row("course", null, 90), row("course", 0, 90), ...Array.from({ length: 4 }, () => row("course", 30, 45))];
   assert.deepEqual(paceByKind(rows).course, { pace: null, n: 4 });
 });
 
-test("paceByKind: only the newest 20 of a kind count", todo, async () => {
+test("paceByKind: only the newest 20 of a kind count", async () => {
   const { paceByKind } = await pace();
   const older = Array.from({ length: 20 }, () => row("course", 30, 60)); // 2 each
   const newer = Array.from({ length: 20 }, () => row("course", 30, 30)); // 1 each
@@ -356,7 +356,7 @@ const paces = (course = null, other = null) => ({
   course: { pace: course, n: course == null ? 0 : 8 }, campus: none, github: none, jira: none, other: { pace: other, n: other == null ? 0 : 8 },
 });
 
-test("pacedMinutes: the estimate rounded to 15 when the kind has no pace yet, or 30 with no estimate", todo, async () => {
+test("pacedMinutes: the estimate rounded to 15 when the kind has no pace yet, or 30 with no estimate", async () => {
   const { pacedMinutes } = await pace();
   assert.equal(pacedMinutes({ est_min: 45, source: null }, paces()), 45);
   assert.equal(pacedMinutes({ est_min: 20, source: null }, paces()), 15);
@@ -364,7 +364,7 @@ test("pacedMinutes: the estimate rounded to 15 when the kind has no pace yet, or
   assert.equal(pacedMinutes({ est_min: null, source: null }, paces()), 30);
 });
 
-test("pacedMinutes: estimate times the kind's pace, rounded to the nearest 15, held to 15-240", todo, async () => {
+test("pacedMinutes: estimate times the kind's pace, rounded to the nearest 15, held to 15-240", async () => {
   const { pacedMinutes } = await pace();
   assert.equal(pacedMinutes({ est_min: 45, source: null }, paces(null, 1.3)), 60);   // 58.5
   assert.equal(pacedMinutes({ est_min: 30, source: null }, paces(null, 1.25)), 45);  // 37.5, half up
@@ -375,7 +375,7 @@ test("pacedMinutes: estimate times the kind's pace, rounded to the nearest 15, h
   assert.equal(pacedMinutes({ est_min: 30, source: "brightspace" }, paces(2, 1)), 60);
 });
 
-test("plannedVsDone: approved block minutes and the done share, for the 14 days before", todo, async () => {
+test("plannedVsDone: approved block minutes and the done share, for the 14 days before", async () => {
   const { plannedVsDone } = await pace();
   const tasks = [{ id: "d1", done: true }, { id: "u1", done: false }];
   const blocks = [

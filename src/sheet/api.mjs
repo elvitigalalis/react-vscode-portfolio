@@ -153,6 +153,9 @@ export const campusByUid = (uids) => (uids.length
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
+// v5 P1, pace (docs/sheet-v5.md): the actuals rows Telegram's Finished answer wrote. Read-only here.
+export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
+
 // Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are
 // replaced by `rows`; Handshake's (source 'handshake', docs/sheet-v5.md) are left alone, and the
 // inserts take the default source, 'calendar'. The insert ignores rows already there, so two tabs
