@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldFire, messageText, checkAnswers, withMessages, proposalTrigger, addedLine } from "../src/sheet/messages.mjs";
+import { shouldFire, messageText, checkAnswers, withMessages, proposalTrigger, addedLine, messageState, itemLines } from "../src/sheet/messages.mjs";
 import { fireText } from "../src/sheet/routine-fire.mjs";
 
 const NOW = new Date("2026-11-04T15:00:00Z"); // 10:00 am EST
@@ -232,6 +232,55 @@ test("addedLine: what an answered message added, as /plan shows it under the rep
   assert.equal(addedLine({ status: "done", tasks_added: 0, events: [ev, ev] }), "Added: 2 events");
   assert.equal(addedLine({ status: "failed", tasks_added: 0, events: [] }), "Nothing added");
   assert.equal(addedLine({ status: "pending", tasks_added: 0, events: [] }), "");
+});
+
+test("addedLine: an answered message whose items were all undone says so", () => {
+  assert.equal(addedLine({ status: "done", tasks_added: 0, events: [] }), "All undone");
+});
+
+// ---------------------------------------------------------------- messageState (/plan)
+
+test("messageState: Claude is reading while a fired message is fresh; queued once the run was missed or rate limited", () => {
+  const m = (over) => ({ id: M1, status: "pending", fired_at: null, ...over });
+  assert.deepEqual(messageState(m({ fired_at: ago(2) }), [], NOW), { key: "reading", words: "Claude is reading…" });
+  // Batched: another pending message's run, fired a minute ago, reads this one too.
+  assert.equal(messageState(m(), [m(), { id: M2, status: "pending", fired_at: ago(1) }], NOW).key, "reading");
+  const queued = { key: "queued", words: "Queued: Claude is busy, so this runs with the next plan." };
+  assert.deepEqual(messageState(m(), [m()], NOW), queued);
+  assert.deepEqual(messageState(m({ fired_at: ago(11) }), [], NOW), queued);
+  // An answered message's fire no longer counts.
+  assert.equal(messageState(m(), [{ id: M2, status: "done", fired_at: ago(1) }], NOW).key, "queued");
+});
+
+test("messageState: an answered message says what it added; one that added nothing couldn't be parsed", () => {
+  assert.deepEqual(messageState({ status: "done", tasks_added: 2, events: [] }, [], NOW), { key: "added", words: "Added: 2 tasks" });
+  assert.deepEqual(messageState({ status: "failed", tasks_added: 0, events: [] }, [], NOW), { key: "unparsed", words: "Couldn't parse it: nothing added" });
+});
+
+// ---------------------------------------------------------------- itemLines (/plan)
+
+test("itemLines: each to-do with its day or Inbox and due date, each event with its day and times, to-dos first", () => {
+  const m = {
+    tasks: [
+      { id: "t1", title: "Project 2 (due 11:59 pm)", day: null, list: "Inbox", due: "2026-11-14", at_time: null },
+      { id: "t2", title: "Read ch. 5", day: "2026-11-09", list: null, due: "2026-11-10", at_time: "09:30" },
+      { id: "t3", title: "Email TA", day: "2026-11-05", list: null, due: null, at_time: null },
+    ],
+    events: [
+      { id: "e1", title: "Quiz ch. 5", starts_at: "2026-11-10T14:00:00.000Z", ends_at: "2026-11-10T15:15:00.000Z" },
+      { id: "e2", title: "Review session", starts_at: "2026-11-12T23:30:00.000Z", ends_at: "2026-11-13T01:00:00.000Z" },
+    ],
+  };
+  assert.deepEqual(itemLines(m, TZ), [
+    { id: "t1", kind: "task", title: "Project 2 (due 11:59 pm)", when: "Inbox · due Sat Nov 14" },
+    { id: "t2", kind: "task", title: "Read ch. 5", when: "Mon Nov 9, 9:30 am · due Tue Nov 10" },
+    { id: "t3", kind: "task", title: "Email TA", when: "Thu Nov 5" },
+    { id: "e1", kind: "event", title: "Quiz ch. 5", when: "Tue Nov 10, 9–10:15 am" },
+    { id: "e2", kind: "event", title: "Review session", when: "Thu Nov 12, 6:30–8 pm" },
+  ]);
+  // A message answered before items were listed has none; an event without an id can't be undone.
+  assert.deepEqual(itemLines({ tasks_added: 2, events: [] }, TZ), []);
+  assert.equal(itemLines({ events: [{ title: "Old", starts_at: "2026-11-10T14:00:00.000Z", ends_at: "2026-11-10T15:00:00.000Z" }] }, TZ)[0].id, null);
 });
 
 // ---------------------------------------------------------------- messageEventBody (/plan)
