@@ -2,7 +2,7 @@
 // them. Loaded on demand the first time Plan today opens (plan-today.mjs, loadDialog).
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, planningDay, snap, formatMinutes, formatClock, formatSpan, proposedOn, DEFAULT_EST, blockMinutes, weekdayName, plural } from "./logic.mjs";
+import { addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, dialogDay, snap, formatMinutes, formatClock, formatSpan, proposedOn, DEFAULT_EST, blockMinutes, weekdayName, plural } from "./logic.mjs";
 import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare } from "./glance.mjs";
 import { approveAllCall, planNotes } from "./morning.mjs";
@@ -155,7 +155,8 @@ async function fetchNotes() {
 }
 
 export async function open() {
-  day = planningDay(localNow(new Date(), SHEET.timeZone));
+  const here = localNow(new Date(), SHEET.timeZone);
+  day = dialogDay(here, shutdownAt(here.day), Boolean(state.days[here.day]?.shutdown));
   await Promise.all([fetchEvents(), fetchNotes()]);
   draw();
   dialog.showModal();
