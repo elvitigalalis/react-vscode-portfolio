@@ -692,24 +692,156 @@ SimplifyJobs list.
 
 ## Setup
 
-Lisul does this once, after each part is deployed:
+v5 goes live in one wave, from one sheet-v5 commit that holds every ticket (48–63): the schema,
+then every function, then /plan, then the morning task's prompt. Nothing here has been run yet.
+Steps marked **[Lisul]** need him; the rest an agent can do. Secrets are named here, never given:
+Lisul pastes each value himself, in the Supabase dashboard (Edge Functions → Secrets).
 
-1. **Calendar:** /plan → Settings → Calendar → Connect, signed in as his own Google account;
-   approve "See the availability on Google Calendars". Then add `sheet_busy_url` to Vault.
-2. **Replans:** in claude.ai, open the morning task, add an API trigger, generate its token and
-   copy it (it is shown once), as [sheet-morning.md](sheet-morning.md)'s Setup step 5 says
-   (`SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN`). After its probe starts one session, turn replans
-   on in Settings.
-3. **Mail sync:** set `SHEET_SENDER_SALT` to a long random string, and add `sheet_mail_url`.
+```bash
+REF=bmbsvvprpfdbvalnkowp
+URL=https://$REF.supabase.co
+SB="npx -y supabase@latest"
+```
+
+### Why it is one wave
+
+- The V1 schema drops the v4 `apply_proposal(date, jsonb, jsonb, jsonb, text)` and keys
+  `proposals` on `(day, rev)`. The live v4 planner-mcp calls the dropped function, so every
+  submit fails until v5 planner-mcp is deployed, and once a day has rev 2, v4 Telegram and /plan
+  read several rows for it. Run steps 4 to 6 back to back, outside the 6:07 run.
+- v5 telegram, planner-mcp and /plan read `weather_cache`, `actuals`, `calendar_account`,
+  `habits`, `reply_state`, `academic_days`, `changes`, `replans`, `couldnt_fit`, `rev` and
+  `busy.source`, and write `finished` and `replan` nudges, `feedback` and `actuals`: the schema
+  must come first.
+- The prompt sends `replaces`, `couldnt_fit`, `habits` and `suggested`, so it goes after
+  planner-mcp.
+
+### Before
+
+1. **Build from a clean checkout** of the commit, never a working tree:
+   `npm ci && npm test && npm run check && bash tools/test-schema.sh` (test-schema needs Docker).
+2. **Take a read-only baseline:** `bash tools/verify-sheet-v4.sh`; `$SB secrets list
+   --project-ref $REF` (names only); and with `$SB db query --remote=$REF --read-only`, the names
+   in `vault.secrets`, the jobs in `cron.job`, and `select count(*) from busy where starts_at is
+   null or ends_at is null`, which must be 0, since S1 makes both `not null`. Save the morning
+   task with `RemoteTrigger get` (prompt, connectors, triggers, including the API trigger). Pick
+   a window clear of 05:45–06:45 America/New_York and of the brief time: midday, after today's
+   plan is approved or skipped.
+3. **[Lisul] Google Cloud**, on the project that owns the mail-connect OAuth client:
+   - APIs & Services → Library: enable the **Google Calendar API**.
+   - Credentials → that web client → Authorized redirect URIs: add
+     `https://bmbsvvprpfdbvalnkowp.supabase.co/functions/v1/calendar-connect/callback`, keeping
+     the mail-connect and Auth ones.
+   - Google Auth Platform → Data Access: add `https://www.googleapis.com/auth/calendar.freebusy`
+     (with `openid` and `email`).
+   - Audience: **In production**. In Testing, refresh tokens die after 7 days. Expect the
+     "unverified app" screen at consent (ADR 0004).
+
+### Deploy
+
+4. **The schema:** `$SB db query --remote=$REF --yes --file supabase/schema.sql`. It is safe to
+   re-run. It adds every v5 column and table in "Schema" above; the functions `apply_proposal`
+   (the v5 signature), `approve_proposal`, `skip_proposal`, `turn_down`, `busy_sync_save`,
+   `handshake_sync_save`, `calendar_account_save`, `calendar_refresh_token` and the
+   `calendar_account_forget` trigger; the new `nightly_roll`; and the cron jobs `sheet-busy`,
+   `sheet-mail`, `sheet-work`, `sheet-slack`, `sheet-ical` and `sheet-weather`. Each job does
+   nothing until its Vault URL exists (step 7). **From here until step 5, submit_proposal
+   fails.**
+5. **The changed functions**, straight after: `planner-mcp`, then `telegram`, then `mail-mcp`.
+6. **The new functions:** `busy-sync`, `calendar-connect`, `mail-sync`, `work-sync`,
+   `slack-sync`, `ical-sync` and `weather`; and again `brightspace` and `campus` (they now log
+   course and campus changes), `mail-connect` (it shares `_shared/google.ts`) and
+   `routine-fire`. Every function deploys the same way:
+   `$SB functions deploy <name> --use-api --no-verify-jwt --project-ref $REF --yes`.
+
+   | Function | Function secrets it reads | Vault URL (job) |
+   |---|---|---|
+   | `planner-mcp` | none of its own | — |
+   | `telegram` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHEET_CRON_SECRET`, `SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN` | `sheet_telegram_url` (`sheet-telegram`) |
+   | `mail-mcp` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SHEET_SENDER_SALT` | — |
+   | `mail-connect` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAIL_STATE_SECRET` | — |
+   | `calendar-connect` | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAIL_STATE_SECRET` | — |
+   | `busy-sync` | `SHEET_CRON_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `sheet_busy_url` (`sheet-busy`) |
+   | `mail-sync` | `SHEET_CRON_SECRET`, `SHEET_SENDER_SALT`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | `sheet_mail_url` (`sheet-mail`) |
+   | `work-sync` | `SHEET_CRON_SECRET`, `SHEET_GITHUB_TOKEN`, `SHEET_JIRA_TOKEN`, `SHEET_JIRA_EMAIL`, `SHEET_JIRA_SITE` | `sheet_work_url` (`sheet-work`) |
+   | `slack-sync` | `SHEET_CRON_SECRET`, `SHEET_SLACK_TOKEN` | `sheet_slack_url` (`sheet-slack`) |
+   | `ical-sync` | `SHEET_CRON_SECRET`, `SHEET_HANDSHAKE_ICS`, `SHEET_ACADEMIC_ICS` | `sheet_ical_url` (`sheet-ical`) |
+   | `weather` | `SHEET_CRON_SECRET` | `sheet_weather_url` (`sheet-weather`) |
+   | `brightspace` | `SHEET_CRON_SECRET`, `SHEET_BRIGHTSPACE_ICS` | `sheet_brightspace_url` (`sheet-brightspace`) |
+   | `campus` | `SHEET_CRON_SECRET` | `sheet_campus_url` (`sheet-campus`) |
+   | `routine-fire` | `SHEET_CRON_SECRET`, `SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN` | — |
+
+   `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are built in. The source secrets
+   (`SHEET_SENDER_SALT`, `SHEET_GITHUB_TOKEN`, the three `SHEET_JIRA_*`, `SHEET_SLACK_TOKEN`,
+   `SHEET_HANDSHAKE_ICS`, `SHEET_ACADEMIC_ICS`) are optional: without one, that sync records
+   "not connected" and does nothing. `sheet-rollover` calls `nightly_roll()` in the database and
+   has no URL.
+7. **Vault URLs.** These are not secrets; `sheet_cron_secret` and the v3/v4 URLs are already
+   there. Add each once its source can work, in this form:
+   ```sql
+   select vault.create_secret('<URL>/functions/v1/<function>', '<name>')
+   where not exists (select 1 from vault.secrets where name = '<name>');
+   ```
+   - now: `sheet_weather_url`;
+   - after the calendar is connected (Lisul's step 1): `sheet_busy_url`;
+   - after `SHEET_SENDER_SALT` is set: `sheet_mail_url`;
+   - after the source's secrets are set: `sheet_work_url`, `sheet_slack_url`, `sheet_ical_url`.
+
+   Vault also holds `mail_refresh:<account>` and `calendar_refresh:<account>`, which
+   `mail_account_save` and `calendar_account_save` write; never add or edit them by hand.
+   Deleting a URL stops its job.
+8. **/plan:** open the PR sheet-v5 → main with the commit as its head; **[Lisul]** merges it,
+   and the push to main deploys GitHub Pages. After steps 4 to 6 only.
+9. **The prompt:** `RemoteTrigger update` on the morning task with the text between the
+   ```` ```text ```` fences in [sheet-morning-task.md](sheet-morning-task.md), pasted as-is.
+   Change only the prompt: keep the schedule (daily 6:07 am America/New_York), exactly its two
+   connectors (The Sheet planner, The Sheet mail) and the API trigger. Compare `RemoteTrigger
+   get` with the saved copy.
+
+### Lisul's one-time setup
+
+1. **Calendar:** /plan → Settings → Calendar → Connect, signed in as his own Google account (the
+   one in `settings.owner_email`); approve "See the availability on Google Calendars". It returns
+   to `/plan/?calendar=connected`. Then `sheet_busy_url` goes into Vault.
+2. **Replans:** the API trigger and `SHEET_ROUTINE_ID`, `SHEET_ROUTINE_TOKEN` are set already
+   ([sheet-morning.md](sheet-morning.md), Setup step 5). Fire one probe
+   (`SHEET_CRON_SECRET=… node tools/routine-probe.mjs --function`; `RemoteTrigger list_runs`
+   shows one new run), then turn replans on in Settings.
+3. **Mail sync:** set `SHEET_SENDER_SALT` to a long random string, never changed after (it would
+   orphan every known-sender hash). Then `sheet_mail_url` goes into Vault.
 4. **Sources** (each optional; a missing one shows "not connected"):
    - GitHub: a fine-grained token with read-only Pull requests, Issues and Metadata on his orgs,
      as `SHEET_GITHUB_TOKEN`; the orgs in Settings.
-   - Jira: an API token as `SHEET_JIRA_TOKEN`, with `SHEET_JIRA_EMAIL` and `SHEET_JIRA_SITE`
-     (`<name>.atlassian.net`).
+   - Jira: an API token (`read:jira-work`) as `SHEET_JIRA_TOKEN`, with `SHEET_JIRA_EMAIL` and
+     `SHEET_JIRA_SITE` (`<name>.atlassian.net`).
    - Slack: a user token with only `search:read`, as `SHEET_SLACK_TOKEN`.
    - Handshake: the private calendar link as `SHEET_HANDSHAKE_ICS`; the SBU academic calendar
      link as `SHEET_ACADEMIC_ICS`.
-   - Then the Vault URLs `sheet_work_url`, `sheet_slack_url`, `sheet_ical_url` and
-     `sheet_weather_url`.
-5. **Settings:** the enrollment time, habits, and the workload cap if 6 hours is wrong.
-6. **Check it:** `bash tools/verify-sheet-v5.sh`.
+   - Then `sheet_work_url`, `sheet_slack_url` and `sheet_ical_url` go into Vault.
+5. **Settings:** the enrollment time, habits, triage rules, and the workload cap if 6 hours is
+   wrong.
+
+### Check it
+
+- `bash tools/verify-sheet-v5.sh`, read-only. Every line should be ✓, with a ! for each source
+  not connected yet, and no ✗. Run it again after 10 minutes and after the next :50, once the
+  syncs have run. It doesn't reach the morning task: `RemoteTrigger get` should show it enabled,
+  at 6:07 am, with its API trigger and only its two connectors.
+- `bash tools/verify-sheet-v4.sh` now shows one ✗ by design: "apply_proposal is security
+  invoker: no function", since V1 dropped that signature.
+- After the next 6:07 am run, today's proposal is `rev 1`, `run_trigger morning`, with `blocks`
+  filled.
+- **[Lisul]** looks: the brief's weather and calendar lines; Approve all; a Finished? check at a
+  nudged block's end with four answers; in /plan, Settings shows Calendar connected, "Busy times
+  saved N min ago", the cap, pace per kind and each feed's status, and the banner shows
+  "Revision 1".
+
+### Rolling back
+
+There is no down script, and V1 is one-way once a day has rev 2: roll forward with a fixed build.
+A real revert deletes every `proposals` row with `rev > 1`, puts back `primary key (day)` and the
+v4 `apply_proposal` from main's schema.sql, and redeploys v4 `planner-mcp` and `telegram` from
+main; the added tables and columns can stay, since v4 ignores them. A new function comes out with
+`$SB functions delete <name> --project-ref $REF`, a job stops when its Vault URL is deleted, and
+Settings → Disconnect deletes the calendar grant and its Vault secret. The prompt goes back with
+`RemoteTrigger update` from the saved copy.
