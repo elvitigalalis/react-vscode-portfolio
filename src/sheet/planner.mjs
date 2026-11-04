@@ -5,7 +5,7 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural,
+  eventsOnDay, visibleEvents, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
 } from "./logic.mjs";
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
@@ -70,12 +70,16 @@ const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null
 export const eventsOn = (day) => eventsOnDay(state.events, day, SHEET.timeZone);
 const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
 
-// Time for tasks on a day: the 5h30 budget, or less when his events leave less free time
+// The workload cap from Settings (v5 D2, settings.workload_cap_min), or the site's budget
+// before settings load.
+export const workloadCap = () => state.settings?.workload_cap_min ?? SHEET.capacityMin;
+
+// Time for tasks on a day: the workload cap, or less when his events leave less free time
 // between 9:30 am and 10 pm (on today, between now and 10 pm).
 export function dayCapacity(day) {
   const from = Math.max(clock(SHEET.dayStartAt), day === state.today ? now().minutes : 0);
   const free = freeMinutes(eventsOn(day), from, clock(SHEET.dayEndAt));
-  return { free, capacity: Math.min(SHEET.capacityMin, free) };
+  return { free, capacity: Math.min(workloadCap(), free) };
 }
 const lastPosition = (siblings) => (siblings.length ? siblings[siblings.length - 1].position : null);
 
@@ -485,6 +489,24 @@ async function saveInterests() {
   } catch (e) { failed(e); }
 }
 
+// Settings, workload cap (v5 D2): the most hours of blocks Claude plans in a day, and the load
+// bar's capacity. Hours from 1 to 16 in half hours; anything else says so and saves nothing.
+settingsHooks.push(() => {
+  $("#sheet-cap").value = String(workloadCap() / 60);
+  $("[data-cap-note]").textContent = "";
+});
+
+async function saveCap() {
+  const workload_cap_min = capMinutes($("#sheet-cap").value);
+  if (workload_cap_min == null) return void ($("[data-cap-note]").textContent = "1 to 16 hours, in half hours.");
+  try {
+    await api.saveSettings({ workload_cap_min });
+    state.settings = { ...state.settings, workload_cap_min };
+    $("[data-cap-note]").textContent = "Saved.";
+    render();
+  } catch (e) { failed(e); }
+}
+
 // Telegram on or off. The "Time blocks" events from today on follow it: no alerts while Telegram
 // nudges him, Google's default alert as the backup while it's off.
 async function toggleTelegram() {
@@ -693,6 +715,7 @@ function wire() {
       if (act === "save-calendars") return saveCalendars();
       if (act === "settings") return openSettings();
       if (act === "save-interests") return saveInterests();
+      if (act === "save-cap") return saveCap();
       if (act === "telegram") return toggleTelegram();
       return actHooks[act]?.(e);
     }
