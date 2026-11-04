@@ -33,7 +33,7 @@
 // (mail_refresh_token) and are never logged or written anywhere.
 import {
   accountPatch, gmailError, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
-  replyDiff, replyState, senderHash, syncMessage, syncThread,
+  replyDiff, replyState, senderHash, syncMessage, syncThread, threadsToRead,
 } from "../../../src/sheet/mail.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
@@ -44,7 +44,6 @@ const SALT = env("SHEET_SENDER_SALT");
 const SOURCE = "gmail";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const HISTORY_PAGES = 10;   // 500 records a page
-const THREADS_MAX = 50;     // threads.get per account per run
 const SWEEP_MAX = 100;      // threads per sweep
 const PARALLEL = 5;
 
@@ -126,8 +125,11 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
           if (!pageToken) break;
         }
         changed = historyChanges(pages);
-        // More history than a run reads: start again from now, as after a 404.
-        if (pageToken) full = true;
+        // More history than a run reads, or more threads: start again from now, as after a 404,
+        // and sweep (threadsToRead).
+        const cut = threadsToRead(changed.threads, Boolean(pageToken));
+        changed = { ...changed, threads: cut.threads };
+        if (cut.full) full = true;
       } catch (e) {
         if (!(e instanceof GmailError && e.status === 404)) throw e;
         full = true;
@@ -136,7 +138,7 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
     if (full) historyId = (await gmail("profile?fields=historyId")).historyId;
 
     // The threads to work out again: those history touched, read whole.
-    const threads: Thread[] = await inBatches(changed.threads.slice(0, THREADS_MAX),
+    const threads: Thread[] = await inBatches(changed.threads,
       async (id) => {
         // A thread deleted since leaves nothing to track.
         try { return syncThread(await gmail(`threads/${id}?${metadataQuery(true)}`), email); }

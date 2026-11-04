@@ -146,3 +146,16 @@ test("threadLink: Gmail's thread link for an Awaiting reply row, only for a hex 
   assert.equal(threadLink("owner@example.com", "javascript:alert(1)"), null);
   assert.equal(threadLink("owner@example.com", null), null);
 });
+
+test("threadsToRead: at most 50 threads a run; cutting any off makes the next run a full sync", async () => {
+  const { threadsToRead } = await import("../src/sheet/mail.mjs");
+  const ids = (n) => Array.from({ length: n }, (_, i) => `t${i}`);
+  assert.deepEqual(threadsToRead(ids(3), false), { threads: ["t0", "t1", "t2"], full: false });
+  const many = threadsToRead(ids(51), false);
+  assert.equal(many.threads.length, 50);
+  assert.equal(many.threads[49], "t49");
+  assert.equal(many.full, true);
+  assert.equal(threadsToRead(ids(50), false).full, false);
+  // More history pages than a run reads is a full sync already.
+  assert.equal(threadsToRead(ids(2), true).full, true);
+});
