@@ -470,7 +470,15 @@ async function saveCalendars() {
 // another, and the order they were added in doesn't matter.
 export const settingsHooks = [];
 
+// The sections only Settings needs are a module of their own (settings.mjs), loaded the first
+// time Settings opens; start() gets the loader, and each section's setup runs once.
+let settingsModule = () => Promise.resolve([]);
+let settingsReady = null;
+const loadSettings = () => (settingsReady ??= settingsModule().then((setups) => { for (const setup of setups) setup(root); }, (e) => { settingsReady = null; throw e; }));
+
 async function openSettings() {
+  try { await loadSettings(); } catch (e) { return failed(e); }
+  if ($("[data-settings]").open) return;
   $("[data-interests-note]").textContent = "";
   $("[data-settings]").showModal();
   await Promise.all(settingsHooks.map(async (fill) => { try { await fill(); } catch (e) { failed(e); } }));
@@ -791,9 +799,11 @@ function wire() {
 
 // --- Start -------------------------------------------------------------------------------
 
-// `plugins` (plan today, shutdown) each get the root once the planner is wired.
-export async function start(node, plugins = []) {
+// `plugins` (plan today, shutdown) each get the root once the planner is wired; `settings`
+// loads Settings' own plugins on demand (openSettings).
+export async function start(node, plugins = [], settings = settingsModule) {
   root = node;
+  settingsModule = settings;
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
   if (!(await api.signedIn())) {
@@ -806,6 +816,8 @@ export async function start(node, plugins = []) {
   }
   wire();
   for (const plugin of plugins) plugin(root);
+  // Back from connecting mail or the calendar: those sections say how it went (mail-settings.mjs).
+  if (/[?&](mail|calendar)=/.test(location.search)) loadSettings().catch(failed);
   try {
     if (!(await api.settings())) {
       setStatus("This account cannot open the planner.");

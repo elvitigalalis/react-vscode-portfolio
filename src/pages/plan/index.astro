@@ -284,17 +284,13 @@ import "../../styles/sheet.css";
   import { start } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
-  import { setupMailSettings } from "../../sheet/mail-settings.mjs";
   import { setupFeedStatus } from "../../sheet/feed-status.mjs";
-  import { setupCalendarSettings } from "../../sheet/calendar-settings.mjs";
   import { setupCampus } from "../../sheet/campus-list.mjs";
   import { setupTopBar } from "../../sheet/topbar.mjs";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
-  import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
-  import { setupHabitSettings } from "../../sheet/habit-settings.mjs";
-  import { setupTriageSettings } from "../../sheet/triage-settings.mjs";
-  import { setupReplanSettings } from "../../sheet/replan-settings.mjs";
-  import { setupEnrollmentSettings } from "../../sheet/enrollment-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupEnrollmentSettings, setupReplanSettings, setupTriageSettings, setupHabitSettings]);
+  // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
+  // when Google sends him back from connecting mail or the calendar.
+  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings]);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou], settings);
 </script>
