@@ -130,6 +130,10 @@ weather_cache id boolean pk default true check (id), point text not null,
     `calendar_refresh:<account>`, reusing the secret on reconnect;
   - `calendar_refresh_token() returns text` returns it, or null;
   - deleting the row deletes its Vault secret (trigger `calendar_account_forget`).
+  - `busy_sync_save(from_at timestamptz, to_at timestamptz, rows jsonb, change jsonb default null)
+    returns void` (S1, service key only) is busy-sync's one call: it replaces the `calendar` busy
+    rows overlapping `from_at` to `to_at`, sets `busy_as_of = from_at`, and inserts `change` into
+    `changes` when given and the table exists.
 - **Revisions.** Each function is `security invoker`, takes a row lock on `d`'s proposals
   rows, and raises with the exact text shown:
   - `apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
@@ -527,6 +531,10 @@ weather_cache id boolean pk default true check (id), point text not null,
   with `access_type=offline`, `prompt=consent` and `login_hint` the owner's email, and accepts
   the grant only when the ID token's verified email is `settings.owner_email`. **Decided:** the
   identity scopes are there only to prove whose account it is.
+  **Decided (S1):** it shares mail-connect's `MAIL_STATE_SECRET` and `mail_connect_states`, its
+  state carries `grant: 'calendar'`, and it returns to `/plan/?calendar=connected` or
+  `?calendar=error&reason=…`. A calendar Google answers with `errors` makes the `freebusy` feed
+  fail ("1 calendar couldn't be read") while the other rows are still saved.
 - **busy-sync** refreshes the token, posts `freeBusyRequest`, then in one call replaces the
   `calendar` busy rows from now to 7 days ahead with `freeBusyRows`, stamps `busy_as_of`, and
   writes `busyChange`'s row. A refused refresh sets `calendar_account.last_error` and a failed
