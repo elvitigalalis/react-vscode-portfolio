@@ -145,6 +145,15 @@ export function formatMinutes(mins) {
   return h ? `${h}h${m ? pad(m) : ""}` : `${m}m`;
 }
 
+// v5 D2: the workload cap as Settings takes it, in hours from 1 to 16 in half hours, as minutes
+// (settings.workload_cap_min); anything else is null.
+export function capMinutes(text) {
+  const t = String(text ?? "").trim();
+  if (!/^\d{1,2}(\.\d+)?$/.test(t)) return null;
+  const m = Number(t) * 60;
+  return m >= 60 && m <= 960 && m % 30 === 0 ? m : null;
+}
+
 export function formatClock(mins) {
   const h = Math.floor(mins / 60) % 24;
   const m = mins % 60;

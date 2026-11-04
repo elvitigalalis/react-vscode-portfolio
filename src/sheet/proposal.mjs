@@ -11,6 +11,9 @@ import { freeFood } from "./campus.mjs";
 const COURSE_AHEAD = 7;
 // The day's shutdown line when it has none of its own.
 const DEFAULT_SHUTDOWN = "17:00";
+// v5 D2: the day rules checkProposal holds a plan to (settings.workload_cap_min's default).
+const DEFAULT_CAP = 360;
+const dayRules = (settings) => ({ workload_cap_min: settings.workload_cap_min ?? DEFAULT_CAP, travel_min: 10, break_after_min: 90, break_min: 10 });
 
 // Whether an ISO span overlaps the local day `day` in `timeZone`.
 const onDay = (s, day, timeZone) => minutesOn(s.ends_at, day, timeZone) > 0 && minutesOn(s.starts_at, day, timeZone) < 1440;
@@ -59,6 +62,7 @@ export function planSnapshot(rows, now) {
     proposal: rows.proposal ? { status: rows.proposal.status, created_at: rows.proposal.created_at } : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
+    day_rules: dayRules(settings),
   };
 }
 
@@ -100,6 +104,76 @@ function text(value, name, max, errors) {
   return t;
 }
 
+// --- v5 D2: a realistic day (docs/sheet-v5.md, "checkProposal") -------------------------------
+
+// "6h00", "6h30": a workload in hours and minutes.
+const hoursLabel = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
+
+// The day rules on a proposal's spans ({ name, start, end }, minutes on the day), pushing an
+// error for each: the travel gap, the break rule and the workload cap. The day's approved blocks count; the
+// pending revision's proposed blocks don't, since the new revision replaces them.
+function dayRuleErrors(spans, snapshot, errors) {
+  const rules = snapshot.day_rules;
+  const approved = snapshot.blocks.filter((b) => !b.proposed);
+  const at = (iso) => minutesOn(iso, snapshot.plan_day, snapshot.time_zone);
+
+  // The travel gap around busy times (not approved blocks). A span over the busy time itself
+  // already has v4's overlap error.
+  const gap = rules.travel_min;
+  for (const s of spans) {
+    for (const b of snapshot.busy) {
+      const [from, to] = [at(b.starts_at), at(b.ends_at)];
+      if (s.start < to && from < s.end) continue;
+      if (s.start < to + gap && from - gap < s.end) {
+        errors.push(`${s.name}: needs ${gap} minutes of travel time around the busy time ${clockSpan(from, to)}`);
+      }
+    }
+  }
+
+  // The break rule: blocks less than break_min apart are one run, and a run holding a proposed
+  // block spans at most break_after_min. A single long block is fine; one error per run.
+  const all = [...approved.map((b) => ({ start: at(b.starts_at), end: at(b.ends_at) })), ...spans].sort((a, b) => a.start - b.start);
+  const runs = [];
+  for (const s of all) {
+    const run = runs.at(-1);
+    if (run && s.start - run.end < rules.break_min) run.items.push(s), (run.end = Math.max(run.end, s.end));
+    else runs.push({ start: s.start, end: s.end, items: [s] });
+  }
+  for (const run of runs) {
+    if (run.end - run.start <= rules.break_after_min || run.items.length < 2) continue;
+    const mine = run.items.filter((s) => s.name);
+    if (!mine.length) continue;
+    // The first block to carry the run past the limit, or, when that one is approved, the
+    // run's latest proposed block.
+    const over = run.items.find((s) => s.end - run.start > rules.break_after_min);
+    const named = over?.name ? over : mine.at(-1);
+    errors.push(`${named.name}: makes ${run.end - run.start} minutes of blocks in a row; leave a ${rules.break_min}-minute break after every ${rules.break_after_min}`);
+  }
+
+  const planned = approved.reduce((n, b) => n + blockMinutes(b), 0) + spans.reduce((n, s) => n + s.end - s.start, 0);
+  if (planned > rules.workload_cap_min) {
+    errors.push(`blocks: ${hoursLabel(planned)} planned, over the ${hoursLabel(rules.workload_cap_min)} workload cap`);
+  }
+}
+
+export const MAX_COULDNT_FIT = 12;
+
+// The tasks Claude couldn't fit: ids from the task list, each once, none also given a block.
+function couldntFitIds(input, snapshot, errors) {
+  const ids = list(input?.couldnt_fit);
+  if (!Array.isArray(ids)) return errors.push("couldnt_fit: must be a list"), [];
+  if (ids.length > MAX_COULDNT_FIT) return errors.push(`couldnt_fit: at most ${MAX_COULDNT_FIT}, got ${ids.length}`), [];
+  const tasks = new Set(snapshot.tasks.map((t) => t.id));
+  const placed = new Set(Array.isArray(input?.blocks) ? input.blocks.map((b) => b?.task_id) : []);
+  ids.forEach((id, i) => {
+    const name = `couldnt_fit[${i}]`;
+    if (!tasks.has(id)) errors.push(`${name}: not one of the tasks read_planner gave`);
+    else if (ids.indexOf(id) < i) errors.push(`${name}: given twice`);
+    else if (placed.has(id)) errors.push(`${name}: this task has a block, so it fit`);
+  });
+  return ids;
+}
+
 // The checks submit_proposal runs on `input` ({ day, blocks: [{ task_id, start: "HH:MM",
 // minutes }], needs_you: [{ account, message_id, link, sender, subject, why, kind, due? }],
 // picks: [{ uid, why }], note }) against a fresh planSnapshot. Every problem is its own error,
@@ -108,6 +182,7 @@ function text(value, name, max, errors) {
 // starts_at, ends_at }], needs, picks, note }, times in UTC.
 export function checkProposal(input, snapshot) {
   const errors = [];
+  const v5 = snapshot.version === 5;
   const tz = snapshot.time_zone;
   const day = snapshot.plan_day;
   if (input?.day !== day) errors.push(`day: must be ${day}, the day being planned`);
@@ -155,6 +230,7 @@ export function checkProposal(input, snapshot) {
         blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
       }
     });
+    if (v5) dayRuleErrors(placed.map((p) => ({ ...p, name: `blocks[${p.i}]` })), snapshot, errors);
   }
 
   // Needs you.
@@ -202,8 +278,12 @@ export function checkProposal(input, snapshot) {
   }
 
   const note = input?.note == null ? null : text(input.note, "note", 280, errors);
+  const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
 
-  return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
+  if (errors.length) return { ok: false, errors, rows: null };
+  const rows = { d: day, blocks, needs, picks, note };
+  if (v5) rows.couldnt_fit = couldntFit;
+  return { ok: true, errors: [], rows };
 }
 
 // --- The brief -------------------------------------------------------------------------------
@@ -220,6 +300,21 @@ export function pickLine(e, tz) {
 
 // The campus events a proposal's picks name, in pick order; a pick whose event is gone drops.
 export const pickedEvents = (picks, campus) => (picks ?? []).map((p) => campus.find((e) => e.uid === p.uid)).filter(Boolean);
+
+// Couldn't-fit titles the line names before "+N more", and the characters kept of each.
+const SHOWN_COULDNT_FIT = 3;
+const COULDNT_FIT_CHARS = 30;
+
+// "Couldn't fit: Lab 4, HW3 +1 more.", for the brief, the plan and replan messages and /plan,
+// or null for none. `ids` are task ids; a task that's gone drops, and a title that could become a
+// link reads "A task".
+export function couldntFitLine(ids, tasks) {
+  const titles = (ids ?? []).map((id) => tasks.find((t) => t.id === id)?.title).filter(Boolean)
+    .map((t) => (linkish(t) ? "A task" : String(t).replace(/\s+/g, " ").trim().slice(0, COULDNT_FIT_CHARS).trim()));
+  if (!titles.length) return null;
+  const more = titles.length > SHOWN_COULDNT_FIT ? ` +${titles.length - SHOWN_COULDNT_FIT} more` : "";
+  return `Couldn't fit: ${titles.slice(0, SHOWN_COULDNT_FIT).join(", ")}${more}.`;
+}
 
 // The lines a pending proposal adds to the brief, or sends as the `proposal` message: a summary,
 // up to 6 blocks, what didn't fit, up to 2 campus picks and the open Needs you count. `blocks`
@@ -238,6 +333,8 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   }
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
+  const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
+  if (unfit) lines.push(unfit);
   const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).

@@ -522,3 +522,12 @@ language sql security definer set search_path = public as $$
   delete from blocks where proposed and (starts_at at time zone (select time_zone from settings))::date = d;
   update proposals set status = 'lapsed' where day = d and status = 'pending';
 $$;
+
+-- --- v5 D2: a realistic day (docs/sheet-v5.md) ---------------------------------------------
+-- The most minutes of blocks a day may hold, set in /plan's Settings (in hours, 1 to 16) and
+-- read by checkProposal through read_planner's day_rules. Owner-only, like the rest of settings.
+alter table settings add column if not exists workload_cap_min int not null default 360;
+alter table settings drop constraint if exists settings_workload_cap_min_check;
+alter table settings add constraint settings_workload_cap_min_check check (workload_cap_min between 60 and 960);
+-- The at-risk tasks a revision couldn't fit, as task ids; apply_proposal (V1) writes it.
+alter table proposals add column if not exists couldnt_fit uuid[] not null default '{}';
