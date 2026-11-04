@@ -25,7 +25,7 @@ const TZ = "America/New_York";
 // businessDays
 // =============================================================================================
 
-test("businessDays: Mondays to Fridays after the first date, up to and including the second", todo, async () => {
+test("businessDays: Mondays to Fridays after the first date, up to and including the second", async () => {
   const { businessDays } = await mail();
   assert.equal(businessDays("2026-11-04T13:00:00Z", "2026-11-04T22:00:00Z", TZ), 0); // same Wednesday
   assert.equal(businessDays("2026-11-04T15:00:00Z", "2026-11-05T15:00:00Z", TZ), 1); // Wed → Thu
@@ -33,7 +33,7 @@ test("businessDays: Mondays to Fridays after the first date, up to and including
   assert.equal(businessDays("2026-11-02T15:00:00Z", "2026-11-16T15:00:00Z", TZ), 10); // two weeks
 });
 
-test("businessDays: weekends don't count", todo, async () => {
+test("businessDays: weekends don't count", async () => {
   const { businessDays } = await mail();
   assert.equal(businessDays("2026-11-06T20:00:00Z", "2026-11-07T20:00:00Z", TZ), 0); // Fri → Sat
   assert.equal(businessDays("2026-11-06T20:00:00Z", "2026-11-08T20:00:00Z", TZ), 0); // Fri → Sun
@@ -42,7 +42,7 @@ test("businessDays: weekends don't count", todo, async () => {
   assert.equal(businessDays("2026-11-07T15:00:00Z", "2026-11-09T15:00:00Z", TZ), 1); // Sat → Mon
 });
 
-test("businessDays: both dates are read in the owner's time zone", todo, async () => {
+test("businessDays: both dates are read in the owner's time zone", async () => {
   const { businessDays } = await mail();
   // 10 pm Thursday in New York is 03:00 Friday UTC: Friday and Monday count (UTC dates would give 1).
   assert.equal(businessDays("2026-11-06T03:00:00Z", "2026-11-09T17:00:00Z", TZ), 2);
