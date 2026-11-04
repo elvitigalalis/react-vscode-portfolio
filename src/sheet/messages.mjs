@@ -16,6 +16,15 @@ export const FIRE_GAP_MS = 3 * 60_000;
 export const shouldFire = (pending, now) =>
   !pending.some((m) => m.fired_at && now.getTime() - Date.parse(m.fired_at) < FIRE_GAP_MS);
 
+// A message as typed: one line (line breaks and runs of spaces become one space), 1 to 500
+// characters, or null. It reaches only the morning task, as data.
+export const MAX_TEXT = 500;
+export function messageText(value) {
+  if (typeof value !== "string") return null;
+  const t = value.replace(/\s+/g, " ").trim();
+  return t && t.length <= MAX_TEXT ? t : null;
+}
+
 // --- Answering (planner-mcp's answer_messages) -----------------------------------------------
 
 export const MAX_ANSWERS = 10;
