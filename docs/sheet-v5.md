@@ -524,6 +524,11 @@ weather_cache id boolean pk default true check (id), point text not null,
   (`assignee = currentUser() AND statusCategory != Done`): `source_uid` the key, `link`
   `https://<site>/browse/<key>`, title `"<KEY> <summary>"`, `due` from `fields.duedate`, list
   "Jira". `issues` is the response's `issues` array; `fields.description` is never read.
+  - **Decided (SRC1):** work-sync closes nothing on a run whose list may be cut short (a GitHub
+    search with `incomplete_results` or more than 100 results, Jira pages left after 5), and
+    skips a source with no token. `githubOrgsFromInput(value)` parses Settings' orgs field
+    (comma or space separated, lower case, once each; undefined when one isn't a GitHub login).
+    A GitHub or Jira task's source icon on /plan links to `link`.
 - `slackNeeds(matches, { known })` takes `search.messages` matches and returns `needs_you` rows:
   `{ source: 'slack', account: 'slack', message_id: '<channel id>:<ts>', link: permalink,
   sender: <username>, subject: '#<channel name>' or 'Direct message', why: 'Mentioned you' or
