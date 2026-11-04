@@ -286,7 +286,7 @@ const ROWS = [
   awaiting("Sam Ortiz", "2026-10-30T16:00:00Z"),
 ];
 
-test("brief: Awaiting reply names who he's waiting on", todo, async () => {
+test("brief: Awaiting reply names who he's waiting on", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ awaiting: ROWS.slice(0, 2) }), at8)).text, [
     "Today: 1 task, 1 block.",
@@ -294,7 +294,7 @@ test("brief: Awaiting reply names who he's waiting on", todo, async () => {
   ].join("\n"));
 });
 
-test("brief: at most 3 names, every thread counted", todo, async () => {
+test("brief: at most 3 names, every thread counted", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ awaiting: ROWS }), at8)).text, [
     "Today: 1 task, 1 block.",
@@ -302,13 +302,13 @@ test("brief: at most 3 names, every thread counted", todo, async () => {
   ].join("\n"));
 });
 
-test("brief: no awaiting rows, no line", todo, async () => {
+test("brief: no awaiting rows, no line", async () => {
   const { whatToSend } = await nudges();
   assert.equal(briefOf(whatToSend(snapshot({ awaiting: [] }), at8)).text, "Today: 1 task, 1 block.");
   assert.equal(briefOf(whatToSend(snapshot(), at8)).text, "Today: 1 task, 1 block.");
 });
 
-test("brief: names cut to 30, names only, nothing link-like", todo, async () => {
+test("brief: names cut to 30, names only, nothing link-like", async () => {
   const { whatToSend } = await nudges();
   const long = "Alexandria Montgomery-Fitzwilliam the Third"; // 43 characters
   const text = briefOf(whatToSend(snapshot({ awaiting: [awaiting(long, "2026-10-28T15:00:00Z"), awaiting("www.example.com", "2026-10-29T15:00:00Z")] }), at8)).text;
@@ -320,7 +320,7 @@ test("brief: names cut to 30, names only, nothing link-like", todo, async () => 
   for (const name of line.replace(/^Awaiting reply: \d+ \(|\)\.$/g, "").split(", ")) assert.ok(name.length <= 30, name);
 });
 
-test("brief: the Awaiting reply line comes after the plan's lines", todo, async () => {
+test("brief: the Awaiting reply line comes after the plan's lines", async () => {
   const { whatToSend } = await nudges();
   const proposed = { ...approved, id: "0b0b0b0b-0000-4000-8000-000000000002", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true };
   const proposal = { day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], run_trigger: "morning", reasons: [], blocks: [] };
