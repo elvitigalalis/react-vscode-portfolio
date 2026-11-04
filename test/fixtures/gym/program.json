@@ -1,0 +1,42 @@
+{
+  "program": "Made-Up Split — Phase 3",
+  "weeks": [
+    {
+      "week": 1,
+      "days": [
+        {
+          "key": "push1",
+          "name": "Push #1",
+          "exercises": [
+            { "order": 1, "name": "Widget Press", "warmup_sets": "2-3", "working_sets": 2, "reps": "5-7", "rpe": "8-9", "rest": "~2-3 min", "rest_min_s": 120, "rest_max_s": 180, "subs": ["Gadget Press", "O'Brien Machine Press"], "notes": "SECRET COACHING NOTE", "load_text": "SECRET LOAD", "his_entries": ["SECRET ENTRY"] },
+            { "order": 2, "name": "Barbell Thing Row", "warmup_sets": "1", "working_sets": 3, "reps": "8-10", "rpe": "10", "rest": "~1-2 min", "rest_min_s": 60, "rest_max_s": 120, "subs": [], "notes": "SECRET COACHING NOTE" }
+          ]
+        },
+        {
+          "key": "pull1",
+          "name": "Pull #1",
+          "exercises": [
+            { "order": 1, "name": "Gizmo Pulldown", "warmup_sets": "2", "working_sets": 1, "reps": "6", "rpe": "9-10", "rest": "~3 min", "subs": ["Widget Press"] }
+          ]
+        }
+      ]
+    },
+    {
+      "week": 2,
+      "days": [
+        {
+          "key": "push1",
+          "name": "Push #1",
+          "exercises": [
+            { "order": 1, "name": "Widget Press", "warmup_sets": "2-3", "working_sets": 2, "reps": "5-7", "rpe": "8-9", "rest_min_s": 120, "rest_max_s": 180, "subs": ["Gadget Press", "O'Brien Machine Press"] }
+          ]
+        },
+        {
+          "key": "pull1",
+          "name": "Pull #1",
+          "exercises": []
+        }
+      ]
+    }
+  ]
+}
