@@ -461,3 +461,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-message-log li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
 .sheet-message-status { color: var(--muted); }
 .sheet-message-reply { display: block; }
+
+/* Event to-dos (docs/sheet-v5.md): a calendar event in the day's list, styled as a task, with the
+   calendar icon. Its check and menu show as a task's do. */
+.sheet-evtodo { position: relative; }
+.sheet-evtodo .sheet-title { cursor: default; }
+.sheet-evtodo .sheet-source { color: var(--muted); }
+.sheet-evtodo:hover .sheet-check, .sheet-evtodo:hover .sheet-more { opacity: 1; }
+.sheet-evtodo:hover { border-bottom-color: var(--accent); }
