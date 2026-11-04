@@ -166,6 +166,8 @@ begin
   delete from needs_you where done or coalesce(created_at, day::timestamptz) < now() - interval '14 days';
   -- v5 P1: actuals are kept 120 days.
   delete from actuals where at < now() - interval '120 days';
+  -- v5 L1: so is feedback.
+  delete from feedback where at < now() - interval '120 days';
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -745,10 +747,11 @@ begin
     coalesce(apply_proposal.run_trigger, 'morning'), coalesce(apply_proposal.reasons, '{}'));
   -- As in v4: a new revision replaces the day's open items, skipping any message already there.
   delete from needs_you n where n.day = d and not n.done;
-  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due)
-  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due
+  -- v5 L1: each row carries the From address checkProposal looked up (null when unknown).
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, due, from_address)
+  select d, x.account, x.message_id, x.link, x.sender, x.subject, x.why, x.kind, x.due, x.from_address
   from jsonb_to_recordset(coalesce(apply_proposal.needs, '[]'))
-    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date)
+    as x(account text, message_id text, link text, sender text, subject text, why text, kind text, due date, from_address text)
   on conflict (account, message_id) do nothing;
   if to_regclass('public.changes') is not null then
     update changes c set consumed_day = d, consumed_rev = r
@@ -832,3 +835,44 @@ revoke insert, update, delete on actuals from authenticated;
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
   check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
+
+-- --- v5 L1, learning from his taps (docs/sheet-v5.md, "Schema") -------------------------------
+-- Needs you gains Not needed (a done row he says wasn't worth showing) and the sender's From
+-- address, lowercased, which the server sets from message_senders.
+alter table needs_you add column if not exists not_needed boolean not null default false;
+alter table needs_you add column if not exists from_address text;
+
+-- Every decision he makes, as ids only: Approve all or Skip by revision, turning down a block,
+-- Done, Not needed and Undo on Needs you, and each Finished? answer. Refs: proposal { day, rev },
+-- block { day, task_id }, needs_you { account, message_id, from_address }, finished { block_id,
+-- task_id }. Append-only: the owner (/plan) and Telegram (service key) insert, nobody updates or
+-- deletes but nightly_roll, which keeps 120 days.
+create table if not exists feedback (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  item text not null check (item in ('proposal', 'block', 'needs_you', 'finished')),
+  action text not null check (action in ('approve', 'skip', 'turn_down', 'done', 'not_needed',
+                                         'undo', 'finished', 'more', 'nostart', 'tomorrow')),
+  ref jsonb not null
+);
+create index if not exists feedback_item_at on feedback (item, at);
+alter table feedback enable row level security;
+drop policy if exists owner_all on feedback;
+create policy owner_all on feedback for all using (is_owner()) with check (is_owner());
+revoke all on feedback from anon;
+revoke update, delete on feedback from authenticated;
+
+-- Always show or never show, by sender address or domain. /plan writes them; read_planner gives
+-- them to the planner, and submit_proposal drops any Needs you item a never rule covers.
+create table if not exists triage_rules (
+  id uuid primary key default gen_random_uuid(),
+  match text not null check (match in ('address', 'domain')),
+  pattern text not null check (pattern = lower(pattern) and char_length(pattern) between 3 and 254),
+  action text not null check (action in ('always', 'never')),
+  created_at timestamptz not null default now(),
+  unique (match, pattern)
+);
+alter table triage_rules enable row level security;
+drop policy if exists owner_all on triage_rules;
+create policy owner_all on triage_rules for all using (is_owner()) with check (is_owner());
+revoke all on triage_rules from anon;
