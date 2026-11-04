@@ -111,7 +111,7 @@ function plannerServer(db: Db) {
   const server = new McpServer({ name: "the-sheet-planner", version: "1.0.0" });
 
   server.registerTool("read_planner", {
-    description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm; a replan run always plans the rest of today), its shutdown time, the plan " +
+    description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm; a replan run always plans the rest of today), read_at (when this was read; pass it to submit_proposal), its shutdown time, the plan " +
       "window (blocks go only inside it), its tasks (with tasks at risk and course tasks due within 7 days; tasks " +
       "turned down today are left out), blocks (proposed: false is approved and locked, treat it as busy), busy " +
       "times, campus events, Lisul's interests, the day's newest proposal revision, the Needs you rows still open, " +
