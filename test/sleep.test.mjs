@@ -153,3 +153,87 @@ test("wokeLate: a revision from before window_from was stored planned from 07:00
   // Read at 9:20 am today: it planned from 9:30.
   assert.equal(wokeLate(woke, { day: "2026-11-04", status: "pending", read_at: "2026-11-04T14:20:00Z", created_at: "2026-11-04T14:22:00Z" }, at11, TZ), false);
 });
+
+// --- dayCap ----------------------------------------------------------------------------------
+
+test("dayCap: readiness under 70 takes 0.8 of the cap, 85+ adds a tenth, rounded to 15 minutes", async () => {
+  const { dayCap } = await import("../src/sheet/sleep.mjs");
+  assert.deepEqual(dayCap(360, { readiness: 64, sleep_s: null }), { workload_cap_min: 285, break_after_min: 90, cap_reason: "readiness 64: lighter day" }); // 288
+  assert.deepEqual(dayCap(360, { readiness: 88, sleep_s: 7 * 3600 }), { workload_cap_min: 390, break_after_min: 90, cap_reason: "readiness 88: fuller day" }); // 396
+  assert.deepEqual(dayCap(360, { readiness: 70, sleep_s: 7 * 3600 }), { workload_cap_min: 360, break_after_min: 90, cap_reason: null });
+  assert.equal(dayCap(360, { readiness: 84 }).workload_cap_min, 360);
+  assert.equal(dayCap(360, { readiness: 85 }).workload_cap_min, 390);
+  assert.equal(dayCap(360, { readiness: 69 }).workload_cap_min, 285);
+});
+
+test("dayCap: no Oura row, or one without numbers, keeps the cap", async () => {
+  const { dayCap } = await import("../src/sheet/sleep.mjs");
+  assert.deepEqual(dayCap(360, null), { workload_cap_min: 360, break_after_min: 90, cap_reason: null });
+  assert.deepEqual(dayCap(270, { readiness: null, sleep_s: null }), { workload_cap_min: 270, break_after_min: 90, cap_reason: null });
+});
+
+test("dayCap: under 6 hours of sleep takes 0.85 and breaks after 60; the lower multiplier wins", async () => {
+  const { dayCap } = await import("../src/sheet/sleep.mjs");
+  const short = 5 * 3600 + 40 * 60;
+  assert.deepEqual(dayCap(360, { readiness: null, sleep_s: short }), { workload_cap_min: 300, break_after_min: 60, cap_reason: "slept 5h40: lighter day" }); // 306
+  assert.deepEqual(dayCap(360, { readiness: 90, sleep_s: short }), { workload_cap_min: 300, break_after_min: 60, cap_reason: "readiness 90, slept 5h40: lighter day" });
+  assert.deepEqual(dayCap(360, { readiness: 64, sleep_s: short }), { workload_cap_min: 285, break_after_min: 60, cap_reason: "readiness 64, slept 5h40: lighter day" });
+  assert.equal(dayCap(360, { sleep_s: 6 * 3600 }).break_after_min, 90); // 6 hours is enough
+});
+
+test("dayCap: a lower cap never drops below the work already approved", async () => {
+  const { dayCap } = await import("../src/sheet/sleep.mjs");
+  assert.equal(dayCap(360, { readiness: 50 }, 330).workload_cap_min, 330);
+  assert.equal(dayCap(360, { readiness: 50 }, 400).workload_cap_min, 360); // never above the base cap for it
+  assert.equal(dayCap(360, { readiness: 50 }, 100).workload_cap_min, 285);
+});
+
+// --- read_planner and submit_proposal (src/sheet/proposal.mjs) -------------------------------
+
+const rows = (sleep, extra = {}) => ({
+  settings: { time_zone: TZ }, tasks: [{ id: "t1", title: "OS homework", est_min: 45, day: "2026-11-04", done: false }],
+  blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [], sleep, ...extra,
+});
+const week = [night("2026-11-02T09:30"), night("2026-11-03T09:50"), night("2026-10-30T09:40"),
+  night("2026-10-31T11:00"), night("2026-11-01T10:40"), night("2026-10-25T10:50")];
+
+test("planSnapshot: the window follows his wake, and sleep says why", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  const at6 = new Date("2026-11-04T11:00:00Z"); // Wed 6:00 am, not up yet
+  const snap = planSnapshot(rows(week, { sleepSynced: "2026-11-04T10:55:00Z" }), at6);
+  assert.deepEqual(snap.window, { from: "10:15", to: "17:00" });
+  assert.deepEqual(snap.sleep, { typical_wake_weekday: "09:40", typical_wake_weekend: "10:50", woke_at: null, last_synced: "2026-11-04T10:55:00Z" });
+  // Up at 8:05 and synced: today's wake wins.
+  const at815 = new Date("2026-11-04T13:15:00Z");
+  const up = planSnapshot(rows([...week, night("2026-11-04T08:05")]), at815);
+  assert.equal(up.window.from, "08:45");
+  assert.equal(up.sleep.woke_at, "08:05");
+  // No Oura: 07:00, as before.
+  const none = planSnapshot(rows(undefined), at6);
+  assert.equal(none.window.from, "07:00");
+  assert.deepEqual(none.sleep, { typical_wake_weekday: null, typical_wake_weekend: null, woke_at: null, last_synced: null });
+});
+
+test("checkProposal: a block may start at the wake-based window start, not before", async () => {
+  const { planSnapshot, checkProposal } = await import("../src/sheet/proposal.mjs");
+  const snap = planSnapshot(rows(week), new Date("2026-11-04T11:00:00Z"));
+  const paced = snap.tasks[0].paced_min;
+  const submit = (start) => checkProposal({ day: "2026-11-04", replaces: null, blocks: [{ task_id: "t1", start, minutes: paced }] }, snap);
+  assert.equal(submit("10:15").ok, true);
+  const early = submit("09:00");
+  assert.equal(early.ok, false);
+  assert.match(early.errors.join("\n"), /blocks\[0\]: starts before 10:15/);
+});
+
+test("planSnapshot: today's readiness and sleep set day_rules; checkProposal holds a plan to them", async () => {
+  const { planSnapshot, checkProposal } = await import("../src/sheet/proposal.mjs");
+  const at6 = new Date("2026-11-04T11:00:00Z");
+  const sleepDays = [{ day: "2026-11-04", readiness: 64, sleep_s: 5 * 3600 + 40 * 60 }, { day: "2026-11-03", readiness: 90, sleep_s: 8 * 3600 }];
+  const snap = planSnapshot(rows([], { sleepDays }), at6);
+  assert.deepEqual(snap.day_rules, { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "readiness 64, slept 5h40: lighter day" });
+  const tasks = [{ id: "t1", title: "A", est_min: 45, day: "2026-11-04", done: false }, { id: "t2", title: "B", est_min: 45, day: "2026-11-04", done: false }];
+  // Two 45-minute blocks back to back run 90 minutes: fine on a normal day, too long after a short night.
+  const two = (s) => checkProposal({ day: "2026-11-04", replaces: null, blocks: [{ task_id: "t1", start: "08:00", minutes: 45 }, { task_id: "t2", start: "08:45", minutes: 45 }] }, s);
+  assert.match(two(planSnapshot(rows([], { sleepDays, tasks }), at6)).errors.join("\n"), /break after every 60/);
+  assert.equal(two(planSnapshot(rows([], { tasks }), at6)).ok, true);
+});
