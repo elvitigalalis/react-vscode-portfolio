@@ -46,7 +46,7 @@ async function connect() {
 }
 
 async function disconnect() {
-  if (!confirm("Disconnect Oura? The plan goes back to starting at 7:00, and every saved sleep time is deleted.")) return;
+  if (!confirm("Disconnect Oura? The plan goes back to starting at 7:00, and every saved sleep time, readiness score and hours slept is deleted.")) return;
   try {
     await api.deleteOuraAccount();
     state.sleep = [];
