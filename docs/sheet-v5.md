@@ -265,10 +265,12 @@ weather_cache id boolean pk default true check (id), point text not null,
     - `last_plan_at`: the later of the newest revision's `created_at` and the newest such
       `replans.at`, today, or null;
     - `seen_until`: today's newest revision's `read_at ?? created_at`, or null;
+    - `closed`: today's newest revision is `skipped` or `lapsed`;
     - `last_edit_at`: `settings.plan_edited_at`.
   - The holds, checked in this order, give `hold`:
     `replans_off`, `morning_off`, `quiet` (before 8:00 or from 23:00), `shut_down`
-    (`day.shutdown`), `after_shutdown` (at or after the shutdown line), `daily_cap`
+    (`day.shutdown`), `closed` (fix: `state.closed`, today's newest revision is `skipped` or
+    `lapsed`, which apply_proposal would refuse anyway), `after_shutdown` (at or after the shutdown line), `daily_cap`
     (`plans_today` ≥ 8), `too_soon` (under 60 minutes since `last_plan_at`), `editing` (under 10
     minutes since `last_edit_at`).
   - Then the rules, over the changes left: fire when one has weight ≥ 8; or the weights add to
