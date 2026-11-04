@@ -371,12 +371,14 @@ weather_cache id boolean pk default true check (id), point text not null,
       proposed block that carries the run past 90 minutes, or the latest proposed block in the
       run when that is an approved one. **Decided:** a single block longer than 90 minutes is
       allowed; the rule is about blocks in a row.
-    - **The workload cap:** the minutes of the day's approved blocks (past ones too), the
-      proposal's blocks and its habit blocks add up to at most `workload_cap_min`. The error
+    - **The workload cap:** the minutes of the day's approved task blocks (past ones too) and
+      the proposal's blocks add up to at most `workload_cap_min`. **Fix:** the cap is for work,
+      so habit blocks, approved or proposed, stay out of it; they still count for free time,
+      travel and breaks. The error
       names `blocks` and the cap ("blocks: 6h30 planned, over the 6h00 workload cap").
   - **habits:** each `habit_id` is in `snapshot.habits`, at most once; `start` is "HH:MM" and
     within `ideal ± flex_min` (inclusive); the block runs `minutes`, inside `window`, and obeys
-    the overlap, travel, break and cap rules. Errors name `habits[i]`.
+    the overlap, travel and break rules (not the cap). Errors name `habits[i]`.
   - **couldnt_fit:** at most 12 ids, each in `snapshot.tasks`, none twice, none also placed in
     `blocks`. Errors name `couldnt_fit[i]`.
   - **suggested:** at most 5. `account` and `message_id` match an item in this submit's
