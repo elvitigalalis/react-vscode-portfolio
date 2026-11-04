@@ -78,7 +78,11 @@ async function snapshot(now: Date) {
   const [academicDay = null] = await db(`academic_days?select=entries&day=eq.${today}`);
   // v5 M1: the threads he's awaiting a reply on, oldest first, for the brief's Awaiting reply line.
   const awaiting = await db("reply_state?select=who,since&state=eq.awaiting&order=since");
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting };
+  // Oura: his sleep periods, for quiet until he's up and the brief's time, and today's readiness
+  // and sleep, for the brief's cap line. None until the Oura schema has run.
+  const sleep = await db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
+  const [sleepDay = null] = await db(`sleep_days?select=day,readiness,sleep_s&day=eq.${today}`).catch(() => []);
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
