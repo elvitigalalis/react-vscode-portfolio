@@ -89,7 +89,7 @@ test("proposalLines: a campus pick whose title could become a link stays off Tel
 test("planSnapshot: day_rules carry the workload cap from settings, 6 hours without one", () => {
   const rows = (settings) => ({ settings: { time_zone: "America/New_York", ...settings }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] });
   const now = new Date("2026-11-04T11:07:00Z");
-  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10 });
+  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10, cap_reason: null });
   assert.equal(planSnapshot(rows({}), now).day_rules.workload_cap_min, 360);
 });
 

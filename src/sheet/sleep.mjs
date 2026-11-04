@@ -90,3 +90,25 @@ export function wokeLate(profile, revision, now, tz) {
   }
   return profile.woke_at - from >= LATE;
 }
+
+// The day's workload cap and break rule from Oura's numbers for that day (a sleep_days row, {
+// readiness, sleep_s }): readiness under 70 takes 0.8 of `base`, 85 or more 1.1 (Oura's bands:
+// ouraring.com/blog/readiness-score); a main sleep under 6 hours takes 0.85 and a break after
+// every 60 minutes instead of 90. With both, the lower multiplier. Rounded to 15 minutes, and a
+// lower cap never drops below the `approved` work already locked in (up to `base`), so a late
+// readiness never refuses a day he already approved. cap_reason says why, or null.
+const SHORT_S = 6 * 3600;
+export function dayCap(base, day, approved = 0) {
+  const r = day?.readiness ?? null, s = day?.sleep_s ?? null;
+  const ready = r == null ? 1 : r < 70 ? 0.8 : r >= 85 ? 1.1 : 1;
+  const short = s != null && s < SHORT_S;
+  const x = short ? Math.min(ready, 0.85) : ready;
+  let cap = Math.round((base * x) / 15) * 15;
+  if (cap < base) cap = Math.max(cap, Math.min(approved, base));
+  const said = [ready !== 1 || short ? (r != null ? `readiness ${r}` : null) : null, short ? `slept ${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}` : null].filter(Boolean);
+  return {
+    workload_cap_min: cap,
+    break_after_min: short ? 60 : 90,
+    cap_reason: x === 1 ? null : `${said.join(", ")}: ${x < 1 ? "lighter" : "fuller"} day`,
+  };
+}
