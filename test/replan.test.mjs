@@ -45,3 +45,36 @@ test("campusChange: only today's events still to come count", async () => {
     { kind: "campus", reason: "campus_change", weight: 3, ref: null });
   assert.equal(campusChange([later], [], now, TZ).reason, "campus_change");
 });
+
+// --- The tick's state (src/sheet/replan.mjs) --------------------------------------------------
+
+test("replanState: plans today, the last plan and the shutdown line from today's rows", async () => {
+  const { replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: "2026-11-04T14:00:00Z", telegram_chat_id: 1 };
+  const proposals = [
+    { rev: 1, run_trigger: "morning", created_at: "2026-11-04T11:09:00Z" },
+    { rev: 2, run_trigger: "replan", created_at: "2026-11-04T15:05:00Z" },
+  ];
+  const replans = [{ at: "2026-11-04T15:00:00Z" }, { at: "2026-11-04T17:00:00Z" }];
+  assert.deepEqual(replanState({ settings, day: { day: "2026-11-04", shutdown: false, shutdown_at: "18:30:00" }, proposals, replans }), {
+    settings: { time_zone: "America/New_York", replans_on: true, morning_on: true },
+    day: { day: "2026-11-04", shutdown: false, shutdown_at: "18:30:00" },
+    shutdown: "18:30",
+    plans_today: 3,
+    last_plan_at: "2026-11-04T17:00:00.000Z",
+    last_edit_at: "2026-11-04T14:00:00Z",
+  });
+  const none = replanState({ settings: { ...settings, plan_edited_at: null }, day: null, proposals: [], replans: [] });
+  assert.equal(none.shutdown, "17:00");
+  assert.equal(none.plans_today, 0);
+  assert.equal(none.last_plan_at, null);
+  // A replan with no morning revision today counts only itself.
+  assert.equal(replanState({ settings, day: null, proposals: [proposals[1]], replans: [replans[0]] }).plans_today, 1);
+});
+
+test("rateLimited: holds until retry_after", async () => {
+  const { rateLimited } = await import("../src/sheet/replan.mjs");
+  const rows = [{ retry_after: null }, { retry_after: "2026-11-04T16:00:00Z" }];
+  assert.equal(rateLimited(rows, new Date("2026-11-04T15:59:00Z")), true);
+  assert.equal(rateLimited(rows, new Date("2026-11-04T16:00:00Z")), false);
+});
