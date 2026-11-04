@@ -19,7 +19,7 @@
 // from Vault (calendar_refresh_token) and is never logged or written anywhere.
 import { busyChange, freeBusyRequest, freeBusyRows } from "../../../src/sheet/freebusy.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
-import { googleToken } from "../_shared/google.ts";
+import { googleToken, refusedWhy } from "../_shared/google.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const SOURCE = "freebusy";
@@ -60,8 +60,7 @@ class Refused extends Error {}
 
 async function sync(refresh: string, now: Date) {
   const { ok, status, grant } = await googleToken({ refresh_token: refresh, grant_type: "refresh_token" });
-  // Google's error code (invalid_grant, say) never holds a token; its description is left out.
-  if (!ok) throw new Refused(`token refresh refused: ${/^[\w-]{1,40}$/.test(grant.error ?? "") ? grant.error : `HTTP ${status}`}`);
+  if (!ok) throw new Refused(refusedWhy(status, grant));
 
   const [settings] = await db("settings?select=owner_email,time_zone,gcal_calendar_id,calendars");
   const body = freeBusyRequest(settings, now);
