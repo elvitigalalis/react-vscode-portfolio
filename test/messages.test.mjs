@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldFire, checkAnswers, withMessages, proposalTrigger } from "../src/sheet/messages.mjs";
+import { shouldFire, messageText, checkAnswers, withMessages, proposalTrigger } from "../src/sheet/messages.mjs";
 import { fireText } from "../src/sheet/routine-fire.mjs";
 
 const NOW = new Date("2026-11-04T15:00:00Z"); // 10:00 am EST
@@ -25,6 +25,15 @@ test("shouldFire: fires when no other pending message was fired in the last 3 mi
 test("shouldFire: holds off while a message fired under 3 minutes ago is still pending, since that run reads this one too", () => {
   assert.equal(shouldFire([{ id: M1, fired_at: ago(2) }], NOW), false);
   assert.equal(shouldFire([{ id: M2, fired_at: null }, { id: M1, fired_at: ago(0.5) }], NOW), false);
+});
+
+test("messageText: one line of 1 to 500 characters, spaces collapsed; anything else is refused", () => {
+  assert.equal(messageText("  dentist   Thu\n3pm "), "dentist Thu 3pm");
+  assert.equal(messageText("x".repeat(500)), "x".repeat(500));
+  assert.equal(messageText("x".repeat(501)), null);
+  assert.equal(messageText("   "), null);
+  assert.equal(messageText(42), null);
+  assert.equal(messageText(undefined), null);
 });
 
 test("fireText: a message fire says only its trigger", () => {
