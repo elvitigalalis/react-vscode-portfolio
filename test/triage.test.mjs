@@ -46,3 +46,20 @@ test("needsFeedback: a needs_you row's ids, with its From address", () => {
   assert.deepEqual(needsFeedback(row, "not_needed"), { item: "needs_you", action: "not_needed", ref: { account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", from_address: "jobs@acme.com" } });
   assert.deepEqual(needsFeedback({ ...row, from_address: undefined }, "done").ref.from_address, null);
 });
+
+// --- tools/triage-score.mjs ---------------------------------------------------------------------
+
+test("triage-score: a run file is a list of items or a submit_proposal input", async () => {
+  const { runItems } = await import("../tools/triage-score.mjs");
+  const item = { account: "a@b.com", message_id: "18f2a3b4c5d6e7f1", subject: "dropped" };
+  assert.deepEqual(runItems([item]), [{ account: "a@b.com", message_id: "18f2a3b4c5d6e7f1" }]);
+  assert.deepEqual(runItems({ needs_you: [item, { account: "a@b.com", message_id: "not hex" }] }), [{ account: "a@b.com", message_id: "18f2a3b4c5d6e7f1" }]);
+  assert.throws(() => runItems({}), /expected a list/);
+});
+
+test("triage-score: counts, then keys, and the feedback query reads ids only", async () => {
+  const { scoreLines, feedbackSql } = await import("../tools/triage-score.mjs");
+  assert.deepEqual(scoreLines({ caught: ["a 1"], missed: [], wrongly_shown: ["a 2", "a 3"] }),
+    ["caught: 1", "  a 1", "missed: 0", "wrongly shown: 2", "  a 2", "  a 3"]);
+  assert.equal(feedbackSql(14), "select at, item, action, ref from feedback where item = 'needs_you' and at > now() - interval '14 days' order by at");
+});
