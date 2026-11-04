@@ -89,7 +89,7 @@ with want(tbl, cols) as (values
   ('triage_rules', array['id','match','pattern','action','created_at','label']),
   ('known_senders', array['hash','last_sent_at']),
   ('message_senders', array['account','message_id','thread_id','address_hash','domain_hashes','at']),
-  ('reply_state', array['account','thread_id','state','since','message_id','who','updated_at']),
+  ('reply_state', array['account','thread_id','state','since','message_id','who','updated_at','basis','draft']),
   ('academic_days', array['day','entries','fetched_at']),
   ('weather_cache', array['id','point','forecast_url','periods','alerts','fetched_at'])),
 cols as (

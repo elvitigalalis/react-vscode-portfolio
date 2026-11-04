@@ -17,11 +17,14 @@
 //   out; …/users.messages/list), then users.messages.get with format=metadata on each thread's
 //   newest message. Reply owed and Awaiting reply turn on as business days pass, which happens
 //   only when the local date changes, so a daily sweep catches every turn the history doesn't.
+//   The sweep first lists `in:sent newer_than:30d` (thread ids only) for the threads he wrote in;
+//   up to SWEEP_THREADS of those are read whole with users.threads.get (so an auto-reply or his
+//   draft is seen), the rest by their newest message with participation from that list.
 //
 // Quota (developers.google.com/workspace/gmail/api/reference/quota): 6,000 units per user per
 // minute; history.list 2, getProfile 1, messages.list 5, messages.get 20 and threads.get 40 (full
 // would be 60 and 120). A quiet run costs 2 units; THREADS_MAX threads.get is 2,000 and a sweep
-// of SWEEP_MAX messages 2,005, so a run stays well inside a minute's quota.
+// at most 10 + 60 × 20 + 40 × 40 = 2,810, so a run stays well inside a minute's quota.
 //
 // Deploy from the repo root:
 //   npx supabase functions deploy mail-sync --use-api --no-verify-jwt
@@ -45,10 +48,11 @@ const SOURCE = "gmail";
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 const HISTORY_PAGES = 10;   // 500 records a page
 const SWEEP_MAX = 100;      // threads per sweep
+const SWEEP_THREADS = 40;   // of those, read whole (threads he wrote in)
 const PARALLEL = 5;
 
 type Msg = ReturnType<typeof syncMessage>;
-type Thread = { account: string; thread_id: string; messages: Msg[] };
+type Thread = { account: string; thread_id: string; draft?: boolean; messages: Msg[] };
 type Account = { email: string; history_id: string | null };
 
 Deno.serve(async (req) => {
@@ -144,20 +148,27 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
         try { return syncThread(await gmail(`threads/${id}?${metadataQuery(true)}`), email); }
         catch (e) { if (e instanceof GmailError && e.status === 404) return { account: email, thread_id: id, messages: [] }; throw e; }
       });
-    // The sweep reads only each recent thread's newest message, which is all replyState looks at.
+    // The sweep: the threads he wrote in (his sent mail, 30 days) are read whole, up to
+    // SWEEP_THREADS; every other recent thread by its newest message only.
+    const sentThreads = new Set<string>();
     if (full || sweepDue) {
       const read = new Set(threads.map((t) => t.thread_id));
+      const sent = new URLSearchParams({ q: "in:sent newer_than:30d", maxResults: "500", fields: "messages(threadId)" });
+      for (const m of (await gmail(`messages?${sent}`)).messages ?? []) sentThreads.add(m.threadId);
       const q = new URLSearchParams({ q: "newer_than:14d -in:drafts", maxResults: String(SWEEP_MAX * 2), fields: "messages(id,threadId)" });
       const { messages = [] } = await gmail(`messages?${q}`);
       const newest = newestPerThread(messages).filter((m: { threadId: string }) => !read.has(m.threadId)).slice(0, SWEEP_MAX);
+      const whole = new Set(newest.filter((m: { threadId: string }) => sentThreads.has(m.threadId)).slice(0, SWEEP_THREADS).map((m: { threadId: string }) => m.threadId));
       threads.push(...await inBatches(newest, async (m: { id: string; threadId: string }) => {
-        const msg = syncMessage(await gmail(`messages/${m.id}?${metadataQuery()}`));
+        if (whole.has(m.threadId)) return syncThread(await gmail(`threads/${m.threadId}?${metadataQuery(true)}`), email);
+        const msg = syncMessage(await gmail(`messages/${m.id}?${metadataQuery()}`), email);
         return { account: email, thread_id: m.threadId, messages: [msg] };
       }));
     }
 
     const messages = threads.flatMap((t) => t.messages);
     await saveSenders(email, messages, now);
+    // Known before replyState, which needs it for basis "known" and "cc".
     const known = await knownAddresses(messages.map((m) => m.from_address).filter(Boolean) as string[]);
 
     // reply_state: upsert what holds now, delete what cleared, and note the threads turned owed.
@@ -166,7 +177,7 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
       ? await db(`reply_state?select=thread_id,state,message_id&account=eq.${enc}`)
       : [];
     const after = threads.map((t) => {
-      const state = replyState(t, tz, now);
+      const state = replyState(t, tz, now, { participated: sentThreads.has(t.thread_id), known });
       const newest = state && t.messages.find((m) => m.id === state.message_id);
       return { thread_id: t.thread_id, state, from_address: newest?.from_address ?? null };
     });
@@ -175,14 +186,16 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
       await db("reply_state?on_conflict=account,thread_id", {
         method: "POST",
         headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify(diff.upserts.map((r) => ({ ...r, updated_at: now.toISOString() }))),
+        // Every row names the same columns (awaiting has no basis or draft).
+        body: JSON.stringify(diff.upserts.map((r) => ({ basis: null, draft: false, ...r, updated_at: now.toISOString() }))),
       });
     }
     if (diff.deletes.length) {
       await db(`reply_state?account=eq.${enc}&thread_id=in.(${diff.deletes.map(quoted).join(",")})`, { method: "DELETE" });
     }
 
-    // Changes for replans: new mail from people, and known senders' threads that turned owed.
+    // Changes for replans: new mail from people, and threads that turned owed (known senders, or
+    // an answer in his own thread).
     // A full sync has nothing new: everything it reads was there before.
     const added = new Set(changed.added);
     const rows = mailChanges(messages.filter((m) => added.has(m.id)), full ? [] : diff.owed);
