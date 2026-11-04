@@ -5,8 +5,8 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { dueLabel, localNow } from "./logic.mjs";
-import { el, icon, state, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
-import { needsGroups, gmailLink } from "./morning.mjs";
+import { el, icon, sourceIcon, state, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
+import { needsGroups, gmailLink, slackLink } from "./morning.mjs";
 import { needsFeedback, neverOffers } from "./triage.mjs";
 
 let root, dialog;
@@ -18,7 +18,7 @@ let offers = [];        // v5 L1: From addresses to offer a never-show rule for
 async function refresh() {
   const [needs, accounts] = await Promise.all([api.listNeeds(), api.listMailAccounts().catch(() => [])]);
   rows = needs;
-  names = new Map(accounts.map((a) => [a.email, a.label || a.email]));
+  names = new Map([["slack", "Slack"], ...accounts.map((a) => [a.email, a.label || a.email])]);
   draw();
   if (dialog.open) await refreshOffers();
 }
@@ -43,7 +43,9 @@ function chip() {
 }
 
 function item(r) {
-  const link = gmailLink(r.link);
+  // v5 SRC2: a Slack row has its icon and opens in Slack, only on a .slack.com permalink.
+  const slack = r.source === "slack";
+  const link = slack ? slackLink(r.link) : gmailLink(r.link);
   const done = el("button", { type: "button", className: "sheet-btn", ariaLabel: `Done: ${r.subject}` }, icon("check"), " Done");
   done.dataset.needDone = r.id;
   // v5 L1: Not needed is done as well, and teaches the planner what isn't worth showing.
@@ -51,11 +53,11 @@ function item(r) {
   skip.dataset.needSkip = r.id;
   const today = state.today ?? localNow(new Date(), SHEET.timeZone).day;
   return el("li", { className: "sheet-needs-item" },
-    el("p", { className: "sheet-needs-head" }, el("strong", { textContent: r.sender }), " · ", el("span", { textContent: r.subject })),
+    el("p", { className: "sheet-needs-head" }, slack ? sourceIcon("slack") : null, slack ? " " : null, el("strong", { textContent: r.sender }), " · ", el("span", { textContent: r.subject })),
     el("p", { className: "sheet-needs-why", textContent: r.why }),
     el("p", { className: "sheet-meta", textContent: [names.get(r.account) ?? r.account, r.due && dueLabel(r.due, today)].filter(Boolean).join(" · ") }),
     el("p", { className: "sheet-needs-acts" },
-      link ? el("a", { className: "sheet-link", href: link, target: "_blank", rel: "noopener noreferrer", textContent: "Open in Gmail" }) : null,
+      link ? el("a", { className: "sheet-link", href: link, target: "_blank", rel: "noopener noreferrer", textContent: slack ? "Open in Slack" : "Open in Gmail" }) : null,
       done, " ", skip));
 }
 

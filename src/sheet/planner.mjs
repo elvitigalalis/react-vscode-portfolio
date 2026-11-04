@@ -37,7 +37,7 @@ export function icon(name, label) {
 }
 
 // A source's icon (docs/sheet-glance.md, change 3), paired with its edge colour in sheet.css.
-const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"], github: ["github", "From GitHub"], jira: ["kanban", "From Jira"] };
+const SOURCES = { course: ["graduation-cap", "From Brightspace"], campus: ["ticket", "Campus event"], github: ["github", "From GitHub"], jira: ["kanban", "From Jira"], slack: ["slack", "From Slack"] };
 export const sourceIcon = (src) => icon(...SOURCES[src]);
 // The words for the aria-label, since the icon is hidden.
 export const sourceWords = (src) => (src ? `, ${SOURCES[src][1].toLowerCase()}` : "");
