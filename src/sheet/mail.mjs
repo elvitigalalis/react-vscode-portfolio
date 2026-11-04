@@ -283,14 +283,14 @@ export function replyState(thread, timeZone, now, { participated = false, known 
 
 // The mail sync's changes rows (replan.mjs's REASON_WORDS). added: the messages new since the
 // last sync, [{ id, labels, automated }], each from a person and not skipped giving mail_new
-// (weight 2). owed: the threads that turned owed this sync, [{ message_id, known }], each from
-// a known sender giving mail_owed (weight 8).
+// (weight 2). owed: the threads that turned owed this sync, [{ message_id, known, basis }], each
+// from a known sender or answering his own thread (basis "thread") giving mail_owed (weight 8).
 export function mailChanges(added, owed) {
-  const quiet = ["SENT", "SPAM", "TRASH"];
+  const quiet = ["SENT", "SPAM", "TRASH", "DRAFT"];
   return [
     ...added.filter((m) => !m.automated && !skippedCategory(m.labels) && !m.labels.some((l) => quiet.includes(l)))
       .map((m) => changeRow("mail_new", m.id)),
-    ...owed.filter((t) => t.known).map((t) => changeRow("mail_owed", t.message_id)),
+    ...owed.filter((t) => t.known || t.basis === "thread").map((t) => changeRow("mail_owed", t.message_id)),
   ];
 }
 
@@ -420,7 +420,7 @@ export function replyDiff(account, before, after, known) {
     if (!state) { if (prev) deletes.push(thread_id); continue; }
     upserts.push({ account, thread_id, ...state });
     if (state.state === "owed" && !(prev?.state === "owed" && prev.message_id === state.message_id)) {
-      owed.push({ message_id: state.message_id, known: Boolean(from_address && known.has(from_address)) });
+      owed.push({ message_id: state.message_id, known: Boolean(from_address && known.has(from_address)), basis: state.basis ?? null });
     }
   }
   return { upserts, deletes, owed };
