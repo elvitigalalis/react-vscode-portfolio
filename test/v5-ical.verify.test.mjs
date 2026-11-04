@@ -150,25 +150,25 @@ const enrollment = (day, at_time) => ({
   title: "Enrollment opens", day, at_time, est_min: 15, public: false, list: null, source: "enrollment", source_uid: "enrollment",
 });
 
-test("enrollmentTask: one private task on the local day, at the local time", todo, async () => {
+test("enrollmentTask: one private task on the local day, at the local time", async () => {
   const { enrollmentTask } = await sources();
   assert.deepEqual(enrollmentTask("2026-11-12T12:00:00Z", TZ), enrollment("2026-11-12", "07:00"));
   assert.deepEqual(enrollmentTask("2026-11-12T12:00:00.000Z", TZ), enrollment("2026-11-12", "07:00"));
 });
 
-test("enrollmentTask: an evening time stays on its New York day", todo, async () => {
+test("enrollmentTask: an evening time stays on its New York day", async () => {
   const { enrollmentTask } = await sources();
   // 03:30 UTC on Nov 13 is 10:30 pm on Nov 12.
   assert.deepEqual(enrollmentTask("2026-11-13T03:30:00Z", TZ), enrollment("2026-11-12", "22:30"));
 });
 
-test("enrollmentTask: in daylight time too", todo, async () => {
+test("enrollmentTask: in daylight time too", async () => {
   const { enrollmentTask } = await sources();
   // April 6, 2027 is EDT (UTC-4).
   assert.deepEqual(enrollmentTask("2027-04-06T13:00:00Z", TZ), enrollment("2027-04-06", "09:00"));
 });
 
-test("enrollmentTask: no enrollment time, no task", todo, async () => {
+test("enrollmentTask: no enrollment time, no task", async () => {
   const { enrollmentTask } = await sources();
   assert.equal(enrollmentTask(null, TZ), null);
 });
