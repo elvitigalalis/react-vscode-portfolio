@@ -272,6 +272,12 @@ weather_cache id boolean pk default true check (id), point text not null,
   `counts` alone: `"trigger: replan\nreasons: mail 3, busy 1"`. The reason names stay on the
   server, in `replans.reasons` and the revision.
 - `reasonWords(reasons)` returns their words joined with ", ", for the replan message.
+- (R1 adds) `changeRow(reason, ref)` gives the `changes` row `{ kind, reason, weight, ref }` for a
+  reason; `replanState({ settings, day, proposals, replans })` builds `state` from today's rows;
+  `rateLimited(replans, now)` is true while a `retry_after` is ahead. feeds.mjs gains
+  `courseChanges(out, tasks, today)` (one row per inserted or updated course task) and
+  `campusChange(before, after, now, timeZone)`. **Decided:** a campus change counts only when
+  the events left today differ, since the 14-day window changes almost every hour.
 
 #### `pace.mjs`, new (P1)
 
