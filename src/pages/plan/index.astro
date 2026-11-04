@@ -162,6 +162,13 @@ import "../../styles/sheet.css";
         <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
       </section>
 
+      <!-- Enrollment time (docs/sheet-v5.md, "/plan"): src/sheet/enrollment-settings.mjs fills and saves it. -->
+      <section class="sheet-settings-part" aria-labelledby="sheet-enroll-title">
+        <h3 id="sheet-enroll-title">Enrollment</h3>
+        <p class="small">When your spring enrollment opens. It becomes a private task at that time.</p>
+        <p class="sheet-dialog-end"><label for="sheet-enroll">Opens</label> <input id="sheet-enroll" type="datetime-local"> <span class="small" role="status" data-enroll-note></span> <button type="button" class="sheet-btn primary" data-act="save-enroll">Save</button></p>
+      </section>
+
       <!-- Feeds status (docs/sheet-sources.md, "/plan"): src/sheet/feed-status.mjs fills the list. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-feeds-title">
         <h3 id="sheet-feeds-title">Feeds</h3>
@@ -248,5 +255,6 @@ import "../../styles/sheet.css";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupPaceSettings } from "../../sheet/pace-settings.mjs";
   import { setupReplanSettings } from "../../sheet/replan-settings.mjs";
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupReplanSettings]);
+  import { setupEnrollmentSettings } from "../../sheet/enrollment-settings.mjs";
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupMailSettings, setupCalendarSettings, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupPaceSettings, setupEnrollmentSettings, setupReplanSettings]);
 </script>

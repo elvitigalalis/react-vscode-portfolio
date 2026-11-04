@@ -6,6 +6,7 @@ import { localNow, zonedIso, minutesOn, planningDay, atRisk, addDays, formatCloc
 import { freeFood } from "./campus.mjs";
 import { weatherHours } from "./sources.mjs";
 import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
+import { dayLabel } from "./logic.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
 
@@ -51,6 +52,7 @@ function runOf(rows, now) {
 //   actuals    v5 P1: the actuals rows (pace)
 //   past       v5 P1: the approved blocks of the 14 days before plan_day, each with its task's
 //              done as `task: { done }` (paceQueries, proposal-io.mjs)
+//   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -104,6 +106,8 @@ export function planSnapshot(rows, now) {
     day_rules: dayRules(settings),
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
+    // v5 SRC3: plan_day's academic calendar entries (academic_days), [] without them.
+    academic: (rows.academic ?? []).map((e) => ({ title: e.title, all_day: e.all_day })),
     // v5 P1.
     pace,
     planned_vs_done: plannedVsDone(past, past.map((b) => ({ id: b.task_id, done: Boolean(b.task?.done) })), day, tz),
@@ -216,6 +220,36 @@ function couldntFitIds(input, snapshot, errors) {
     else if (placed.has(id)) errors.push(`${name}: this task has a block, so it fit`);
   });
   return ids;
+}
+
+// --- v5 A1: suggested tasks (docs/sheet-v5.md, "checkProposal") -------------------------------
+
+export const MAX_SUGGESTED = 5;
+export const SUGGESTED_KINDS = ["assessment", "interview"];
+
+// The tasks Claude suggests from assessment and interview mail: each for one of this submit's
+// needs_you items (an item open from an earlier run isn't enough), at most one per item.
+function suggestedTasks(input, errors) {
+  const items = list(input?.suggested);
+  if (!Array.isArray(items)) return errors.push("suggested: must be a list"), [];
+  if (items.length > MAX_SUGGESTED) return errors.push(`suggested: at most ${MAX_SUGGESTED}, got ${items.length}`), [];
+  const needs = Array.isArray(input?.needs_you) ? input.needs_you : [];
+  const key = (x) => `${x?.account} ${x?.message_id}`;
+  const mine = new Set(needs.map(key));
+  const out = [];
+  const used = new Set();
+  items.forEach((t, i) => {
+    const name = `suggested[${i}]`;
+    const before = errors.length;
+    if (!mine.has(key(t))) errors.push(`${name}: account and message_id must match one of this submit's needs_you items`);
+    else if (used.has(key(t))) errors.push(`${name}: that item already has a suggested task`);
+    used.add(key(t));
+    if (!isDate(t?.due)) errors.push(`${name}.due: required, a date "YYYY-MM-DD"`);
+    if (!SUGGESTED_KINDS.includes(t?.kind)) errors.push(`${name}.kind: must be one of ${SUGGESTED_KINDS.join(", ")}`);
+    const title = text(t?.title, `${name}.title`, 80, errors);
+    if (errors.length === before) out.push({ account: t.account, message_id: t.message_id, title, due: t.due, kind: t.kind });
+  });
+  return out;
 }
 
 // The checks submit_proposal runs on `input` ({ day, blocks: [{ task_id, start: "HH:MM",
@@ -345,14 +379,15 @@ export function checkProposal(input, snapshot) {
 
   const note = input?.note == null ? null : text(input.note, "note", 280, errors);
   const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
+  const suggested = v5 ? suggestedTasks(input, errors) : null;
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
-  // Habit blocks (H1) and suggested tasks (A1) come with their tickets.
+  // Habit blocks (H1) come with their ticket.
   const { trigger: run_trigger, reasons } = snapshot.run;
   return {
     ok: true, errors: [],
-    rows: { d: day, replaces, blocks, habit_blocks: [], needs, picks, note, couldnt_fit: couldntFit, suggested: [], run_trigger, reasons },
+    rows: { d: day, replaces, blocks, habit_blocks: [], needs, picks, note, couldnt_fit: couldntFit, suggested, run_trigger, reasons },
     dropped: [],
   };
 }
@@ -406,6 +441,9 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
   const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
   if (unfit) lines.push(unfit);
+  // v5 A1: one line per suggested task. Titles passed checkProposal; one that could become a link
+  // reads "A task" anyway.
+  for (const t of proposal.suggested ?? []) lines.push(`Task to add: ${linkish(t.title) ? "A task" : t.title} (due ${dayLabel(t.due).date})`);
   const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).
