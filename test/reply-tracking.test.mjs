@@ -430,9 +430,16 @@ test("gmailJson: an empty reply is an empty object; a cut one says so", async ()
   assert.throws(() => gmailJson('{"messages":['), /Gmail sent a reply that isn't JSON/);
 });
 
-test("mail-sync: reads every Gmail reply through gmailJson", async () => {
+test("mail-sync: reads every Gmail reply through gmailJson, and clears old-rule owed rows on a sweep", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("../supabase/functions/mail-sync/index.ts", import.meta.url), "utf8");
   assert.doesNotMatch(src, /res\.json\(\)/);
   assert.match(src, /gmailJson\(await res\.text\(\)\)/);
+  assert.match(src, /reply_state\?account=eq\.\$\{enc\}&state=eq\.owed&basis=is\.null/);
+});
+
+test("schema: a re-runnable cleanup of owed rows from the old rule, with a WHERE", async () => {
+  const { readFileSync } = await import("node:fs");
+  const sql = readFileSync(new URL("../supabase/schema.sql", import.meta.url), "utf8");
+  assert.match(sql, /delete from reply_state where state = 'owed' and basis is null;/);
 });

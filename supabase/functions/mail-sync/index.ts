@@ -196,6 +196,10 @@ async function syncAccount(account: Account, tz: string, now: Date, sweepDue: bo
     if (diff.deletes.length) {
       await db(`reply_state?account=eq.${enc}&thread_id=in.(${diff.deletes.map(quoted).join(",")})`, { method: "DELETE" });
     }
+    // A sweep also clears owed rows the old rule left (no basis), which it may not have re-read.
+    if (full || sweepDue) {
+      await db(`reply_state?account=eq.${enc}&state=eq.owed&basis=is.null`, { method: "DELETE" });
+    }
 
     // Changes for replans: new mail from people, and threads that turned owed (known senders, or
     // an answer in his own thread).
