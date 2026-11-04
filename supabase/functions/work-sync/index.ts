@@ -5,7 +5,7 @@
 // (src/sheet/sources.mjs), the functions the tests cover, decide what changes; this file only
 // fetches and writes what they say. Only titles, links and due dates are ever stored.
 //
-// - GitHub: GET /user for the login, then GET /search/issues for `is:open is:pr review-requested:<login>` and `is:open assignee:<login>`
+// - GitHub: GET /user for the login, then GET /search/issues for PRs awaiting his review and PRs and issues assigned to him
 //   (https://docs.github.com/en/rest/search/search#search-issues-and-pull-requests: at most 100
 //   per page and 30 requests a minute when signed in; `incomplete_results` is true when the search
 //   timed out). Only repositories in settings.github_orgs count. Recorded in feed_state as
@@ -161,9 +161,13 @@ async function githubSearch(q: string) {
 async function githubItems() {
   const login = String((await githubGet("/user"))?.login ?? "");
   if (!/^[A-Za-z\d-]{1,39}$/.test(login)) throw new Error("github: no login for this token");
-  const review = await githubSearch(`is:open is:pr review-requested:${login}`);
-  const assigned = await githubSearch(`is:open assignee:${login}`);
-  return { items: [...review.items, ...assigned.items], whole: review.whole && assigned.whole };
+  // Each search must name is:issue or is:pull-request, or GitHub answers 422.
+  const parts = await Promise.all([
+    `is:open is:pull-request review-requested:${login}`,
+    `is:open is:pull-request assignee:${login}`,
+    `is:open is:issue assignee:${login}`,
+  ].map(githubSearch));
+  return { items: parts.flatMap((p) => p.items), whole: parts.every((p) => p.whole) };
 }
 
 // --- Jira -------------------------------------------------------------------------------------
