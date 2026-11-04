@@ -29,6 +29,18 @@ const blocks = [
   { id: 4, task_id: 2, starts_at: "2026-11-03T22:30:00Z", ends_at: "2026-11-03T23:30:00Z", gcal_id: null, proposed: false },
 ];
 const days = [{ day: "2026-11-02", planned: true, shutdown: true }, { day: "2026-11-03", planned: false, shutdown: false }];
+// Messages to Claude (docs/sheet-messages.md): a pasted announcement answered, one being read.
+const messages = [
+  { id: "m2", at: "2026-11-03T15:18:00Z", text: "gym tomorrow 7am", status: "pending", fired_at: "2026-11-03T15:18:00Z", tasks: [], events: [], tasks_added: 0, created_in_calendar: false, reply: null },
+  { id: "m1", at: "2026-11-03T14:00:00Z", status: "done", fired_at: "2026-11-03T14:00:00Z", created_in_calendar: true, tasks_added: 2,
+    text: "CSE 320 reminders:\nProject 2 is due Nov 14 11:59pm.\nQuiz on ch. 5 next Tuesday in class.\nLab 4 report due the Friday after.\nOffice hours moved, see the site.",
+    reply: "Added Project 2 and Lab 4 to your Inbox and the quiz on Tue Nov 10. Skipped office hours: no day or time given.",
+    tasks: [
+      { id: "t1", title: "CSE 320 Project 2 (due 11:59 pm)", day: null, list: "Inbox", due: "2026-11-14", at_time: null },
+      { id: "t2", title: "CSE 320 Lab 4 report", day: null, list: "Inbox", due: "2026-11-13", at_time: null },
+    ],
+    events: [{ id: "e1", title: "CSE 320 quiz, ch. 5", starts_at: "2026-11-10T14:00:00.000Z", ends_at: "2026-11-10T15:20:00.000Z", gcal_id: "gq" }] },
+];
 const settings = [{ id: true, owner_email: "x@y", nudges_on: true, calendars: [], gcal_calendar_id: "c", interests: "robotics, free food" }];
 const campus = [
   { uid: "c1", title: "Pizza & Pitch Night", starts_at: "2026-11-03T22:00:00Z", ends_at: "2026-11-04T00:00:00Z", all_day: false, group_name: "Entrepreneurship Club", event_type: "Social", tags: ["Free Food", "Career"], url: "https://sbengaged.stonybrook.edu/x", rsvp_count: 22 },
@@ -76,7 +88,7 @@ function route(r) {
   }
   if (p === "blocks" && q.includes("gcal_id=is.null") && r.method() === "PATCH") return json(r, [{ ...blocks[3], ...JSON.parse(r.postData()) }]);
   if (p === "needs_you" && r.method() === "GET") return json(r, needs.filter((n) => !n.done));
-  const map = { tasks: tasks, blocks, days, settings, proposals, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", tag: "workit", public: true, updated_on: "2026-11-03" }] };
+  const map = { messages, tasks: tasks, blocks, days, settings, proposals, campus_events: campus, feed_state: feeds, mail_accounts: [{ id: 1, email: "lisul@stonybrook.edu", label: null, last_error: null }], gcal_pending: [], public_week: pubWeek, public_days: days, public_now: [{ title: "WorkIt: batch apply PR review", tag: "workit", public: true, updated_on: "2026-11-03" }] };
   if (new URL(u).search.includes("parked_on")) return json(r, [{ id: 99 }]);
   return json(r, map[p] ?? []);
 }
@@ -175,6 +187,16 @@ async function checkTopBar(pg, name) {
 }
 for (const w of [1440, 1280]) for (const dark of [false, true]) {
   await shot("/plan/", `plan-week-${w}-${dark ? "dark" : "light"}`, w, 900, dark, async (pg) => { await checkRows(pg, `/plan ${w}px ${dark ? "dark" : "light"}`); await checkTopBar(pg, `/plan ${w}px ${dark ? "dark" : "light"}`); });
+}
+for (const w of [1440, 390]) {
+  await shot("/plan/", `plan-messages-${w}`, w, 900, false, async (pg) => {
+    const r = await pg.evaluate(() => {
+      const d = document.querySelector("[data-message-recent]");
+      return { open: d?.open, items: document.querySelectorAll(".sheet-message-added li").length, wide: document.documentElement.scrollWidth > innerWidth };
+    });
+    if (!r.open || r.items !== 3) failures.push(`/plan ${w}px: Recent should be open with 3 added items, got ${JSON.stringify(r)}`);
+    if (r.wide) failures.push(`/plan ${w}px: the message list scrolls sideways`);
+  });
 }
 await shot("/plan/", "plan-campus", 1440, 900, false, async (pg) => { await pg.click(".sheet-campus-row"); await new Promise((r) => setTimeout(r, 500)); });
 await shot("/plan/", "plan-settings", 1440, 900, false, async (pg) => { await pg.click("[data-feed-alert]"); await new Promise((r) => setTimeout(r, 800)); });

@@ -126,7 +126,8 @@ async function patch(id, change) {
 // Google calendar blocks of a task. A block with no gcal_id was made while Google was off.
 const blocksOf = (id) => state.blocks.filter((b) => b.task_id === id);
 
-async function dropBlocks(id) {
+// A task's blocks, out of Google Calendar and the table; message-box.mjs's Undo uses it too.
+export async function dropBlocks(id) {
   for (const b of blocksOf(id)) {
     if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
     await api.deleteBlock(b.id);
