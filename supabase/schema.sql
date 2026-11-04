@@ -1120,6 +1120,11 @@ create table if not exists reply_state (
   updated_at timestamptz not null default now(),
   primary key (account, thread_id)
 );
+-- Reply owed's evidence (replyState): "thread" they answered a thread he wrote in, "known" someone
+-- he has written to wrote to him, "cc" the same with him copied; null for awaiting. draft: the
+-- thread holds his unsent Gmail draft (a draft is not a reply).
+alter table reply_state add column if not exists basis text check (basis in ('thread', 'known', 'cc'));
+alter table reply_state add column if not exists draft boolean not null default false;
 
 alter table known_senders enable row level security;
 alter table message_senders enable row level security;
