@@ -18,15 +18,28 @@ export function outbox(storage, name = "sheet.gym.outbox") {
   let running = null;
   const save = () => { try { storage.setItem(name, JSON.stringify(entries)); } catch {} };
   const at = (table, id) => entries.findIndex((e) => e.table === table && e.id === id);
+  // Entries in a send under way: the server may have them whatever the send's outcome.
+  let sending = new Set();
   function keep(entry) {
     const i = at(entry.table, entry.id);
     entry.v = ++version;
+    // A row first made on the phone stays fresh until a send of it starts.
+    if (entry.op === "upsert" && i >= 0 && entries[i].fresh && !sending.has(entries[i])) entry.fresh = true;
     if (i < 0) entries.push(entry); else entries[i] = entry;
     save();
+  }
+  // A delete of a fresh row (the server never had it) just forgets it: nothing to send.
+  function forget(table, id) {
+    const i = at(table, id);
+    if (i < 0 || !entries[i].fresh || sending.has(entries[i])) return false;
+    entries.splice(i, 1);
+    save();
+    return true;
   }
 
   async function run(send) {
     const batch = entries.slice();
+    sending = new Set(batch);
     const done = (sent) => {
       entries = entries.filter((e) => !sent.some((s) => s.table === e.table && s.id === e.id && s.v === e.v));
       save();
@@ -42,13 +55,19 @@ export function outbox(storage, name = "sheet.gym.outbox") {
       }
       return true;
     } catch {
+      // A failed send may still have reached the server: what it carried is no longer fresh.
+      for (const e of entries) if (sending.has(e)) delete e.fresh;
+      save();
       return false;
+    } finally {
+      sending = new Set();
     }
   }
 
   return {
-    put: (table, row) => keep({ op: "upsert", table, id: row[keyOf(table)], row }),
-    drop: (table, id) => keep({ op: "delete", table, id }),
+    // fresh: the row was just made on the phone (a new set), so the server hasn't got it yet.
+    put: (table, row, { fresh = false } = {}) => keep({ op: "upsert", table, id: row[keyOf(table)], row, ...(fresh ? { fresh } : {}) }),
+    drop: (table, id) => forget(table, id) || keep({ op: "delete", table, id }),
     pending: () => entries.length,
     // The queued rows of a table, for drawing what the server hasn't got yet.
     rows: (table) => entries.filter((e) => e.op === "upsert" && e.table === table).map((e) => e.row),

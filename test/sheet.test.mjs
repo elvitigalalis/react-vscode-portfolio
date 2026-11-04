@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
@@ -138,6 +138,12 @@ test("plan today: the load meter turns amber near capacity and red over it", () 
 test("plan today: after 3 pm it plans tomorrow; blocks snap to 15 minutes", () => {
   assert.equal(planningDay({ day: "2026-10-20", minutes: 9 * 60 }), "2026-10-20");
   assert.equal(planningDay({ day: "2026-10-20", minutes: 15 * 60 }), "2026-10-21");
+  // The Plan dialog opens today while today has time left before its shutdown (5 pm here), and
+  // tomorrow once that time is past or the day is shut down.
+  assert.equal(dialogDay({ day: "2026-10-20", minutes: 15 * 60 + 30 }, 17 * 60, false), "2026-10-20");
+  assert.equal(dialogDay({ day: "2026-10-20", minutes: 9 * 60 }, 17 * 60, false), "2026-10-20");
+  assert.equal(dialogDay({ day: "2026-10-20", minutes: 17 * 60 }, 17 * 60, false), "2026-10-21");
+  assert.equal(dialogDay({ day: "2026-10-20", minutes: 16 * 60 }, 17 * 60, true), "2026-10-21");
   assert.equal(snap(607), 600);
   assert.equal(snap(608), 615);
 });

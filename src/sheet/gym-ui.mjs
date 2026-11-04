@@ -9,7 +9,7 @@ import { lightDismiss } from "./dismiss.mjs";
 import { loadAll, send } from "./gym-api.mjs";
 import { keyOf, outbox } from "./gym-sync.mjs";
 import {
-  activeExercise, e1rm, historyFor, nextDay, ordered, parseSlot, plateText, prsFor, range, records, rxLine, strip, suggest, warmups,
+  activeExercise, e1rm, historyFor, nextDay, ordered, parseSlot, plateText, prsFor, range, readNum, records, rxLine, setToSave, strip, suggest, warmups,
 } from "./gym.mjs";
 
 const CACHE = "sheet.gym.cache";
@@ -28,7 +28,7 @@ const $ = (sel) => root.querySelector(sel);
 // D: the rows, as the server has them plus every write made here since.
 let D = { exercises: [], days: [], rxs: [], baselines: [], swaps: [], sessions: [], sets: [] };
 const TABLE = { gym_exercises: "exercises", gym_program_days: "days", gym_prescriptions: "rxs", gym_baselines: "baselines", gym_swaps: "swaps", gym_sessions: "sessions", gym_sets: "sets" };
-const S = { view: "today", dayId: null, session: null, extra: {}, rpeFor: null, recordsFor: null, draft: readJson(DRAFT) ?? {} };
+const S = { view: "today", dayId: null, session: null, extra: {}, removed: {}, rpeFor: null, recordsFor: null, draft: readJson(DRAFT) ?? {} };
 
 const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -67,9 +67,29 @@ async function sync() {
   syncFailed = !(await box.flush(send));
   note();
 }
+// The status line says where his sets are: "Saved on phone · will sync" while writes wait (offline,
+// a failed send, or a send taking over 2 s), then "Saved" for 3 s once they all went up.
+let queuedShown = false;
+let queuedTimer = null;
+let savedUntil = 0;
 function note() {
   const n = $("[data-gym-offline]");
-  if (n) n.hidden = !(box.pending() && (syncFailed || !navigator.onLine));
+  if (!n) return;
+  const show = (text) => { n.textContent = text; n.hidden = false; };
+  if (box.pending()) {
+    savedUntil = 0;
+    if (syncFailed || !navigator.onLine) { queuedShown = true; show("Saved on phone · will sync"); }
+    else if (!queuedShown && !queuedTimer) queuedTimer = setTimeout(() => { queuedTimer = null; if (box.pending()) { queuedShown = true; show("Saved on phone · will sync"); } }, 2000);
+    return;
+  }
+  clearTimeout(queuedTimer);
+  queuedTimer = null;
+  if (queuedShown) {
+    queuedShown = false;
+    savedUntil = Date.now() + 3000;
+    show("Saved");
+    setTimeout(note, 3100);
+  } else if (Date.now() >= savedUntil) n.hidden = true;
 }
 
 // --- Loading -----------------------------------------------------------------------------------
@@ -195,22 +215,28 @@ function rowValues(key, logged, prefill) {
   if (logged) return { weight_lb: Number(logged.weight_lb), reps: logged.reps };
   return { ...prefill, ...S.draft[key] };
 }
-function setDraft(key, patch) { S.draft[key] = { ...S.draft[key], ...patch }; writeJson(DRAFT, S.draft); }
+// A blank field (null) leaves the draft, so the row shows its prefill again.
+function setDraft(key, patch) {
+  const next = { ...S.draft[key], ...patch };
+  for (const k of Object.keys(next)) if (next[k] == null) delete next[k];
+  S.draft[key] = next;
+  writeJson(DRAFT, S.draft);
+}
 
+// onSet(value, redraw): a typed value is kept without redrawing, since the change event fires as
+// the field blurs, on the very press of ✓, and a redraw then would swallow that tap.
 function stepper(id, label, unit, value, step, onSet, numeric) {
   const input = el("input", {
     id, type: "text", inputMode: numeric ? "numeric" : "decimal", enterKeyHint: "done", autocomplete: "off",
     className: "gym-num", value: value == null ? "" : lb(value), ariaLabel: label,
   });
-  input.addEventListener("change", () => {
-    const v = numeric ? parseInt(input.value, 10) : parseFloat(input.value.replace(",", "."));
-    onSet(Number.isFinite(v) && v >= 0 ? v : 0);
-  });
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+  input.addEventListener("change", () => onSet(readNum(input.value, numeric), false));
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") { input.blur(); render(); } });
   const minus = btn("−", { id: `${id}-m`, className: "gym-step", ariaLabel: `${label}: ${step} less` });
   const plus = btn("+", { id: `${id}-p`, className: "gym-step", ariaLabel: `${label}: ${step} more` });
-  minus.addEventListener("click", () => onSet(Math.max(0, (value ?? 0) - step)));
-  plus.addEventListener("click", () => onSet((value ?? 0) + step));
+  const now = () => readNum(input.value, numeric) ?? value ?? 0;
+  minus.addEventListener("click", () => onSet(Math.max(0, now() - step), true));
+  plus.addEventListener("click", () => onSet(now() + step, true));
   return el("span", { className: "gym-stepper" }, minus, el("span", { className: "gym-num-wrap" }, input, el("span", { className: "gym-unit", textContent: unit, ariaHidden: "true" })), plus);
 }
 
@@ -240,25 +266,37 @@ function card(rx, dayKey) {
   for (const spec of specs) {
     const done = logged.find((s) => s.warmup === spec.warmup && s.set_index === spec.index);
     const key = `${rx.id}|${spec.warmup ? "w" : "s"}${spec.index}`;
+    if (!done && S.removed[key]) continue;
     const v = rowValues(key, done, spec.prefill);
     const id = key.replace(/[^a-z0-9]/gi, "");
     const what = `${spec.warmup ? "warm-up" : "set"} ${spec.warmup ? spec.index + 1 : spec.index}`;
-    const change = (patch) => {
-      if (done) put("gym_sets", { ...done, ...patch });
+    const change = (patch, redraw) => {
+      // A logged set keeps its numbers when a field is cleared.
+      if (done) { if (Object.values(patch).every((x) => x != null)) put("gym_sets", { ...done, ...patch }); }
       else setDraft(key, patch);
-      render();
+      if (redraw) render();
     };
     const prev = spec.warmup ? null : last?.sets[spec.index - 1];
     const check = btn("✓", { id: `${id}-ok`, className: `gym-check${done ? " is-done" : ""}`, ariaLabel: `${done ? "Saved" : "Save"} ${what} of ${name}` });
     check.setAttribute("aria-pressed", String(Boolean(done)));
-    check.addEventListener("click", () => logSet({ rx, exId, name, spec, done, values: v }));
+    // ✓ saves what the fields hold right now, typed or not, in the one tap.
+    check.addEventListener("click", () => {
+      const [w, r] = row.querySelectorAll(".gym-num");
+      const typed = { weight_lb: readNum(w.value), reps: readNum(r.value, true) };
+      const values = setToSave(typed, done ? { weight_lb: Number(done.weight_lb), reps: done.reps } : spec.prefill, Boolean(ex.bodyweight));
+      if (values.error) return askFor(row, values.error, values.error === "weight" ? w : r);
+      logSet({ rx, exId, name, spec, done, values });
+    });
+    // ✕ drops a planned row, or deletes a logged set; either way with Undo for 5 s.
+    const x = btn("✕", { id: `${id}-x`, className: "gym-x", ariaLabel: `${done ? "Delete" : "Remove"} ${what} of ${name}`, title: done ? "Delete set" : "Remove set" });
+    x.addEventListener("click", () => removeSet(key, done, what));
     const row = el("div", { className: `gym-set${spec.warmup ? " is-warmup" : ""}${done ? " is-done" : ""}` },
       el("span", { className: "gym-set-n", textContent: spec.label, title: spec.warmup ? "Warm-up: never counted" : "" }),
       el("span", { className: "gym-set-last", textContent: prev ? `${lb(prev.weight_lb)}×${prev.reps}` : "—", ariaLabel: prev ? `Last time ${lb(prev.weight_lb)} by ${prev.reps}` : "No last time" }),
-      check,
+      x, check,
       el("span", { className: "gym-set-inputs" },
-        stepper(`${id}-w`, `Weight, ${what}, lb`, "lb", v.weight_lb, Number(ex.step_lb) || 5, (x) => change({ weight_lb: x })),
-        stepper(`${id}-r`, `Reps, ${what}`, "reps", v.reps, 1, (x) => change({ reps: Math.round(x) }), true)));
+        stepper(`${id}-w`, `Weight, ${what}, lb`, "lb", v.weight_lb, Number(ex.step_lb) || 5, (x, redraw) => change({ weight_lb: x }, redraw)),
+        stepper(`${id}-r`, `Reps, ${what}`, "reps", v.reps, 1, (x, redraw) => change({ reps: x == null ? x : Math.round(x) }, redraw), true)));
     rows.push(row);
     if (done && S.rpeFor === done.id) rows.push(rpeChips(done, rx));
     if (ex.bar_lb && !spec.warmup && spec.index === 1 && v.weight_lb) rows.push(el("p", { className: "gym-plates", textContent: plateText(v.weight_lb, Number(ex.bar_lb)) }));
@@ -277,6 +315,29 @@ function card(rx, dayKey) {
     more);
 }
 
+// Removing a row: a planned one is hidden for this session; a logged one is deleted (by id, from the
+// outbox or the server), and records, PRs and the summary are worked out again from the sets left.
+function removeSet(key, done, what) {
+  if (done) {
+    drop("gym_sets", done.id);
+    if (S.rpeFor === done.id) S.rpeFor = null;
+    offerUndo(`Deleted ${what}: ${lb(done.weight_lb)} × ${done.reps}`, () => put("gym_sets", done));
+  } else {
+    S.removed[key] = true;
+    offerUndo(`Removed ${what}`, () => { delete S.removed[key]; });
+  }
+  render();
+}
+
+// A row with nothing to save says so under its fields and focuses the one to fill.
+function askFor(row, what, input) {
+  let p = row.querySelector(".gym-set-err");
+  if (!p) row.append(p = el("p", { className: "gym-set-err", role: "alert" }));
+  p.textContent = what === "weight" ? "Enter a weight first (0 only for a bodyweight exercise)." : "Enter the reps first.";
+  input.setAttribute("aria-invalid", "true");
+  input.focus();
+}
+
 function rpeChips(set, rx) {
   const chips = RPES.map((r) => {
     const b = btn(String(r), { className: "gym-chip", ariaLabel: `RPE ${r}` });
@@ -292,16 +353,16 @@ function logSet({ rx, exId, name, spec, done, values }) {
   const session = ensureSession();
   const row = {
     id: done?.id ?? uuid(), session_id: session.id, prescription_id: rx.id, exercise_id: exId, set_index: spec.index, warmup: spec.warmup,
-    weight_lb: values.weight_lb ?? 0, reps: values.reps ?? 0, rpe: done?.rpe ?? (spec.warmup ? null : rx.rpe_target ?? null), done_at: done?.done_at ?? nowIso(),
+    weight_lb: values.weight_lb, reps: values.reps, rpe: done?.rpe ?? (spec.warmup ? null : rx.rpe_target ?? null), done_at: done?.done_at ?? nowIso(),
   };
   const prs = prsFor(row, D.sets.filter((s) => s.id !== row.id), D.baselines);
-  put("gym_sets", row);
+  put("gym_sets", row, { fresh: !done });
   delete S.draft[`${rx.id}|${spec.warmup ? "w" : "s"}${spec.index}`];
   writeJson(DRAFT, S.draft);
   if (!done) {
     startRest(spec.warmup ? 60 : rx.rest_min_s ?? 120);
     S.rpeFor = spec.warmup ? null : row.id;
-    offerUndo(`Saved ${lb(row.weight_lb)} × ${row.reps}`, () => drop("gym_sets", row.id));
+    offerUndo(`Logged ${lb(row.weight_lb)} × ${row.reps}`, () => drop("gym_sets", row.id));
   }
   if (prs.length) banner(name, prs[0]);
   render();
@@ -373,6 +434,7 @@ async function finishSession() {
   lock = null;
   S.dayId = nextDay(D.days, D.sessions);
   S.extra = {};
+  S.removed = {};
   const dlg = $("[data-gym-summary]");
   dlg.replaceChildren(
     el("h2", { id: "gym-summary-title", textContent: "Workout done" }),
@@ -485,13 +547,15 @@ const twins = (rx) => {
   const key = dayKeys()[rx.program_day_id];
   return D.rxs.filter((r) => dayKeys()[r.program_day_id] === key && r.position === rx.position && r.exercise_id === rx.exercise_id);
 };
+// "in every week" only when the program has more than one week.
+const everyWeek = () => (new Set(D.days.map((d) => d.week)).size > 1 ? " in every week" : "");
 const editRx = (rx, patch) => { for (const r of twins(rx)) put("gym_prescriptions", { ...r, ...patch }); render(); };
 
 function drawEdit(main) {
   const day = byId(D.days, S.dayId);
   if (S.session) { main.append(el("p", { className: "sheet-status", textContent: "Finish today's workout to edit the program: changes apply from the next session." })); return; }
   if (!day) return;
-  main.append(el("p", { className: "gym-day", textContent: `${day.name}, every week` }),
+  main.append(el("p", { className: "gym-day", textContent: new Set(D.days.map((d) => d.week)).size > 1 ? `${day.name}, every week` : dayLabel(day) }),
     el("p", { className: "small", textContent: "Changes apply from the next session. Logged sets keep their exercise." }));
   const list = rxsOf(day.id);
   const field = (id, label, value, onChange, props = {}) => {
@@ -511,7 +575,7 @@ function drawEdit(main) {
       for (const r of b) put("gym_prescriptions", { ...r, position: rx.position });
       render();
     };
-    const replace = el("select", { id: `${id}-x`, className: "gym-select" }, el("option", { value: "", textContent: "Replace with…" }),
+    const replace = el("select", { id: `${id}-x`, className: "gym-select", ariaLabel: `Replace ${ex?.name ?? "this exercise"} with` }, el("option", { value: "", textContent: "Replace with…" }),
       ...[...D.exercises].sort((a, b) => a.name.localeCompare(b.name)).filter((e) => e.id !== rx.exercise_id).map((e) => el("option", { value: e.id, textContent: e.name })));
     replace.addEventListener("change", () => replace.value && editRx(rx, { exercise_id: replace.value }));
     const up = btn("↑", { className: "gym-icon-btn", ariaLabel: `Move ${ex?.name} up`, disabled: i === 0 });
@@ -519,7 +583,7 @@ function drawEdit(main) {
     const remove = btn("Remove", { className: "sheet-link", ariaLabel: `Remove ${ex?.name} from ${day.name}` });
     up.addEventListener("click", () => move(-1));
     down.addEventListener("click", () => move(1));
-    remove.addEventListener("click", () => { if (confirm(`Remove ${ex?.name} from ${day.name} in every week?`)) { for (const r of twins(rx)) drop("gym_prescriptions", r.id); render(); } });
+    remove.addEventListener("click", () => { if (confirm(`Remove ${ex?.name} from ${day.name}${everyWeek()}?`)) { for (const r of twins(rx)) drop("gym_prescriptions", r.id); render(); } });
     main.append(el("section", { className: "gym-card gym-edit", ariaLabel: ex?.name ?? "Exercise" },
       field(`${id}-n`, "Name", ex?.name, (v) => { if (v && ex) { put("gym_exercises", { ...ex, name: v }); render(); } }, { maxLength: 80 }),
       el("div", { className: "gym-fields" },

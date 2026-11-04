@@ -43,7 +43,7 @@
 /* A set: number, last time and ✓ on top, then the weight and reps steppers. On wide screens it is
    one line, like Strong's Set | Previous | lb | Reps | ✓. */
 .gym-set {
-  display: grid; grid-template-columns: 2rem 1fr 3.5rem; grid-template-areas: "n last ok" "in in in";
+  display: grid; grid-template-columns: 2rem 1fr 2.75rem 3.5rem; grid-template-areas: "n last x ok" "in in in in";
   align-items: center; gap: 0.4rem 0.5rem; padding: 0.5rem 0; border-top: 1px solid var(--line);
 }
 .gym-set-head { display: none; }
@@ -51,17 +51,23 @@
 .gym-set.is-warmup .gym-set-n { color: var(--muted); }
 .gym-set-last { grid-area: last; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
 .gym-check { grid-area: ok; }
+/* ✕: a quiet 44 px button, kept clear of ✓ by the gap; Undo backs out a mis-tap. */
+.gym-x {
+  grid-area: x; width: 2.75rem; height: 2.75rem; font: inherit; font-size: 1rem; color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: 50%; cursor: pointer; touch-action: manipulation; margin-right: 0.5rem;
+}
+.gym-x:hover, .gym-x:focus-visible { border-color: var(--line-strong); color: var(--fg); }
 /* Weight takes the room left by reps; on the narrowest phones reps wrap below. */
 .gym-set-inputs { grid-area: in; display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .gym-stepper { flex: 1 1 9.5rem; display: flex; align-items: stretch; min-width: 0; }
-.gym-stepper + .gym-stepper { flex: 0 1 9.5rem; }
+.gym-stepper + .gym-stepper { flex: 0 0 auto; }
 .gym-step {
   flex: none; width: 3.5rem; min-height: 3.5rem; font: inherit; font-size: 1.5rem; line-height: 1; color: var(--fg);
   background: var(--chip); border: 1px solid var(--line-strong); cursor: pointer; touch-action: manipulation;
 }
 .gym-stepper .gym-step:first-child { border-radius: 0.5rem 0 0 0.5rem; }
 .gym-stepper .gym-step:last-child { border-radius: 0 0.5rem 0.5rem 0; }
-.gym-num-wrap { flex: 1; min-width: 2.5rem; position: relative; display: flex; }
+.gym-num-wrap { flex: 1; min-width: 2.75rem; position: relative; display: flex; }
 .gym-num {
   width: 100%; min-width: 0; text-align: center; font: inherit; font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums;
   color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-inline: 0; border-radius: 0; padding: 0.6rem 0 0;
@@ -73,7 +79,10 @@
 }
 .gym-check.is-done { background: var(--accent); color: var(--on-btn); }
 .gym-set.is-done .gym-num { color: var(--muted); }
-.gym-more { display: inline-block; margin-top: 0.5rem; min-height: 2.75rem; }
+.gym-set-err { grid-column: 1 / -1; margin: 0; color: var(--warn); font-size: 0.875rem; }
+.gym-more { display: inline-block; margin-top: 0.5rem; min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.5rem; }
+/* Undo: a 44 px target inside the toast. */
+.gym-toast .sheet-link { min-height: 2.75rem; min-width: 2.75rem; padding: 0 0.5rem; }
 
 .gym-rpe { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0 0 0.5rem 2.5rem; }
 .gym-chip {
@@ -83,7 +92,8 @@
 .gym-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
 
 @media (min-width: 40rem) {
-  .gym-set { grid-template-columns: 2rem 5rem 3.5rem 1fr; grid-template-areas: "n last ok in"; }
+  .gym-set { grid-template-columns: 2rem 5rem 3.5rem 1fr 2.75rem; grid-template-areas: "n last ok in x"; }
+  .gym-x { margin: 0 0 0 0.5rem; }
   .gym-set-head { display: grid; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 0 0.25rem; border-top: 0; }
   .gym-set-head > :nth-child(3) { text-align: center; }
 }

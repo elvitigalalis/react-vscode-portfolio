@@ -1580,6 +1580,8 @@ create table if not exists gym_exercises (
   bar_lb numeric check (bar_lb > 0 and bar_lb <= 100),  -- barbell lifts: the plate chip
   created_at timestamptz not null default now()
 );
+-- A bodyweight exercise (pull-ups, dips) may log 0 lb added; any other never logs 0.
+alter table gym_exercises add column if not exists bodyweight boolean not null default false;
 
 create table if not exists gym_program_days (
   id uuid primary key default gen_random_uuid(),

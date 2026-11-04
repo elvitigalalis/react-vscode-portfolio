@@ -20,9 +20,10 @@ JavaScript must stay at or under 40 KB gzipped (`check/budget.mjs`, run by `npm 
 ## Today
 
 - The page opens on the session after the last finished one, in program order, not by calendar
-  date. After Week 4 Legs #2 it goes back to Week 1. A picker chooses another day. The picker is
+  date. After the program's last day (Legs #2 of its last week) it goes back to its first; a
+  program of one week (Lisul runs only Week 4) cycles Push #1 → … → Legs #2 → Push #1. A picker chooses another day. The picker is
   locked once a set is logged.
-- The 4 × 6 strip shows the days done in this pass, today's day and the next one.
+- The strip (one row of six days per week in the program) shows the days done in this pass, today's day and the next one.
 - Each exercise gets a card with: the prescription line, last time (the same program day first),
   today's suggestion and its reason, and an e1RM sparkline.
 - Below that come the set rows. Warm-up rows (W) come first, prefilled from about 50% to 85% of
@@ -33,6 +34,12 @@ JavaScript must stay at or under 40 KB gzipped (`check/budget.mjs`, run by `npm 
   slot's lower rest bound, or 60 s after a warm-up) and opens the RPE chips (6–10 in half steps,
   set to the target by default). The banner shows the most important PR the set made: e1RM, then
   heaviest weight, then reps at a weight.
+- ✓ saves what the fields hold at that tap, typed or not, in one tap. A blank weight takes the
+  row's prefill; with none it asks for a weight inline. A weight is never saved as 0 unless the
+  exercise is marked bodyweight (`gym_exercises.bodyweight`).
+- ✕ on a row removes a planned set for this session, or deletes a logged one (by id, from the
+  outbox or the server), each with Undo for 5 s; records, PRs and the summary come from the sets
+  left. A set deleted before it synced is never sent.
 - The rest bar keeps counting past zero (+0:20). At zero the screen flashes and a beep sounds.
   The wake lock is held while a session is open and is taken again on `visibilitychange`.
 - ⇄ swaps the exercise. The choices are the original (marked Original), the two substitutes, any
@@ -72,8 +79,9 @@ has a where, and pg-safeupdate is loaded for PostgREST's role (checked by `tools
 
 The outbox flushes after each write, when the phone comes back online, when the page becomes
 visible, and every 30 s while writes are waiting. An entry leaves the outbox only after the server
-takes that exact version. "Saved on phone, syncing" shows while writes are waiting and the phone
-is offline. The page also keeps a copy of the rows, so it can reload with a bad signal.
+takes that exact version. The status line says "Saved on phone · will sync" while writes wait (offline,
+a failed send, or one taking over 2 s), then "Saved" for 3 s once all went up; the ✓ toast only
+says "Logged". The page also keeps a copy of the rows, so it can reload with a bad signal.
 
 ## Home screen
 
