@@ -130,7 +130,7 @@ test("replyDiff: upserts, deletes, and owed only when it turns owed at a new mes
       { account: "owner@example.com", thread_id: "t4", ...owed("m4", "Dana Lee") },
     ],
     deletes: ["t3"],
-    owed: [{ message_id: "m2b", known: true }, { message_id: "m4", known: false }],
+    owed: [{ message_id: "m2b", known: true, basis: null }, { message_id: "m4", known: false, basis: null }],
   });
 });
 
@@ -338,4 +338,19 @@ test("replyState: when he wrote last, awaiting only from 3 business days", async
   const sent = [m("18f3a1c2d4e5f761", "2026-11-02T15:00:00.000Z", ["SENT"], ME, PAT)];
   assert.equal(replyState(th(sent), TZ, wed0607), null);
   assert.equal(replyState(th(sent), TZ, new Date("2026-11-05T14:00:00Z")).state, "awaiting");
+});
+
+test("mailChanges: a thread turning owed because they answered him replans, known or not", async () => {
+  const { replyDiff, mailChanges } = await import("../src/sheet/mail.mjs");
+  const state = { state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f702", who: "Pat Kim", basis: "thread", draft: false };
+  const diff = replyDiff("owner@example.com", [], [{ thread_id: "18f3a1c2d4e5f700", state, from_address: "pat.kim@example.org" }], new Set());
+  assert.deepEqual(diff.owed, [{ message_id: "18f3a1c2d4e5f702", known: false, basis: "thread" }]);
+  assert.deepEqual(mailChanges([], diff.owed), [{ kind: "mail", reason: "mail_owed", weight: 8, ref: "18f3a1c2d4e5f702" }]);
+});
+
+test("replyDiff: an owed thread read again at the same message doesn't fire again, overdue or not", async () => {
+  const { replyDiff } = await import("../src/sheet/mail.mjs");
+  const state = { state: "owed", since: "2026-11-03T20:00:00.000Z", message_id: "18f3a1c2d4e5f702", who: "Pat Kim", basis: "thread", draft: false };
+  const before = [{ thread_id: "18f3a1c2d4e5f700", state: "owed", message_id: "18f3a1c2d4e5f702" }];
+  assert.deepEqual(replyDiff("owner@example.com", before, [{ thread_id: "18f3a1c2d4e5f700", state, from_address: null }], new Set()).owed, []);
 });
