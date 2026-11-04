@@ -75,3 +75,15 @@ export function weatherLine(periods, alerts, day, timeZone) {
   if (events.length) line += ` Alert: ${events.join(", ")}.`;
   return line;
 }
+
+// --- Handshake, the academic calendar and enrollment (SRC3) ----------------------------------
+// Both feeds are iCal links (RFC 5545), read by parseIcs (ical.mjs); ical-sync fetches them.
+
+// Handshake's interviews and appointments, which count as busy; its events (fairs, info sessions)
+// don't. The summary has to start with the word, so "Info Session: … interview tips" is left out.
+const HANDSHAKE_BUSY = /^(interview|appointment)/i;
+
+// Parsed Handshake events to busy rows, in feed order.
+export const handshakeBusy = (events) => events
+  .filter((e) => !e.allDay && HANDSHAKE_BUSY.test(e.summary.trim()))
+  .map((e) => ({ source: "handshake", starts_at: e.start, ends_at: e.end }));

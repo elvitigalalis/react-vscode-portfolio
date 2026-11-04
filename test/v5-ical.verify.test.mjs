@@ -40,7 +40,7 @@ const fixture = async (name) => {
 // Handshake: interviews and appointments are busy, events aren't
 // =============================================================================================
 
-test("handshakeBusy: interviews and appointments become busy rows from Handshake", todo, async () => {
+test("handshakeBusy: interviews and appointments become busy rows from Handshake", async () => {
   const { handshakeBusy } = await sources();
   assert.deepEqual(handshakeBusy(await fixture("handshake.ics")), [
     { source: "handshake", starts_at: "2026-11-06T15:00:00.000Z", ends_at: "2026-11-06T15:45:00.000Z" }, // Interview, 10:00-10:45 am
@@ -50,7 +50,7 @@ test("handshakeBusy: interviews and appointments become busy rows from Handshake
   ]);
 });
 
-test("handshakeBusy: the summary must start with Interview or Appointment", todo, async () => {
+test("handshakeBusy: the summary must start with Interview or Appointment", async () => {
   const { handshakeBusy } = await sources();
   const ev = (summary) => ({ uid: summary, summary, description: "", location: "", url: "", categories: [], start: "2026-11-06T15:00:00.000Z", end: "2026-11-06T16:00:00.000Z", allDay: false });
   assert.equal(handshakeBusy([ev("Fall Career Fair")]).length, 0);
