@@ -217,13 +217,13 @@ test("skippedCategory: the four Gmail categories spec 47 skips", async () => {
 
 const SALT = "test-salt-0001";
 
-test("senderHash: hex SHA-256 of the salt and the address", todo, async () => {
+test("senderHash: hex SHA-256 of the salt and the address", async () => {
   const { senderHash } = await mail();
   assert.equal(await senderHash("ana.ruiz@example.edu", SALT), "b2d1910ecb638f419ce06372f8393efff2ab1f90e03954509117859182151af9");
   assert.equal(await senderHash("kim@cs.example.edu", SALT), "1e10efc4fc43e6d00faaeb662af18129323f4edeb39dc8aa1d0e4c8f18590164");
 });
 
-test("senderHash: the same address gives the same hash, whatever its case or spaces", todo, async () => {
+test("senderHash: the same address gives the same hash, whatever its case or spaces", async () => {
   const { senderHash } = await mail();
   const h = await senderHash("ana.ruiz@example.edu", SALT);
   assert.equal(await senderHash("Ana.Ruiz@Example.EDU", SALT), h);
@@ -231,7 +231,7 @@ test("senderHash: the same address gives the same hash, whatever its case or spa
   assert.match(h, /^[0-9a-f]{64}$/);
 });
 
-test("senderHash: the salt matters", todo, async () => {
+test("senderHash: the salt matters", async () => {
   const { senderHash } = await mail();
   assert.equal(await senderHash("ana.ruiz@example.edu", "other-salt"), "ed30bbe393cd2abc0240fa98f20c411c8399b1a855288650e1e261dd4184990c");
   assert.notEqual(await senderHash("ana.ruiz@example.edu", "other-salt"), await senderHash("ana.ruiz@example.edu", SALT));
@@ -241,7 +241,7 @@ test("senderHash: the salt matters", todo, async () => {
 // mailChanges
 // =============================================================================================
 
-test("mailChanges: weight 2 per new message from a person; 8 when a known sender's reply turns owed", todo, async () => {
+test("mailChanges: weight 2 per new message from a person; 8 when a known sender's reply turns owed", async () => {
   const { mailChanges } = await mail();
   const added = [
     { id: "18f3a1c2d4e5f101", labels: ["INBOX", "UNREAD", "CATEGORY_PERSONAL"], automated: false },
@@ -260,7 +260,7 @@ test("mailChanges: weight 2 per new message from a person; 8 when a known sender
   ]);
 });
 
-test("mailChanges: nothing new, no changes", todo, async () => {
+test("mailChanges: nothing new, no changes", async () => {
   const { mailChanges } = await mail();
   assert.deepEqual(mailChanges([], []), []);
   assert.deepEqual(mailChanges([{ id: "18f3a1c2d4e5f102", labels: ["SENT"], automated: false }], [{ message_id: "18f3a1c2d4e5f009", known: false }]), []);
