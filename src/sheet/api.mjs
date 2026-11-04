@@ -146,11 +146,12 @@ export const campusByUid = (uids) => (uids.length
 // and campus functions after each fetch. Read-only here.
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
-// Busy times (docs/sheet-morning.md, "/plan"): the rows overlapping [from, to) are replaced by
-// `rows`. The insert ignores rows already there, so two tabs saving at once don't fail on the
-// primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
+// Busy times (docs/sheet-morning.md, "/plan"): the calendar rows overlapping [from, to) are
+// replaced by `rows`; Handshake's (source 'handshake', docs/sheet-v5.md) are left alone, and the
+// inserts take the default source, 'calendar'. The insert ignores rows already there, so two tabs
+// saving at once (or the server's busy-sync) don't fail on the primary key (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
 export async function replaceBusy(fromIso, toIso, rows) {
-  await rest(`busy?starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
+  await rest(`busy?source=eq.calendar&starts_at=lt.${encodeURIComponent(toIso)}&ends_at=gt.${encodeURIComponent(fromIso)}`, { method: "DELETE" });
   if (rows.length) await rest("busy", { method: "POST", body: rows, prefer: "resolution=ignore-duplicates" });
 }
 
