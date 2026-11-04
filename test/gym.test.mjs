@@ -2,7 +2,7 @@
 // suggestion, the session order, plate math. Every exercise and number here is made up.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { e1rm, records, prsFor, historyFor, suggest, nextDay, strip, plates, plateText } from "../src/sheet/gym.mjs";
+import { e1rm, records, prsFor, historyFor, suggest, nextDay, strip, plates, plateText, rxLine, warmups, activeExercise } from "../src/sheet/gym.mjs";
 
 // A made-up exercise, "Widget Press", and its sets.
 const set = (weight_lb, reps, more = {}) => ({ exercise_id: "wp", weight_lb, reps, warmup: false, done_at: "2026-01-05T15:00:00Z", ...more });
@@ -198,4 +198,32 @@ test("plates: per side on a 45 lb bar, heaviest first", () => {
   assert.equal(plateText(45), "Just the bar");
   assert.equal(plateText(136), "45 bar | 45 / side (+1)");
   assert.equal(plateText(40), "");
+});
+
+// --- The card ---------------------------------------------------------------------------------
+
+test("rxLine: sets × reps @ RPE · rest · warm-up", () => {
+  assert.equal(rxLine({ working_sets: 2, reps: "4-6", rpe: "10", rest_min_s: 180, rest_max_s: 240, warmup_sets: "3" }), "2 × 4–6 @ RPE 10 · rest 3–4 min · warm-up 3");
+  assert.equal(rxLine({ working_sets: 1, reps: "8", rpe: "", rest_min_s: 90, rest_max_s: 90, warmup_sets: "" }), "1 × 8 · rest 1:30");
+});
+
+test("warmups: lighter sets up to the working weight, to the step, never under the bar", () => {
+  assert.deepEqual(warmups({ warmup_sets: "3-4" }, 200, { step_lb: 5, bar_lb: 45 }), [{ weight_lb: 100, reps: 8 }, { weight_lb: 135, reps: 5 }, { weight_lb: 170, reps: 3 }]);
+  assert.deepEqual(warmups({ warmup_sets: "2" }, 60, { step_lb: 5, bar_lb: 45 }).map((w) => w.weight_lb), [45, 50]);
+  assert.deepEqual(warmups({ warmup_sets: "1" }, null, { step_lb: 5 }), [{ weight_lb: null, reps: 8 }]);
+  assert.deepEqual(warmups({ warmup_sets: "" }, 100, { step_lb: 5 }), []);
+});
+
+test("activeExercise: today's swap, else the latest rest-of-phase swap for the slot, else the program's", () => {
+  const p = { id: "p-w2", exercise_id: "wp" };
+  const slot = (id) => ({ "p-w1": "push1|1|wp", "p-w2": "push1|1|wp", "p-x": "pull1|1|wp" })[id];
+  assert.equal(activeExercise(p, [], slot, "s1"), "wp");
+  const phase = { scope: "phase", prescription_id: "p-w1", exercise_id: "gadget", created_at: "2026-01-01T00:00:00Z" };
+  assert.equal(activeExercise(p, [phase], slot, "s1"), "gadget");
+  assert.equal(activeExercise(p, [{ ...phase, prescription_id: "p-x" }], slot, "s1"), "wp");
+  const back = { ...phase, exercise_id: "wp", created_at: "2026-01-02T00:00:00Z" };
+  assert.equal(activeExercise(p, [phase, back], slot, "s1"), "wp");
+  const today = { scope: "today", prescription_id: "p-w2", session_id: "s1", exercise_id: "gizmo", created_at: "2025-12-01T00:00:00Z" };
+  assert.equal(activeExercise(p, [phase, today], slot, "s1"), "gizmo");
+  assert.equal(activeExercise(p, [phase, today], slot, "s2"), "gadget");
 });
