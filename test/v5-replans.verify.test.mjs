@@ -324,7 +324,7 @@ const planButtons = [
 ];
 const at1006 = new Date("2026-11-04T15:06:00Z");
 
-test("replan message: the reasons in words, the blocks added and gone, and what couldn't fit", todo, async () => {
+test("replan message: the reasons in words, the blocks added and gone, and what couldn't fit", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot(), at1006), [{
     kind: "replan",
@@ -341,7 +341,7 @@ test("replan message: the reasons in words, the blocks added and gone, and what 
   }]);
 });
 
-test("replan message: after an approved revision every proposed block is new", todo, async () => {
+test("replan message: after an approved revision every proposed block is new", async () => {
   const { whatToSend } = await nudges();
   const snap = snapshot({
     previous: revision(1, { status: "approved", blocks: [GYM] }),
@@ -357,13 +357,13 @@ test("replan message: after an approved revision every proposed block is new", t
   ].join("\n"));
 });
 
-test("replan message: not sent when the blocks are the same set as the previous pending revision's", todo, async () => {
+test("replan message: not sent when the blocks are the same set as the previous pending revision's", async () => {
   const { whatToSend } = await nudges();
   // The same two blocks, listed the other way round.
   assert.deepEqual(whatToSend(snapshot({ previous: rev1({ blocks: [HW3, OS] }) }), at1006), []);
 });
 
-test("replan message: a block moved by 15 minutes is one gone and one added", todo, async () => {
+test("replan message: a block moved by 15 minutes is one gone and one added", async () => {
   const { whatToSend } = await nudges();
   const moved = span("t3", "2026-11-04T21:15:00Z", "2026-11-04T22:00:00Z"); // 4:15-5:00 pm
   const snap = snapshot({ previous: rev1({ blocks: [OS, HW3] }), proposal: rev2({ blocks: [OS, moved], couldnt_fit: [] }), blocks: [row(B(1), OS), row(B(3), moved)] });
@@ -371,19 +371,19 @@ test("replan message: a block moved by 15 minutes is one gone and one added", to
   assert.equal(m.text, "Replan: a busy time landed on a block, new mail.\n+ 4:15 pm · HW3 (45 min)\n− 4:00 pm · HW3");
 });
 
-test("replan message: at most 4 a day", todo, async () => {
+test("replan message: at most 4 a day", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot({ replanSent: 4 }), at1006), []);
   assert.deepEqual(whatToSend(snapshot({ replanSent: 3 }), at1006).map((m) => m.kind), ["replan"]);
 });
 
-test("replan message: once per revision", todo, async () => {
+test("replan message: once per revision", async () => {
   const { whatToSend } = await nudges();
   const sent = { block_id: null, kind: "replan", day: DAY, send_at: "2026-11-04T15:05:00.000Z", sent_at: "2026-11-04T15:05:30Z" };
   assert.deepEqual(whatToSend(snapshot({ log: [briefSent, sent], replanSent: 1 }), at1006), []);
 });
 
-test("replan message: not in quiet hours", todo, async () => {
+test("replan message: not in quiet hours", async () => {
   const { whatToSend } = await nudges();
   // Made at 11:10 pm, looked at a minute later.
   const late = snapshot({ proposal: rev2({ created_at: "2026-11-05T04:10:00Z" }) });
@@ -393,19 +393,19 @@ test("replan message: not in quiet hours", todo, async () => {
   assert.deepEqual(whatToSend(early, new Date("2026-11-04T12:45:00Z")), []);
 });
 
-test("replan message: outside the nudge budget", todo, async () => {
+test("replan message: outside the nudge budget", async () => {
   const { whatToSend } = await nudges();
   // Six nudges already went out today: the budget is spent.
   const used = [1, 2, 3, 4, 5, 6].map((n) => ({ block_id: `0c0c0c0c-0000-4000-8000-00000000000${n}`, kind: "start", day: DAY, send_at: `2026-11-04T13:0${n}:00.000Z`, sent_at: `2026-11-04T13:0${n}:01Z` }));
   assert.deepEqual(whatToSend(snapshot({ log: [briefSent, ...used] }), at1006).map((m) => m.kind), ["replan"]);
 });
 
-test("replan message: only for a pending revision", todo, async () => {
+test("replan message: only for a pending revision", async () => {
   const { whatToSend } = await nudges();
   assert.deepEqual(whatToSend(snapshot({ proposal: rev2({ status: "approved" }), blocks: [row(B(1), OS, { proposed: false }), row(B(3), HW3, { proposed: false })] }), at1006), []);
 });
 
-test("replan message: at most 6 added lines, earliest first", todo, async () => {
+test("replan message: at most 6 added lines, earliest first", async () => {
   const { whatToSend } = await nudges();
   // Seven 15-minute blocks from 10:15 am, given latest first.
   const seven = ["15:15", "15:30", "15:45", "16:00", "16:15", "16:30", "16:45"].map((t) => {
