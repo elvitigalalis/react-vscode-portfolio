@@ -440,6 +440,16 @@ weather_cache id boolean pk default true check (id), point text not null,
   ```
   `+` lines are blocks new in this revision, `−` lines blocks gone from the previous one, each
   earliest first, at most 6 of each. Its buttons are the plan buttons.
+  **Fix:** the first line says what changed where the stored rows allow. The snapshot gains
+  `replanChanges`, the `{ reason, ref }` rows the revision consumed (`consumed_day`,
+  `consumed_rev`). A `busy_overlap` row (its ref now the new busy time's span,
+  `"<starts_at>/<ends_at>"` in UTC, from `busyChange`) reads "Busy 2:00–3:00 pm now overlaps
+  Gym", naming the earliest approved or previous-revision block it overlaps ("Busy 2:00–3:00 pm
+  now" with none); a `*_due_soon` row (ref the task's `source_uid`) reads "HW3 due Thu". At most
+  3 such phrases, titles cut to 30; a reason with one loses its fixed words, and every other
+  reason, a title `linkish` refuses, or a ref with nothing stored keeps them: "Replan: Busy
+  2:00–3:00 pm now overlaps Gym, HW3 due Thu, new mail." No mail text or address is used, and
+  the fire payload stays fixed names and counts.
 - **The Finished? check** (`kind: "finished"`), for each of today's approved blocks:
   - due at the block's `ends_at`, when its start nudge went out (a `start` row at its current
     `starts_at`), its task isn't done, the day isn't shut down (`day.shutdown`), and `ends_at`

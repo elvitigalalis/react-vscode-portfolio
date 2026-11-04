@@ -53,13 +53,16 @@ export function busyChange(before, after, blocks, now, timeZone) {
   const had = new Set(before.map(key));
   const has = new Set(after.map(key));
   if (had.size === has.size && [...has].every((k) => had.has(k))) return null;
-  const change = (reason, weight) => ({ kind: "busy", reason, weight, ref: null });
+  const change = (reason, weight, ref = null) => ({ kind: "busy", reason, weight, ref });
 
   const today = localNow(now, timeZone).day;
   const t = now.getTime();
   const live = blocks.filter((b) => Date.parse(b.ends_at) > t && localNow(new Date(b.starts_at), timeZone).day === today);
   const overlaps = (s, b) => Date.parse(s.starts_at) < Date.parse(b.ends_at) && Date.parse(b.starts_at) < Date.parse(s.ends_at);
-  if (after.some((s) => !had.has(key(s)) && live.some((b) => overlaps(s, b)))) return change("busy_overlap", 10);
+  // Its ref is the new busy time's span, "<starts_at>/<ends_at>" in UTC (times, never a title),
+  // so the replan message can say which block it landed on.
+  const hit = after.find((s) => !had.has(key(s)) && live.some((b) => overlaps(s, b)));
+  if (hit) return change("busy_overlap", 10, `${new Date(hit.starts_at).toISOString()}/${new Date(hit.ends_at).toISOString()}`);
 
   const midnight = Date.parse(zonedIso(addDays(today, 1), 0, timeZone));
   if (busyMinutes(before, t, midnight) - busyMinutes(after, t, midnight) >= 60) return change("time_freed", 4);

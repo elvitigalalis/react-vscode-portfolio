@@ -18,7 +18,7 @@ test("busyChange: the same spans, in any order, are no change", () => {
 });
 
 test("busyChange: a new busy time on a block today is busy_overlap, weight 10", () => {
-  assert.deepEqual(busyChange([], [lecture], [block], now, TZ), { kind: "busy", reason: "busy_overlap", weight: 10, ref: null });
+  assert.deepEqual(busyChange([], [lecture], [block], now, TZ), { kind: "busy", reason: "busy_overlap", weight: 10, ref: "2026-11-04T19:00:00.000Z/2026-11-04T20:20:00.000Z" });
 });
 
 test("busyChange: a block already over, or on another day, doesn't count as overlapped", () => {
@@ -56,4 +56,9 @@ test("busySaved: how long ago busy times were saved, from busy_as_of", () => {
   assert.equal(busySaved("2026-11-04T14:02:00.000Z", now), "Busy times saved 1 hour ago");
   assert.equal(busySaved("2026-11-04T05:00:00.000Z", now), "Busy times saved 10 hours ago");
   assert.equal(busySaved("2026-11-01T15:00:00.000Z", now), "Busy times saved 3 days ago");
+});
+
+test("busyChange: busy_overlap's ref is the new busy time's span, for the replan message", () => {
+  const out = busyChange([], [lecture], [block], now, TZ);
+  assert.equal(out.ref, `${new Date(lecture.starts_at).toISOString()}/${new Date(lecture.ends_at).toISOString()}`);
 });

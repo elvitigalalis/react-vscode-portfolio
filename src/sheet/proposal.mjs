@@ -183,7 +183,7 @@ const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && 
 const list = (v) => (v == null ? [] : v);
 
 // "2:00–3:20 pm", "11:00 am–12:00 pm": the half of the day once when both ends share it.
-function clockSpan(start, end) {
+export function clockSpan(start, end) {
   const [a, b] = [formatClock(((start % 1440) + 1440) % 1440), formatClock(((end % 1440) + 1440) % 1440)];
   return a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
 }
