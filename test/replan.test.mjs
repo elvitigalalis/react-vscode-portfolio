@@ -78,3 +78,17 @@ test("rateLimited: holds until retry_after", async () => {
   assert.equal(rateLimited(rows, new Date("2026-11-04T15:59:00Z")), true);
   assert.equal(rateLimited(rows, new Date("2026-11-04T16:00:00Z")), false);
 });
+
+// --- /plan's edit stamp (src/sheet/api.mjs) ---------------------------------------------------
+
+test("stampsEdit: writes to tasks, blocks and turn_down count; reads and other tables don't", async () => {
+  const { stampsEdit } = await import("../src/sheet/api.mjs");
+  assert.equal(stampsEdit("PATCH", "tasks?id=eq.1"), true);
+  assert.equal(stampsEdit("POST", "blocks"), true);
+  assert.equal(stampsEdit("DELETE", "blocks?id=eq.1"), true);
+  assert.equal(stampsEdit("POST", "rpc/turn_down"), true);
+  assert.equal(stampsEdit("GET", "tasks?select=*"), false);
+  assert.equal(stampsEdit("PATCH", "settings?id=eq.true"), false);
+  assert.equal(stampsEdit("POST", "busy"), false);
+  assert.equal(stampsEdit("POST", "tasks_extra"), false);
+});
