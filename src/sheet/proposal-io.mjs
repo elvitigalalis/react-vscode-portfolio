@@ -39,7 +39,8 @@ export function snapshotQueries(now, timeZone) {
         filters: [["starts_at", "gte", from], ["starts_at", "lt", to]],
         order: "starts_at",
       },
-      proposal: { table: "proposals", select: "*", filters: [["day", "eq", plan_day]] },
+      // v5: newest revision first; the snapshot takes the first row.
+      proposal: { table: "proposals", select: "*", filters: [["day", "eq", plan_day]], order: "rev.desc" },
       needsOpen: { table: "needs_you", select: "account,message_id", filters: [["done", "is", "false"]], order: "created_at" },
       accounts: { table: "mail_accounts", select: "email", order: "connected_at" },
     },
