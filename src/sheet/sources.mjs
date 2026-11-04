@@ -1,7 +1,8 @@
 // Read-only sources for the planner (docs/sheet-v5.md, "sources.mjs"): what the sync functions
 // turn each outside feed into. Pure, so node --test covers it; the Edge Functions import it.
-import { formatSpan, minutesOn, cutTitle, localNow, zonedIso } from "./logic.mjs";
+import { addDays, formatSpan, minutesOn, cutTitle, localNow, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
+import { changeRow } from "./replan.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
 // The NWS API (https://www.weather.gov/documentation/services-web-api): /points/{lat},{lon} names
@@ -74,6 +75,80 @@ export function weatherLine(periods, alerts, day, timeZone) {
     .map((a) => cutTitle(String(a.event ?? "").replace(/\s+/g, " "))))].filter((e) => e && !linkish(e)).slice(0, MAX_ALERTS);
   if (events.length) line += ` Alert: ${events.join(", ")}.`;
   return line;
+}
+
+// --- GitHub and Jira (SRC1) ------------------------------------------------------------------
+// work-sync fetches both read-only and hands the raw results here. Only titles, links and due
+// dates come out: never a body, a description, a milestone's notes or a person.
+
+// The task changes for one source's open items, already shaped as [{ uid, title, link, due }].
+// As courseTaskChanges (feeds.mjs): a uid never seen is inserted and goes into feed_seen; a seen
+// one updates its undone task; a done or deleted task is left alone. Unlike Brightspace, the
+// searches list only open items, so an undone task whose uid is gone is closed: the review was
+// done, the issue closed or the ticket finished. One change row per insert, weight 8 when due
+// today, tomorrow or the day after.
+function workTaskChanges(rows, { tasks, seen, today }, source, list) {
+  const mine = tasks.filter((t) => t.source === source && t.source_uid);
+  const byUid = new Map(mine.map((t) => [t.source_uid, t]));
+  const known = new Set([...seen.map((s) => (typeof s === "string" ? s : s.uid)), ...byUid.keys()]);
+  const soon = (due) => due != null && due >= today && due <= addDays(today, 2);
+  const insert = [], update = [], added = [], changes = [];
+  const open = new Set();
+  for (const { uid, title, link, due } of rows) {
+    if (!uid || !title || open.has(uid)) continue;
+    open.add(uid);
+    if (!known.has(uid)) {
+      insert.push({ title, day: null, list, due, public: false, source, source_uid: uid, link });
+      added.push({ source, uid });
+      changes.push(changeRow(`${source}_${soon(due) ? "due_soon" : "change"}`, uid));
+      continue;
+    }
+    const t = byUid.get(uid);
+    if (t && !t.done && (t.title !== title || t.due !== due)) update.push({ id: t.id, title, due });
+  }
+  const close = mine.filter((t) => !t.done && !open.has(t.source_uid)).map((t) => t.id);
+  return { insert, update, close, seen: added, changes };
+}
+
+const httpsOnly = (u) => (/^https:\/\//.test(String(u ?? "")) ? u : null);
+const dayOf = (s) => (/^\d{4}-\d{2}-\d{2}/.test(String(s ?? "")) ? String(s).slice(0, 10) : null);
+
+// GitHub search/issues items (https://docs.github.com/en/rest/search/search#search-issues-and-pull-requests),
+// both searches merged. The owner is read from repository_url
+// ("https://api.github.com/repos/<owner>/<repo>"); only repositories in `orgs` count. A pull
+// request carries `pull_request`. The milestone's due_on is a UTC instant at the start of its day,
+// so its date part is the due date.
+export function githubTaskChanges(items, { tasks, seen, orgs, today }) {
+  const allowed = new Set((orgs ?? []).map((o) => String(o).toLowerCase()));
+  const rows = (items ?? []).filter((it) => {
+    const owner = /\/repos\/([^/]+)\//.exec(String(it?.repository_url ?? ""))?.[1];
+    return owner && allowed.has(owner.toLowerCase());
+  }).map((it) => {
+    const title = cutTitle(String(it.title ?? "").replace(/\s+/g, " "));
+    const link = httpsOnly(it.html_url);
+    return { uid: link, link, title: title && (it.pull_request ? `Review: ${title}` : title), due: dayOf(it.milestone?.due_on) };
+  });
+  return workTaskChanges(rows, { tasks, seen, today }, "github", "GitHub");
+}
+
+// Jira POST /rest/api/3/search/jql issues
+// (https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/), for
+// `assignee = currentUser() AND statusCategory != Done`. Reads key, fields.summary and
+// fields.duedate ("YYYY-MM-DD") only; `site` is "<name>.atlassian.net".
+export function jiraTaskChanges(issues, { tasks, seen, site, today }) {
+  const rows = (issues ?? []).filter((i) => /^[A-Z][A-Z0-9_]*-\d+$/.test(String(i?.key ?? ""))).map((i) => {
+    const summary = cutTitle(String(i.fields?.summary ?? "").replace(/\s+/g, " "));
+    return { uid: i.key, link: `https://${site}/browse/${i.key}`, title: summary && cutTitle(`${i.key} ${summary}`), due: dayOf(i.fields?.duedate) };
+  });
+  return workTaskChanges(rows, { tasks, seen, today }, "jira", "Jira");
+}
+
+// /plan Settings' GitHub orgs: logins split on commas or spaces, lower case, once each. Anything
+// that isn't a GitHub login (letters, digits and inner hyphens, up to 39) is undefined, so nothing
+// is saved.
+export function githubOrgsFromInput(value) {
+  const orgs = [...new Set(String(value ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean))];
+  return orgs.every((o) => /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/.test(o)) ? orgs : undefined;
 }
 
 // --- Handshake, the academic calendar and enrollment (SRC3) ----------------------------------
