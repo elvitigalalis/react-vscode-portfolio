@@ -1,6 +1,6 @@
 // Read-only sources for the planner (docs/sheet-v5.md, "sources.mjs"): what the sync functions
 // turn each outside feed into. Pure, so node --test covers it; the Edge Functions import it.
-import { formatSpan, minutesOn, cutTitle } from "./logic.mjs";
+import { formatSpan, minutesOn, cutTitle, localNow } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
@@ -105,3 +105,13 @@ export const academicEntries = (events, day, timeZone) => events
   .filter((e) => onDay(e, day, timeZone) && !linkish(e.summary))
   .map((e) => ({ title: cutTitle(String(e.summary ?? "").replace(/\s+/g, " ")).slice(0, ACADEMIC_TITLE).trim(), all_day: e.allDay }))
   .filter((e) => e.title);
+
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+// The one task for settings.enrollment_at, on its local day at its local time, or null when it
+// isn't set. ical-sync upserts it on (source, source_uid), so moving the time moves the task.
+export function enrollmentTask(enrollmentAt, timeZone) {
+  if (!enrollmentAt) return null;
+  const { day, minutes } = localNow(new Date(enrollmentAt), timeZone);
+  return { title: "Enrollment opens", day, at_time: hhmm(minutes), est_min: 15, public: false, list: null, source: "enrollment", source_uid: "enrollment" };
+}
