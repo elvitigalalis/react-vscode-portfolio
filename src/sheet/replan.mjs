@@ -21,6 +21,8 @@ const REASONS = {
   jira_change: ["jira", 3, "Jira tickets changed"],
   slack_new: ["slack", 3, "new Slack mentions"],
   handshake_change: ["handshake", 3, "Handshake events changed"],
+  // Oura: today's wake came 45+ minutes after the window the plan started from (sleep.mjs, wokeLate).
+  woke_late: ["sleep", 9, "you woke up later than planned"],
 };
 
 // The reasons' words, for the replan message.
