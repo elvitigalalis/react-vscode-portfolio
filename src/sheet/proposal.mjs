@@ -465,7 +465,8 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
     ? `Morning plan: ${plural(mine.length, "block")}, ${clockSpan(at(mine[0].starts_at), at(mine.at(-1).ends_at))}.`
     : "Morning plan: no blocks."];
   for (const b of mine.slice(0, SHOWN_BLOCKS)) {
-    const title = tasks.find((t) => t.id === b.task_id)?.title ?? "A task";
+    // v5 H1: a habit block has no task; the brief doesn't read habits, so it says "Habit".
+    const title = b.habit_id ? "Habit" : tasks.find((t) => t.id === b.task_id)?.title ?? "A task";
     lines.push(`${formatClock(at(b.starts_at))} · ${title} (${blockMinutes(b)} min)`);
   }
   if (mine.length > SHOWN_BLOCKS) lines.push(`+${mine.length - SHOWN_BLOCKS} more`);
