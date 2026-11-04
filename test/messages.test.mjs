@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { shouldFire, messageText, checkAnswers, withMessages, proposalTrigger, addedLine, messageState, itemLines } from "../src/sheet/messages.mjs";
+import { shouldFire, startedPatch, batchedPatch, messageText, checkAnswers, withMessages, proposalTrigger, addedLine, messageState, itemLines, checkStep, stepTargets, progress } from "../src/sheet/messages.mjs";
 import { fireText } from "../src/sheet/routine-fire.mjs";
 
 const NOW = new Date("2026-11-04T15:00:00Z"); // 10:00 am EST
@@ -25,6 +25,23 @@ test("shouldFire: fires when no other pending message was fired in the last 3 mi
 test("shouldFire: holds off while a message fired under 3 minutes ago is still pending, since that run reads this one too", () => {
   assert.equal(shouldFire([{ id: M1, fired_at: ago(2) }], NOW), false);
   assert.equal(shouldFire([{ id: M2, fired_at: null }, { id: M1, fired_at: ago(0.5) }], NOW), false);
+});
+
+test("startedPatch: a fired message keeps the run's claude.ai link and its first step", () => {
+  assert.deepEqual(startedPatch({ session_url: "https://claude.ai/code/session_01abc" }, NOW), {
+    fired_at: NOW.toISOString(),
+    session_url: "https://claude.ai/code/session_01abc",
+    steps: [{ at: NOW.toISOString(), kind: "started", text: "Started Claude" }],
+  });
+  // Only a claude.ai link is kept.
+  assert.equal(startedPatch({ session_url: "https://evil.example/x" }, NOW).session_url, null);
+});
+
+test("batchedPatch: a message riding on another's run gets that run's link, or nothing to write", () => {
+  const link = "https://claude.ai/code/session_01abc";
+  assert.deepEqual(batchedPatch([{ id: M1, fired_at: ago(1), session_url: link }], NOW), { session_url: link });
+  assert.equal(batchedPatch([{ id: M1, fired_at: ago(1), session_url: null }], NOW), null);
+  assert.equal(batchedPatch([{ id: M1, fired_at: ago(5), session_url: link }], NOW), null);
 });
 
 test("messageText: 1 to 8000 characters, line breaks kept (a pasted announcement), spaces collapsed; anything else is refused", () => {
@@ -180,6 +197,83 @@ test("checkAnswers: a reply may run to 500 characters, so it can list what was s
   assert.deepEqual(checkAnswers({ answers: [answer({ reply: "y".repeat(501) })] }, PENDING, TZ).errors, ["answers[0].reply: at most 500 characters, got 501"]);
 });
 
+test("checkAnswers: each task and event may carry a short why for /plan's How Claude decided; a long or linked one fails", () => {
+  const out = checkAnswers({ answers: [answer({
+    tasks: [{ title: "Lab report", due: "2026-11-06", why: "A deadline with no time, so a task due Fri." }],
+    events: [{ title: "Dentist", start: "2026-11-05T15:00", minutes: 60, why: "60 min: you gave no length." }],
+  })] }, PENDING, TZ);
+  assert.deepEqual(out.errors, []);
+  assert.equal(out.answers[0].tasks[0].why, "A deadline with no time, so a task due Fri.");
+  assert.equal(out.answers[0].events[0].why, "60 min: you gave no length.");
+  const bad = checkAnswers({ answers: [answer({
+    tasks: [{ title: "A", why: "w".repeat(141) }],
+    events: [{ title: "B", start: "2026-11-05T15:00", minutes: 60, why: "see cse416.org" }],
+  })] }, PENDING, TZ);
+  assert.deepEqual(bad.errors, [
+    "answers[0].tasks[0].why: at most 140 characters, got 141",
+    "answers[0].events[0].why: must not hold a link or web address",
+  ]);
+});
+
+// ---------------------------------------------------------------- report_step
+
+test("checkStep: a step is one plain line of at most 120 characters, of a known kind", () => {
+  assert.deepEqual(checkStep({ kind: "checking", text: "Checking  Thursday on your calendar" }), { step: { kind: "checking", text: "Checking Thursday on your calendar" } });
+  assert.deepEqual(checkStep({ kind: "searching", text: "Searching the web for the CSE 416 page" }).step.kind, "searching");
+  assert.deepEqual(checkStep({ kind: "thinking", text: "Hmm" }), { error: "kind: must be reading, checking, searching, adding or done" });
+  assert.deepEqual(checkStep({ kind: "adding", text: "x".repeat(121) }), { error: "text: at most 120 characters, got 121" });
+  assert.deepEqual(checkStep({ kind: "adding", text: "Open https://evil.example" }), { error: "text: must not hold a link or web address" });
+});
+
+test("stepTargets: the named pending messages, or every pending one when none are named", () => {
+  const pending = [{ id: M1 }, { id: M2 }];
+  assert.deepEqual(stepTargets(pending, undefined), [M1, M2]);
+  assert.deepEqual(stepTargets(pending, [M2, "0b6f3c1e-0000-4000-8000-000000000009"]), [M2]);
+  assert.deepEqual(stepTargets([], undefined), []);
+});
+
+// ---------------------------------------------------------------- progress (/plan)
+
+const at = (s) => new Date(NOW.getTime() - s * 1000).toISOString();
+const step = (s, text, kind = "checking") => ({ at: at(s), kind, text });
+
+test("progress: while Claude works, the time since the fire and the last 5 steps, the newest one current", () => {
+  const steps = [step(40, "Started Claude", "started"), step(38, "Read your planner", "reading"), step(30, "Checking Thursday on your calendar"),
+    step(20, "Searching the web for the CSE 416 page", "searching"), step(10, "Adding Project 2, due Nov 14", "adding"), step(5, "Adding the quiz", "adding")];
+  assert.deepEqual(progress({ status: "pending", fired_at: at(34), steps }, NOW), {
+    running: true, elapsed: "0:34", note: null,
+    steps: [
+      { text: "Read your planner", done: true },
+      { text: "Checking Thursday on your calendar", done: true },
+      { text: "Searching the web for the CSE 416 page", done: true },
+      { text: "Adding Project 2, due Nov 14", done: true },
+      { text: "Adding the quiz", done: false },
+    ],
+  });
+});
+
+test("progress: notes for a run that hasn't started, has gone quiet, or a message riding on another's run", () => {
+  assert.equal(progress({ status: "pending", fired_at: at(50), steps: [step(50, "Started Claude", "started")] }, NOW).note,
+    "Claude hasn't started yet. Cloud runs can take a minute to start.");
+  assert.equal(progress({ status: "pending", fired_at: at(30), steps: [step(30, "Started Claude", "started")] }, NOW).note, null);
+  assert.equal(progress({ status: "pending", fired_at: at(200), steps: [step(200, "Started Claude", "started"), step(95, "Checking Thursday on your calendar")] }, NOW).note,
+    "Still working on \u201cChecking Thursday on your calendar\u201d…");
+  const batched = progress({ status: "pending", fired_at: null, steps: [] }, NOW);
+  assert.equal(batched.note, "Waiting for the run that's already going…");
+  assert.equal(batched.elapsed, null);
+});
+
+test("progress: once answered, the steps fold into a count and how long the run took", () => {
+  const steps = [step(80, "Started Claude", "started"), step(70, "Read your planner", "reading"), step(40, "Checking Thursday on your calendar"), step(30, "Saving", "adding")];
+  assert.deepEqual(progress({ status: "done", fired_at: at(82), answered_at: at(30), steps }, NOW), {
+    running: false, summary: "4 steps · 52 s",
+    steps: steps.map((x) => ({ text: x.text, done: true })),
+  });
+  assert.equal(progress({ status: "failed", fired_at: at(200), answered_at: at(65), steps: steps.slice(0, 1) }, NOW).summary, "1 step · 2 min 15 s");
+  // A message answered before steps were kept has nothing to fold.
+  assert.equal(progress({ status: "done", fired_at: null, steps: [] }, NOW), null);
+});
+
 // ---------------------------------------------------------------- withMessages
 
 const snap = (trigger = "morning") => ({ version: 5, now: NOW.toISOString(), time_zone: TZ, plan_day: "2026-11-04", run: { trigger, reasons: [], changes: {} } });
@@ -262,7 +356,7 @@ test("messageState: an answered message says what it added; one that added nothi
 test("itemLines: each to-do with its day or Inbox and due date, each event with its day and times, to-dos first", () => {
   const m = {
     tasks: [
-      { id: "t1", title: "Project 2 (due 11:59 pm)", day: null, list: "Inbox", due: "2026-11-14", at_time: null },
+      { id: "t1", title: "Project 2 (due 11:59 pm)", day: null, list: "Inbox", due: "2026-11-14", at_time: null, why: "A deadline at 11:59 pm: a task due that day." },
       { id: "t2", title: "Read ch. 5", day: "2026-11-09", list: null, due: "2026-11-10", at_time: "09:30" },
       { id: "t3", title: "Email TA", day: "2026-11-05", list: null, due: null, at_time: null },
     ],
@@ -272,11 +366,11 @@ test("itemLines: each to-do with its day or Inbox and due date, each event with 
     ],
   };
   assert.deepEqual(itemLines(m, TZ), [
-    { id: "t1", kind: "task", title: "Project 2 (due 11:59 pm)", when: "Inbox · due Sat Nov 14" },
-    { id: "t2", kind: "task", title: "Read ch. 5", when: "Mon Nov 9, 9:30 am · due Tue Nov 10" },
-    { id: "t3", kind: "task", title: "Email TA", when: "Thu Nov 5" },
-    { id: "e1", kind: "event", title: "Quiz ch. 5", when: "Tue Nov 10, 9–10:15 am" },
-    { id: "e2", kind: "event", title: "Review session", when: "Thu Nov 12, 6:30–8 pm" },
+    { id: "t1", kind: "task", title: "Project 2 (due 11:59 pm)", when: "Inbox · due Sat Nov 14", why: "A deadline at 11:59 pm: a task due that day." },
+    { id: "t2", kind: "task", title: "Read ch. 5", when: "Mon Nov 9, 9:30 am · due Tue Nov 10", why: null },
+    { id: "t3", kind: "task", title: "Email TA", when: "Thu Nov 5", why: null },
+    { id: "e1", kind: "event", title: "Quiz ch. 5", when: "Tue Nov 10, 9–10:15 am", why: null },
+    { id: "e2", kind: "event", title: "Review session", when: "Thu Nov 12, 6:30–8 pm", why: null },
   ]);
   // A message answered before items were listed has none; an event without an id can't be undone.
   assert.deepEqual(itemLines({ tasks_added: 2, events: [] }, TZ), []);
