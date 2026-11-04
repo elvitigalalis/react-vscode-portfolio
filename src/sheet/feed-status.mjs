@@ -7,13 +7,15 @@ import { plural } from "./logic.mjs";
 import { el, icon, settingsHooks } from "./planner.mjs";
 import { feedAlert } from "./glance.mjs";
 
-const NAMES = { brightspace: "Brightspace", campus: "Campus events" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", freebusy: "Calendar busy times" };
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // "Brightspace: ok, 12 items, Nov 3, 2:20 PM", or the error. A row with no fetch yet says so.
 function line(f) {
   const name = NAMES[f.source] ?? f.source;
   if (!f.fetched_at) return `${name}: not read yet`;
+  // A sync with nothing to read yet ("not connected") hasn't failed.
+  if (f.ok === null && f.error) return `${name}: ${f.error}`;
   const how = f.ok ? `ok, ${plural(f.items ?? 0, "item")}` : `failed: ${f.error ?? "unknown error"}`;
   return `${name}: ${how}, ${when(f.fetched_at)}`;
 }

@@ -131,6 +131,11 @@ export const clearGcalPending = (gcalId) => rest(`gcal_pending?gcal_id=eq.${enco
 export const listMailAccounts = () => rest("mail_accounts?select=id,email,label,last_error&order=connected_at");
 export const deleteMailAccount = (id) => rest(`mail_accounts?id=eq.${id}`, { method: "DELETE" });
 
+// The calendar free/busy account (docs/sheet-v5.md): one row or none, read and deleted here;
+// connecting goes through calendar-connect. Deleting it deletes its Vault secret (a trigger).
+export const calendarAccount = async () => (await rest("calendar_account?select=email,connected_at,last_error"))[0] ?? null;
+export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", { method: "DELETE" });
+
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
 // and a day's proposal with the campus events it picked.
 export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
