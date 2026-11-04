@@ -5,9 +5,10 @@ import { atRisk, minutesOn } from "./logic.mjs";
 
 // --- Sources and due levels (G2) ---------------------------------------------------------
 
-// A task's source, for its edge colour and icon: Brightspace first, then the #campus tag.
-export const sourceOf = (task) =>
-  task.source === "brightspace" ? "course" : task.tag === "campus" ? "campus" : null;
+// A task's source, for its edge colour and icon: Brightspace, GitHub and Jira (v5 SRC1) first,
+// then the #campus tag.
+const SOURCE_KINDS = { brightspace: "course", github: "github", jira: "jira" };
+export const sourceOf = (task) => SOURCE_KINDS[task.source] ?? (task.tag === "campus" ? "campus" : null);
 
 // The day's campus chip: how many events, and how many with free food.
 export const campusSummary = (events) => ({ n: events.length, food: events.filter(freeFood).length });

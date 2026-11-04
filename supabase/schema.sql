@@ -997,3 +997,26 @@ select cron.schedule('sheet-ical', '25 * * * *', $job$
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_ical_url')
 $job$);
+
+-- --- v5 SRC1, GitHub and Jira tasks (docs/sheet-v5.md) ---------------------------------------
+-- work-sync (supabase/functions/work-sync) turns review requests and assigned issues in the orgs
+-- below, and his open Jira tickets, into private tasks in the "GitHub" and "Jira" lists, with
+-- their page in `link`. The public views list their columns by name, so link never reaches /now.
+-- The tokens are function secrets (SHEET_GITHUB_TOKEN, SHEET_JIRA_TOKEN), never columns here.
+alter table settings add column if not exists github_orgs text[] not null default '{}';
+alter table tasks add column if not exists link text;
+alter table tasks drop constraint if exists tasks_link_check;
+alter table tasks add constraint tasks_link_check check (link is null or link ~ '^https://');
+
+-- At :40 every hour, call work-sync. Like sheet-brightspace, it does nothing until its URL and
+-- the shared secret are in Vault.
+select cron.unschedule(jobid) from cron.job where jobname = 'sheet-work';
+select cron.schedule('sheet-work', '40 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_work_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "work"}'::jsonb)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_work_url')
+$job$);
