@@ -2,6 +2,7 @@
 // calendar-connect's /token, fetched once however many calls want it, and once more on a 401.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { googleTokens } from "../src/sheet/gtoken.mjs";
 
 const HOUR = 3600_000;
@@ -96,4 +97,24 @@ test("call: no token at all answers null without calling Google", async () => {
   let called = false;
   assert.equal(await tokens.call(async () => { called = true; return { status: 200 }; }), null);
   assert.equal(called, false);
+});
+
+// --- /plan's wiring (api.mjs, planner.mjs, calendar-settings.mjs, plan/index.astro) -------------
+
+const src = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
+
+test("/plan gets Google's token through gtoken.mjs and calendar-connect's /token, in a header", () => {
+  const api = src("src/sheet/api.mjs");
+  assert.match(api, /googleTokens\(\{ read, save, fetchToken: serverToken \}\)/);
+  assert.match(api, /functions\/v1\/calendar-connect\/token`, \{ method: "POST", headers: \{ authorization: `Bearer \$\{token\}` \} \}/);
+  assert.match(api, /tokens\.call\(/);
+});
+
+test("the stale-events banner shows only without a token, and reconnects the server grant", () => {
+  const planner = src("src/sheet/planner.mjs");
+  assert.match(planner, /if \(await api\.ensureGoogle\(\)\) \{/);
+  assert.match(planner, /stale\.hidden = !state\.eventsStale \|\| api\.googleReady\(\);/);
+  assert.match(planner, /act === "connect"\) return openSettings\(\)\.then\(\(\) => actHooks\["cal-connect"\]/);
+  assert.match(src("src/pages/plan/index.astro"), /data-events-stale hidden>[^<]*<button[^>]*data-act="connect">Reconnect Google Calendar in Settings</);
+  assert.match(src("src/sheet/calendar-settings.mjs"), /"needs-scopes" \? "Reconnect to let \/plan read events\."/);
 });

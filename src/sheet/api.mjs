@@ -1,14 +1,16 @@
 // The Sheet's network side: Supabase Auth and REST through plain fetch (no client library), and
-// Google Calendar with the Google token Supabase hands back at sign-in (docs/sheet.md).
+// Google Calendar with the Google token Supabase hands back at sign-in (docs/sheet.md), then one
+// from the server's calendar grant (gtoken.mjs, calendar-connect's /token).
 import { SHEET } from "../site.mjs";
 import { blockReminders } from "./logic.mjs";
+import { googleTokens } from "./gtoken.mjs";
 
 export const configured = Boolean(SHEET.supabaseUrl && SHEET.anonKey);
 
 const SCOPES = "https://www.googleapis.com/auth/calendar.app.created https://www.googleapis.com/auth/calendar.events.readonly";
 // The top bar (src/components/Header.astro) reads this key too, to show the owner a Plan link.
 const KEY = "sheet.session";
-// Google access tokens last an hour; treat them as stale a few minutes early.
+// The sign-in's Google token lasts an hour; treat it as stale a few minutes early.
 const GOOGLE_TTL = 55 * 60 * 1000;
 
 // --- Session -----------------------------------------------------------------------------
@@ -52,7 +54,8 @@ async function session() {
   });
   if (!res.ok) { save(null); return null; }
   const t = await res.json();
-  const next = { ...s, access_token: t.access_token, refresh_token: t.refresh_token, expires_at: Date.now() + t.expires_in * 1000 };
+  // Read again: a Google token saved while this refresh was out must not be lost.
+  const next = { ...read(), access_token: t.access_token, refresh_token: t.refresh_token, expires_at: Date.now() + t.expires_in * 1000 };
   save(next);
   return next;
 }
@@ -61,7 +64,27 @@ export const signedIn = async () => Boolean(await session());
 // The signed-in user's Supabase access token, refreshed when stale; null when signed out. Pages
 // the browser opens itself (mail-connect/start) and the OAuth consent page use it.
 export const accessToken = async () => (await session())?.access_token ?? null;
-export const googleReady = () => { const s = read(); return Boolean(s?.provider_token && Date.now() < s.provider_expires_at); };
+
+// Google's token: the sign-in's for its hour, then calendar-connect's /token, which refreshes the
+// server's calendar grant (Supabase never refreshes the sign-in's). The function checks the
+// session token, sent in a header; it answers { access_token, expires_in } or { error }.
+async function serverToken() {
+  const token = await accessToken();
+  if (!token) return { error: "signed-out" };
+  try {
+    const res = await fetch(`${SHEET.supabaseUrl}/functions/v1/calendar-connect/token`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+    return await res.json();
+  } catch { return { error: "failed" }; }
+}
+const tokens = googleTokens({ read, save, fetchToken: serverToken });
+// Settings, Calendar: whether the server grant can give /plan a token ("ok"), or why not.
+export const calendarGrantStatus = async () => { const out = await serverToken(); return out.access_token ? "ok" : out.error ?? "failed"; };
+// A Google token is live now. Call ensureGoogle first where it may have run out (each load does).
+export const googleReady = () => tokens.ready();
+// Gets a token if there is none: true when /plan can call Google.
+export const ensureGoogle = async () => Boolean(await tokens.token());
+// Why the server gave no token ("needs-scopes", "not-connected", …), "ok", or null before asking.
+export const googleStatus = () => tokens.status();
 
 // --- Supabase REST -----------------------------------------------------------------------
 
@@ -216,15 +239,14 @@ export async function replaceBusy(fromIso, toIso, rows) {
 
 const GCAL = "https://www.googleapis.com/calendar/v3";
 
+// A 401 gets one fresh token and one retry (gtoken.mjs); only then is Google signed out.
 async function google(path, { method = "GET", body } = {}) {
-  const s = read();
-  if (!googleReady()) throw new SheetError("google: signed out");
-  const res = await fetch(`${GCAL}/${path}`, {
+  const res = await tokens.call((token) => fetch(`${GCAL}/${path}`, {
     method,
-    headers: { authorization: `Bearer ${s.provider_token}`, ...(body ? { "content-type": "application/json" } : {}) },
+    headers: { authorization: `Bearer ${token}`, ...(body ? { "content-type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
-  });
-  if (res.status === 401) { save({ ...s, provider_expires_at: 0 }); throw new SheetError("google: signed out"); }
+  }));
+  if (!res || res.status === 401) throw new SheetError("google: signed out");
   if (!res.ok && res.status !== 404 && res.status !== 410) throw new SheetError(`google ${method}: ${res.status}`);
   return res.status === 204 || method === "DELETE" ? null : res.json();
 }
