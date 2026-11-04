@@ -6,6 +6,7 @@ import { localNow, zonedIso, minutesOn, planningDay, atRisk, addDays, formatCloc
 import { freeFood } from "./campus.mjs";
 import { weatherHours } from "./sources.mjs";
 import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
+import { dayLabel } from "./logic.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
 
@@ -437,6 +438,9 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   if (proposal.note) lines.push(`Didn't fit: ${proposal.note}`);
   const unfit = couldntFitLine(proposal.couldnt_fit, tasks);
   if (unfit) lines.push(unfit);
+  // v5 A1: one line per suggested task. Titles passed checkProposal; one that could become a link
+  // reads "A task" anyway.
+  for (const t of proposal.suggested ?? []) lines.push(`Task to add: ${linkish(t.title) ? "A task" : t.title} (due ${dayLabel(t.due).date})`);
   const events = pickedEvents(picks ?? proposal.picks, campus);
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).
