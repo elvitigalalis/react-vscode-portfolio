@@ -345,8 +345,15 @@ export async function sendMessage(text) {
   if (!res.ok || !out.id) throw new SheetError(`message: ${res.status} ${out.error ?? ""}`.trim());
   return out;
 }
-const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,events,created_in_calendar";
+const MESSAGE_COLUMNS = "id,at,text,status,reply,tasks_added,tasks,events,created_in_calendar,fired_at,steps,session_url,answered_at";
 export const getMessage = async (id) => (await rest(`messages?select=${MESSAGE_COLUMNS}&id=eq.${id}`))[0] ?? null;
+// The newest 10 messages, newest first, for /plan's Recent list. 404 (no table yet) reads as none.
+export const recentMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&order=at.desc&limit=10`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
+// Undo one item a message added (supabase/schema.sql): the item with its kind, or null.
+export const undoMessageItem = (m, item) => rest("rpc/undo_message_item", { method: "POST", body: { m, item } });
+// Record the Google event made for a message's event, so its Undo can delete it.
+export const messageEventCreated = (m, item, gcal) => rest("rpc/message_event_created", { method: "POST", body: { m, item, gcal } });
 // Answered messages whose events aren't in Google Calendar yet. Until the table exists PostgREST
 // answers 404, which reads as none.
 export const uncreatedMessages = () => rest(`messages?select=${MESSAGE_COLUMNS}&status=eq.done&created_in_calendar=is.false&order=at`)

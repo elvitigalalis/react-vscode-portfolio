@@ -1282,7 +1282,11 @@ declare
 begin
   begin insert into messages (text) values (''); raise exception 'messages took empty text';
   exception when check_violation then null; end;
-  begin insert into messages (text) values (repeat('a', 501)); raise exception 'messages took 501 characters';
+  begin insert into messages (text) values (repeat('a', 8001)); raise exception 'messages took 8001 characters';
+  exception when check_violation then null; end;
+  insert into messages (text) values (repeat('a', 8000)) returning id into m;
+  delete from messages where id = m;
+  begin insert into messages (text, reply) values ('x', repeat('r', 501)); raise exception 'messages took a 501-character reply';
   exception when check_violation then null; end;
   insert into messages (text) values ('lab report due Friday, ~2h; dentist Thu 3pm') returning id into m;
   if (select status <> 'pending' or events <> '[]'::jsonb or created_in_calendar or tasks_added <> 0 from messages where id = m)
@@ -1322,6 +1326,112 @@ begin
     then raise exception 'deleting a message kept its busy time'; end if;
   raise notice '✓ messages: owner-only, answer_message adds tasks, events as busy times, and answers once';
 end $$;
+-- What a message added, item by item, and Undo on each (docs/sheet-messages.md).
+do $$
+declare
+  m uuid;
+  m2 uuid;
+  t1 uuid;
+  e1 uuid;
+  e2 uuid;
+  out jsonb;
+begin
+  insert into messages (text) values ('Project 2 due Nov 14 11:59pm; quiz Tue 9am; lab Wed 2pm') returning id into m;
+  perform answer_message(m,
+    '[{"title": "MSG Project 2 (due 11:59 pm)", "day": null, "list": "Inbox", "due": "2026-11-14", "at_time": null, "est_min": null},
+      {"title": "MSG Read ch. 5", "day": "2026-11-09", "list": null, "due": "2026-11-10", "at_time": null, "est_min": 60}]',
+    '[{"title": "Quiz ch. 5", "starts_at": "2026-11-10T14:00:00.000Z", "ends_at": "2026-11-10T15:00:00.000Z"},
+      {"title": "Lab", "starts_at": "2026-11-11T19:00:00.000Z", "ends_at": "2026-11-11T20:00:00.000Z"}]',
+    'Added 2 tasks and 2 events; skipped office hours (no day given).');
+  -- Each task is listed with its id, title and place; each event gets an id.
+  if (select jsonb_array_length(tasks) <> 2 or tasks -> 0 ->> 'title' <> 'MSG Project 2 (due 11:59 pm)'
+        or tasks -> 0 ->> 'list' <> 'Inbox' or tasks -> 0 ->> 'due' <> '2026-11-14' or tasks -> 1 ->> 'day' <> '2026-11-09'
+        from messages where id = m)
+    then raise exception 'answer_message did not list the tasks it added'; end if;
+  select (tasks -> 0 ->> 'id')::uuid, (events -> 0 ->> 'id')::uuid, (events -> 1 ->> 'id')::uuid into t1, e1, e2 from messages where id = m;
+  if not exists (select 1 from tasks where id = t1 and title = 'MSG Project 2 (due 11:59 pm)')
+    then raise exception 'a listed task id is not the task added'; end if;
+  if e1 is null or e2 is null or e1 = e2 then raise exception 'events did not get their own ids'; end if;
+
+  -- /plan records the Google event it made for an event.
+  perform message_event_created(m, e1, 'gcal-abc');
+  if (select events -> 0 ->> 'gcal_id' from messages where id = m) is distinct from 'gcal-abc'
+    then raise exception 'message_event_created did not keep the Google id'; end if;
+
+  -- Undo a task: the task goes, and so does its line.
+  out := undo_message_item(m, t1);
+  if out ->> 'kind' <> 'task' or out ->> 'title' <> 'MSG Project 2 (due 11:59 pm)' then raise exception 'undo of a task returned %', out; end if;
+  if exists (select 1 from tasks where id = t1) then raise exception 'undo kept the task'; end if;
+  if (select jsonb_array_length(tasks) <> 1 or tasks_added <> 1 or status <> 'done' from messages where id = m)
+    then raise exception 'undo did not take the task off the message'; end if;
+
+  -- Undo an event: its line and its busy time go; it comes back with its Google id, for /plan to delete.
+  out := undo_message_item(m, e1);
+  if out ->> 'kind' <> 'event' or out ->> 'gcal_id' <> 'gcal-abc' then raise exception 'undo of an event returned %', out; end if;
+  if (select jsonb_array_length(events) <> 1 or events -> 0 ->> 'title' <> 'Lab' from messages where id = m)
+    then raise exception 'undo did not take the event off the message'; end if;
+  if exists (select 1 from busy where message_id = m and starts_at = '2026-11-10T14:00:00Z')
+    then raise exception 'undo kept the event''s busy time'; end if;
+  if not exists (select 1 from busy where message_id = m and starts_at = '2026-11-11T19:00:00Z')
+    then raise exception 'undo took another event''s busy time'; end if;
+
+  -- An item undone already, or of another message, is nothing to undo.
+  if undo_message_item(m, e1) is not null then raise exception 'undo ran twice'; end if;
+
+  -- Two messages with an event at the same times share a busy row; undoing one keeps it busy.
+  insert into messages (text) values ('lab Wed 2pm') returning id into m2;
+  perform answer_message(m2, '[]', '[{"title": "Lab again", "starts_at": "2026-11-11T19:00:00.000Z", "ends_at": "2026-11-11T20:00:00.000Z"}]', 'Lab Wed 2-3 pm.');
+  perform undo_message_item(m, e2);
+  if not exists (select 1 from busy where source = 'message' and message_id = m2 and starts_at = '2026-11-11T19:00:00Z')
+    then raise exception 'undo left the other message''s event without its busy time'; end if;
+
+  -- A stranger can undo nothing.
+  perform pg_temp.as_user('authenticated', 'stranger@example.com');
+  if undo_message_item(m2, (select (events -> 0 ->> 'id')::uuid from messages where id = m2)) is not null
+    then raise exception 'a stranger undid an item'; end if;
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  if (select jsonb_array_length(events) from messages where id = m2) <> 1 then raise exception 'a stranger changed a message'; end if;
+
+  delete from tasks where title like 'MSG %';
+  delete from messages where id in (m, m2);
+  raise notice '✓ messages: each added item is listed, and undone one at a time';
+end $$;
+-- Claude's steps on a message, and its notes on each item (docs/sheet-messages.md).
+do $$
+declare
+  m uuid;
+  m2 uuid;
+begin
+  insert into messages (text, session_url) values ('quiz Tue 9am', 'https://claude.ai/code/session_x') returning id into m;
+  insert into messages (text) values ('done one') returning id into m2;
+  perform answer_message(m2, '[{"title": "MSG x", "day": null, "list": "Inbox", "due": null, "at_time": null, "est_min": null}]', '[]', 'Added x.');
+  perform add_message_step(array[m, m2], 'checking', 'Checking Tuesday on your calendar');
+  if (select jsonb_array_length(steps) <> 1 or steps -> 0 ->> 'kind' <> 'checking' or steps -> 0 ->> 'text' <> 'Checking Tuesday on your calendar'
+        or (steps -> 0 ->> 'at')::timestamptz > now() from messages where id = m)
+    then raise exception 'add_message_step did not add the step'; end if;
+  if (select jsonb_array_length(steps) from messages where id = m2) <> 0
+    then raise exception 'an answered message took a step'; end if;
+  for i in 1..15 loop perform add_message_step(array[m], 'adding', 'Adding ' || i); end loop;
+  if (select jsonb_array_length(steps) from messages where id = m) <> 12 then raise exception 'steps should stop at 12'; end if;
+  -- A stranger adds nothing.
+  perform pg_temp.as_user('authenticated', 'stranger@example.com');
+  perform add_message_step(array[m], 'adding', 'Stranger');
+  perform pg_temp.as_user('authenticated', 'owner@example.com');
+  if exists (select 1 from messages where id = m and steps::text like '%Stranger%') then raise exception 'a stranger added a step'; end if;
+  update messages set steps = '[]' where id = m;
+  perform add_message_step(array[m], 'adding', 'Adding 1');
+  -- The answer keeps each item's why, and when it came.
+  perform answer_message(m,
+    '[{"title": "MSG Read ch. 5", "day": null, "list": "Inbox", "due": "2026-11-10", "at_time": null, "est_min": null, "why": "Before the quiz."}]',
+    '[{"title": "Quiz", "starts_at": "2026-11-10T14:00:00.000Z", "ends_at": "2026-11-10T15:00:00.000Z", "why": "A class quiz at a time."}]', 'Added.');
+  if (select tasks -> 0 ->> 'why' <> 'Before the quiz.' or events -> 0 ->> 'why' <> 'A class quiz at a time.' or answered_at is null
+        or jsonb_array_length(steps) <> 1 from messages where id = m)
+    then raise exception 'answer_message did not keep the whys and answered_at'; end if;
+  if (select answered_at from messages where id = m2) is null then raise exception 'answered_at missing'; end if;
+  delete from tasks where title like 'MSG %';
+  delete from messages where id in (m, m2);
+  raise notice '✓ messages: steps (at most 12, pending only, owner only), whys and answered_at';
+end $$;
 reset role;
 do $$ begin
   insert into messages (at, text) values (now() - interval '31 days', 'old one'), (now() - interval '29 days', 'new one');
@@ -1335,11 +1445,6 @@ do $$ begin
   delete from messages where text = 'new one';
   raise notice '✓ messages kept 30 days';
 end $$;
--- Event to-dos (docs/sheet-v5.md, "Event to-dos"): owner-only, set_event_titles writes only
--- title_ai, and nightly_roll keeps 30 days.
-select pg_temp.as_user('anon', null);
-do $$ begin
-  begin perform 1 from event_todos; raise exception 'anon read event_todos';
 -- --- Oura (docs/sheet-v5.md, "Oura") ---------------------------------------------------------
 reset role;
 do $$ begin
@@ -1403,47 +1508,6 @@ do $$ begin
 end $$;
 select pg_temp.as_user('authenticated', 'stranger@example.com');
 do $$ begin
-  insert into event_todos (cal_event_key, day, done) values ('primary:stranger', '2026-11-04', true);
-  raise exception 'a stranger wrote event_todos';
-exception when insufficient_privilege then null;
-end $$;
-select pg_temp.as_user('authenticated', 'owner@example.com');
-do $$ begin
-  begin insert into event_todos (cal_event_key, day, title_ai) values ('primary:long', '2026-11-04', repeat('a', 81));
-    raise exception 'event_todos took an 81-character title';
-  exception when check_violation then null; end;
-  -- /plan checks an event off and hides another, as PostgREST's merge-duplicates upsert does.
-  insert into event_todos (cal_event_key, day, done) values ('primary:e1', '2026-11-04', true)
-    on conflict (cal_event_key) do update set done = excluded.done;
-  insert into event_todos (cal_event_key, day, hidden) values ('primary:e2', '2026-11-04', true)
-    on conflict (cal_event_key) do update set hidden = excluded.hidden;
-  -- Claude's titles: one for an event already checked, one new; done and hidden stay.
-  perform set_event_titles('2026-11-04', '[{"cal_event_key": "primary:e1", "title_ai": "Go to CSE 416 lecture"},
-    {"cal_event_key": "primary:e2", "title_ai": "Weekly sync"}, {"cal_event_key": "primary:e3", "title_ai": "Dentist"}]');
-  if (select not done or hidden or title_ai <> 'Go to CSE 416 lecture' from event_todos where cal_event_key = 'primary:e1')
-    then raise exception 'set_event_titles changed done or hidden'; end if;
-  if (select done or not hidden from event_todos where cal_event_key = 'primary:e2')
-    then raise exception 'set_event_titles unhid an event'; end if;
-  if (select done or hidden or title_ai <> 'Dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
-    then raise exception 'set_event_titles did not add a new title'; end if;
-  perform set_event_titles('2026-11-05', '[{"cal_event_key": "primary:e3", "title_ai": "See the dentist"}]');
-  if (select title_ai <> 'See the dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
-    then raise exception 'a second title should replace the first and keep the day'; end if;
-  raise notice '✓ event_todos: owner-only, and titles never touch done or hidden';
-end $$;
-reset role;
-do $$ begin
-  if exists (select 1 from information_schema.role_table_grants where table_name = 'event_todos' and grantee = 'anon')
-    then raise exception 'anon has a grant on event_todos'; end if;
-  if exists (select 1 from pg_views where schemaname = 'public' and definition like '%event_todos%')
-    then raise exception 'a view reads event_todos'; end if;
-  delete from event_todos;
-  insert into event_todos (cal_event_key, day) values ('primary:old', sheet_today() - 31), ('primary:kept', sheet_today() - 30);
-  perform nightly_roll();
-  if exists (select 1 from event_todos where cal_event_key = 'primary:old') or not exists (select 1 from event_todos where cal_event_key = 'primary:kept')
-    then raise exception 'nightly_roll should keep event_todos 30 days after their day'; end if;
-  delete from event_todos;
-  raise notice '✓ event_todos kept 30 days';
   if (select count(*) from sleep_nights) + (select count(*) from sleep_days) + (select count(*) from oura_account) <> 0
     then raise exception 'a non-owner sees Oura data'; end if;
 end $$;
@@ -1488,6 +1552,57 @@ do $$ begin
     raise exception 'window_from took a bad time';
   exception when check_violation then null; end;
   raise notice '✓ Oura: owner read-only, Disconnect deletes the grant, tokens and rows; kept 60 days';
+end $$;
+-- Event to-dos (docs/sheet-v5.md, "Event to-dos"): owner-only, set_event_titles writes only
+-- title_ai, and nightly_roll keeps 30 days.
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from event_todos; raise exception 'anon read event_todos';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  insert into event_todos (cal_event_key, day, done) values ('primary:stranger', '2026-11-04', true);
+  raise exception 'a stranger wrote event_todos';
+exception when insufficient_privilege then null;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  begin insert into event_todos (cal_event_key, day, title_ai) values ('primary:long', '2026-11-04', repeat('a', 81));
+    raise exception 'event_todos took an 81-character title';
+  exception when check_violation then null; end;
+  -- /plan checks an event off and hides another, as PostgREST's merge-duplicates upsert does.
+  insert into event_todos (cal_event_key, day, done) values ('primary:e1', '2026-11-04', true)
+    on conflict (cal_event_key) do update set done = excluded.done;
+  insert into event_todos (cal_event_key, day, hidden) values ('primary:e2', '2026-11-04', true)
+    on conflict (cal_event_key) do update set hidden = excluded.hidden;
+  -- Claude's titles: one for an event already checked, one new; done and hidden stay.
+  perform set_event_titles('2026-11-04', '[{"cal_event_key": "primary:e1", "title_ai": "Go to CSE 416 lecture"},
+    {"cal_event_key": "primary:e2", "title_ai": "Weekly sync"}, {"cal_event_key": "primary:e3", "title_ai": "Dentist"}]');
+  if (select not done or hidden or title_ai <> 'Go to CSE 416 lecture' from event_todos where cal_event_key = 'primary:e1')
+    then raise exception 'set_event_titles changed done or hidden'; end if;
+  if (select done or not hidden from event_todos where cal_event_key = 'primary:e2')
+    then raise exception 'set_event_titles unhid an event'; end if;
+  if (select done or hidden or title_ai <> 'Dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
+    then raise exception 'set_event_titles did not add a new title'; end if;
+  perform set_event_titles('2026-11-05', '[{"cal_event_key": "primary:e3", "title_ai": "See the dentist"}]');
+  if (select title_ai <> 'See the dentist' or day <> '2026-11-04' from event_todos where cal_event_key = 'primary:e3')
+    then raise exception 'a second title should replace the first and keep the day'; end if;
+  raise notice '✓ event_todos: owner-only, and titles never touch done or hidden';
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from information_schema.role_table_grants where table_name = 'event_todos' and grantee = 'anon')
+    then raise exception 'anon has a grant on event_todos'; end if;
+  if exists (select 1 from pg_views where schemaname = 'public' and definition like '%event_todos%')
+    then raise exception 'a view reads event_todos'; end if;
+  delete from event_todos;
+  insert into event_todos (cal_event_key, day) values ('primary:old', sheet_today() - 31), ('primary:kept', sheet_today() - 30);
+  perform nightly_roll();
+  if exists (select 1 from event_todos where cal_event_key = 'primary:old') or not exists (select 1 from event_todos where cal_event_key = 'primary:kept')
+    then raise exception 'nightly_roll should keep event_todos 30 days after their day'; end if;
+  delete from event_todos;
+  raise notice '✓ event_todos kept 30 days';
 end $$;
 SQL
 echo "✓ all schema checks passed"
