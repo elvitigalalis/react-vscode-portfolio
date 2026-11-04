@@ -213,3 +213,28 @@ export function automatedSender(headers) {
 // The Gmail categories spec 47 leaves out of reply tracking.
 export const SKIPPED_CATEGORIES = ["CATEGORY_PROMOTIONS", "CATEGORY_UPDATES", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"];
 export const skippedCategory = (labels) => (labels ?? []).some((l) => SKIPPED_CATEGORIES.includes(l));
+
+// reply_state.who: a display name, never an address, at most 80 characters.
+export const WHO_MAX = 80;
+function displayName(value) {
+  const first = parseAddresses(value)[0];
+  if (!first) return "";
+  const name = first.name && !first.name.includes("@") ? first.name : first.address.split("@")[0];
+  return name.slice(0, WHO_MAX);
+}
+
+// A thread's reply state, { state, since, message_id, who } or null, from its newest message
+// that isn't spam or trash. thread: { account, thread_id, messages: [{ id, date, labels, from,
+// to, automated }] }. Owed: from a person, not him, 2+ business days old. Awaiting: his, 3+.
+export function replyState(thread, timeZone, now) {
+  const kept = (thread.messages ?? []).filter((m) => !m.labels.includes("SPAM") && !m.labels.includes("TRASH"));
+  if (!kept.length) return null;
+  const newest = kept.reduce((a, b) => (Date.parse(b.date) > Date.parse(a.date) ? b : a));
+  if (skippedCategory(newest.labels)) return null;
+  const days = businessDays(newest.date, now.toISOString(), timeZone);
+  const sent = newest.labels.includes("SENT");
+  if (sent ? days < 3 : newest.automated || days < 2) return null;
+  const who = displayName(sent ? newest.to : newest.from);
+  if (!who) return null;
+  return { state: sent ? "awaiting" : "owed", since: newest.date, message_id: newest.id, who };
+}
