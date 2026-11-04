@@ -311,7 +311,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
    title wraps under itself beside it (.sheet-body); in the week's narrow columns it is a line of
    its own above the title. Done rows dim and strike it with the title. */
 .sheet-when { flex: none; font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--accent); line-height: 1.172rem; }
-.sheet-body { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; }
+/* One layout for every row: the title on its own line, the details always on the line under it. */
+.sheet-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 0.125rem; }
+.sheet-body > .sheet-title { width: 100%; text-align: start; }
+.sheet-body > .sheet-details { display: flex; }
+.sheet-row:has(> .sheet-body) { align-items: flex-start; }
 .sheet-row:has(> .sheet-when) { align-items: baseline; }
 @media (max-width: 48rem) { .sheet-when { width: 6rem; } }
 @media (min-width: 48.0625rem) {
