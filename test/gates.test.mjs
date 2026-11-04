@@ -15,6 +15,7 @@ import { lint } from "../check/lint.mjs";
 import { length } from "../check/writeup.mjs";
 import { tags } from "../check/tags.mjs";
 import { html, links, lighthouse, a11y } from "../check/tools.mjs";
+import { budget, firstLoad } from "../check/budget.mjs";
 import { escapeRe, htmlPages, ORIGIN, RESUME_PDF } from "../check/lib.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -54,6 +55,19 @@ test("schema: fails on an offer note or a missing field", async () => {
   assert.match((await schema({ root, resume: note })).join("\n"), /\/projects\/0 must NOT have additional properties/);
   const { skills, ...noSkills } = resume;
   assert.match((await schema({ root, resume: noSkills })).join("\n"), /must have required property 'skills'/);
+});
+
+// --- budget ---------------------------------------------------------------
+
+test("budget: /plan/gym/ loads at most 40 KB of gzipped JS, counting its static imports", async () => {
+  assert.deepEqual(await budget({ dist: realDist }), []);
+  assert.ok(firstLoad(realDist, "plan/gym/index.html").length >= 2, "follows the page script's imports");
+  const heavy = broken((d) => {
+    const script = read(d, "plan/gym/index.html").match(/<script\b[^>]*\bsrc="\/([^"]+\.js)"/)[1];
+    write(d, "_astro/heavy.js", `export const x = "${randomBytes(45 * 1024).toString("base64")}";`); // incompressible
+    write(d, script, `import { x } from "./heavy.js";\n${read(d, script)}`);
+  });
+  assert.match((await budget({ dist: heavy })).join("\n"), /plan\/gym\/index\.html: \d+\.\d KB of gzipped JS on first load, over 40 KB/);
 });
 
 // --- mirror ---------------------------------------------------------------
