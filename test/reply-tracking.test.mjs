@@ -170,3 +170,58 @@ test("senderHashes: the salted hash of the address, and of its domain and every 
   });
   assert.equal(await senderHashes("not an address", "pepper"), null);
 });
+
+// --- Reply owed from positive evidence ---------------------------------------------------------
+// Owed needs evidence of a conversation: he wrote in the thread, or he has written to the sender.
+// Machine mail (list, auto-reply and ESP headers, no-reply style addresses) never counts. The
+// fixtures are anonymised versions of real misses: a reply in his own thread a day old, a bank's
+// no.reply.alerts mail and a one-time passcode from a careers address.
+
+const hdrs = (from, extra = []) => [
+  { name: "From", value: from }, { name: "To", value: "Sample Owner <owner@example.com>" },
+  ...extra.map(([name, value]) => ({ name, value })),
+];
+
+test("automatedSender: a bank's no.reply.alerts address is a machine", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  assert.equal(automatedSender(hdrs("Bank <no.reply.alerts@bank.example.com>")), true);
+});
+
+test("automatedSender: no-reply addresses however they're spelled", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  for (const from of ["alerts-noreply@x.example.com", "do.not.reply@x.example.com", "donotreply@x.example.com",
+    "notifications+abc@code.example.com", "x_no-reply_y@x.example.com", "Alerts <alerts@x.example.com>"]) {
+    assert.equal(automatedSender(hdrs(from)), true, from);
+  }
+});
+
+test("automatedSender: a person is not; a person-like info.* prefix is (an accepted false positive)", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  assert.equal(automatedSender(hdrs("Ana Ruiz <ana.ruiz@example.edu>")), false);
+  assert.equal(automatedSender(hdrs("Ana <info.ana@x.example.com>")), true);
+});
+
+test("automatedSender: a machine Sender behind a person's From", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  assert.equal(automatedSender(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Sender", "Google Calendar <calendar-notification@google.com>"]])), true);
+  assert.equal(automatedSender(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Sender", "ana.ruiz@example.edu"]])), false);
+});
+
+test("automatedSender: one-click unsubscribe, Feedback-ID and Auto-Submitted", async () => {
+  const { automatedSender } = await import("../src/sheet/mail.mjs");
+  const ana = "Ana Ruiz <ana.ruiz@example.edu>";
+  assert.equal(automatedSender(hdrs(ana, [["List-Unsubscribe-Post", "List-Unsubscribe=One-Click"]])), true);
+  assert.equal(automatedSender(hdrs(ana, [["Feedback-ID", "1:2:acme"]])), true);
+  assert.equal(automatedSender(hdrs(ana, [["Auto-Submitted", "no"]])), false);
+  assert.equal(automatedSender(hdrs(ana, [["Auto-Submitted", "auto-replied"]])), true);
+});
+
+test("automationDemerit: X-Auto-Response-Suppress counts against, without making it automated", async () => {
+  const { automatedSender, automationDemerit } = await import("../src/sheet/mail.mjs");
+  const h = hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["X-Auto-Response-Suppress", "All"]]);
+  assert.equal(automatedSender(h), false);
+  assert.equal(automationDemerit(h), true);
+  assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>")), false);
+  assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Return-Path", "<bounce-123@mail.example.com>"]])), true);
+  assert.equal(automationDemerit(hdrs("Ana Ruiz <ana.ruiz@example.edu>", [["Return-Path", "<ana.ruiz@example.edu>"]])), false);
+});

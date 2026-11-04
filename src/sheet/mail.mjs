@@ -197,18 +197,37 @@ export function parseAddresses(value) {
   }).filter((a) => a.address.includes("@"));
 }
 
-// Local parts that only machines write from.
-const AUTOMATED_LOCAL = /^(?:no-?reply|do-?not-?reply|notifications?|mailer-daemon|bounces?)(?:[-+._].*)?$/i;
+// Local parts that only machines write from: a known prefix, or "noreply" anywhere in it
+// (alerts-noreply, no.reply.alerts).
+const AUTOMATED_LOCAL = /^(?:no[-._]?reply|do[-._]?not[-._]?reply|donotreply|mailer[-._]?daemon|postmaster|bounces?|notifications?|notify|alerts?|updates?|news(?:letter)?|info|marketing|billing|receipts?|security|verify|verification|accounts?|auto(?:mated)?|system|calendar-notification)(?:[-+._].*)?$/i;
+const NOREPLY_ANYWHERE = /no[-._]?reply/i;
+const machineAddress = (value) => {
+  const a = parseAddresses(value)[0];
+  const local = a ? a.address.split("@")[0] : "";
+  return Boolean(local) && (AUTOMATED_LOCAL.test(local) || NOREPLY_ANYWHERE.test(local));
+};
 
-// True for mail no person wrote: a no-reply style From address, or a mailing list or
-// auto-reply header (RFC 2369 List-*, RFC 2919 List-Id, RFC 3834 Auto-Submitted, Precedence).
+// True for mail no person wrote: a machine From or Sender address (Sender is who actually sent
+// it, e.g. Google Calendar for a person's invite), a mailing list or bulk header (RFC 2369
+// List-*, RFC 2919 List-Id, RFC 8058 List-Unsubscribe-Post, Precedence), an ESP stream's
+// Feedback-ID (support.google.com/mail/answer/6254652) or an RFC 3834 Auto-Submitted other than
+// "no". Transactional mail (passcodes, alerts) carries no list headers (support.google.com/a/
+// answer/14229414), so the address check carries most of that.
 export function automatedSender(headers) {
-  const from = parseAddresses(headerOf(headers, "From"))[0];
-  if (from && AUTOMATED_LOCAL.test(from.address.split("@")[0])) return true;
-  if (headerOf(headers, "List-Id") || headerOf(headers, "List-Unsubscribe")) return true;
+  if (machineAddress(headerOf(headers, "From")) || machineAddress(headerOf(headers, "Sender"))) return true;
+  for (const h of ["List-Id", "List-Unsubscribe", "List-Unsubscribe-Post", "Feedback-ID"]) if (headerOf(headers, h)) return true;
   const auto = headerOf(headers, "Auto-Submitted").trim().toLowerCase();
   if (auto && auto !== "no") return true;
   return /^(bulk|list|junk)$/i.test(headerOf(headers, "Precedence").trim());
+}
+
+// Signs that count against a person having written it, without ruling it out: Exchange's
+// X-Auto-Response-Suppress (MS-OXCMAIL; a person's Outlook mail can carry it too) or a bounce
+// or VERP Return-Path. They keep a thread from being owed unless he wrote in it.
+export function automationDemerit(headers) {
+  if (headerOf(headers, "X-Auto-Response-Suppress")) return true;
+  const local = parseAddresses(headerOf(headers, "Return-Path"))[0]?.address.split("@")[0] ?? "";
+  return /^bounces?/i.test(local) || /[+=]/.test(local);
 }
 
 // The Gmail categories spec 47 leaves out of reply tracking.
