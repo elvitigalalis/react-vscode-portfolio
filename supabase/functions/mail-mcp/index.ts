@@ -38,7 +38,9 @@ import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@^2
 import { pipeline } from "npm:@supabase/middleware@1";
 import { withOAuthProtectedResource, withSupabase } from "npm:@supabase/server@^1.9.2";
 import { z } from "npm:zod@^4.3.6";
-import { accountPatch, gmailError, messageBody, messageSummary, parseAddresses, searchMarks, searchPlan, senderHash } from "../../../src/sheet/mail.mjs";
+import {
+  accountPatch, gmailError, messageBody, messageSummary, parseAddresses, searchMarks, searchPlan, senderHash, summarySignals,
+} from "../../../src/sheet/mail.mjs";
 import { googleToken } from "../_shared/google.ts";
 
 // Every tool's description ends with this (docs/sheet-claude.md, "Inbox sweep").
@@ -85,8 +87,11 @@ function mailServer(admin: Db) {
     description: "Search mail with Gmail search syntax (e.g. `newer_than:3d`, `is:unread newer_than:14d`). " +
       "Searches every connected account unless `account` names one. Returns message summaries " +
       "(account, id, from, subject, date, snippet, labels, link), newest first, at most 25. Each also has known " +
-      "(Lisul has sent mail to the sender) and reply_state (owed: a reply from him is owed; awaiting: he wrote " +
-      `last and is waiting; or null), which the mail sync keeps. ${UNTRUSTED}`,
+      "(Lisul has sent mail to the sender), automated (list, bulk, auto-reply or no-reply mail, from its headers), " +
+      "addressed (to, cc or none: where his address is), reply_state (owed: a reply from him is owed; awaiting: he " +
+      "wrote last and is waiting; or null), owed_basis (thread: they answered a thread he wrote in; known: someone " +
+      "he has written to; cc: he was copied) and overdue (owed 2+ business days). The mail sync keeps reply_state. " +
+      `${UNTRUSTED}`,
     inputSchema: z.object({
       query: z.string().max(500),
       account: z.string().max(320).optional(),
@@ -130,6 +135,7 @@ function mailServer(admin: Db) {
 // (SHEET_SENDER_SALT, the mail sync's salt; without it nobody is known), and `reply_state` from
 // reply_state, both kept by the mail-sync function. A failed read leaves them false and null.
 // .in() is supabase-js's in.() filter (https://supabase.com/docs/reference/javascript/in).
+// reply_state is matched on account as well as thread: two accounts can share a thread id.
 async function marked(admin: Db, summaries: { account: string; thread_id: string; from: string }[]) {
   const salt = Deno.env.get("SHEET_SENDER_SALT") ?? "";
   const byHash = new Map<string, string>();
@@ -146,13 +152,18 @@ async function marked(admin: Db, summaries: { account: string; thread_id: string
     for (const r of data ?? []) known.add(byHash.get(r.hash)!);
   }
   const threads = [...new Set(summaries.map((s) => s.thread_id))];
-  let states: { account: string; thread_id: string; state: string }[] = [];
+  const inAccounts = [...new Set(summaries.map((s) => s.account))];
+  let states: { account: string; thread_id: string; state: string; basis: string | null; since: string }[] = [];
+  let timeZone = "UTC";
   if (threads.length) {
-    const { data, error } = await admin.from("reply_state").select("account,thread_id,state").in("thread_id", threads);
+    const { data, error } = await admin.from("reply_state").select("account,thread_id,state,basis,since")
+      .in("account", inAccounts).in("thread_id", threads);
     if (error) console.error("reply_state", error.message);
     states = data ?? [];
+    const { data: settings } = await admin.from("settings").select("time_zone").maybeSingle();
+    timeZone = settings?.time_zone ?? timeZone;
   }
-  return searchMarks(summaries, known, states);
+  return searchMarks(summaries, known, states, timeZone, new Date());
 }
 
 async function accounts(admin: Db): Promise<Account[]> {
@@ -179,12 +190,19 @@ async function gmail(token: string, path: string) {
 }
 
 // One account's matches, as summaries. The list gives IDs only, so each is fetched with just
-// the headers a summary needs.
+// the headers a summary and its automated and addressed marks need (summarySignals; the headers
+// themselves aren't returned).
+const SEARCH_HEADERS = ["From", "To", "Subject", "Cc", "Sender", "List-Id", "List-Unsubscribe", "List-Unsubscribe-Post",
+  "Feedback-ID", "Auto-Submitted", "Precedence"];
 async function search(token: string, r: SearchRequest) {
   const q = new URLSearchParams({ q: r.q, maxResults: String(r.maxResults) });
   const { messages = [] } = await gmail(token, `messages?${q}`);
-  const meta = "format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject";
-  return Promise.all(messages.map(async (m: { id: string }) => messageSummary(await gmail(token, `messages/${m.id}?${meta}`), r.account)));
+  const meta = new URLSearchParams({ format: "metadata" });
+  for (const h of SEARCH_HEADERS) meta.append("metadataHeaders", h);
+  return Promise.all(messages.map(async (m: { id: string }) => {
+    const message = await gmail(token, `messages/${m.id}?${meta}`);
+    return { ...messageSummary(message, r.account), ...summarySignals(message, r.account) };
+  }));
 }
 
 // --- Google access tokens and account health ---------------------------------------------------
