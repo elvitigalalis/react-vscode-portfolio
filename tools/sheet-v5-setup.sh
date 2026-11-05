@@ -232,13 +232,16 @@ SECRET_NAMES=""; STATE=""
 load_state() {
   # The Supabase CLI must be logged in (to the account that owns the-sheet) for every check and
   # Vault step below; without it the wizard would silently see nothing.
-  if ! sb projects list >/dev/null 2>&1 || ! sb secrets list --project-ref "$REF" >/dev/null 2>&1; then
+  note "· Supabase login (if this sits here, look for a macOS Keychain prompt and click Always Allow)"
+  if ! sb secrets list --project-ref "$REF" >/dev/null 2>&1; then
     warn "The Supabase CLI isn't logged in here (or not to the account that owns the-sheet)."
     say "Run this once, sign in in the browser it opens, then run this wizard again:"
     say "    npx -y supabase@latest login"
     exit 1
   fi
+  note "· function secrets (names only)"
   SECRET_NAMES=$(sb secrets list --project-ref "$REF" 2>/dev/null | grep -oE '"name":"[A-Z0-9_]+"' | cut -d'"' -f4 | tr '\n' ' ' || true)
+  note "· the database (calendar, Oura, GitHub orgs, replans, habits, sync switches)"
   STATE=$(sql "select
     (select count(*) from calendar_account) as cal,
     (select count(*) from oura_account) as oura,
