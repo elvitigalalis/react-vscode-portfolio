@@ -145,6 +145,18 @@ _Avoid_: Overbooked, impossible
 When Lisul got up today, from the end of his main sleep on his Oura ring. The plan starts 30 minutes after it.
 _Avoid_: Wake-up, alarm, start time
 
+**Light start**:
+The first stretch of the day, until 90 minutes after his wake (120 after a short night), when only light tasks go: mail, admin, or 30 minutes or less. The hardest task comes right after it.
+_Avoid_: Warm-up, slow start
+
+**Short night**:
+A main sleep under 6 hours, or a sleep debt: three nights averaging under 6.5 hours. It gives a lighter day.
+_Avoid_: Bad night, tired day
+
+**Long break**:
+A gap of 15 minutes or more, due after about 3 hours of blocks; on a day of 4 hours or more of blocks, one of 30 minutes falls in the middle third of the plan window for a meal.
+_Avoid_: Rest, pause
+
 **Typical wake**:
 The median wake time of his last 14 weekday nights, or of his last 14 weekend nights, used until today's wake time has synced.
 _Avoid_: Usual wake, average wake, chronotype
@@ -224,6 +236,14 @@ _Avoid_: Email check, triage
 **Nudge**:
 A message to Lisul when an approved block starts, naming its task.
 _Avoid_: Reminder, notification, ping, alert
+
+**First step**:
+The concrete action a block starts with, such as "open HW4, do Q1", which its nudge leads with.
+_Avoid_: Subtask, next action
+
+**Next free slot**:
+The first quarter hour later today that holds a block, which a Didn't start answer offers as a button that moves the block there.
+_Avoid_: Reschedule, retry
 
 **Repeat**:
 The single second nudge sent when a block's task is still not done 10 minutes after the block starts.
