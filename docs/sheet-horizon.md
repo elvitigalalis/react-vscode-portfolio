@@ -203,7 +203,10 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
    | `minutes_p80` | `horizonMinutes(task, paceP80ByKind(actuals))`, from the same `actuals` rows as `paceByKind` | states judged at the median (`minutes`) |
    | `kind` | `workKind(task)` on the task row (needs `title`, `source`, and `kind` if the row ever has one) | no exam spacing, no 120-minute stretch |
 
-   Both go in the key, so a pace or title change re-flows. Nothing else changes for the caller:
+   `horizonInput` passes both (wired 2026-11-05). Both go in the key, so a pace or title change
+   re-flows. The key also folds in `HORIZON_RULES` (horizon.mjs), the engine's rules version:
+   bump it whenever `planHorizon`'s rules change, so the first tick after a deploy re-flows
+   instead of skipping on unchanged inputs. Nothing else changes for the caller:
    the 85% fill of later days and the 20% buffer work from `free` and `minutes` as passed now.
    The output only gains `remaining_p80_min` per task; every other field keeps its name and
    meaning (`short_min` and `over_min` can now also count minutes past the daily maximum).

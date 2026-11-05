@@ -3,6 +3,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { wakeProfile } from "../src/sheet/sleep.mjs";
+// The day rules v5 D2 and Oura set (the later ones have tests of their own, day-rules.test.mjs).
+const pick = (r) => Object.fromEntries(["workload_cap_min", "travel_min", "break_after_min", "break_min", "cap_reason", "bedtime", "wind_down_from"].map((k) => [k, r[k]]));
 
 const TZ = "America/New_York";
 // One night, `hours` long, ending at `wake`, "YYYY-MM-DDTHH:MM" local in New York: EDT (UTC-4)
@@ -228,7 +230,7 @@ test("planSnapshot: today's readiness and sleep set day_rules; checkProposal hol
   const at6 = new Date("2026-11-04T11:00:00Z");
   const sleepDays = [{ day: "2026-11-04", readiness: 64, sleep_s: 5 * 3600 + 40 * 60 }, { day: "2026-11-03", readiness: 90, sleep_s: 8 * 3600 }];
   const snap = planSnapshot(rows([], { sleepDays }), at6);
-  assert.deepEqual(snap.day_rules, { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "lighter day", bedtime: null, wind_down_from: null });
+  assert.deepEqual(pick(snap.day_rules), { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "lighter day", bedtime: null, wind_down_from: null });
   const tasks = [{ id: "t1", title: "A", est_min: 45, day: "2026-11-04", done: false }, { id: "t2", title: "B", est_min: 45, day: "2026-11-04", done: false }];
   // Two 45-minute blocks back to back run 90 minutes: fine on a normal day, too long after a short night.
   const two = (s) => checkProposal({ day: "2026-11-04", replaces: null, blocks: [{ task_id: "t1", start: "08:00", minutes: 45 }, { task_id: "t2", start: "08:45", minutes: 45 }] }, s);
@@ -270,4 +272,25 @@ test("planSnapshot: no Oura-sourced field or figure reaches read_planner", async
   assert.equal(snap.window.from, "08:45");
   assert.equal(snap.day_rules.cap_reason, "lighter day");
   assert.equal(snap.day_rules.bedtime, "23:30");
+});
+
+// --- Day rules (docs/sheet-v5.md, "Day rules and first steps") --------------------------------
+
+test("sleepDebt: a 3-night mean under 6.5 hours is a debt; fewer than 3 nights is none", async () => {
+  const { sleepDebt } = await import("../src/sheet/sleep.mjs");
+  const h = (x) => x * 3600;
+  const rows = [{ day: "2026-11-04", sleep_s: h(7) }, { day: "2026-11-03", sleep_s: h(6) }, { day: "2026-11-02", sleep_s: h(6) }];
+  assert.equal(sleepDebt(rows, "2026-11-04"), true); // mean 6h20
+  assert.equal(sleepDebt([...rows.slice(0, 2), { day: "2026-11-02", sleep_s: h(6.5) }], "2026-11-04"), false); // mean 6h30
+  assert.equal(sleepDebt(rows.slice(0, 2), "2026-11-04"), false);
+  // A night older than the three, or with no sleep_s, doesn't stand in.
+  assert.equal(sleepDebt([...rows.slice(0, 2), { day: "2026-11-01", sleep_s: h(4) }], "2026-11-04"), false);
+  assert.equal(sleepDebt([...rows.slice(0, 2), { day: "2026-11-02", sleep_s: null }], "2026-11-04"), false);
+});
+
+test("dayCap: a sleep debt gives the short-night day: 0.85 of the cap and a break after every 60", async () => {
+  const { dayCap } = await import("../src/sheet/sleep.mjs");
+  assert.deepEqual(dayCap(360, { readiness: 75, sleep_s: 7 * 3600 }, 0, true),
+    { workload_cap_min: 300, break_after_min: 60, cap_reason: "readiness 75, short nights: lighter day" });
+  assert.equal(dayCap(360, { readiness: 64, sleep_s: 5 * 3600 }, 0, true).cap_reason, "readiness 64, slept 5h00: lighter day");
 });

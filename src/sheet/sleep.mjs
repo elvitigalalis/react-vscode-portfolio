@@ -66,10 +66,21 @@ const quarter = (m) => Math.ceil(m / 15) * 15;
 // before now rounded up, so a replan never plans the past.
 export function windowStart(day, now, tz, profile, fallback = DEFAULT_START) {
   const here = localNow(now, tz);
-  const today = here.day === day;
-  const wake = (today ? profile?.woke_at : null) ?? (isWeekend(day) ? profile?.weekend : profile?.weekday) ?? null;
-  const m = Math.min(quarter(wake == null ? fallback : wake + AFTER_WAKE), LATEST);
-  return today ? Math.max(m, quarter(Math.floor(here.minutes))) : m;
+  const m = planStart(day, now, tz, profile, fallback);
+  return here.day === day ? Math.max(m, quarter(Math.floor(here.minutes))) : m;
+}
+
+// The wake the day rules count from on `day`: today's actual wake on today, else the day's
+// kind's typical wake, else null.
+export function wakeOn(day, now, tz, profile) {
+  const today = localNow(now, tz).day === day;
+  return (today ? profile?.woke_at : null) ?? (isWeekend(day) ? profile?.weekend : profile?.weekday) ?? null;
+}
+
+// windowStart before it is held to now: where the day's plan window opened.
+export function planStart(day, now, tz, profile, fallback = DEFAULT_START) {
+  const wake = wakeOn(day, now, tz, profile);
+  return Math.min(quarter(wake == null ? fallback : wake + AFTER_WAKE), LATEST);
 }
 
 // "HH:MM" for minutes past midnight.
@@ -98,20 +109,34 @@ export function wokeLate(profile, revision, now, tz) {
 // every 60 minutes instead of 90. With both, the lower multiplier. Rounded to 15 minutes, and a
 // lower cap never drops below the `approved` work already locked in (up to `base`), so a late
 // readiness never refuses a day he already approved. cap_reason says why, or null.
+// `debt` (sleepDebt) gives the same lighter day as a short night.
 const SHORT_S = 6 * 3600;
-export function dayCap(base, day, approved = 0) {
+export function dayCap(base, day, approved = 0, debt = false) {
   const r = day?.readiness ?? null, s = day?.sleep_s ?? null;
   const ready = r == null ? 1 : r < 70 ? 0.8 : r >= 85 ? 1.1 : 1;
-  const short = s != null && s < SHORT_S;
+  const lastNight = s != null && s < SHORT_S;
+  const short = lastNight || debt;
   const x = short ? Math.min(ready, 0.85) : ready;
   let cap = Math.round((base * x) / 15) * 15;
   if (cap < base) cap = Math.max(cap, Math.min(approved, base));
-  const said = [ready !== 1 || short ? (r != null ? `readiness ${r}` : null) : null, short ? `slept ${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}` : null].filter(Boolean);
+  const said = [ready !== 1 || short ? (r != null ? `readiness ${r}` : null) : null,
+    lastNight ? `slept ${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}` : debt ? "short nights" : null].filter(Boolean);
   return {
     workload_cap_min: cap,
     break_after_min: short ? 60 : 90,
     cap_reason: x === 1 ? null : `${said.join(", ")}: ${x < 1 ? "lighter" : "fuller"} day`,
   };
+}
+
+// Rolling sleep debt (docs/sheet-v5.md, "Day rules and first steps"): the mean main sleep of the
+// three nights ending on `day` (sleep_days rows { day, sleep_s }) is under 6.5 hours. It needs
+// all three nights.
+const DEBT_NIGHTS = 3;
+const DEBT_S = 6.5 * 3600;
+export function sleepDebt(rows, day) {
+  const want = new Set([0, 1, 2].map((i) => new Date(Date.parse(`${day}T12:00:00Z`) - i * 86_400_000).toISOString().slice(0, 10)));
+  const s = (rows ?? []).filter((r) => want.has(r?.day) && Number.isFinite(r.sleep_s)).map((r) => r.sleep_s);
+  return s.length === DEBT_NIGHTS && s.reduce((a, b) => a + b, 0) / DEBT_NIGHTS < DEBT_S;
 }
 
 // Settings → Oura's status line, from the oura_account row ({ synced_at }) and a wakeProfile:

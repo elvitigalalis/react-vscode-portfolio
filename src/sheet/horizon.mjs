@@ -6,6 +6,9 @@ import { paceKind, PACE_KINDS, PACE_SAMPLES, PACE_WINDOW, PACE_LIMITS } from "./
 
 // Chunks: at least 30 and at most 90 minutes of one task on one day; a task of 60 minutes or
 // less is never split. Minutes move in 15-minute steps.
+// The engine's rules version, folded into horizonKey (horizon-io.mjs): bump it whenever planHorizon's
+// rules change, so the next tick after a deploy re-flows instead of skipping on an unchanged key.
+export const HORIZON_RULES = 2;
 export const CHUNK_MIN = 30;
 export const CHUNK_MAX = 90;
 export const WHOLE_UP_TO = 60;

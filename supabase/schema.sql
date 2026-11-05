@@ -736,6 +736,9 @@ drop function if exists apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, te
 -- (auto_approve_proposal, below). Until it starts, and until /plan moves it (which clears auto),
 -- the next revision may move it: apply_proposal replaces it like a proposed one.
 alter table blocks add column if not exists auto boolean not null default false;
+-- Day rules and first steps (docs/sheet-v5.md): the first action the plan gives a block, which its
+-- start nudge leads with. checkProposal holds it to one line of at most 80 characters.
+alter table blocks add column if not exists first_step text check (char_length(first_step) between 1 and 80);
 create or replace function apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
   needs jsonb default '[]', picks jsonb default '[]', note text default null,
   couldnt_fit uuid[] default '{}', suggested jsonb default '[]',
@@ -768,9 +771,9 @@ begin
   where b.auto and not b.proposed and b.starts_at > now() and b.gcal_id is not null and (b.starts_at at time zone tz)::date = d
   on conflict (gcal_id) do update set ends_at = null;
   delete from public.blocks b where b.auto and not b.proposed and b.starts_at > now() and (b.starts_at at time zone tz)::date = d;
-  insert into public.blocks (task_id, starts_at, ends_at, proposed)
-  select x.task_id, x.starts_at, x.ends_at, true
-  from jsonb_to_recordset(coalesce(apply_proposal.blocks, '[]')) as x(task_id uuid, starts_at timestamptz, ends_at timestamptz);
+  insert into public.blocks (task_id, starts_at, ends_at, proposed, first_step)
+  select x.task_id, x.starts_at, x.ends_at, true, x.first_step
+  from jsonb_to_recordset(coalesce(apply_proposal.blocks, '[]')) as x(task_id uuid, starts_at timestamptz, ends_at timestamptz, first_step text);
   if jsonb_array_length(coalesce(apply_proposal.habit_blocks, '[]')) > 0 then
     insert into public.blocks (habit_id, starts_at, ends_at, proposed)
     select x.habit_id, x.starts_at, x.ends_at, true

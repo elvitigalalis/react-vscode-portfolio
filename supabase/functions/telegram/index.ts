@@ -383,7 +383,7 @@ const RESOLVE: Record<string, string> = { nudges: "ignore-duplicates", gcal_pend
 const KEY: Record<string, string> = { proposals: "day" };
 
 // Done or Snooze on a nudge, Approve all or Skip on a plan; readTap decides what counts as one.
-// The message's buttons go when its text is edited.
+// The message's buttons go when its text is edited, unless the answer gives new ones.
 async function tap(update: unknown, now: Date) {
   const snap = await snapshot(now);
   const t = readTap(update, snap.settings);
@@ -404,7 +404,8 @@ async function tap(update: unknown, now: Date) {
       snap.tasks.push(...(await db(`tasks?select=*&id=eq.${b.task_id}`)));
     }
   }
-  let { changes, text } = handleTap(t, snap, now) as { changes: Change[]; text: string };
+  // Didn't start's answer carries buttons of its own (the next free slot, Tomorrow).
+  let { changes, text, buttons } = handleTap(t, snap, now) as { changes: Change[]; text: string; buttons?: { text: string; callback_data: string }[] };
   // v5 L1: the decision, logged once its changes are made (and not when a newer plan refused it).
   let logged = tapFeedback(t, snap);
   for (const c of changes) {
@@ -435,7 +436,7 @@ async function tap(update: unknown, now: Date) {
   if (logged) await db("feedback", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(logged) });
   await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
-  await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN }).catch(() => {});
+  await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN, ...(buttons?.length ? { reply_markup: { inline_keyboard: [buttons] } } : {}) }).catch(() => {});
 }
 
 // The webhook must ask for texts as well as taps, or Telegram never delivers a text to the bot

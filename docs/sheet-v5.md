@@ -1009,6 +1009,82 @@ of `next_day`; `atRisk` reads its state (tight or won't fit); the brief gains a 
 and Telegram a budgeted `horizon` message. The re-flow runs in the telegram tick and in
 read_planner.
 
+## Day rules and first steps
+
+Research-backed rules for how a day is blocked and followed through (2026-11-05). W is the wake
+the plan counts from (today's wake on today, else the typical wake: `wakeOn`, sleep.mjs) and B
+is tonight's bedtime (bedtime.mjs). Both stay on the server (ADR 0005): read_planner carries only
+the times worked out from them, as "HH:MM" or null.
+
+### read_planner (`planSnapshot`)
+
+- `window.to` = the earliest of the shutdown line, B − 60 (wind-down) and W + 16 h.
+- A **short night** is a main sleep under 6 hours, or a **sleep debt**: the mean sleep of the
+  three nights ending on plan_day under 6.5 hours (`sleepDebt`, all three nights needed). Both
+  give the lighter day (0.85 of the cap, a break after every 60), as `dayCap(base, day,
+  approved, debt)`. planner-mcp reads plan_day's and the two days before's `sleep_days` rows; the
+  horizon re-flow does the same for today's cap. The brief's cap line still reads only last
+  night.
+- `day_rules` gains: `light_until` (W + 90, W + 120 after a short night), `hard_work_from` (W +
+  90), `hard_work_to` (W + 6.5 h, no later than B − 120), `hard_work_ends_by` (B − 120),
+  `gym_admin_from` and `gym_admin_to` (W + 6.5 h to W + 9 h), `long_break_after_min` 180,
+  `long_break_min` 15, `meal_after_min` 240, `meal_break_min` 30, `meal_from` and `meal_to` (the
+  middle third of the window from `planStart`, its start before it is held to now, so a replan
+  keeps the day's thirds) and `mail_admin_batches` 2.
+- A task gains `light: true` when it is mail or admin, or its paced minutes are 30 or less, and
+  `mail_admin: true` when it is mail or admin: a tag of mail, email, admin or errand(s), or a
+  title word such as email, inbox, reply, respond, admin, paperwork, form or errand. A task with
+  a source (course, GitHub, Jira) never is.
+
+### checkProposal
+
+Each rule is skipped when `day_rules` lacks its numbers, and each error names the block to move:
+
+- **Light start:** a course, GitHub or Jira task that isn't light can't start before
+  `light_until` (a task fixed at a time still starts then). Unknown kinds pass; the prompt asks
+  for light tasks and the easy start of at most 30 minutes, with the hardest task next.
+- **Long break:** task blocks under 15 minutes apart are one stretch, holding at most 180
+  minutes of blocks; approved blocks count. 90/10 (60/10 after a short night) still holds.
+- **Meal break:** with 240 minutes or more of task blocks on the day, `meal_from`–`meal_to` keeps
+  30 free minutes. Busy times and non-meal habits take time; a habit named lunch, dinner, meal
+  and so on is free. Refused only when a proposed block lies in the middle third.
+- **Mail and admin:** their blocks, back to back (under 15 minutes apart, no other task block
+  between) are batches, at most 2 a day.
+- **Gym:** a habit ends by `window.to`, which is B − 60 or earlier, so a gym habit ends an hour
+  before bed with no rule of its own.
+- **first_step:** optional per block, text of at most 80 characters, one line, no link, not
+  blank; the row carries it to `apply_proposal`, which stores it on the block.
+- The preferred times (hard work, gym and admin) are the prompt's only.
+
+### Telegram (`nudges.mjs`)
+
+- A start nudge (and a snooze) of a block with `first_step` reads `Now: OS homework — first:
+  open HW4, do Q1 (2:00 pm, 45 min)`; without one, as before.
+- **Didn't start** offers the next free quarter hour today, at least 5 minutes on, that holds the
+  block's length by the shutdown line and quiet hours, clear of busy times (with 10 minutes of
+  travel) and other approved blocks: `Next free slot: 4:15 pm (45 min) · OS homework` with
+  **Move to 4:15 pm** (`move:<block id>:<start in epoch minutes>`) and **Tomorrow**. With no slot:
+  `No free slot left today · OS homework` and **Tomorrow**, whose plan times it.
+- **Move** checks the slot again, then moves the block: new times, `auto: false` (his own move
+  locks it), `gcal_id: null`, and a `gcal_pending` delete of the old event, so /plan makes a new
+  one. A slot taken or past since: `That slot isn't free any more · OS homework`.
+- **Finished** already counts each block only up to the earlier of its end and the tap, so a late
+  tap records the block, not the tap; the actuals row's `day` is now the block's day, not the
+  tap's.
+
+### Schema
+
+```sql
+alter table blocks add column if not exists first_step text check (char_length(first_step) between 1 and 80);
+-- apply_proposal: the blocks recordset gains first_step text, inserted with each block.
+```
+
+### Deploy
+
+1. Run `supabase/schema.sql` (the `first_step` column and `apply_proposal`), then deploy
+   `planner-mcp` and `telegram` with `--use-api --no-verify-jwt`.
+2. Paste the prompt from docs/sheet-morning-task.md into the live routine.
+
 ## Out of scope
 ## Out of scope
 

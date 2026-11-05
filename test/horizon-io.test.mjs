@@ -20,8 +20,26 @@ test("horizonInput: undone due tasks without a fixed time, in minutes with their
   const tasks = [task(A, "2026-11-09", { est_min: 120 }), task(B, "2026-11-07", { at_time: "15:00:00" })];
   const input = horizonInput(rows({ tasks }), eight);
   assert.equal(input.today, TODAY);
-  assert.deepEqual(input.tasks, [{ id: A, due: "2026-11-09", minutes: 120, done_min: 0 }]);
+  assert.deepEqual(input.tasks, [{ id: A, due: "2026-11-09", minutes: 120, done_min: 0, minutes_p80: 120, kind: null }]);
   assert.deepEqual(Object.keys(input.free), ["2026-11-05", "2026-11-06", "2026-11-07", "2026-11-08", "2026-11-09"]);
+});
+
+test("horizonInput: each task carries its minutes at the 80th-percentile pace and its kind of work", () => {
+  // Ten "other" actuals: eight at 1x, two at 2x. The median pace is 1, the P80 pace 1.
+  // With four at 2x, the P80 is 2 while the median stays 1.
+  const row = (i, r) => ({ at: `2026-10-${String(10 + i).padStart(2, "0")}T12:00:00Z`, kind: "other", est_min: 60, minutes: 60 * r });
+  const actuals = [1, 1, 1, 1, 1, 1, 2, 2, 2, 2].map((r, i) => row(i, r));
+  const tasks = [task(A, "2026-11-09", { title: "CSE 320 midterm", est_min: 60 }), task(B, "2026-11-08", { title: "Implement the parser", est_min: 60 })];
+  const input = horizonInput(rows({ tasks, actuals }), eight);
+  assert.deepEqual(input.tasks.map((t) => [t.id, t.minutes, t.minutes_p80, t.kind]), [[B, 60, 120, "programming"], [A, 60, 120, "exam"]]);
+});
+
+test("horizonKey: a change to the engine's rules changes the key, so a deploy re-flows", async () => {
+  const { HORIZON_RULES } = await import("../src/sheet/horizon.mjs");
+  assert.ok(Number.isInteger(HORIZON_RULES));
+  const input = horizonInput(rows({ tasks: [task(A, "2026-11-08")] }), eight);
+  assert.notEqual(await horizonKey(input, HORIZON_RULES + 1), await horizonKey(input));
+  assert.equal(await horizonKey(input, HORIZON_RULES), await horizonKey(input));
 });
 
 test("horizonInput: each day's free time is the window less busy times with travel and habits, under the cap", () => {
@@ -49,7 +67,7 @@ test("horizonInput: today's locked task blocks count against today, and a More t
   ];
   const feedback = [{ at: at(TODAY, "07:30"), item: "finished", action: "more", ref: { block_id: "b1" } }];
   const input = horizonInput(rows({ tasks, blocks, feedback }), eight);
-  assert.deepEqual(input.tasks, [{ id: A, due: "2026-11-06", minutes: 180, done_min: 30 }]);
+  assert.deepEqual(input.tasks, [{ id: A, due: "2026-11-06", minutes: 180, done_min: 30, minutes_p80: 180, kind: null }]);
   assert.deepEqual(input.locked, [{ task_id: A, day: TODAY, minutes: 120 }]);
   // Cap 600 less 120 locked; the window 8:00–17:00 less the 13:00–14:00 block is 480.
   assert.equal(input.free[TODAY], 480);
@@ -69,6 +87,14 @@ test("horizonInput: a short night lowers today's cap, as read_planner's does", (
   const s = { ...settings, workload_cap_min: 360 };
   const input = horizonInput(rows({ tasks, settings: s, sleepDay: { day: TODAY, readiness: 60, sleep_s: 8 * 3600 } }), eight);
   assert.equal(input.free[TODAY], 285); // 360 × 0.8 = 288 → 285
+});
+
+test("horizonInput: three short nights lower today's cap, as read_planner's does", () => {
+  const tasks = [task(A, "2026-11-06")];
+  const s = { ...settings, workload_cap_min: 360 };
+  const h = (x) => x * 3600;
+  const sleepDays = [{ day: TODAY, readiness: 75, sleep_s: h(7) }, { day: "2026-11-04", sleep_s: h(6) }, { day: "2026-11-03", sleep_s: h(6) }];
+  assert.equal(horizonInput(rows({ tasks, settings: s, sleepDays }), eight).free[TODAY], 300); // 360 × 0.85 = 306 → 300
 });
 
 test("horizonKey: the same inputs give the same key; previous and field order don't count", async () => {

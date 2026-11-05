@@ -241,9 +241,13 @@ test("More time: not past 11 pm", async () => {
   });
 });
 
-test("Didn't start: leaves the task open and records nothing", async () => {
+// Day rules and first steps: Didn't start now offers the next free slot (test/follow-through.test.mjs).
+test("Didn't start: leaves the task open, records nothing and offers the next free slot", async () => {
   const { handleTap } = await nudges();
-  assert.deepEqual(handleTap({ action: "nostart", block_id: B(1) }, busyDay(), tapAt), { changes: [], text: "Left open · OS homework" });
+  assert.deepEqual(handleTap({ action: "nostart", block_id: B(1) }, busyDay(), tapAt), {
+    changes: [], text: "Next free slot: 10:30 am (45 min) · OS homework",
+    buttons: [{ text: "Move to 10:30 am", callback_data: `move:${B(1)}:${Date.parse("2026-11-04T15:30:00Z") / 60_000}` }, { text: "Tomorrow", callback_data: `tomorrow:${B(1)}` }],
+  });
 });
 
 test("Tomorrow: rolls the task at once and clears its blocks still to come today", async () => {
