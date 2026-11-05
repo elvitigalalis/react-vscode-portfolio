@@ -86,7 +86,8 @@ const ProposalInput = z.object({
   replaces: z.number().int().nullish(),
   // read_planner's read_at: the revision consumes only the changes logged by then.
   read_at: z.string().max(40).nullish(),
-  blocks: z.array(z.object({ task_id: z.string().max(64), start: z.string().max(5), minutes: z.number().int() })).max(50).default([]),
+  // Day rules and first steps: first_step, the action the block starts with (checkProposal checks it).
+  blocks: z.array(z.object({ task_id: z.string().max(64), start: z.string().max(5), minutes: z.number().int(), first_step: line.nullish() })).max(50).default([]),
   needs_you: z.array(z.object({
     account: z.string().max(320),
     message_id: z.string().max(64),
@@ -152,6 +153,11 @@ function plannerServer(db: Db) {
       "essentials only, and habits holds only what's left); use them as given. " +
       "day_rules.bedtime is tonight's bedtime and wind_down_from the hour before it (\"HH:MM\", or null); " +
       "window.to already ends at wind_down_from when that is on plan_day: plan nothing in wind-down. " +
+      "day_rules also gives, as \"HH:MM\" or null: light_until (before it only light tasks: mail, admin or 30 minutes or less), " +
+      "hard_work_from to hard_work_to (the best time for hard work), hard_work_ends_by, gym_admin_from to gym_admin_to, and " +
+      "meal_from to meal_to (the window's middle third, which keeps a meal break of meal_break_min on a day of meal_after_min " +
+      "or more); long_break_after_min and long_break_min; and mail_admin_batches. A task has light: true when it is light and " +
+      "mail_admin: true when it is mail or admin. " +
       `${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -171,7 +177,8 @@ function plannerServer(db: Db) {
 
   server.registerTool("submit_proposal", {
     description: "Submit a plan revision for plan_day: replaces (the proposal's rev from read_planner, or null when " +
-      "there is none), read_at (read_planner's read_at, as given), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
+      "there is none), read_at (read_planner's read_at, as given), blocks ({ task_id, start: \"HH:MM\", minutes, first_step? }, first_step the concrete action " +
+      "it starts with, at most 80 characters, which the block's nudge leads with) inside the plan window and clear of approved " +
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
       "at-risk tasks that couldn't fit, next_day, the ids of plan_day's untimed tasks that couldn't fit, which move " +
@@ -183,7 +190,9 @@ function plannerServer(db: Db) {
       "plan_day and the next day, saved apart from the revision (event_todo_errors lists any refused). Needs you items from a " +
       "never-show sender are dropped, and dropped lists their message ids. Blocks and habits keep the day rules " +
       "from read_planner's day_rules: the workload cap (task blocks only; habits stay out of it), a break after " +
-      "every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
+      "every 90 minutes in a row, a 15-minute break after about 3 hours of blocks, a 30-minute meal break in the window's " +
+      "middle third on a day of 4 hours or more, mail and admin tasks in at most 2 batches, no course, GitHub or Jira " +
+      "task over 30 minutes before light_until, and travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
       "{ ok: true, rev, approved } the revision is approved at once when approved is true (auto_approve), and " +
       "otherwise waits for Lisul to approve it; submitting again (replaces: that rev) supersedes it. " + UNTRUSTED,

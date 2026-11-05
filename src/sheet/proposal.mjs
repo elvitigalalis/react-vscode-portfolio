@@ -295,6 +295,7 @@ function dayHabits(habits, day) {
 // --- submit_proposal -------------------------------------------------------------------------
 
 export const MAX_BLOCKS = 12;
+export const MAX_FIRST_STEP = 80;
 export const MAX_NEEDS = 15;
 export const MAX_PICKS = 5;
 export const NEEDS_KINDS = ["reply", "deadline", "meeting", "admin"];
@@ -638,6 +639,9 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
       if (lightUntil && from < toMinutes(lightUntil) && task && !task.at_time && hardKind(task)) {
         errors.push(`${name}: starts before ${lightUntil}, and until then only light tasks go (mail, admin, or ${LIGHT_MAX} minutes or less); start it at ${lightUntil} or later`);
       }
+      // Its first step (docs/sheet-v5.md, "Day rules and first steps"): optional, the nudge says it.
+      const step = b?.first_step == null ? null : text(b.first_step, `${name}.first_step`, MAX_FIRST_STEP, errors);
+      if (step === "") errors.push(`${name}.first_step: an action to start with, such as "open HW4, do Q1"; leave it out when there is none`);
       if (errors.length > before && !Number.isInteger(minutes)) return;
       const to = from + minutes;
       if (win && to > win.to) errors.push(`${name}: ends after ${snapshot.window.to}, ${windowEnd(snapshot)}`);
@@ -649,7 +653,7 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
       if (twin) errors.push(`${name}: overlaps blocks[${twin.i}]`);
       placed.push({ i, start: from, end: to, task_id: b.task_id });
       if (errors.length === before) {
-        blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
+        blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz), ...(step ? { first_step: step } : {}) });
       }
     });
   }

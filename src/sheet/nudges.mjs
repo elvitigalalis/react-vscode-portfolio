@@ -388,8 +388,10 @@ function replanWords(reasons, day) {
 const tapButtons = (id) => [{ text: "Done", callback_data: `done:${id}` }, { text: "Snooze 10 min", callback_data: `snooze:${id}` }];
 
 // "▶ 2:00 pm · OS homework (45 min)"
-const nudgeText = (b, task, { today, tz }) =>
-  `▶ ${formatClock(minutesOn(b.starts_at, today, tz))} · ${task.title} (${blockMinutes(b)} min)`;
+// With a first step (docs/sheet-v5.md, "Day rules and first steps") it leads with it.
+const nudgeText = (b, task, { today, tz }) => (b.first_step
+  ? `Now: ${task.title} — first: ${b.first_step} (${formatClock(minutesOn(b.starts_at, today, tz))}, ${blockMinutes(b)} min)`
+  : `▶ ${formatClock(minutesOn(b.starts_at, today, tz))} · ${task.title} (${blockMinutes(b)} min)`);
 
 // The blocks that can still be nudged, with their tasks: today's, starting outside quiet hours
 // (so a block before 8 am never gets one), whose task isn't done; earliest first.
