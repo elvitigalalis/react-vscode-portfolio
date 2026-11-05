@@ -47,7 +47,7 @@ test("busy-sync checks the cron secret, reads the token by rpc, and writes in on
   assert.match(syncFn, /rpc\/busy_sync_save/);
   assert.match(syncFn, /freeBusyRequest\(/);
   assert.match(syncFn, /freeBusyRows\(/);
-  assert.match(syncFn, /busyChange\(/);
+  assert.match(syncFn, /busyChange\(.*shutdown\)/);
   assert.match(syncFn, /"freebusy"/);
   assert.match(syncFn, /not connected/);
 });
