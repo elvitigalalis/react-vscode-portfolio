@@ -1841,3 +1841,70 @@ create policy owner_all on gym_sets for all using (is_owner()) with check (is_ow
 create policy owner_all on gym_baselines for all using (is_owner()) with check (is_owner());
 create policy owner_all on gym_swaps for all using (is_owner()) with check (is_owner());
 revoke all on gym_exercises, gym_program_days, gym_prescriptions, gym_sessions, gym_sets, gym_baselines, gym_swaps from anon;
+
+-- --- Horizon planning (docs/sheet-horizon.md; ADR 0006) -------------------------------------
+-- Every undone task with a due date gets planned minutes on each working day up to it, worked out
+-- by src/sheet/horizon.mjs on the server. Future days hold minutes only, never times or Google
+-- events. Owner-only, in no public view, written only through replace_horizon.
+create table if not exists horizon_alloc (
+  task_id uuid not null references tasks on delete cascade,
+  day date not null,
+  minutes int not null check (minutes > 0),
+  over_min int not null default 0 check (over_min >= 0 and over_min <= minutes),  -- past the cap
+  updated_at timestamptz not null default now(),
+  primary key (task_id, day)
+);
+create index if not exists horizon_alloc_day on horizon_alloc (day);
+create table if not exists horizon_state (
+  task_id uuid primary key references tasks on delete cascade,
+  state text not null check (state in ('on_track', 'tight', 'wont_fit')),
+  slack_min int not null,
+  short_min int not null default 0 check (short_min >= 0),
+  remaining_min int not null check (remaining_min >= 0),
+  finish_day date,
+  target_day date not null,
+  updated_at timestamptz not null default now()
+);
+-- The last re-flow: when, and the key of the inputs it planned from (a re-flow with the same key
+-- is skipped).
+alter table settings add column if not exists horizon_at timestamptz;
+alter table settings add column if not exists horizon_key text check (char_length(horizon_key) <= 128);
+alter table horizon_alloc enable row level security;
+alter table horizon_state enable row level security;
+drop policy if exists owner_all on horizon_alloc;
+drop policy if exists owner_all on horizon_state;
+create policy owner_all on horizon_alloc for all using (is_owner()) with check (is_owner());
+create policy owner_all on horizon_state for all using (is_owner()) with check (is_owner());
+revoke all on horizon_alloc, horizon_state from anon;
+
+-- One re-flow, all or nothing: allocations from from_day on are replaced by `allocs` ([{ task_id,
+-- day, minutes, over_min }]), rows from more than 30 days before it go, every task's state is
+-- replaced by `states` ([{ task_id, state, slack_min, short_min, remaining_min, finish_day,
+-- target_day }]), and settings records the run. Rows for a task that no longer exists are left
+-- out. Security invoker, so RLS applies to the caller. Returns how many allocations it wrote.
+create or replace function replace_horizon(from_day date, key text, allocs jsonb, states jsonb) returns int
+language plpgsql security invoker set search_path = public as $$
+declare n int;
+begin
+  delete from horizon_alloc a where a.day >= from_day or a.day < from_day - 30;
+  insert into horizon_alloc (task_id, day, minutes, over_min)
+  select x.task_id, x.day, x.minutes, coalesce(x.over_min, 0)
+  from jsonb_to_recordset(coalesce(allocs, '[]')) as x(task_id uuid, day date, minutes int, over_min int)
+  join tasks t on t.id = x.task_id
+  where x.day >= from_day;
+  get diagnostics n = row_count;
+  delete from horizon_state s
+  where s.task_id <> all (array(select (e->>'task_id')::uuid from jsonb_array_elements(coalesce(states, '[]')) e));
+  insert into horizon_state (task_id, state, slack_min, short_min, remaining_min, finish_day, target_day)
+  select x.task_id, x.state, x.slack_min, coalesce(x.short_min, 0), x.remaining_min, x.finish_day, x.target_day
+  from jsonb_to_recordset(coalesce(states, '[]'))
+    as x(task_id uuid, state text, slack_min int, short_min int, remaining_min int, finish_day date, target_day date)
+  join tasks t on t.id = x.task_id
+  on conflict (task_id) do update set state = excluded.state, slack_min = excluded.slack_min,
+    short_min = excluded.short_min, remaining_min = excluded.remaining_min,
+    finish_day = excluded.finish_day, target_day = excluded.target_day, updated_at = now();
+  update settings set horizon_at = now(), horizon_key = key where id;
+  return n;
+end $$;
+revoke execute on function replace_horizon(date, text, jsonb, jsonb) from public, anon;
+grant execute on function replace_horizon(date, text, jsonb, jsonb) to authenticated, service_role;

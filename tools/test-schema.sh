@@ -1797,4 +1797,76 @@ SQL
 )
 grep -q "requires a WHERE clause" <<<"$out" || { echo "✗ safeupdate let a delete without where through: $out"; exit 1; }
 echo "✓ gym: safeupdate refuses a delete without where"
+# Horizon planning (docs/sheet-horizon.md): replace_horizon as PostgREST runs it, with pg-safeupdate
+# loaded and as the owner; RLS keeps everyone else out.
+psql_as supabase_admin >/dev/null <<'SQL'
+\set QUIET on
+load 'safeupdate';
+create function pg_temp.as_user(r text, email text) returns void language sql as $$
+  select set_config('role', r, false),
+         set_config('request.jwt.claims', coalesce(json_build_object('email', email)::text, ''), false) $$;
+insert into tasks (id, title, list, due) values
+  ('00000000-0000-4000-8000-0000000000e1', 'OS project', 'Inbox', current_date + 9),
+  ('00000000-0000-4000-8000-0000000000e2', 'HW 5', 'Inbox', current_date + 2);
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$
+declare
+  e1 uuid := '00000000-0000-4000-8000-0000000000e1';
+  e2 uuid := '00000000-0000-4000-8000-0000000000e2';
+  gone uuid := '00000000-0000-4000-8000-0000000000ef';
+  d date := current_date;
+begin
+  if replace_horizon(d, 'k1',
+       jsonb_build_array(
+         jsonb_build_object('task_id', e1, 'day', d, 'minutes', 90),
+         jsonb_build_object('task_id', e1, 'day', d + 1, 'minutes', 60),
+         jsonb_build_object('task_id', e2, 'day', d + 2, 'minutes', 120, 'over_min', 30),
+         jsonb_build_object('task_id', gone, 'day', d, 'minutes', 30)),
+       jsonb_build_array(
+         jsonb_build_object('task_id', e1, 'state', 'on_track', 'slack_min', 600, 'remaining_min', 150, 'finish_day', d + 1, 'target_day', d + 8),
+         jsonb_build_object('task_id', e2, 'state', 'wont_fit', 'slack_min', -30, 'short_min', 30, 'remaining_min', 120, 'finish_day', d + 2, 'target_day', d + 1),
+         jsonb_build_object('task_id', gone, 'state', 'tight', 'slack_min', 0, 'remaining_min', 30, 'target_day', d))) <> 3
+    then raise exception 'replace_horizon wrote the wrong count'; end if;
+  if (select horizon_key from settings) <> 'k1' or (select horizon_at from settings) is null
+    then raise exception 'replace_horizon did not record the run'; end if;
+  -- A past row stays; a second run replaces from from_day on, and drops states it doesn't name.
+  insert into horizon_alloc (task_id, day, minutes) values (e1, d - 1, 45);
+  perform replace_horizon(d, 'k2', jsonb_build_array(jsonb_build_object('task_id', e1, 'day', d + 3, 'minutes', 60)),
+    jsonb_build_array(jsonb_build_object('task_id', e1, 'state', 'tight', 'slack_min', 30, 'remaining_min', 60, 'finish_day', d + 3, 'target_day', d + 8)));
+  if (select count(*) from horizon_alloc) <> 2 or not exists (select 1 from horizon_alloc where day = d - 1)
+    or (select count(*) from horizon_state) <> 1 or (select state from horizon_state) <> 'tight'
+    then raise exception 'replace_horizon second run'; end if;
+  -- All or nothing: a bad row leaves the last plan in place.
+  begin
+    perform replace_horizon(d, 'k3', jsonb_build_array(jsonb_build_object('task_id', e1, 'day', d, 'minutes', 0)), '[]');
+    raise exception 'replace_horizon took a zero-minute row';
+  exception when check_violation then null; end;
+  if (select count(*) from horizon_alloc) <> 2 or (select horizon_key from settings) <> 'k2'
+    then raise exception 'a failed replace_horizon changed the plan'; end if;
+  -- Done with a task: its rows go with it.
+  delete from tasks where id = e1;
+  if exists (select 1 from horizon_alloc) or exists (select 1 from horizon_state) then raise exception 'horizon rows outlived their task'; end if;
+  raise notice '✓ horizon: replace_horizon under safeupdate, all or nothing, cascades';
+end $$;
+select pg_temp.as_user('authenticated', 'someone@example.com');
+do $$ begin
+  if exists (select 1 from horizon_alloc) or exists (select 1 from horizon_state) then raise exception 'a stranger read horizon rows'; end if;
+  begin
+    insert into horizon_alloc (task_id, day, minutes) values ('00000000-0000-4000-8000-0000000000e2', current_date, 30);
+    raise exception 'a stranger wrote horizon_alloc';
+  exception when insufficient_privilege then null; end;
+  raise notice '✓ horizon: RLS keeps a stranger out';
+end $$;
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from horizon_alloc; raise exception 'anon read horizon_alloc';
+  exception when insufficient_privilege then null; end;
+  if has_function_privilege('anon', 'replace_horizon(date, text, jsonb, jsonb)', 'execute')
+    then raise exception 'anon may call replace_horizon'; end if;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('horizon_alloc', 'horizon_state'))
+    then raise exception 'a public view reads the horizon'; end if;
+  raise notice '✓ horizon: anon has no table and no function';
+end $$;
+SQL
 echo "✓ all schema checks passed"
