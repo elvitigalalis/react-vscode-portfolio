@@ -30,8 +30,12 @@ An undone task whose due date has passed.
 _Avoid_: Late, past due
 
 **Message**:
-A plain line Lisul types to Claude in /plan, such as "dentist Thu 3pm". Claude answers it with tasks, events and a one-line reply, and nothing else.
+A plain line Lisul types to Claude in /plan or texts to the bot, such as "dentist Thu 3pm". Claude answers it with tasks, events and a one-line reply, and nothing else.
 _Avoid_: Chat, prompt, command
+
+**Receipt**:
+What a message added, item by item, each with an Undo: under the message in /plan, and as the bot's reply to a text.
+_Avoid_: Confirmation, summary, result
 
 **Block**:
 A stretch of time on a day reserved for one task, mirrored to the "Time blocks" calendar.
@@ -188,6 +192,10 @@ _Avoid_: Check-in, follow-up, time log
 **Nudge budget**:
 The most nudges Lisul gets in one day: six, counting repeats and snoozes but not the morning brief or the check-in. The first six blocks' nudges are kept for them; repeats and snoozes get only the slots left.
 _Avoid_: Limit, cap
+
+**Now message**:
+The one pinned Telegram message that says which block is on until when, and what's next. It is edited in place, never sent again, so it makes no notification.
+_Avoid_: Status, pinned nudge, ticker
 
 **Quiet hours**:
 11 pm to 8 am, when nothing is sent.

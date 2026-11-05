@@ -1368,6 +1368,20 @@ language sql security invoker set search_path = public as $$
 $$;
 revoke execute on function add_message_step(uuid[], text, text) from public, anon;
 
+-- A message texted to the bot (docs/sheet-messages.md, "From Telegram"): tg_message_id is his
+-- Telegram message, which the receipt replies to, and tg_receipt_at is when the telegram
+-- function claimed the receipt (set before sending, back to null if Telegram refused it), so it
+-- goes out once. Null for a message typed in /plan.
+alter table messages add column if not exists tg_message_id bigint;
+alter table messages add column if not exists tg_receipt_at timestamptz;
+create index if not exists messages_tg_receipt on messages (answered_at) where tg_message_id is not null and tg_receipt_at is null;
+
+-- The pinned Now message in Telegram (docs/sheet-nudges.md, "The pinned Now message"): the bot's
+-- message id and the words it last showed, so the minute tick edits it only when they change.
+-- Null until the first one is made, and again if Lisul deletes it.
+alter table settings add column if not exists now_message_id bigint;
+alter table settings add column if not exists now_text text;
+
 -- --- Event to-dos (docs/sheet-v5.md, "Event to-dos") -----------------------------------------
 -- Every Google Calendar event on a day is also a to-do in /plan's list. Only what the browser
 -- can't get from Google is kept, by the event's key (calendar ID ":" event ID): done, hidden,

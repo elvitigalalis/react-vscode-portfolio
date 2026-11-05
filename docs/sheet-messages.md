@@ -18,8 +18,8 @@ with `trigger: message`, and that run does the reading. Terms are as in
   `at`, `text` (1–8000, line breaks kept), `status` (`pending` | `done` | `failed`), `reply`
   (≤ 500), `tasks_added`, `tasks` (`[{ id, title, day, list, due, at_time, why? }]`, as added),
   `events` (`[{ id, title, starts_at, ends_at, why?, gcal_id? }]`), `created_in_calendar`,
-  `fired_at`, `steps` (`[{ at, kind, text }]`, at most 12), `session_url` (the run on claude.ai)
-  and `answered_at`. nightly_roll keeps 30 days.
+  `fired_at`, `steps` (`[{ at, kind, text }]`, at most 12), `session_url` (the run on claude.ai),
+  `answered_at`, and for a text to the bot `tg_message_id` and `tg_receipt_at` ("From Telegram"). nightly_roll keeps 30 days.
 - **`answer_message(m, new_tasks, new_events, answer)`**, security invoker: refuses a message that
   isn't pending; adds each task at the end of its day or Someday list with `source = 'message'`;
   sets the message `done` (or `failed` when it added nothing), with its reply, `tasks` (each with
@@ -90,6 +90,43 @@ with `trigger: message`, and that run does the reading. Terms are as in
   claiming `created_in_calendar` so two tabs never make them twice, and each one's Google id is
   recorded for its Undo; any left over (a closed tab,
   no Google access) are created on the next load with Google access.
+
+## From Telegram
+
+A plain text Lisul sends the bot is a message too, exactly as if he had typed it into the box:
+it lands in the same table, shows in /plan's Recent list, and Claude answers it the same way.
+
+- **The webhook** (the `telegram` function, now also given `message` updates: `setWebhook`'s
+  `allowed_updates` is `["callback_query", "message"]`) reads an update with `readText`
+  (src/sheet/capture.mjs): only a text from `settings.telegram_chat_id`, the chat the nudges go
+  to, and not a command (`/start`), an edit or a photo; every other update and chat is ignored
+  without a word, and taps are read as before. The text is cleaned by `messageText` and goes
+  through `saveAndFire` (supabase/functions/_shared/capture.ts), the message function's own save
+  and fire, with `tg_message_id` (his Telegram message) on the row. A text already saved (a
+  webhook retry) is not saved again. The bot answers at once, as a reply: `ackText`, "Sent to
+  Claude. Claude is reading…" or the box's Queued words.
+- **The receipt** goes from the minute tick once the message is answered (`receipts`): a reply
+  to his text with `receipt(m, timeZone)`: "Added: 1 task, 1 event" (or "Couldn't parse it:
+  nothing added"), Claude's reply, and each to-do and event on its own line as /plan lists them
+  (`itemLines`), with an **Undo** button for each item (`mu:` and the message and item ids, each
+  as base64url, so it fits Telegram's 64 bytes). It is claimed through `tg_receipt_at` so it goes
+  out once, whatever the hour, for a message answered in the last day.
+- **Undo** (`readUndo`, `undoChanges`) does what /plan's Undo does: a to-do's blocks' Google
+  events and an event's Google event (when /plan made one) are left as `gcal_pending` deletes,
+  which /plan applies when it opens, then `undo_message_item` takes the item off. The receipt is
+  edited to start "Undone: Lab report", with the other Undo buttons kept. An item undone already
+  (in /plan, or a second tap) changes nothing.
+- A text Claude can't act on is answered as the box's would be: the receipt says "Couldn't parse
+  it: nothing added" with Claude's reply.
+
+Deploying it, outside 05:45–06:45 America/New_York: (1) the schema (adds `tg_message_id` and
+`tg_receipt_at`); (2) `telegram` and `message` (they share `_shared/capture.ts`), each with
+`$SB functions deploy <name> --use-api --no-verify-jwt --project-ref $REF --yes`; (3) the
+webhook, so Telegram sends texts as well as taps: `bash tools/sheet-setup.sh telegram`, or
+`setWebhook` by hand with the same `url` and `secret_token` and
+`allowed_updates=["callback_query","message"]`. Check it: text the bot "dentist Thu 3pm"; it
+answers "Sent to Claude…", the message shows in /plan's Recent list, the receipt follows within
+a minute of Claude's answer, and its Undo takes the event off in both places.
 
 ## Deploy
 

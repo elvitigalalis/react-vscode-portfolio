@@ -16,12 +16,14 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep } from "../../../src/sheet/nudges.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
+import { ackText, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
+import { saveAndFire } from "../_shared/capture.ts";
 
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -37,10 +39,12 @@ Deno.serve(async (req) => {
     const now = new Date();
     // A replan that fails to start must not stop the messages, and the other way round.
     const replan = await replanTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now)), replan });
+    // Nor must a receipt for a text to the bot.
+    const receipted = await receipts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    return Response.json({ ...(await send(now)), replan, receipts: receipted });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
-    await tap(await req.json(), new Date());
+    await webhook(await req.json(), new Date());
     return new Response("ok");
   }
   return new Response("forbidden", { status: 403 });
@@ -89,9 +93,9 @@ async function snapshot(now: Date) {
   // Tips: two weeks of score contributors and the Gym habit's time; and whether the ring's battery
   // was low at the last sync. The words are composed here (nudges.mjs), never by the routine.
   const tipDays = await db(`sleep_days?select=day,contributors&day=gte.${addDays(today, -14)}&contributors=not.is.null`).catch(() => []);
-  const gymHabits = await db("habits?select=name,ideal").catch(() => []);
+  const gymHabits = await db("habits?select=id,name,ideal").catch(() => []);
   const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, ringLow };
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -169,7 +173,48 @@ async function send(now: Date) {
     await c.sent();
     sent.push(m.kind);
   }
-  return { sent };
+  // The pinned Now message must not stop the messages, nor they it.
+  const pin = await pinTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return { sent, pin };
+}
+
+// --- The pinned Now message (docs/sheet-nudges.md, "The pinned Now message") ---------------
+// pinStep decides; this sends, pins and edits. Its id and words live in settings (now_message_id,
+// now_text). Made with sendMessage's disable_notification ("Sends the message silently") and
+// pinned with pinChatMessage's disable_notification ("Notifications are always disabled in ...
+// private chats", and a bot may pin any non-service message there: core.telegram.org/bots/api#sendmessage,
+// #pinchatmessage). Then only editMessageText, which notifies no one (#editmessagetext). Telegram
+// refuses an edit that changes nothing ("message is not modified"), which only records the words;
+// a message he deleted ("message to edit not found") is forgotten, and made again once he's up.
+const saveNow = (patch: Record<string, unknown>) => db("settings?id=eq.true", { method: "PATCH", body: JSON.stringify(patch) });
+
+async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
+  // A block's task may be on another day or a Someday list, outside the snapshot's tasks.
+  const missing = [...new Set(snap.blocks.map((b: { task_id: string | null }) => b.task_id)
+    .filter((id: string | null) => id && !snap.tasks.some((t: { id: string }) => t.id === id)))];
+  const tasks = missing.length ? [...snap.tasks, ...(await db(`tasks?select=id,title&id=in.(${missing.join(",")})`))] : snap.tasks;
+  const step = pinStep({ ...snap, tasks }, now) as { action: "create" | "edit"; text: string; message_id?: number } | null;
+  if (!step) return null;
+  const chat_id = snap.settings.telegram_chat_id;
+  if (step.action === "edit") {
+    try {
+      await telegram("editMessageText", { chat_id, message_id: step.message_id, text: step.text, ...PLAIN });
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "";
+      if (/message to edit not found|message can't be edited/i.test(why)) {
+        await saveNow({ now_message_id: null, now_text: null });
+        return "gone";
+      }
+      if (!/message is not modified/i.test(why)) throw e;
+    }
+    await saveNow({ now_text: step.text });
+    return "edited";
+  }
+  const msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  // Kept before the pin, so a refused pin never makes a second message.
+  await saveNow({ now_message_id: msg.message_id, now_text: step.text });
+  await telegram("pinChatMessage", { chat_id, message_id: msg.message_id, disable_notification: true });
+  return "created";
 }
 
 const setSentAt = (id: string, sent_at: string | null) => db(`nudges?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ sent_at }) });
@@ -200,6 +245,94 @@ async function claim(m: Message) {
 // editMessageText both take link_preview_options, a LinkPreviewOptions with is_disabled: true
 // (core.telegram.org/bots/api#linkpreviewoptions, #sendmessage, #editmessagetext; Bot API 10.3).
 const PLAIN = { link_preview_options: { is_disabled: true } };
+
+// --- The webhook ------------------------------------------------------------------------------
+
+// A text from Lisul's chat is a message to Claude (capture.mjs); anything else is a tap, read as
+// before. Every other update, and any other chat, is ignored without a word.
+async function webhook(update: unknown, now: Date) {
+  const [settings] = await db("settings?select=*");
+  const t = readText(update, settings);
+  if (t) return capture(t, now);
+  const u = readUndo(update, settings);
+  if (u) return undo(u, settings);
+  return tap(update, now);
+}
+
+// --- Texting the bot (docs/sheet-messages.md, "From Telegram") -----------------------------
+
+// The text goes through the same save and fire as /plan's box (../_shared/capture.ts), with his
+// Telegram message's id on the row, and the bot answers at once with where it stands, as a reply
+// to his text (sendMessage's reply_parameters, a ReplyParameters with message_id;
+// allow_sending_without_reply so a deleted text doesn't stop it: core.telegram.org/bots/api#sendmessage,
+// #replyparameters). The receipt follows from the minute tick once Claude has answered (receipts).
+// Telegram sends an update again when the webhook fails ("we will repeat the request":
+// core.telegram.org/bots/api#setwebhook): a text already saved is not saved again, so a failed
+// save is retried and a saved one never doubles. A failed answer is only logged.
+async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
+  if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
+  const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  await telegram("sendMessage", {
+    chat_id: t.chat_id,
+    text: ackText(saved),
+    ...PLAIN,
+    reply_parameters: { message_id: t.message_id, allow_sending_without_reply: true },
+  }).catch((e) => console.error("telegram capture:", e.message));
+}
+
+// The receipt for each text Claude has answered since yesterday, once: a reply to his text with
+// what was added and an Undo for each item (capture.mjs's receipt), whatever the hour, since he
+// asked. Claimed first by filling in tg_receipt_at, which only one run can do, and given back
+// if Telegram refuses it, so the next minute tries again.
+async function receipts(now: Date) {
+  const [settings] = await db("settings?select=time_zone,telegram_chat_id");
+  if (!settings?.telegram_chat_id) return [];
+  const since = new Date(now.getTime() - 86_400_000).toISOString();
+  const rows = await db(`messages?select=*&tg_message_id=not.is.null&tg_receipt_at=is.null&status=neq.pending&answered_at=gte.${since}&order=at`);
+  const sent = [];
+  for (const m of rows) {
+    const [claimed] = await db(`messages?id=eq.${m.id}&tg_receipt_at=is.null`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ tg_receipt_at: now.toISOString() }),
+    });
+    if (!claimed) continue;
+    const { text, buttons } = receipt(m, settings.time_zone);
+    try {
+      await telegram("sendMessage", {
+        chat_id: settings.telegram_chat_id,
+        text,
+        ...PLAIN,
+        reply_parameters: { message_id: m.tg_message_id, allow_sending_without_reply: true },
+        reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
+      });
+    } catch (e) {
+      await db(`messages?id=eq.${m.id}`, { method: "PATCH", body: JSON.stringify({ tg_receipt_at: null }) });
+      throw e;
+    }
+    sent.push(m.id);
+  }
+  return sent;
+}
+
+// Undo on a receipt: the item comes off as /plan's Undo takes it (undoChanges), then the receipt
+// is edited to say so, with the Undo buttons left (editMessageText takes reply_markup, an
+// InlineKeyboardMarkup: core.telegram.org/bots/api#editmessagetext). An item undone already
+// changes nothing.
+async function undo(u: { message: string; item: string; query_id: string; chat_id: number; message_id: number }, settings: { time_zone: string }) {
+  const [m = null] = await db(`messages?select=*&id=eq.${u.message}`);
+  const blocks = await db(`blocks?select=id,task_id,gcal_id&task_id=eq.${u.item}`);
+  const r = undoChanges(m, u.item, blocks) as { title: string; changes: Change[] } | null;
+  for (const c of r?.changes ?? []) {
+    if (c.rpc) await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
+    else await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table!]}` }, body: JSON.stringify(c.insert) });
+  }
+  await telegram("answerCallbackQuery", { callback_query_id: u.query_id });
+  if (!m) return;
+  const [fresh = m] = r ? await db(`messages?select=*&id=eq.${u.message}`) : [m];
+  const { text, buttons } = receipt(fresh, settings.time_zone, r ? `Undone: ${r.title}` : null);
+  await telegram("editMessageText", { chat_id: u.chat_id, message_id: u.message_id, text, ...PLAIN, reply_markup: { inline_keyboard: buttons } }).catch(() => {});
+}
 
 // --- Taps ---------------------------------------------------------------------------------
 

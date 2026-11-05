@@ -13,17 +13,16 @@
 //   npx supabase functions deploy message --use-api --no-verify-jwt
 // --no-verify-jwt as calendar-connect: it checks the caller's token itself, against Auth.
 //
-// Secrets: SHEET_ROUTINE_ID and SHEET_ROUTINE_TOKEN, shared with telegram and routine-fire. The
-// token is never logged or returned.
-import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
-import { batchedPatch, messageText, shouldFire, startedPatch } from "../../../src/sheet/messages.mjs";
+// Secrets: SHEET_ROUTINE_ID and SHEET_ROUTINE_TOKEN, shared with telegram and routine-fire, read
+// in ../_shared/capture.ts (the save and the fire, which the telegram function shares). The token
+// is never logged or returned.
+import { messageText } from "../../../src/sheet/messages.mjs";
 import { corsFor } from "../../../src/sheet/mailconnect.mjs";
 import { db, env } from "../_shared/server.ts";
+import { saveAndFire } from "../_shared/capture.ts";
 
 const SUPABASE_URL = env("SUPABASE_URL");
 const SERVICE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
-const ROUTINE_ID = env("SHEET_ROUTINE_ID");
-const ROUTINE_TOKEN = env("SHEET_ROUTINE_TOKEN");
 
 Deno.serve(async (req) => {
   const cors = corsFor(req.headers.get("origin"));
@@ -38,24 +37,7 @@ Deno.serve(async (req) => {
     const text = messageText(body?.text);
     if (!text) return reply({ error: "bad-text" }, 400);
 
-    const now = new Date();
-    const pending = await db("messages?select=id,fired_at,session_url&status=eq.pending");
-    const [row] = await db("messages?select=id,at", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ text }) });
-    const saved = { id: row.id, at: row.at, status: "pending" };
-    if (!shouldFire(pending, now)) {
-      // It rides on that run, so it shows that run's link.
-      const link = batchedPatch(pending, now);
-      if (link) await db(`messages?id=eq.${row.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(link) });
-      return reply({ ...saved, fired: false, why: "batched" });
-    }
-    if (!ROUTINE_ID || !ROUTINE_TOKEN) return reply({ ...saved, fired: false, why: "not connected" });
-
-    const out = await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "message", counts: {} }, now);
-    if (!out.ok) {
-      return reply({ ...saved, fired: false, why: out.status === 429 ? "rate_limited" : "failed", ...(out.retry_at ? { retry_at: out.retry_at } : {}) });
-    }
-    await db(`messages?id=eq.${row.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(startedPatch(out, now)) });
-    return reply({ ...saved, fired: true });
+    return reply(await saveAndFire(text, new Date()));
   } catch (e) {
     console.error("message:", e instanceof Error ? e.message : "failed");
     return reply({ error: "failed" }, 500);

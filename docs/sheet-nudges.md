@@ -30,6 +30,8 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
     secret, given to `setWebhook` as its `secret_token`) and ignores, without a reply, any chat
     that isn't Lisul's (the chat ID is in `settings`). The same module reads the tap (`readTap`) and decides what it changes
     (`handleTap`); the function writes it, answers the tap and edits the message.
+    It also takes Lisul's texts to the bot, which are messages to Claude
+    ([sheet-messages.md](sheet-messages.md), "From Telegram").
 
   The bot token is a function secret. Messages are fixed templates.
 
@@ -134,6 +136,25 @@ every day, weekends included.
 - A late run still sends what it missed, for the minute it was due: a nudge or repeat while its
   block is still on, the brief and the check-in until 11 pm.
 - A day with no tasks gets its brief ("Nothing on today.") and no check-in.
+
+## The pinned Now message
+
+One message pinned at the top of the chat says what's on: "Now: OS homework until 3:40 pm ·
+Next: Gym at 4:00 pm", "Next: Gym at 4:00 pm" between blocks, "Next: Gym tomorrow at 8:00 am"
+when the next block is on a later day, or "Nothing scheduled". It reads the approved blocks
+(proposed ones aren't on the plan), each named by its task or habit (`nowText`).
+
+- The minute tick (`pinStep`, then `pinTick` in the `telegram` function) makes it once, silently
+  (`sendMessage` with `disable_notification`), pins it (`pinChatMessage`, also silent), and keeps
+  its id and words in `settings.now_message_id` and `now_text`. After that it only edits it
+  (`editMessageText`), and only when the words change, so it never notifies. It follows /plan
+  within a minute.
+- It is made only while he's up: not in quiet hours or before his wake (the brief's rule). Edits
+  go at any hour, since they are silent. Nothing happens while Telegram is off.
+- If he deletes it, the next edit finds it gone, the id is forgotten, and a new one is made and
+  pinned once he's up.
+
+Deploying it: the schema (adds `settings.now_message_id` and `now_text`), then `telegram`.
 
 ## Rules file: `sheet-claude.md`
 
