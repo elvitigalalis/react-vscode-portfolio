@@ -314,7 +314,8 @@ fi
 # ── 13 ───────────────────────────────────────────────────────────────────
 if need_settings; then
 stage "/plan: your day's settings"
-step "Still in Settings:"
+open_url "$PLAN"
+step "Click ••• (top right) → Settings, then:"
 step "Workload cap: hours of planned work a day (6 by default). Save."
 step "Habits: add each one (gym, lunch...) with its days, ideal time, minutes, flex and"
 say "    Firm (always placed first) or Flexible."
