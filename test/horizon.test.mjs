@@ -1,7 +1,7 @@
 // Horizon planning, part 1: the pure engine (docs/sheet-horizon.md, "The engine").
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planHorizon, horizonMinutes, confirmedDoneMin, dayFree, CHUNK_MIN, CHUNK_MAX } from "../src/sheet/horizon.mjs";
+import { planHorizon, horizonMinutes, confirmedDoneMin, dayFree, workKind, CHUNK_MIN, CHUNK_MAX, STRETCH_MAX } from "../src/sheet/horizon.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -55,9 +55,9 @@ test("earliest due goes first", () => {
 
 test("what won't fit stays on the due day past the cap, with the minutes short", () => {
   const r = plan({ tasks: [task("a", "2026-11-05", 180)], free: { "2026-11-05": 120 } });
-  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-05", minutes: 180, over_min: 60 }]);
+  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-05", minutes: 180, over_min: 90 }]);
   assert.equal(r.tasks.a.state, "wont_fit");
-  assert.equal(r.tasks.a.short_min, 60);
+  assert.equal(r.tasks.a.short_min, 90);
   assert.equal(r.tasks.a.slack_min, -60);
 });
 
@@ -173,14 +173,18 @@ test("dayFree is the cap less locked work, held to the free window", () => {
   assert.equal(dayFree({ cap: 360, window_free_min: 600, locked_min: 400 }), 0);
 });
 
+// Task kinds for the sweeps, from their own generator so the rest of each run stays the same.
+const kinds = (s) => () => { s = (s * 1103515245 + 12345) % 2 ** 31; return [undefined, undefined, "programming", "writing", "exam"][s % 5]; };
+
 // A seeded sweep: whatever the input, the rules hold.
 test("every plan keeps the rules", () => {
   let seed = 7;
   const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+  const kindOf = kinds(3);
   const day = (i) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); };
   for (let run = 0; run < 300; run++) {
     const free = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [day(i), rand(5) * 60]));
-    const tasks = Array.from({ length: 1 + rand(6) }, (_, i) => task(`t${i}`, day(rand(20) - 2), 15 * (1 + rand(40)), { done_min: rand(3) ? 0 : 15 * rand(4) }));
+    const tasks = Array.from({ length: 1 + rand(6) }, (_, i) => task(`t${i}`, day(rand(20) - 2), 15 * (1 + rand(40)), { done_min: rand(3) ? 0 : 15 * rand(4), kind: kindOf() }));
     const frozen_days = rand(2) ? [day(1)] : [];
     const previous = rand(2) ? planHorizon({ today: TODAY, tasks, free }).allocations : [];
     const r = planHorizon({ today: TODAY, tasks, free, frozen_days, previous });
@@ -195,7 +199,8 @@ test("every plan keeps the rules", () => {
       for (const a of mine) {
         assert.ok(a.day >= TODAY && a.day <= due, `run ${run}: ${t.id} on ${a.day}, due ${t.due}`);
         if (frozen_days.includes(a.day)) continue;
-        if (a.day !== due) assert.ok(a.minutes <= CHUNK_MAX, `run ${run}: ${t.id} ${a.minutes} on ${a.day}`);
+        const max = ["programming", "writing"].includes(t.kind) ? STRETCH_MAX : CHUNK_MAX;
+        assert.ok(a.minutes - a.over_min <= max, `run ${run}: ${t.id} ${a.minutes} on ${a.day}`);
         if (left >= CHUNK_MIN) assert.ok(a.minutes >= CHUNK_MIN, `run ${run}: ${t.id} piece ${a.minutes}`);
       }
       if (left <= 60 && !fromFrozen) assert.ok(mine.length <= 1, `run ${run}: ${t.id} split`);
@@ -212,12 +217,13 @@ test("every plan keeps the rules", () => {
 test("after a change, a re-flow moves no more minutes than planning afresh would", () => {
   let seed = 11;
   const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+  const kindOf = kinds(5);
   const day = (i) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); };
   const moved = (prev, next) => prev.reduce((s, p) => s + Math.max(0, p.minutes - (next.find((a) => a.task_id === p.task_id && a.day === p.day)?.minutes ?? 0)), 0);
   let total = 0, fresh = 0;
   for (let run = 0; run < 300; run++) {
     const free = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [day(i), 60 + rand(4) * 60]));
-    const tasks = Array.from({ length: 2 + rand(5) }, (_, i) => task(`t${i}`, day(1 + rand(20)), 15 * (2 + rand(30))));
+    const tasks = Array.from({ length: 2 + rand(5) }, (_, i) => task(`t${i}`, day(1 + rand(20)), 15 * (2 + rand(30)), { kind: kindOf() }));
     const previous = planHorizon({ today: TODAY, tasks, free }).allocations;
     // One change: a busy time lands, a task is added, or one is done.
     const kind = rand(3);
@@ -244,4 +250,34 @@ test("a big task's buffer holds a fifth of its minutes, a small one's one workin
   assert.equal(r.tasks.b.target_day, "2026-11-14");
   assert.ok(on(r, "a").every(([d]) => d <= "2026-11-13"));
   assert.equal(r.tasks.a.state, "on_track");
+});
+
+test("a task gets at most 90 minutes a day, even on its due day", () => {
+  const r = plan({ tasks: [task("a", "2026-11-05", 180)] });
+  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-05", minutes: 180, over_min: 90 }]);
+  assert.equal(r.tasks.a.state, "wont_fit");
+});
+
+test("programming and writing stretch to 120 a day, only when they would not fit", () => {
+  const r = plan({ tasks: [task("a", "2026-11-06", 300, { kind: "programming" })] });
+  assert.deepEqual(r.allocations, [
+    { task_id: "a", day: "2026-11-05", minutes: 120, over_min: 0 },
+    { task_id: "a", day: "2026-11-06", minutes: 180, over_min: 60 },
+  ]);
+  const fits = plan({ tasks: [task("b", "2026-11-06", 180, { kind: "writing" })] });
+  assert.deepEqual(on(fits, "b"), [["2026-11-05", 90], ["2026-11-06", 90]]);
+  const other = plan({ tasks: [task("c", "2026-11-06", 300)] });
+  assert.deepEqual(other.tasks.c.short_min, 120);
+});
+
+test("workKind reads exams, programming and writing from the task", () => {
+  assert.equal(workKind({ title: "CSE 320 Midterm 2" }), "exam");
+  assert.equal(workKind({ title: "Quiz 4 review" }), "exam");
+  assert.equal(workKind({ title: "Final exam" }), "exam");
+  assert.equal(workKind({ title: "Final project report" }), "writing");
+  assert.equal(workKind({ title: "Add tests for parser", source: "github" }), "programming");
+  assert.equal(workKind({ title: "Implement malloc" }), "programming");
+  assert.equal(workKind({ title: "History essay draft" }), "writing");
+  assert.equal(workKind({ title: "Laundry" }), null);
+  assert.equal(workKind({ title: "Laundry", kind: "writing" }), "writing");
 });

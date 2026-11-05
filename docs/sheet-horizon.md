@@ -23,7 +23,7 @@ Pure, deterministic, no network. Same input, same output.
 | field | what |
 | --- | --- |
 | `today` | `"YYYY-MM-DD"` in `settings.time_zone` |
-| `tasks` | `[{ id, due, minutes, done_min }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. |
+| `tasks` | `[{ id, due, minutes, done_min, kind? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. |
 | `free` | `{ day: minutes }` for every day from today to the latest due date: `dayFree(...)` of that day. A missing day has 0. |
 | `locked` | `[{ task_id, day, minutes }]`: today's locked task blocks, past ones too (one row per task, minutes summed). |
 | `frozen_days` | `[day]`: tomorrow once today is shut down (`days.shutdown`), else `[]`. |
@@ -46,6 +46,11 @@ Helpers in the same module:
     planSnapshot's `window`) after the day's busy times widened by `travel_min` (10) on each side,
     that weekday's habits at their ideal times, and the day's locked blocks;
   - `locked_min` is the minutes of the day's locked task blocks (habits stay out, as in the cap).
+- **`workKind(task)`**: `task.kind` when set; GitHub and Jira tasks are `"programming"`; else the
+  title: exam, quiz, test, midterm or final (not "final project/paper/report/essay/presentation/
+  draft") is `"exam"`, program/coding/code/implement/debug is `"programming"`, essay/paper/report/
+  write-up/draft/writing is `"writing"`, anything else `null`. The caller passes the task row
+  (`title`, `source`) and puts the result in the input's `kind`.
 - **`targetDay(due, today, working, buffer_min = 0, room = () => 0)`**: see "Buffer" below.
 
 ### Output
@@ -58,8 +63,9 @@ Helpers in the same module:
 }
 ```
 
-`minutes` on a day includes that task's locked minutes there. `over_min` is the part past the
-day's free time (only ever on the due day of a task that won't fit).
+`minutes` on a day includes that task's locked minutes there. `over_min` is the part the rules
+couldn't place: past the day's free time or past the task's daily maximum (only ever on the due
+day of a task that won't fit).
 
 ### Rules
 
@@ -72,7 +78,7 @@ day's free time (only ever on the due day of a task that won't fit).
    their free time, rounded down to 15; today takes all of it. The slack absorbs the overruns a
    far-off day's estimate hides (Zauberman & Lynch 2005). A task the plain pass can't finish may
    top up days it already has in 15-minute steps, but only when that places all of what is left.
-4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day; a task with 60
+4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day, the due day too; a task with 60
    minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
    90 + 75 + 30). All minutes move in 15-minute steps.
 5. **Buffer (R4):** the **target day** is the last working day before the due day when the due
@@ -86,8 +92,10 @@ day's free time (only ever on the due day of a task that won't fit).
    time, it takes kept minutes from tasks due later, only as many as it needs: the smallest cut
    first, then one the later task can take back on its other days, then latest due, then latest
    day. Those re-place in their own turn.
-7. **Due-day crunch:** before giving up, the due day takes whatever its free time holds, past
-   the 90-minute chunk.
+7. **Stretch:** before giving up, a `programming` or `writing` task may hold up to `STRETCH_MAX`
+   (120) minutes a day, from today to its due day, filling free time and then under rule 6.
+   Other kinds never pass 90 (study is better spaced; production work has a fixed start-up
+   cost). This replaces the old due-day crunch, which let any task take the whole due day.
 8. **Won't fit stays visible (R7):** what is still left goes on the due day as `over_min`, past
    the cap, never dropped.
 9. **No new minutes before today, after the due day, or on a frozen day.**

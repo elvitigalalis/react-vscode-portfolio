@@ -134,7 +134,7 @@ A task whose allocations fit by its due day only by using its buffer, or with le
 _Avoid_: At risk, close
 
 **Won't fit**:
-A task with more minutes left than its horizon's free time holds. The rest sits on its due day past the workload cap, with the hours short, and is never dropped.
+A task with more minutes left than its horizon's free time holds at 90 minutes a day (120 for programming and writing). The rest sits on its due day past the workload cap, with the hours short, and is never dropped.
 _Avoid_: Overbooked, impossible
 
 **Wake time**:
