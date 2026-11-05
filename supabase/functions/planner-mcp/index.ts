@@ -139,9 +139,11 @@ function plannerServer(db: Db) {
       "with answer_messages; messages_held is how many more wait for a later run (the oldest, when the total ran " +
       "over). run.trigger is message when one of them started this run. today is his date in " +
       "time_zone, and replans_on whether replans are on. " +
-      "window.from follows his wake time from his Oura ring: sleep " +
-      "gives typical_wake_weekday, typical_wake_weekend, woke_at (today's actual wake, or null) and last_synced, and " +
-      "day_rules.cap_reason says when his readiness or a short night changed the cap. " +
+      "window.from follows when he wakes, and day_rules.cap_reason (\"lighter day\" or \"fuller day\", or null) " +
+      "says the cap and break rule were changed for how he slept (\"rest mode\" or \"easing back from rest mode\": " +
+      "essentials only, and habits holds only what's left); use them as given. " +
+      "day_rules.bedtime is tonight's bedtime and wind_down_from the hour before it (\"HH:MM\", or null); " +
+      "window.to already ends at wind_down_from when that is on plan_day: plan nothing in wind-down. " +
       `${UNTRUSTED}`,
     inputSchema: z.object({}),
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -359,15 +361,18 @@ async function snapshot(db: Db, now: Date) {
   const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
   // v5 M1: Reply owed and Awaiting reply, which the mail sync keeps.
   const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who,message_id,basis,draft", order: "since" });
-  // Oura: the sleep periods (nightly_roll keeps 60 days), the days' readiness and sleep, and the
-  // last good sync. A missing table (the Oura schema not run yet) reads as none.
-  const [sleep, sleepDays, [ouraFeed = null]] = await Promise.all([
+  // Oura: the sleep periods (nightly_roll keeps 60 days), the day's readiness and sleep, and
+  // Oura's bedtime windows. A missing table (the Oura schema not run yet) reads as none. Only what
+  // code derives from them goes out: window.from, window.to, the cap and break rule, and bedtime
+  // and wind_down_from as plain times (docs/adr/0005-oura-data-never-reaches-claude.md).
+  const [sleep, sleepDays, sleepTimes, restPeriods] = await Promise.all([
     optional(db, { table: "sleep_nights", select: "oura_id,day,type,bedtime_start,bedtime_end", order: "bedtime_end" }),
     optional(db, { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "eq", planDay]] }),
-    read(db, { table: "feed_state", select: "fetched_at,ok", filters: [["source", "eq", "oura"]] }),
+    optional(db, { table: "sleep_times", select: "day,start_offset,end_offset", order: "day" }),
+    optional(db, { table: "rest_periods", select: "start_day,end_day", order: "start_day" }),
   ]);
   const snap = planSnapshot({
-    sleep, sleepDays, sleepSynced: ouraFeed?.ok ? ouraFeed.fetched_at : null,
+    sleep, sleepDays, sleepTimes, restPeriods,
     plan_day: planDay, actuals, past, habits, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,

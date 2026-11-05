@@ -126,6 +126,22 @@ import "../../styles/sheet.css";
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
+    <!-- A day's Oura numbers (docs/sheet-v5.md, "Day numbers"): src/sheet/oura-popover.mjs fills it. -->
+    <dialog class="sheet-dialog sheet-oura-dialog" data-oura-day aria-labelledby="sheet-oura-day-title">
+      <h2 id="sheet-oura-day-title">Oura</h2>
+      <dl class="sheet-oura-list" data-oura-list></dl>
+      <section data-oura-tips hidden aria-labelledby="sheet-oura-tips-title">
+        <h3 id="sheet-oura-tips-title" class="sheet-oura-h">How to raise it</h3>
+        <ul class="sheet-oura-tips" data-oura-tip-list></ul>
+      </section>
+      <section aria-labelledby="sheet-oura-week-title">
+        <h3 id="sheet-oura-week-title" class="sheet-oura-h">Sleep this week</h3>
+        <div data-oura-strip></div>
+        <p class="small" data-oura-spread></p>
+      </section>
+      <p class="small">From your Oura ring. Only you see these.</p>
+      <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
+    </dialog>
     <dialog class="sheet-dialog" data-calendars aria-labelledby="sheet-cal-title">
       <h2 id="sheet-cal-title">Calendars</h2>
       <p class="small">Your main Google calendar always shows. To add another one, like a class schedule: in Google Calendar, open Settings, click the calendar under "Settings for my calendars", and copy its Calendar ID from "Integrate calendar". Paste one ID per line.</p>
@@ -165,10 +181,16 @@ import "../../styles/sheet.css";
       <!-- Oura (docs/sheet-v5.md, "Oura"): src/sheet/oura-settings.mjs fills it. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-oura-title">
         <h3 id="sheet-oura-title">Oura</h3>
-        <p class="small">The plan starts 30 minutes after you wake, and your readiness and a short night can lighten the day. From Oura, only your sleep start and end times and each day's readiness score and hours slept are kept, for 60 days, never shared.</p>
+        <p class="small">The plan starts 30 minutes after you wake; your readiness, a short night or Rest Mode can lighten the day, and a ring workout ticks your Gym habit. Kept for 60 days, never shared and never sent to Claude: sleep start and end times; each day's sleep, readiness and activity scores and their contributors, hours slept, efficiency, deep and REM time, lowest and average heart rate, HRV, temperature deviation, steps and stress; Oura's bedtime window; workouts' day, times and type; Rest Mode's days; and a low-battery flag.</p>
         <p class="small"><span role="status" data-oura-status></span> <span class="sheet-mail-error" data-oura-error></span></p>
         <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
         <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
+        <!-- Wind-down (docs/sheet-v5.md, "Wind-down"): src/sheet/bedtime-settings.mjs fills it. -->
+        <h4 id="sheet-sleep-title">Sleep</h4>
+        <p class="small">No block or habit goes in the hour before bed, and Telegram says when to wind down and when it's bedtime. With no bedtime set, Oura's suggested one is used when it has one.</p>
+        <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn" data-act="bedtime-ease" aria-pressed="true">Ease in</button> <button type="button" class="sheet-btn" data-act="wind-down" aria-pressed="true">Wind-down</button> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
+        <p class="small" role="status" data-bedtime-note></p>
+        <p><button type="button" class="sheet-link" data-act="oura-week">Sleep this week</button></p>
       </section>
 
       <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
@@ -307,6 +329,8 @@ import "../../styles/sheet.css";
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
       <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" /><path d="m2.5 21.5 1.4-1.4" /><path d="m20.1 3.9 1.4-1.4" /><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" /><path d="m9.6 14.4 4.8-4.8" /></symbol>
       <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
       <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
     </svg>
 
@@ -325,6 +349,6 @@ import "../../styles/sheet.css";
   import { setupMessages } from "../../sheet/message-box.mjs";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
-  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings]);
+  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupBedtimeSettings]);
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages], settings);
 </script>

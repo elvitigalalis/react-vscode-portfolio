@@ -831,13 +831,13 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **Window start** (`windowStart`): today's wake + 30, else the day's typical wake + 30, else
   07:00; rounded up to the quarter hour; never after 12:00; on today never before now. read_planner's
   `window.from`, checkProposal's earliest start and /plan's day start (dayCapacity, 9:30 am without
-  Oura) all use it. read_planner adds `sleep { typical_wake_weekday, typical_wake_weekend, woke_at,
-  last_synced }`, local "HH:MM" times.
+  Oura) all use it. read_planner says nothing more about his sleep (see Oura and AI).
 - **Day rules** (`dayCap`): on a day with a `sleep_days` row, readiness under 70 takes 0.8 of the
   workload cap, 85 or more 1.1; a main sleep under 6 hours takes 0.85 and `break_after_min` 60.
   With both, the lower multiplier. Rounded to 15 minutes, and never below the day's approved task
-  minutes. `day_rules.cap_reason` says why ("readiness 64, slept 5h40: lighter day"), or null.
-  Late numbers only change later revisions.
+  minutes. `dayCap`'s reason says why ("readiness 64, slept 5h40: lighter day"); read_planner's
+  `day_rules.cap_reason` keeps only "lighter day" or "fuller day", or null. Late numbers only
+  change later revisions.
 - **Woke late.** apply_proposal saves each revision's `window_from`. When today's wake syncs 45+
   minutes after the newest pending or approved revision's `window_from` (07:00, or when it was
   read today, for a revision without one), oura-sync logs one change `{ kind: 'sleep', reason:
@@ -847,8 +847,77 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
   syncs), never before 8:00, and the brief goes 15 minutes after the wake, or 90 after the typical
   one while the ring hasn't synced; it goes once a day. The brief adds "Readiness 64, slept 5h40:
   cap 4h45." when the cap changed. Without sleep rows, nothing changes.
+- **Oura and AI** ([ADR 0005](adr/0005-oura-data-never-reaches-claude.md)). Oura's agreement
+  (§4(d)) bars giving its data to an AI model, so no Oura field or figure goes to the routine.
+  read_planner carries only constraints code derives: `window.from`, `window.to`, the cap and
+  break rule with a figure-free `cap_reason`, `bedtime` and `wind_down_from` as plain times, and
+  the reason name `woke_late`. Messages with Oura numbers are composed by the telegram function.
 - **Privacy.** Only the fields above, 60 days, never on /now, never shared or used to train or
   evaluate a model (cloud.ouraring.com/legal/api-agreement). /privacy says so.
+
+### Wind-down
+
+- **Bedtime** (`bedtimeFor`, src/sheet/bedtime.mjs). A night is the evening of its day: any time
+  from noon to the next noon belongs to it, so 00:30 or 02:00 bedtimes are the night before's.
+  Settings → Oura → Sleep sets `settings.bedtime_target` (a time, optional), `bedtime_ease`
+  (default on) and `wind_down_on` (default on); a new target, or Ease in turned on, stamps
+  `bedtime_set_on` with tonight. With a target and Ease in: start 15 minutes before his typical
+  bedtime (the median of the newest 7 long_sleep `bedtime_start`s of nights before
+  `bedtime_set_on`, rounded to the quarter hour, needing 3) and move 15 minutes earlier each night
+  since, never earlier than the target; without enough nights, the target. Ease in off: the
+  target. No target: the start of Oura's optimal bedtime window (`sleep_times`, the newest row up
+  to the next day), else none. Wind-down off: none.
+- **Sync.** oura-sync also reads `/v2/usercollection/sleep_time` and keeps only `sleep_times { day,
+  start_offset, end_offset }` (seconds from that day's midnight) when `status` is `optimal_found`
+  or `only_recommended_found`; 60 days; a refused read is skipped, not a failed run.
+- **Planning.** read_planner's `window.to` is the earlier of the shutdown line and bedtime − 60
+  when that falls on plan_day; `day_rules.bedtime` and `wind_down_from` give both as "HH:MM" (or
+  null). checkProposal holds blocks and habits to `window.to` and names wind-down when it bites.
+- **Telegram.** "Wind down: lights out at 12:30 am. Wrap up and put the screens away." at
+  bedtime − 60 (until bedtime) and "Bedtime: lights out now. Sleep well." at bedtime (until 30
+  minutes after), once each a night (kinds `wind_down` and `bedtime`, logged on the night's
+  day), through quiet hours, outside the nudge budget. Off with nudges or wind-down off, and once
+  a synced Oura sleep has begun after wind-down started.
+- **/plan.** Today's column shows "Wind down 11:30 pm · Bed 12:30 am"; Settings shows "Tonight:
+  bed 2:15 am, easing 15 min earlier a night toward 12:30 am".
+
+### Day numbers, tips and the ring
+
+- **Day numbers.** oura-sync also reads `/daily_sleep`, `/daily_activity` and `/daily_stress`, and
+  keeps per day in `sleep_days`: `sleep_score`, `efficiency`, `deep_s`, `rem_s`, `rhr_low`,
+  `rhr_avg`, `hrv_avg` (the day's longest long_sleep), `temp_dev` (daily_readiness),
+  `activity_score`, `steps`, `stress` (`day_summary`), and `contributors` (the sleep and
+  readiness contributor scores by Oura's names, integers). A refused read is skipped.
+- **/plan.** Each past day's and today's header gets one quiet chip line, "☾ 82 · ⚡ 86 · 7h 40m",
+  scores in Oura's bands (85+ optimal `--accent`, 70-84 good, under 70 `--warn`), named for screen
+  readers ("Sleep score 82, good"). It opens a dialog (lazy `oura-popover.mjs`) with the full set,
+  each with a 7-day sparkline, "How to raise it" (1-2 tips with a "why" link to Oura's article),
+  and "Sleep this week": 7 nights of bed-to-wake bars against the bedtime target and each one's
+  spread ("Bedtime ±42 min · Wake ±15 min"). Settings → Oura → Sleep this week opens it for today.
+  Today's chip adds "late nap 5:10–6:20 pm" (a `late_nap` ending after 6 pm) and "1 tip". /plan
+  re-reads the numbers every 10 minutes while it shows. Never on /now.
+- **Tips** (`pickTips`, src/sheet/tips.mjs): one tip per contributor from Oura's guidance, with
+  his own times (bedtime, wind-down, target, gym). A day takes its lowest contributors under 70,
+  at most 2, leaving out any picked on the 2 days before (worked forward from 13 days back).
+  The brief adds "Tip: …" and Wind down adds today's first evening tip (timing, latency,
+  recovery_index and others marked evening), composed by the telegram function.
+- **Brief.** "Sleep score 82, good." from today's row.
+- **Bedtime window.** `sleep_times.hint` keeps Oura's `recommendation`; the marker and Settings
+  add "Oura: 12:15–12:45 am, earlier bedtime".
+- **Workouts** (scope `workout`; oura-connect now asks for `daily workout`). `ring_workouts {
+  oura_id, day, starts_at, ends_at, activity }`, strength-type and generic activities only, never
+  calories or intensity. A 401/403 sets `oura_account.workouts_ok = false` and Settings says
+  "Reconnect to add workouts". A workout overlapping a Gym habit block (or a lifting one on its
+  day) ends it as a Done tap does (`gymMatches`, src/sheet/ring.mjs; Google through
+  `gcal_pending`). The gym page shows "Ring: 1h 12m" for today.
+- **Rest Mode** (`/rest_mode_period`, `rest_periods { oura_id, start_day, end_day }`, no episode
+  tags). While on, the cap is 40% of the base and only firm habits are offered; after, it eases
+  back evenly over as many days as it lasted, at most 7 (`restMode`). `cap_reason` is "rest mode"
+  or "easing back from rest mode".
+- **Ring battery.** `/ring_battery_level?latest=true` each sync; only `oura_account.ring_low`
+  (under 20% and off the charger) and when it was checked. Wind down adds "Charge your ring."
+  when the last check, within 30 minutes, was low; "After a late nap, keep to your bedtime." after
+  a late nap.
 
 ### Deploy
 

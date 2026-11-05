@@ -181,6 +181,9 @@ begin
   -- Oura: sleep rows are kept 60 days.
   delete from sleep_nights where bedtime_end < now() - interval '60 days';
   delete from sleep_days where day < current_date - 60;
+  delete from sleep_times where day < current_date - 60;
+  delete from ring_workouts where day < current_date - 60;
+  delete from rest_periods where end_day < current_date - 60;
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -495,7 +498,7 @@ alter table settings add column if not exists morning_on boolean not null defaul
 -- one Postgres gave the inline check), so a re-run is safe.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime'));
 
 -- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
 -- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
@@ -871,7 +874,7 @@ revoke insert, update, delete on actuals from authenticated;
 -- The Finished? check, and the replan message (R1), in the nudges log.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime'));
 
 -- --- v5 H1, habits (docs/sheet-v5.md) ----------------------------------------------------------
 -- Things Lisul does on set weekdays (gym, lunch, a weekly review), edited in /plan's Settings.
@@ -1407,8 +1410,9 @@ grant execute on function set_event_titles(date, jsonb) to authenticated;
 -- --- Oura: the plan starts when he wakes (docs/sheet-v5.md, "Oura") -------------------------
 -- oura-connect connects his Oura account (OAuth2 with PKCE, scope daily); oura-sync reads his
 -- sleep periods and daily readiness every 10 minutes. Only these fields are kept, 60 days
--- (nightly_roll), never shared and never used to train anything (Oura's API agreement,
--- cloud.ouraring.com/legal/api-agreement): no scores but readiness, no heart rate, no stages.
+-- (nightly_roll), never shared, never sent to an AI model and never used to train anything (Oura's
+-- API agreement, cloud.ouraring.com/legal/api-agreement; docs/adr/0005). Below: sleep times and
+-- each day's numbers for /plan, Oura's bedtime window, workouts and Rest Mode, nothing else.
 -- Oura's refresh tokens are single-use and rotate, so each refresh's new token is saved before
 -- its access token is used (oura_token_save); both tokens live only in Vault.
 create table if not exists oura_account (
@@ -1435,6 +1439,71 @@ create table if not exists sleep_days (
   readiness int check (readiness between 0 and 100),
   sleep_s int check (sleep_s between 0 and 86400)
 );
+-- The day's Oura numbers that /plan shows him (never /now, never Claude: docs/adr/0005): the
+-- sleep score, the main sleep's efficiency, deep and REM seconds, lowest and average heart rate
+-- and average HRV, readiness's temperature deviation, the activity score and steps, and the
+-- stress summary.
+alter table sleep_days add column if not exists sleep_score int check (sleep_score between 0 and 100);
+alter table sleep_days add column if not exists efficiency int check (efficiency between 1 and 100);
+alter table sleep_days add column if not exists deep_s int check (deep_s between 0 and 86400);
+alter table sleep_days add column if not exists rem_s int check (rem_s between 0 and 86400);
+alter table sleep_days add column if not exists rhr_low int check (rhr_low between 20 and 250);
+alter table sleep_days add column if not exists rhr_avg int check (rhr_avg between 20 and 250);
+alter table sleep_days add column if not exists hrv_avg int check (hrv_avg between 0 and 500);
+alter table sleep_days add column if not exists temp_dev numeric(4, 2) check (temp_dev between -10 and 10);
+alter table sleep_days add column if not exists activity_score int check (activity_score between 0 and 100);
+alter table sleep_days add column if not exists steps int check (steps between 0 and 200000);
+alter table sleep_days add column if not exists stress text check (stress in ('restored', 'normal', 'stressful'));
+-- Tips: the day's sleep and readiness score contributors, integers 0-100 by Oura's names only.
+alter table sleep_days add column if not exists contributors jsonb check (contributors is null or jsonb_typeof(contributors) = 'object');
+-- Ring workouts (scope workout): only strength-type and generic ones, and only their day, start,
+-- end and activity; never calories, intensity or distance. Gym habit blocks they overlap end.
+create table if not exists ring_workouts (
+  oura_id text primary key check (char_length(oura_id) <= 100),
+  day date not null,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null check (ends_at > starts_at),
+  activity text not null check (char_length(activity) <= 40)
+);
+-- Rest Mode: only each period's start and end days (end null while it is on).
+create table if not exists rest_periods (
+  oura_id text primary key check (char_length(oura_id) <= 100),
+  start_day date not null,
+  end_day date check (end_day >= start_day)
+);
+alter table ring_workouts enable row level security;
+alter table rest_periods enable row level security;
+drop policy if exists owner_all on ring_workouts;
+drop policy if exists owner_all on rest_periods;
+create policy owner_all on ring_workouts for all using (is_owner()) with check (is_owner());
+create policy owner_all on rest_periods for all using (is_owner()) with check (is_owner());
+revoke all on ring_workouts, rest_periods from anon;
+revoke insert, update, delete on ring_workouts, rest_periods from authenticated;
+-- Whether the grant reads workouts (null until tried; false: Settings asks to reconnect), and
+-- whether the ring's battery was low at the last sync (the level itself is never kept).
+alter table oura_account add column if not exists workouts_ok boolean;
+alter table oura_account add column if not exists ring_low boolean;
+alter table oura_account add column if not exists ring_checked_at timestamptz;
+-- Wind-down: Oura's optimal bedtime window by its day (/v2/usercollection/sleep_time), only its
+-- start and end as seconds from that day's midnight, for tonight's bedtime when none is set.
+create table if not exists sleep_times (
+  day date primary key,
+  start_offset int not null check (start_offset between -86400 and 86400),
+  end_offset int not null check (end_offset between -86400 and 86400)
+);
+alter table sleep_times add column if not exists hint text check (hint in ('improve_efficiency', 'earlier_bedtime', 'later_bedtime', 'earlier_wake_up_time', 'later_wake_up_time', 'follow_optimal_bedtime'));
+alter table sleep_times enable row level security;
+drop policy if exists owner_all on sleep_times;
+create policy owner_all on sleep_times for all using (is_owner()) with check (is_owner());
+revoke all on sleep_times from anon;
+revoke insert, update, delete on sleep_times from authenticated;
+-- Wind-down's settings (Settings, Oura): a bedtime target, whether to ease in toward it 15
+-- minutes a night (bedtime_set_on is the night it was set, where easing starts), and the switch
+-- for all of it (the planning limit, the Telegram nudges and /plan's marker).
+alter table settings add column if not exists bedtime_target time;
+alter table settings add column if not exists bedtime_ease boolean not null default true;
+alter table settings add column if not exists bedtime_set_on date;
+alter table settings add column if not exists wind_down_on boolean not null default true;
 alter table oura_account enable row level security;
 alter table sleep_nights enable row level security;
 alter table sleep_days enable row level security;
@@ -1456,6 +1525,9 @@ begin
   delete from vault.secrets where id in (old.refresh_secret_id, old.access_secret_id);
   delete from sleep_nights where true;
   delete from sleep_days where true;
+  delete from sleep_times where true;
+  delete from ring_workouts where true;
+  delete from rest_periods where true;
   return old;
 end $$;
 drop trigger if exists oura_account_forget on oura_account;
@@ -1508,29 +1580,60 @@ grant execute on function oura_tokens() to service_role;
 
 -- oura-sync's write, in one transaction: the sleep periods upserted by oura_id ([{ oura_id, day,
 -- type, bedtime_start, bedtime_end }]), the days ([{ day, readiness, sleep_s }], a null keeps
--- what was there), synced_at stamped, and the woke-late change inserted once per wake (its ref).
--- Service key only.
-create or replace function oura_sync_save(nights jsonb, days jsonb default '[]', change jsonb default null)
+-- what was there), Oura's optimal bedtime windows ([{ day, start_offset, end_offset }]),
+-- synced_at stamped, and the woke-late change inserted once per wake (its ref). Service key only.
+-- extra: { workouts: [{ oura_id, day, starts_at, ends_at, activity }] or null when the grant
+-- can't read them (workouts_ok false), rest: [{ oura_id, start_day, end_day }], ring_low: boolean
+-- or null (no sample) }.
+drop function if exists oura_sync_save(jsonb, jsonb, jsonb);
+drop function if exists oura_sync_save(jsonb, jsonb, jsonb, jsonb);
+create or replace function oura_sync_save(nights jsonb, days jsonb default '[]', change jsonb default null, times jsonb default '[]', extra jsonb default '{}')
 returns void language plpgsql security invoker set search_path = public as $$
 begin
+  insert into sleep_times (day, start_offset, end_offset, hint)
+  select x.day, x.start_offset, x.end_offset, x.hint
+  from jsonb_to_recordset(coalesce(times, '[]')) as x(day date, start_offset int, end_offset int, hint text)
+  on conflict (day) do update set start_offset = excluded.start_offset, end_offset = excluded.end_offset, hint = excluded.hint;
+  if extra ? 'workouts' then
+    update oura_account set workouts_ok = jsonb_typeof(extra->'workouts') = 'array' where id;
+    insert into ring_workouts (oura_id, day, starts_at, ends_at, activity)
+    select x.oura_id, x.day, x.starts_at, x.ends_at, x.activity
+    from jsonb_to_recordset(case when jsonb_typeof(extra->'workouts') = 'array' then extra->'workouts' else '[]' end)
+      as x(oura_id text, day date, starts_at timestamptz, ends_at timestamptz, activity text)
+    on conflict (oura_id) do update set day = excluded.day, starts_at = excluded.starts_at, ends_at = excluded.ends_at, activity = excluded.activity;
+  end if;
+  insert into rest_periods (oura_id, start_day, end_day)
+  select x.oura_id, x.start_day, x.end_day
+  from jsonb_to_recordset(coalesce(extra->'rest', '[]')) as x(oura_id text, start_day date, end_day date)
+  on conflict (oura_id) do update set start_day = excluded.start_day, end_day = excluded.end_day;
+  if extra ? 'ring_low' then
+    update oura_account set ring_low = (extra->>'ring_low')::boolean, ring_checked_at = now() where id;
+  end if;
   insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end)
   select x.oura_id, x.day, x.type, x.bedtime_start, x.bedtime_end
   from jsonb_to_recordset(coalesce(nights, '[]')) as x(oura_id text, day date, type text, bedtime_start timestamptz, bedtime_end timestamptz)
   on conflict (oura_id) do update
   set day = excluded.day, type = excluded.type, bedtime_start = excluded.bedtime_start, bedtime_end = excluded.bedtime_end;
-  insert into sleep_days (day, readiness, sleep_s)
-  select x.day, x.readiness, x.sleep_s
-  from jsonb_to_recordset(coalesce(days, '[]')) as x(day date, readiness int, sleep_s int)
+  insert into sleep_days (day, readiness, sleep_s, sleep_score, efficiency, deep_s, rem_s, rhr_low, rhr_avg, hrv_avg, temp_dev, activity_score, steps, stress, contributors)
+  select x.day, x.readiness, x.sleep_s, x.sleep_score, x.efficiency, x.deep_s, x.rem_s, x.rhr_low, x.rhr_avg, x.hrv_avg, x.temp_dev, x.activity_score, x.steps, x.stress, x.contributors
+  from jsonb_to_recordset(coalesce(days, '[]')) as x(day date, readiness int, sleep_s int, sleep_score int, efficiency int, deep_s int, rem_s int,
+    rhr_low int, rhr_avg int, hrv_avg int, temp_dev numeric, activity_score int, steps int, stress text, contributors jsonb)
   on conflict (day) do update
-  set readiness = coalesce(excluded.readiness, sleep_days.readiness), sleep_s = coalesce(excluded.sleep_s, sleep_days.sleep_s);
+  set readiness = coalesce(excluded.readiness, sleep_days.readiness), sleep_s = coalesce(excluded.sleep_s, sleep_days.sleep_s),
+      sleep_score = coalesce(excluded.sleep_score, sleep_days.sleep_score), efficiency = coalesce(excluded.efficiency, sleep_days.efficiency),
+      deep_s = coalesce(excluded.deep_s, sleep_days.deep_s), rem_s = coalesce(excluded.rem_s, sleep_days.rem_s),
+      rhr_low = coalesce(excluded.rhr_low, sleep_days.rhr_low), rhr_avg = coalesce(excluded.rhr_avg, sleep_days.rhr_avg),
+      hrv_avg = coalesce(excluded.hrv_avg, sleep_days.hrv_avg), temp_dev = coalesce(excluded.temp_dev, sleep_days.temp_dev),
+      activity_score = coalesce(excluded.activity_score, sleep_days.activity_score), steps = coalesce(excluded.steps, sleep_days.steps),
+      stress = coalesce(excluded.stress, sleep_days.stress), contributors = coalesce(excluded.contributors, sleep_days.contributors);
   update oura_account set synced_at = now(), last_error = null where id;
   if change is not null and not exists (select 1 from changes c where c.reason = change->>'reason' and c.ref = change->>'ref') then
     insert into changes (kind, reason, weight, ref)
     values (change->>'kind', change->>'reason', (change->>'weight')::int, change->>'ref');
   end if;
 end $$;
-revoke execute on function oura_sync_save(jsonb, jsonb, jsonb) from public, anon, authenticated;
-grant execute on function oura_sync_save(jsonb, jsonb, jsonb) to service_role;
+revoke execute on function oura_sync_save(jsonb, jsonb, jsonb, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function oura_sync_save(jsonb, jsonb, jsonb, jsonb, jsonb) to service_role;
 
 -- A refused refresh marks the grant broken (Settings shows Reconnect). Service key only.
 create or replace function oura_broken(why text) returns void

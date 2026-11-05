@@ -4,15 +4,17 @@
 //   Auth: cloud.ouraring.com/docs/authentication (authorize and token URLs, scopes, PKCE, "The
 //     refresh token is single-use, meaning it is invalidated after being used", and "All requests
 //     to the Oura API must include a non-empty User-Agent header").
-//   Data: cloud.ouraring.com/v2/docs (spec 1.43): /v2/usercollection/sleep and daily_readiness,
-//     paged by next_token; "the dates are interpreted in the user's local timezone".
+//   Data: cloud.ouraring.com/v2/docs (spec 1.43): /v2/usercollection/sleep, daily_readiness and
+//     sleep_time (PublicSleepTime: day, optimal_bedtime { day_tz, start_offset, end_offset } "offset
+//     from midnight in second", status), paged by next_token; "the dates are interpreted in the user's local timezone".
 import { addDays, localNow } from "./logic.mjs";
 
 export const AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
 export const TOKEN_URL = "https://api.ouraring.com/oauth/token";
 export const API_URL = "https://api.ouraring.com/v2/usercollection";
-// "daily": "Daily summaries of sleep, activity and readiness", the only scope sleep needs.
-export const SCOPE = "daily";
+// "daily": "Daily summaries of sleep, activity and readiness", the scope sleep needs, and
+// "workout": "Summaries for auto-detected and user entered workouts", for the Gym habit.
+export const SCOPE = "daily workout";
 export const USER_AGENT = "TheSheet/1.0 (+https://lisul-elvi.com/privacy/)";
 
 export const ouraAuthUrl = ({ clientId, redirectUri, state, challenge }) => `${AUTHORIZE_URL}?${new URLSearchParams({
@@ -88,7 +90,7 @@ export async function ouraDocs(fetch, collection, range, access) {
   do {
     const q = new URLSearchParams({ ...range, ...(next ? { next_token: next } : {}) });
     const res = await fetch(`${API_URL}/${collection}?${q}`, { headers: { Authorization: `Bearer ${access}`, "User-Agent": USER_AGENT } });
-    if (!res.ok) throw new Error(`oura ${collection}: HTTP ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(`oura ${collection}: HTTP ${res.status}`), { status: res.status });
     const body = await res.json();
     docs.push(...(body.data ?? []));
     next = body.next_token ?? null;
@@ -108,19 +110,105 @@ export const sleepRows = (docs) => docs.flatMap((d) => {
     && row.bedtime_start && row.bedtime_end ? [row] : [];
 });
 
-// The sleep_days rows, by Oura's day, oldest first: readiness's score (daily_readiness) and the
-// longest long_sleep's total_sleep_duration in seconds (sleep), each null when Oura gave none.
-export function dayRows(sleepDocs, readinessDocs) {
+// The sleep_days rows, by Oura's day, oldest first: readiness's score and temperature_deviation
+// (daily_readiness); from the day's main sleep (its longest long_sleep, sleep) total_sleep_duration
+// as sleep_s, efficiency, deep and REM seconds, lowest and average heart rate and average HRV; the
+// sleep score (daily_sleep); the activity score and steps (daily_activity); and the stress
+// day_summary (daily_stress). Each null when Oura gave none or a value out of range, and a day
+// appears only with at least one. Field names and types: cloud.ouraring.com/v2/docs (spec 1.43,
+// PublicDailyReadiness, PublicModifiedSleepModel, PublicDailySleep, PublicDailyActivity,
+// PublicDailyStress). Nothing else in the payloads is kept.
+const KEYS = ["contributors", "readiness", "sleep_s", "sleep_score", "efficiency", "deep_s", "rem_s", "rhr_low", "rhr_avg", "hrv_avg", "temp_dev", "activity_score", "steps", "stress"];
+const STRESS = ["restored", "normal", "stressful"];
+export const SLEEP_CONTRIBUTORS = ["total_sleep", "efficiency", "restfulness", "rem_sleep", "deep_sleep", "latency", "timing"];
+export const READINESS_CONTRIBUTORS = ["activity_balance", "body_temperature", "hrv_balance", "previous_day_activity", "previous_night", "recovery_index", "resting_heart_rate", "sleep_balance", "sleep_regularity"];
+const int = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? Math.round(v) : null);
+export function dayRows(sleepDocs, readinessDocs, { dailySleep = [], activity = [], stress = [] } = {}) {
   const days = new Map();
-  const at = (day) => days.get(day) ?? days.set(day, { day, readiness: null, sleep_s: null }).get(day);
+  // The score contributors (0-100 each, PublicSleepContributors and PublicReadinessContributors),
+  // merged into one object per day; none of their names are shared.
+  const addContributors = (day, c, names) => {
+    const kept = Object.fromEntries(names.map((k) => [k, int(c?.[k], 0, 100)]).filter(([, v]) => v != null));
+    if (Object.keys(kept).length) put(day, "contributors", { ...(days.get(day)?.contributors ?? {}), ...kept });
+  };
+  const put = (day, key, v) => {
+    if (v == null || !DAY.test(day ?? "")) return;
+    if (!days.has(day)) days.set(day, { day, ...Object.fromEntries(KEYS.map((k) => [k, null])) });
+    days.get(day)[key] = v;
+  };
   for (const r of readinessDocs) {
-    if (DAY.test(r?.day ?? "") && Number.isInteger(r.score) && r.score >= 0 && r.score <= 100) at(r.day).readiness = r.score;
+    put(r?.day, "readiness", Number.isInteger(r?.score) ? int(r.score, 0, 100) : null);
+    const t = r?.temperature_deviation;
+    put(r?.day, "temp_dev", Number.isFinite(t) && Math.abs(t) <= 10 ? Math.round(t * 100) / 100 : null);
+    addContributors(r?.day, r?.contributors, READINESS_CONTRIBUTORS);
   }
+  const main = new Map();
   for (const s of sleepDocs) {
     const secs = s?.total_sleep_duration;
     if (s?.type !== "long_sleep" || !DAY.test(s.day ?? "") || !Number.isInteger(secs) || secs < 0 || secs > 86400) continue;
-    const row = at(s.day);
-    row.sleep_s = Math.max(row.sleep_s ?? 0, secs);
+    if (!main.has(s.day) || secs > main.get(s.day).total_sleep_duration) main.set(s.day, s);
   }
+  for (const [day, s] of main) {
+    put(day, "sleep_s", s.total_sleep_duration);
+    put(day, "efficiency", int(s.efficiency, 1, 100));
+    put(day, "deep_s", int(s.deep_sleep_duration, 0, 86400));
+    put(day, "rem_s", int(s.rem_sleep_duration, 0, 86400));
+    put(day, "rhr_low", int(s.lowest_heart_rate, 20, 250));
+    put(day, "rhr_avg", int(s.average_heart_rate, 20, 250));
+    put(day, "hrv_avg", int(s.average_hrv, 0, 500));
+  }
+  for (const d of dailySleep) {
+    put(d?.day, "sleep_score", int(d?.score, 0, 100));
+    addContributors(d?.day, d?.contributors, SLEEP_CONTRIBUTORS);
+  }
+  for (const a of activity) {
+    put(a?.day, "activity_score", int(a?.score, 0, 100));
+    put(a?.day, "steps", int(a?.steps, 0, 200000));
+  }
+  for (const x of stress) put(x?.day, "stress", STRESS.includes(x?.day_summary) ? x.day_summary : null);
   return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
+}
+
+// Wind-down: the sleep_times rows from /sleep_time documents, { day, start_offset, end_offset }
+// and nothing else, only when Oura found a window (status optimal_found or only_recommended_found,
+// the two that come with one). Offsets are seconds from the day's midnight, within a day.
+const WINDOW_FOUND = ["optimal_found", "only_recommended_found"];
+const offset = (s) => Number.isInteger(s) && Math.abs(s) <= 86400;
+export const sleepTimeRows = (docs) => docs.flatMap((d) => {
+  const w = d?.optimal_bedtime;
+  return DAY.test(d?.day ?? "") && WINDOW_FOUND.includes(d.status) && offset(w?.start_offset) && offset(w?.end_offset)
+    ? [{ day: d.day, start_offset: w.start_offset, end_offset: w.end_offset, hint: HINTS.includes(d.recommendation) ? d.recommendation : null }] : [];
+});
+// PublicSleepTimeRecommendation's values.
+const HINTS = ["improve_efficiency", "earlier_bedtime", "later_bedtime", "earlier_wake_up_time", "later_wake_up_time", "follow_optimal_bedtime"];
+
+// Ring workouts (scope workout; PublicWorkout: activity, day, start_datetime, end_datetime): only
+// the day, start, end and activity of strength-type and generic ones, never calories, intensity,
+// distance or label. Oura's activity is free text; these are matched loosely.
+export const GYM_ACTIVITY = /strength|weight|lift|resistance|crossfit|functional|bodybuilding|gym|other|workout|unknown/i;
+export const workoutRows = (docs) => docs.flatMap((d) => {
+  const row = { oura_id: d?.id, day: d?.day, starts_at: iso(d?.start_datetime), ends_at: iso(d?.end_datetime), activity: typeof d?.activity === "string" ? d.activity.slice(0, 40) : null };
+  return typeof row.oura_id === "string" && row.oura_id.length <= 100 && DAY.test(row.day ?? "") && row.starts_at && row.ends_at
+    && row.starts_at < row.ends_at && row.activity && GYM_ACTIVITY.test(row.activity) ? [row] : [];
+});
+
+// Rest Mode (PublicRestModePeriod): only its start and end days (end null while it is on); its
+// episodes' tags (symptoms) are never kept.
+export const restRows = (docs) => docs.flatMap((d) => (typeof d?.id === "string" && d.id.length <= 100 && DAY.test(d.start_day ?? "")
+  && (d.end_day == null || (DAY.test(d.end_day) && d.end_day >= d.start_day)) ? [{ oura_id: d.id, start_day: d.start_day, end_day: d.end_day ?? null }] : []));
+
+// The ring's battery from /ring_battery_level?latest=true (PublicRingBatteryLevelRow: level,
+// charging, in_charger): true when under 20% and off the charger, false otherwise, null with no
+// sample. Only this flag is kept, never the level.
+export function ringLow(rows) {
+  const r = (rows ?? []).at(-1);
+  if (!r || !Number.isFinite(r.level)) return null;
+  return r.level < 20 && !r.charging && !r.in_charger;
+}
+
+// The newest sample of a time series (ring_battery_level takes latest=true), or [] when refused.
+export async function ouraLatest(fetch, collection, access) {
+  const res = await fetch(`${API_URL}/${collection}?latest=true`, { headers: { Authorization: `Bearer ${access}`, "User-Agent": USER_AGENT } });
+  if (!res.ok) return [];
+  return (await res.json().catch(() => ({})))?.data ?? [];
 }

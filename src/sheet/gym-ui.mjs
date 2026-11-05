@@ -7,6 +7,7 @@ import * as api from "./api.mjs";
 import { addDays, blockOnComplete, localNow, zonedIso } from "./logic.mjs";
 import { lightDismiss } from "./dismiss.mjs";
 import { loadAll, send } from "./gym-api.mjs";
+import { ringLine } from "./ring.mjs";
 import { keyOf, outbox } from "./gym-sync.mjs";
 import {
   activeExercise, e1rm, historyFor, nextDay, ordered, parseSlot, plateText, prsFor, range, readNum, records, rxLine, setToSave, strip, suggest, warmups,
@@ -27,6 +28,8 @@ let root;
 const $ = (sel) => root.querySelector(sel);
 // D: the rows, as the server has them plus every write made here since.
 let D = { exercises: [], days: [], rxs: [], baselines: [], swaps: [], sessions: [], sets: [] };
+// Oura: the ring's workouts of the last week, length only ("Ring: 1h 12m" on today's session).
+let ring = [];
 const TABLE = { gym_exercises: "exercises", gym_program_days: "days", gym_prescriptions: "rxs", gym_baselines: "baselines", gym_swaps: "swaps", gym_sessions: "sessions", gym_sets: "sets" };
 const S = { view: "today", dayId: null, session: null, extra: {}, removed: {}, rpeFor: null, recordsFor: null, draft: readJson(DRAFT) ?? {} };
 
@@ -96,7 +99,7 @@ function note() {
 
 async function load() {
   try {
-    D = await loadAll();
+    [D, ring] = await Promise.all([loadAll(), api.listRingWorkouts(addDays(localNow(new Date(), SHEET.timeZone).day, -7))]);
     writeJson(CACHE, D);
   } catch (e) {
     const cached = readJson(CACHE);
@@ -388,6 +391,14 @@ function sparkline(exId) {
   return svg;
 }
 
+// Today's ring time, matched to today's session (or any lifting workout today), or nothing.
+function ringToday() {
+  const today = localNow(new Date(), SHEET.timeZone).day;
+  const session = [...D.sessions].reverse().find((x) => localNow(new Date(x.started_at), SHEET.timeZone).day === today) ?? null;
+  const line = ringLine(ring, today, session);
+  return line ? el("p", { className: "gym-last", textContent: line }) : null;
+}
+
 function drawToday(main) {
   const day = byId(D.days, S.dayId);
   if (!day) { main.append(el("p", { className: "sheet-status", textContent: "No program yet. Run tools/gym-seed.mjs (docs/sheet-gym.md)." })); return; }
@@ -403,6 +414,7 @@ function drawToday(main) {
   const states = { done: "done", today: "today", next: "next" };
   main.append(
     el("p", { className: "gym-day", textContent: dayLabel(day) }),
+    ringToday(),
     el("div", { className: "gym-strip", role: "img", ariaLabel: `Program progress: ${rows.flat().filter((d) => d.state === "done").length} of ${rows.flat().length} done this pass` },
       ...rows.map((week) => el("div", { className: "gym-strip-week" }, ...week.map((d) => el("span", { className: `gym-dot${d.state ? ` is-${states[d.state]}` : ""}`, title: dayLabel(d) }))))),
     el("p", { className: "gym-pick" }, el("label", { htmlFor: "gym-day", textContent: loggedAny ? "Today's day (sets logged)" : "Another day" }), pick),

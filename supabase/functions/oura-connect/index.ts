@@ -7,7 +7,7 @@
 // token call are in src/sheet/oura.mjs, the state and the CORS rule in src/sheet/mailconnect.mjs;
 // the tests cover both.
 //
-// OAuth2 authorization code with PKCE, scope daily (cloud.ouraring.com/docs/authentication). The
+// OAuth2 authorization code with PKCE, scopes daily and workout (cloud.ouraring.com/docs/authentication). The
 // callback URL,
 //   https://<project>.supabase.co/functions/v1/oura-connect/callback
 // must be the app's redirect URI at cloud.ouraring.com/oauth/applications, exactly. Oura gives no

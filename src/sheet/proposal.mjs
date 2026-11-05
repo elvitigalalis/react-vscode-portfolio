@@ -10,6 +10,8 @@ import { messageKey, neverRule } from "./triage.mjs";
 import { dayLabel } from "./logic.mjs";
 import { dayCap, hhmm, wakeProfile, windowStart } from "./sleep.mjs";
 import { businessDays } from "./mail.mjs";
+import { bedtimeFor } from "./bedtime.mjs";
+import { restMode } from "./ring.mjs";
 import { threadLink } from "./morning.mjs";
 
 // --- read_planner ----------------------------------------------------------------------------
@@ -22,8 +24,19 @@ const DEFAULT_SHUTDOWN = "17:00";
 const DEFAULT_CAP = 360;
 // Oura: the day's readiness and sleep (sleep_days) scale the cap and can shorten the break rule
 // (dayCap, sleep.mjs); `approved` is the day's approved task minutes, which a lower cap keeps.
-const dayRules = (settings, sleepDay = null, approved = 0) => {
-  const { workload_cap_min, break_after_min, cap_reason } = dayCap(settings.workload_cap_min ?? DEFAULT_CAP, sleepDay, approved);
+// Oura's API agreement (§4(d), docs/adr/0005-oura-data-never-reaches-claude.md) bars giving its
+// data to an AI model, so read_planner gets only what code derives: the numbers and "lighter
+// day" or "fuller day", never the readiness or hours behind them.
+// Rest Mode (ring.mjs, restMode) takes the cap to its share of the base, if lower, and says
+// "rest mode" or "easing back from rest mode".
+const dayRules = (settings, sleepDay = null, approved = 0, rest = null) => {
+  const base = settings.workload_cap_min ?? DEFAULT_CAP;
+  let { workload_cap_min, break_after_min, cap_reason } = dayCap(base, sleepDay, approved);
+  cap_reason = cap_reason ? cap_reason.split(": ").pop() : null;
+  if (rest) {
+    const cap = Math.max(Math.round((base * rest.factor) / 15) * 15, Math.min(approved, base));
+    if (cap < workload_cap_min) [workload_cap_min, cap_reason] = [cap, rest.reason];
+  }
   return { workload_cap_min, travel_min: 10, break_after_min, break_min: 10, cap_reason };
 };
 
@@ -35,13 +48,14 @@ const onDay = (s, day, timeZone) => minutesOn(s.ends_at, day, timeZone) > 0 && m
 // Oura: with sleep_nights rows it starts 30 minutes after his wake instead (sleep.mjs).
 const windowFrom = (now, day, tz, profile) => hhmm(windowStart(day, now, tz, profile));
 
-// Oura: what read_planner says about his sleep, local "HH:MM" times, and when it last synced.
-const sleepOf = (profile, synced) => ({
-  typical_wake_weekday: profile.weekday == null ? null : hhmm(profile.weekday),
-  typical_wake_weekend: profile.weekend == null ? null : hhmm(profile.weekend),
-  woke_at: profile.woke_at == null ? null : hhmm(profile.woke_at),
-  last_synced: synced ?? null,
-});
+// Wind-down (bedtime.mjs): plan_day's night's bedtime, which ends the plan window an hour before
+// it when that hour starts on plan_day. day_rules says both, as clock "HH:MM", or null without one.
+const windDownOf = (settings, rows, day, tz, shutdown) => {
+  const bed = bedtimeFor(day, { settings, sleep: rows.sleep ?? [], sleepTimes: rows.sleepTimes ?? [], tz });
+  const to = bed && bed.wind_down < 1440 ? hhmm(Math.min(toMinutes(shutdown), bed.wind_down)) : shutdown;
+  return { to, bedtime: bed ? hhmm(bed.minutes % 1440) : null, wind_down_from: bed ? hhmm(bed.wind_down % 1440) : null };
+};
+
 
 // A replan the server started for this run: started, after the newest revision and under 30
 // minutes old. Otherwise this is the morning run. The changes since the newest revision go in as
@@ -102,8 +116,11 @@ function replyStateOf(rows, timeZone, now) {
 //   habits     v5 H1: the habits rows
 //   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
 //   replyState v5 M1: the reply_state rows
-//   sleep      Oura: the sleep_nights rows, and sleepSynced the oura feed's last good fetched_at
+//   sleep      Oura: the sleep_nights rows, which only window.from and the bedtime are worked out
+//              from; none of it goes out (docs/adr/0005-oura-data-never-reaches-claude.md)
 //   sleepDays  Oura: the sleep_days rows ({ day, readiness, sleep_s })
+//   sleepTimes Wind-down: the sleep_times rows ({ day, start_offset, end_offset })
+//   restPeriods Rest Mode: the rest_periods rows ({ start_day, end_day })
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
 // undone course tasks due within 7 days, each once and in row order within its group.
 export function planSnapshot(rows, now) {
@@ -132,6 +149,8 @@ export function planSnapshot(rows, now) {
   }));
   const shutdown = line ? line.slice(0, 5) : DEFAULT_SHUTDOWN;
   const profile = wakeProfile(rows.sleep ?? [], now, tz);
+  const wind = windDownOf(settings, rows, day, tz, shutdown);
+  const rest = restMode(day, rows.restPeriods ?? []);
   return {
     version: 5,
     now: now.toISOString(),
@@ -142,9 +161,7 @@ export function planSnapshot(rows, now) {
     plan_day: day,
     shutdown,
     run: runOf(rows, now, day),
-    window: { from: windowFrom(now, day, tz, profile), to: shutdown },
-    // Oura: his typical and actual wake, which window.from follows.
-    sleep: sleepOf(profile, rows.sleepSynced),
+    window: { from: windowFrom(now, day, tz, profile), to: wind.to },
     turned_down: turnedDown,
     tasks,
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
@@ -162,7 +179,7 @@ export function planSnapshot(rows, now) {
       : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
-    day_rules: dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks, day, tz)),
+    day_rules: { ...dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks, day, tz), rest), bedtime: wind.bedtime, wind_down_from: wind.wind_down_from },
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
     // v5 L1: the triage rules, which submit_proposal enforces for never.
@@ -175,7 +192,8 @@ export function planSnapshot(rows, now) {
     pace,
     planned_vs_done: plannedVsDone(past, past.map((b) => ({ id: b.task_id, done: Boolean(b.task?.done) })), day, tz),
     // v5 H1.
-    habits: dayHabits(rows.habits, day),
+    // Rest Mode: firm habits only while it is on.
+    habits: dayHabits(rows.habits, day).filter((h) => !rest?.firm_only || h.defence === "firm"),
   };
 }
 
@@ -217,6 +235,9 @@ export const linkish = (s) => URLISH.test(String(s ?? ""));
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 
 const toMinutes = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+// What ends the plan window: wind-down, when planSnapshot cut it there, or the window itself.
+const windowEnd = ({ window, day_rules: r }) => (r?.wind_down_from && r.wind_down_from === window.to
+  ? `when wind-down starts (bed ${formatClock(toMinutes(r.bedtime))})` : "the end of the plan window");
 const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
 const list = (v) => (v == null ? [] : v);
 
@@ -323,7 +344,7 @@ function habitBlockRows(input, snapshot, placed, errors) {
       errors.push(`${name}: must start between ${formatClock(Math.max(0, ideal - h.flex_min))} and ${formatClock(Math.min(1439, ideal + h.flex_min))}, ${h.name}'s ideal time ± ${h.flex_min} minutes`);
     }
     if (from < toMinutes(window.from)) errors.push(`${name}: starts before ${window.from}, the start of the plan window`);
-    else if (to > toMinutes(window.to)) errors.push(`${name}: ends after ${window.to}, the end of the plan window`);
+    else if (to > toMinutes(window.to)) errors.push(`${name}: ends after ${window.to}, ${windowEnd(snapshot)}`);
     const hit = fixed.find((s) => from < s.end && s.start < to);
     if (hit) errors.push(`${name}: overlaps ${hit.label} ${clockSpan(hit.start, hit.end)}`);
     const block = placed.find((p) => from < p.end && p.start < to);
@@ -455,7 +476,7 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
       if (task?.at_time && task.at_time.slice(0, 5) !== start) errors.push(`${name}: this task is fixed at ${task.at_time.slice(0, 5)}, so it must start then`);
       if (errors.length > before && !Number.isInteger(minutes)) return;
       const to = from + minutes;
-      if (win && to > win.to) errors.push(`${name}: ends after ${snapshot.window.to}, the end of the plan window`);
+      if (win && to > win.to) errors.push(`${name}: ends after ${snapshot.window.to}, ${windowEnd(snapshot)}`);
       else if (!win && to > shutdown) errors.push(`${name}: ends after the ${snapshot.shutdown} shutdown line`);
       // A block may end exactly when the next one starts.
       const hit = fixed.find((s) => from < s.end && s.start < to);
