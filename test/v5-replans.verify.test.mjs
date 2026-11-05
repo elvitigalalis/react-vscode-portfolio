@@ -59,21 +59,12 @@ test("shouldReplan: a lone change under weight 8, a minute old, waits", async ()
   assert.deepEqual(shouldReplan([change("c1", "2026-11-04T15:01:00Z", "course", "course_change", 3)], state(), now), hold("waiting"));
 });
 
-test("shouldReplan: weights adding to 4 fire once the oldest is 15 minutes old", async () => {
+test("shouldReplan: a real busy change fires once it is 15 minutes old, not at 14", async () => {
   const { shouldReplan } = await replan();
   // 9:47 am is 15 minutes before 10:02.
-  const changes = [change("c1", "2026-11-04T14:47:00Z", "mail", "mail_new", 2), change("c2", "2026-11-04T15:00:00Z", "busy", "busy_change", 2)];
-  const r = shouldReplan(changes, state(), now);
-  assert.equal(r.fire, true);
-  assert.deepEqual(r.reasons, ["busy_change", "mail_new"]);
-  assert.deepEqual(r.counts, { mail: 1, busy: 1 });
-  assert.deepEqual([...r.ids].sort(), ["c1", "c2"]);
-});
-
-test("shouldReplan: weights adding to 4 wait while the oldest is 14 minutes old", async () => {
-  const { shouldReplan } = await replan();
-  const changes = [change("c1", "2026-11-04T14:48:00Z", "mail", "mail_new", 2), change("c2", "2026-11-04T15:00:00Z", "busy", "busy_change", 2)];
-  assert.deepEqual(shouldReplan(changes, state(), now), hold("waiting"));
+  const at = (t) => [change("c1", t, "busy", "busy_change", 2)];
+  assert.deepEqual(shouldReplan(at("2026-11-04T14:47:00Z"), state(), now), { fire: true, reasons: ["busy_change"], counts: { busy: 1 }, ids: ["c1"] });
+  assert.deepEqual(shouldReplan(at("2026-11-04T14:48:00Z"), state(), now), hold("waiting"));
 });
 
 test("shouldReplan: one change of weight 4 is enough at 15 minutes old, not at 14", async () => {
@@ -83,17 +74,41 @@ test("shouldReplan: one change of weight 4 is enough at 15 minutes old, not at 1
   assert.deepEqual(shouldReplan(at("2026-11-04T14:48:00Z"), state(), now), hold("waiting"));
 });
 
-test("shouldReplan: weights adding to 3 wait at 22 minutes old", async () => {
+// The quiet reasons, written with the weights the syncs give them.
+const quiet = [
+  ["mail", "mail_new", 2], ["slack", "slack_new", 3], ["campus", "campus_change", 3], ["course", "course_change", 3],
+  ["github", "github_change", 3], ["jira", "jira_change", 3], ["handshake", "handshake_change", 3],
+];
+
+test("shouldReplan: a quiet change alone waits, however old, while the last plan is under 5 hours old", async () => {
   const { shouldReplan } = await replan();
-  assert.deepEqual(shouldReplan([change("c1", "2026-11-04T14:40:00Z", "course", "course_change", 3)], state(), now), hold("waiting"));
+  // The plan was 4 h 59 min ago; the change came just after it.
+  const s = state({ last_plan_at: "2026-11-04T10:03:00Z" });
+  for (const [kind, reason, weight] of quiet) {
+    assert.deepEqual(shouldReplan([change("c1", "2026-11-04T10:04:00Z", kind, reason, weight)], s, now), hold("waiting"), reason);
+  }
+  // Many of them, and all kinds at once, add up to nothing.
+  const all = quiet.map(([k, r, w], i) => change(`c${i}`, "2026-11-04T11:00:00Z", k, r, w));
+  assert.deepEqual(shouldReplan(all, s, now), hold("waiting"));
 });
 
-test("shouldReplan: any change fires once it is 45 minutes old, not at 44", async () => {
+test("shouldReplan: a quiet change catches up 5 hours after the last plan, once settled 15 minutes", async () => {
   const { shouldReplan } = await replan();
-  // 9:17 am is 45 minutes before 10:02.
+  const s = state({ last_plan_at: "2026-11-04T10:02:00Z" });
   const at = (t) => [change("c1", t, "mail", "mail_new", 2)];
-  assert.deepEqual(shouldReplan(at("2026-11-04T14:17:00Z"), state(), now), { fire: true, reasons: ["mail_new"], counts: { mail: 1 }, ids: ["c1"] });
-  assert.deepEqual(shouldReplan(at("2026-11-04T14:18:00Z"), state(), now), hold("waiting"));
+  assert.deepEqual(shouldReplan(at("2026-11-04T14:47:00Z"), s, now), { fire: true, reasons: ["mail_new"], counts: { mail: 1 }, ids: ["c1"] });
+  assert.deepEqual(shouldReplan(at("2026-11-04T14:48:00Z"), s, now), hold("waiting"));
+});
+
+test("shouldReplan: quiet changes ride along on a fire that's happening anyway", async () => {
+  const { shouldReplan } = await replan();
+  const changes = [change("c1", "2026-11-04T15:01:00Z", "mail", "mail_owed", 8), change("c2", "2026-11-04T15:00:00Z", "slack", "slack_new", 3)];
+  const r = shouldReplan(changes, state(), now);
+  assert.deepEqual(r.reasons, ["mail_owed", "slack_new"]);
+  assert.deepEqual([...r.ids].sort(), ["c1", "c2"]);
+  // A fresh busy change waits for itself, and a quiet change older than it doesn't hurry it.
+  const older = [change("c1", "2026-11-04T14:00:00Z", "campus", "campus_change", 3), change("c2", "2026-11-04T15:00:00Z", "busy", "busy_change", 2)];
+  assert.deepEqual(shouldReplan(older, state(), now), hold("waiting"));
 });
 
 test("shouldReplan: with no changes it holds with nothing", async () => {
@@ -124,7 +139,7 @@ test("shouldReplan: the run's own proposal doesn't count; a change a minute afte
 
 test("shouldReplan: with no plan today nothing is ignored for being old", async () => {
   const { shouldReplan } = await replan();
-  const r = shouldReplan([change("c1", "2026-11-04T11:00:00Z", "mail", "mail_new", 2)], state({ last_plan_at: null, plans_today: 0 }), now);
+  const r = shouldReplan([change("c1", "2026-11-04T10:00:00Z", "mail", "mail_new", 2)], state({ last_plan_at: null, plans_today: 0 }), now);
   assert.deepEqual(r, { fire: true, reasons: ["mail_new"], counts: { mail: 1 }, ids: ["c1"] });
 });
 

@@ -42,9 +42,14 @@ export function changeRow(reason, ref = null) {
 
 // The rules and holds (spec 47).
 const FIRE_WEIGHT = 8;
-const SUM_WEIGHT = 4;
-const SUM_AGE = 15 * 60_000;
-const ANY_AGE = 45 * 60_000;
+const SETTLE_AGE = 15 * 60_000;
+// New items that can't change today's blocks by themselves, however many: they wait for a fire
+// that's happening anyway, or for the catch-up.
+const QUIET = new Set(["mail_new", "slack_new", "campus_change", "course_change", "github_change", "jira_change", "handshake_change"]);
+// A run costs a full Claude session, and Needs you only needs triaged mail by midday and again by
+// late afternoon: from a morning plan near 6 am, 5 hours gives two catch-ups before a 5-11 pm
+// shutdown, where 4 gives three and 6 leaves mail untriaged until after lunch.
+const CATCH_UP_GAP = 5 * 60 * 60_000;
 const DAILY_CAP = 8;
 const PLAN_GAP = 60 * 60_000;
 const EDIT_GAP = 10 * 60_000;
@@ -81,9 +86,13 @@ export function shouldReplan(changes, state, now) {
   // The plan already saw anything at or before it (the run's own proposal included).
   const left = changes.filter((c) => { const at = Date.parse(c.at); return at <= t && (seen == null || at > seen); });
   if (!left.length) return { fire: false, hold: "nothing" };
-  const oldest = t - Math.min(...left.map((c) => Date.parse(c.at)));
-  const sum = left.reduce((n, c) => n + c.weight, 0);
-  const fire = left.some((c) => c.weight >= FIRE_WEIGHT) || (sum >= SUM_WEIGHT && oldest >= SUM_AGE) || oldest >= ANY_AGE;
+  const age = (c) => t - Date.parse(c.at);
+  // A catch-up counts from the last plan; with none today, from the oldest change.
+  const oldest = Math.max(...left.map(age));
+  const caughtUp = lastPlan == null ? oldest : t - lastPlan;
+  const fire = left.some((c) => c.weight >= FIRE_WEIGHT)
+    || left.some((c) => !QUIET.has(c.reason) && age(c) >= SETTLE_AGE)
+    || (caughtUp >= CATCH_UP_GAP && oldest >= SETTLE_AGE);
   if (!fire) return { fire: false, hold: "waiting" };
   const weight = {};
   const counts = {};
