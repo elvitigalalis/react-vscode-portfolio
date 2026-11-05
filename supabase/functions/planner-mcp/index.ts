@@ -171,7 +171,7 @@ function plannerServer(db: Db) {
       "to the next day so its plan times them, habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
       "time ± flex_min and running its minutes (a habit that can't fit is left out), and suggested tasks ({ account, " +
       "message_id, title, due, kind: assessment | interview }) for Needs you items from assessment or " +
-      "interview-scheduling senders, which become Inbox tasks only when Lisul approves; event_todos ({ calendar_id, " +
+      "interview-scheduling senders, which become Inbox tasks only once the revision is approved; event_todos ({ calendar_id, " +
       "event_id, title }), a concise to-do title of at most 60 characters for each of his calendar events on " +
       "plan_day and the next day, saved apart from the revision (event_todo_errors lists any refused). Needs you items from a " +
       "never-show sender are dropped, and dropped lists their message ids. Blocks and habits keep the day rules " +
