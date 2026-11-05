@@ -1,7 +1,7 @@
 // Horizon planning, part 1: the pure engine (docs/sheet-horizon.md, "The engine").
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planHorizon, horizonMinutes, confirmedDoneMin, dayFree, CHUNK_MIN, CHUNK_MAX } from "../src/sheet/horizon.mjs";
+import { planHorizon, horizonMinutes, confirmedDoneMin, dayFree, workKind, paceP80ByKind, CHUNK_MIN, CHUNK_MAX, STRETCH_MAX } from "../src/sheet/horizon.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -10,6 +10,8 @@ const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({
 }));
 const task = (id, due, minutes, extra = {}) => ({ id, due, minutes, done_min: 0, ...extra });
 const plan = (input) => planHorizon({ today: TODAY, free: days(30), locked: [], frozen_days: [], previous: [], ...input });
+// Later days fill to 85% of their free time: 106 free holds 90, 75 holds 60.
+const free90 = { ...days(30, 106), [TODAY]: 90 };
 const on = (r, id) => r.allocations.filter((a) => a.task_id === id).map(({ day, minutes }) => [day, minutes]);
 
 test("a task that fits goes on today, whole, and is on track", () => {
@@ -33,7 +35,7 @@ test("a task of an hour or less is never split", () => {
 });
 
 test("the plan aims to finish a working day before the due day", () => {
-  const free = { ...days(30), "2026-11-05": 0, "2026-11-06": 0, "2026-11-07": 60 };
+  const free = { ...days(30), "2026-11-05": 0, "2026-11-06": 0, "2026-11-07": 75 };
   const r = plan({ tasks: [task("a", "2026-11-08", 90)], free });
   assert.equal(r.tasks.a.target_day, "2026-11-07");
   assert.deepEqual(on(r, "a"), [["2026-11-07", 60], ["2026-11-08", 30]]);
@@ -45,7 +47,7 @@ test("the plan aims to finish a working day before the due day", () => {
 });
 
 test("earliest due goes first", () => {
-  const r = plan({ tasks: [task("a", "2026-11-20", 120), task("b", "2026-11-07", 90)], free: days(30, 90) });
+  const r = plan({ tasks: [task("a", "2026-11-20", 120), task("b", "2026-11-07", 90)], free: free90 });
   assert.deepEqual(on(r, "b"), [["2026-11-05", 90]]);
   assert.deepEqual(on(r, "a"), [["2026-11-06", 90], ["2026-11-07", 30]]);
   assert.equal(r.tasks.a.state, "on_track");
@@ -53,9 +55,9 @@ test("earliest due goes first", () => {
 
 test("what won't fit stays on the due day past the cap, with the minutes short", () => {
   const r = plan({ tasks: [task("a", "2026-11-05", 180)], free: { "2026-11-05": 120 } });
-  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-05", minutes: 180, over_min: 60 }]);
+  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-05", minutes: 180, over_min: 90 }]);
   assert.equal(r.tasks.a.state, "wont_fit");
-  assert.equal(r.tasks.a.short_min, 60);
+  assert.equal(r.tasks.a.short_min, 90);
   assert.equal(r.tasks.a.slack_min, -60);
 });
 
@@ -84,7 +86,7 @@ test("a re-flow with nothing changed moves nothing", () => {
 });
 
 test("a new task takes free time first and moves only the minutes it must", () => {
-  const free = days(30, 90);
+  const free = free90;
   const previous = [{ task_id: "a", day: "2026-11-05", minutes: 90, over_min: 0 }, { task_id: "a", day: "2026-11-06", minutes: 30, over_min: 0 }];
   const r = plan({ tasks: [task("a", "2026-11-20", 120), task("b", "2026-11-07", 90)], free, previous });
   assert.deepEqual(on(r, "b"), [["2026-11-06", 90]]);
@@ -118,7 +120,7 @@ test("an overdue task is planned from today and is tight at best", () => {
 
 test("an earlier deadline takes kept time from a task due later", () => {
   // b (due Fri) was planned on today; a new a, due tomorrow, needs today's only free time.
-  const free = { ...days(30, 0), "2026-11-05": 90, "2026-11-08": 90 };
+  const free = { ...days(30, 0), "2026-11-05": 90, "2026-11-08": 106 };
   const previous = [{ task_id: "b", day: "2026-11-05", minutes: 90, over_min: 0 }];
   const r = plan({ tasks: [task("a", "2026-11-06", 90), task("b", "2026-11-09", 90)], free, previous });
   assert.deepEqual(on(r, "a"), [["2026-11-05", 90]]);
@@ -171,14 +173,20 @@ test("dayFree is the cap less locked work, held to the free window", () => {
   assert.equal(dayFree({ cap: 360, window_free_min: 600, locked_min: 400 }), 0);
 });
 
+// Task kinds for the sweeps, from their own generator so the rest of each run stays the same.
+const kinds = (s) => () => { s = (s * 1103515245 + 12345) % 2 ** 31; return [undefined, undefined, "programming", "writing", "exam"][s % 5]; };
+
 // A seeded sweep: whatever the input, the rules hold.
 test("every plan keeps the rules", () => {
   let seed = 7;
   const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+  const kindOf = kinds(3);
+  let s80 = 9;
+  const p80 = (m) => { s80 = (s80 * 1103515245 + 12345) % 2 ** 31; return s80 % 3 ? m + 15 * (s80 % 20) : undefined; };
   const day = (i) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); };
   for (let run = 0; run < 300; run++) {
     const free = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [day(i), rand(5) * 60]));
-    const tasks = Array.from({ length: 1 + rand(6) }, (_, i) => task(`t${i}`, day(rand(20) - 2), 15 * (1 + rand(40)), { done_min: rand(3) ? 0 : 15 * rand(4) }));
+    const tasks = Array.from({ length: 1 + rand(6) }, (_, i) => task(`t${i}`, day(rand(20) - 2), 15 * (1 + rand(40)), { done_min: rand(3) ? 0 : 15 * rand(4), kind: kindOf() })).map((t) => ({ ...t, minutes_p80: p80(t.minutes) }));
     const frozen_days = rand(2) ? [day(1)] : [];
     const previous = rand(2) ? planHorizon({ today: TODAY, tasks, free }).allocations : [];
     const r = planHorizon({ today: TODAY, tasks, free, frozen_days, previous });
@@ -193,7 +201,8 @@ test("every plan keeps the rules", () => {
       for (const a of mine) {
         assert.ok(a.day >= TODAY && a.day <= due, `run ${run}: ${t.id} on ${a.day}, due ${t.due}`);
         if (frozen_days.includes(a.day)) continue;
-        if (a.day !== due) assert.ok(a.minutes <= CHUNK_MAX, `run ${run}: ${t.id} ${a.minutes} on ${a.day}`);
+        const max = ["programming", "writing"].includes(t.kind) ? STRETCH_MAX : CHUNK_MAX;
+        assert.ok(a.minutes - a.over_min <= max, `run ${run}: ${t.id} ${a.minutes} on ${a.day}`);
         if (left >= CHUNK_MIN) assert.ok(a.minutes >= CHUNK_MIN, `run ${run}: ${t.id} piece ${a.minutes}`);
       }
       if (left <= 60 && !fromFrozen) assert.ok(mine.length <= 1, `run ${run}: ${t.id} split`);
@@ -210,12 +219,13 @@ test("every plan keeps the rules", () => {
 test("after a change, a re-flow moves no more minutes than planning afresh would", () => {
   let seed = 11;
   const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
+  const kindOf = kinds(5);
   const day = (i) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); };
   const moved = (prev, next) => prev.reduce((s, p) => s + Math.max(0, p.minutes - (next.find((a) => a.task_id === p.task_id && a.day === p.day)?.minutes ?? 0)), 0);
   let total = 0, fresh = 0;
   for (let run = 0; run < 300; run++) {
     const free = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [day(i), 60 + rand(4) * 60]));
-    const tasks = Array.from({ length: 2 + rand(5) }, (_, i) => task(`t${i}`, day(1 + rand(20)), 15 * (2 + rand(30))));
+    const tasks = Array.from({ length: 2 + rand(5) }, (_, i) => task(`t${i}`, day(1 + rand(20)), 15 * (2 + rand(30)), { kind: kindOf() }));
     const previous = planHorizon({ today: TODAY, tasks, free }).allocations;
     // One change: a busy time lands, a task is added, or one is done.
     const kind = rand(3);
@@ -228,4 +238,84 @@ test("after a change, a re-flow moves no more minutes than planning afresh would
     assert.ok(r.moved_min <= moved(previous, f.allocations), `run ${run}: moved ${r.moved_min}, fresh ${moved(previous, f.allocations)}`);
   }
   assert.ok(total < fresh, `re-flows moved ${total}, fresh plans ${fresh}`);
+});
+
+test("later days fill to 85% of their free time, today to all of it", () => {
+  const r = plan({ tasks: [task("a", "2026-11-20", 240)], free: days(30, 90) });
+  assert.deepEqual(on(r, "a"), [["2026-11-05", 90], ["2026-11-06", 75], ["2026-11-07", 75]]);
+});
+
+test("a big task's buffer holds a fifth of its minutes, a small one's one working day", () => {
+  // 600 minutes: the buffer must hold 120, and a later day holds 102 (85% of 120), so two days.
+  const r = plan({ tasks: [task("a", "2026-11-15", 600), task("b", "2026-11-15", 60)], free: days(30, 120) });
+  assert.equal(r.tasks.a.target_day, "2026-11-13");
+  assert.equal(r.tasks.b.target_day, "2026-11-14");
+  assert.ok(on(r, "a").every(([d]) => d <= "2026-11-13"));
+  assert.equal(r.tasks.a.state, "on_track");
+});
+
+test("a task gets at most 90 minutes a day, even on its due day", () => {
+  const r = plan({ tasks: [task("a", "2026-11-05", 180)] });
+  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-05", minutes: 180, over_min: 90 }]);
+  assert.equal(r.tasks.a.state, "wont_fit");
+});
+
+test("programming and writing stretch to 120 a day, only when they would not fit", () => {
+  const r = plan({ tasks: [task("a", "2026-11-06", 300, { kind: "programming" })] });
+  assert.deepEqual(r.allocations, [
+    { task_id: "a", day: "2026-11-05", minutes: 120, over_min: 0 },
+    { task_id: "a", day: "2026-11-06", minutes: 180, over_min: 60 },
+  ]);
+  const fits = plan({ tasks: [task("b", "2026-11-06", 180, { kind: "writing" })] });
+  assert.deepEqual(on(fits, "b"), [["2026-11-05", 90], ["2026-11-06", 90]]);
+  const other = plan({ tasks: [task("c", "2026-11-06", 300)] });
+  assert.deepEqual(other.tasks.c.short_min, 120);
+});
+
+test("workKind reads exams, programming and writing from the task", () => {
+  assert.equal(workKind({ title: "CSE 320 Midterm 2" }), "exam");
+  assert.equal(workKind({ title: "Quiz 4 review" }), "exam");
+  assert.equal(workKind({ title: "Final exam" }), "exam");
+  assert.equal(workKind({ title: "Final project report" }), "writing");
+  assert.equal(workKind({ title: "Add tests for parser", source: "github" }), "programming");
+  assert.equal(workKind({ title: "Implement malloc" }), "programming");
+  assert.equal(workKind({ title: "History essay draft" }), "writing");
+  assert.equal(workKind({ title: "Laundry" }), null);
+  assert.equal(workKind({ title: "Laundry", kind: "writing" }), "writing");
+});
+
+test("exam study spreads over 3 days or more, a day apart, when the horizon allows", () => {
+  const r = plan({ tasks: [task("a", "2026-11-12", 180, { kind: "exam" })] });
+  assert.deepEqual(on(r, "a"), [["2026-11-05", 60], ["2026-11-07", 60], ["2026-11-09", 60]]);
+  assert.equal(r.tasks.a.state, "on_track");
+  // Two days to the target: as spread as they allow, and it still fits.
+  const short = plan({ tasks: [task("b", "2026-11-07", 180, { kind: "exam" })] });
+  assert.deepEqual(on(short, "b"), [["2026-11-05", 90], ["2026-11-06", 90]]);
+  // An hour or less stays whole.
+  assert.deepEqual(on(plan({ tasks: [task("c", "2026-11-12", 60, { kind: "exam" })] }), "c"), [["2026-11-05", 60]]);
+});
+
+test("states are judged at the P80 minutes while the minutes placed stay at the median", () => {
+  const median = plan({ tasks: [task("a", "2026-11-08", 120)] });
+  // At P80 it needs 300: 90 a day reaches past the target into the buffer.
+  const r = plan({ tasks: [task("a", "2026-11-08", 120, { minutes_p80: 300 })] });
+  assert.deepEqual(r.allocations, median.allocations);
+  assert.deepEqual([median.tasks.a.state, r.tasks.a.state], ["on_track", "tight"]);
+  assert.equal(r.tasks.a.finish_day, "2026-11-06");
+  assert.equal(r.tasks.a.remaining_min, 120);
+  assert.equal(r.tasks.a.remaining_p80_min, 300);
+  // At P80 it needs 240 by tomorrow, 60 more than 90 a day holds.
+  const w = plan({ tasks: [task("b", "2026-11-06", 120, { minutes_p80: 240 })] });
+  assert.deepEqual(on(w, "b"), [["2026-11-05", 90], ["2026-11-06", 30]]);
+  assert.deepEqual([w.tasks.b.state, w.tasks.b.short_min], ["wont_fit", 60]);
+});
+
+test("paceP80ByKind is the 80th-percentile overrun of the newest 20, from 5 samples", () => {
+  const row = (kind, est_min, minutes, i) => ({ kind, est_min, minutes, at: `2026-10-${String(10 + i).padStart(2, "0")}T12:00:00Z` });
+  const actuals = [[60, 60], [60, 66], [60, 72], [60, 90], [60, 120]].map(([e, m], i) => row("course", e, m, i))
+    .concat([row("other", 30, 60, 0)]);
+  const p = paceP80ByKind(actuals);
+  assert.deepEqual(p.course, { pace: 1.5, n: 5 });
+  assert.deepEqual(p.other, { pace: null, n: 1 });
+  assert.equal(horizonMinutes({ est_min: 120, source: "brightspace" }, p), 180);
 });
