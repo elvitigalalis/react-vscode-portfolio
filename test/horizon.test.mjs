@@ -281,3 +281,14 @@ test("workKind reads exams, programming and writing from the task", () => {
   assert.equal(workKind({ title: "Laundry" }), null);
   assert.equal(workKind({ title: "Laundry", kind: "writing" }), "writing");
 });
+
+test("exam study spreads over 3 days or more, a day apart, when the horizon allows", () => {
+  const r = plan({ tasks: [task("a", "2026-11-12", 180, { kind: "exam" })] });
+  assert.deepEqual(on(r, "a"), [["2026-11-05", 60], ["2026-11-07", 60], ["2026-11-09", 60]]);
+  assert.equal(r.tasks.a.state, "on_track");
+  // Two days to the target: as spread as they allow, and it still fits.
+  const short = plan({ tasks: [task("b", "2026-11-07", 180, { kind: "exam" })] });
+  assert.deepEqual(on(short, "b"), [["2026-11-05", 90], ["2026-11-06", 90]]);
+  // An hour or less stays whole.
+  assert.deepEqual(on(plan({ tasks: [task("c", "2026-11-12", 60, { kind: "exam" })] }), "c"), [["2026-11-05", 60]]);
+});

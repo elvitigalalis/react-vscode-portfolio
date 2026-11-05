@@ -81,24 +81,31 @@ day of a task that won't fit).
 4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day, the due day too; a task with 60
    minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
    90 + 75 + 30). All minutes move in 15-minute steps.
-5. **Buffer (R4):** the **target day** is the last working day before the due day when the due
+5. **Exam spacing:** an `exam` task with more than 60 minutes spreads over at least `EXAM_DAYS`
+   (3) days, a day apart, before its target (Cepeda 2006, Dunlosky 2013): its share a day is
+   its minutes over `max(3, ceil(minutes / 90))` days (over 2 days for 61-89 minutes), rounded
+   up to 15. Fill first places that share on days with no minutes of the task next to them, then
+   the share on any day up to the target, then the plain rules for what is left. So 3 hours
+   due in a week go 1h today, 1h in two days, 1h in four; with only two days to the target they
+   go 90 + 90.
+6. **Buffer (R4):** the **target day** is the last working day before the due day when the due
    day is 2 or more days off, else the due day. A **working day** has free time, is frozen, or
    holds a locked block. The buffer (target + 1 to the due day) must also hold `BUFFER_SHARE`
    (20%) of the task's `minutes`, counted in the days' fill room: the target steps back a working
    day at a time until it does, never before today (overruns grow with size: Buehler 1994). So a
    60-minute task keeps a one-day buffer and a 10-hour one on 2-hour days gets two. Fill runs to
    the target day first, then into the buffer.
-6. **Earlier deadlines win:** when a task can't reach its target (or then its due day) in free
+7. **Earlier deadlines win:** when a task can't reach its target (or then its due day) in free
    time, it takes kept minutes from tasks due later, only as many as it needs: the smallest cut
    first, then one the later task can take back on its other days, then latest due, then latest
    day. Those re-place in their own turn.
-7. **Stretch:** before giving up, a `programming` or `writing` task may hold up to `STRETCH_MAX`
-   (120) minutes a day, from today to its due day, filling free time and then under rule 6.
+8. **Stretch:** before giving up, a `programming` or `writing` task may hold up to `STRETCH_MAX`
+   (120) minutes a day, from today to its due day, filling free time and then under rule 7.
    Other kinds never pass 90 (study is better spaced; production work has a fixed start-up
    cost). This replaces the old due-day crunch, which let any task take the whole due day.
-8. **Won't fit stays visible (R7):** what is still left goes on the due day as `over_min`, past
+9. **Won't fit stays visible (R7):** what is still left goes on the due day as `over_min`, past
    the cap, never dropped.
-9. **No new minutes before today, after the due day, or on a frozen day.**
+10. **No new minutes before today, after the due day, or on a frozen day.**
 
 ### Stability (R9)
 
@@ -112,7 +119,7 @@ A re-flow starts from `previous` and changes only what the change forces:
   run's `over_min` is not kept; it is planned again.
 - **Forced moves only:** a day whose free time shrank (a busy time landed) gives back only the
   minutes past its free time, from the task due latest. New or grown work takes free time first
-  and displaces kept minutes only under rule 6. Kept minutes past a task's target come forward
+  and displaces kept minutes only under rule 7. Kept minutes past a task's target come forward
   when time before the target is free, so a task doesn't eat its buffer needlessly.
 - Re-planning its own output moves nothing (`moved_min` 0), and after one change (a busy time, a
   new task, a done task) a re-flow never moves more minutes than a fresh plan would; the tests

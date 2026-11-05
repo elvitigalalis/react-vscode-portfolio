@@ -13,6 +13,9 @@ export const WHOLE_UP_TO = 60;
 // fit otherwise: loading the problem has a fixed cost, and spacing helps such work less.
 export const STRETCH_MAX = 120;
 export const STRETCH_KINDS = ["programming", "writing"];
+// Exam study spreads over at least this many days, a day apart, where the horizon allows: spaced
+// study beats massed study (Cepeda 2006, Dunlosky 2013).
+export const EXAM_DAYS = 3;
 const STEP = 15;
 export const STATES = ["on_track", "tight", "wont_fit"];
 // Days after today are filled to at most this share of their free time, leaving slack for the
@@ -194,8 +197,10 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
     }
     return 0;
   };
-  const fill = (t, from, to, lim = CHUNK_MAX) => {
+  // With spaced, a day next to one the task already has takes nothing new.
+  const fill = (t, from, to, lim = CHUNK_MAX, spaced = false) => {
     for (let d = from; d <= to && need.get(t.id) > 0; d = addDays(d, 1)) {
+      if (spaced && !at(t.id, d) && (at(t.id, addDays(d, -1)) || at(t.id, addDays(d, 1)))) continue;
       const n = piece(t, d, need.get(t.id), lim);
       if (n > 0) { add(kept, t.id, d, n); need.set(t.id, need.get(t.id) - n); }
     }
@@ -268,6 +273,14 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
         for (const [d] of late) kept.get(t.id).delete(d);
         need.set(t.id, need.get(t.id) + back);
       }
+    }
+    // Exam study: first a share a day on days a day apart, then that share on any day, then the
+    // plain rules for what is left.
+    if (t.kind === "exam" && need0.get(t.id) > WHOLE_UP_TO) {
+      const m = need0.get(t.id);
+      const share = up(m / (m >= EXAM_DAYS * CHUNK_MIN ? Math.max(EXAM_DAYS, Math.ceil(m / CHUNK_MAX)) : 2));
+      fill(t, today, tg, share, true);
+      fill(t, today, tg, share);
     }
     fill(t, today, tg);
     evict(t, today, tg);
