@@ -107,15 +107,16 @@ test("windowStart: no wake yet uses the day's kind's typical wake + 30, else 07:
   assert.equal(windowStart("2026-11-05", at6, TZ, { ...profile, woke_at: 6 * 60 }), 10 * 60 + 15);
 });
 
-test("windowStart: never later than 12:00, and on today never before now rounded up", async () => {
+test("windowStart: never later than 17:00, and on today never before now rounded up", async () => {
   const { windowStart } = await import("../src/sheet/sleep.mjs");
   const at6 = new Date("2026-11-04T11:00:00Z");
-  assert.equal(windowStart("2026-11-04", at6, TZ, { weekday: 13 * 60, weekend: null, woke_at: null }), 12 * 60);
-  assert.equal(windowStart("2026-11-04", at6, TZ, { weekday: null, weekend: null, woke_at: 11 * 60 + 50 }), 12 * 60);
+  assert.equal(windowStart("2026-11-04", at6, TZ, { weekday: 13 * 60, weekend: null, woke_at: null }), 13 * 60 + 30);
+  assert.equal(windowStart("2026-11-04", at6, TZ, { weekday: 17 * 60, weekend: null, woke_at: null }), 17 * 60);
+  assert.equal(windowStart("2026-11-04", at6, TZ, { weekday: null, weekend: null, woke_at: 16 * 60 + 50 }), 17 * 60);
   const at1007 = new Date("2026-11-04T15:07:00Z"); // 10:07 am, woke at 8:00
   assert.equal(windowStart("2026-11-04", at1007, TZ, { weekday: null, weekend: null, woke_at: 8 * 60 }), 10 * 60 + 15);
   const at1pm = new Date("2026-11-04T18:00:00Z");
-  assert.equal(windowStart("2026-11-04", at1pm, TZ, { weekday: 13 * 60, weekend: null, woke_at: null }), 13 * 60);
+  assert.equal(windowStart("2026-11-04", at1pm, TZ, { weekday: 13 * 60, weekend: null, woke_at: null }), 13 * 60 + 30);
   // An early riser's window can open before 07:00.
   assert.equal(windowStart("2026-11-05", at6, TZ, { weekday: 5 * 60 + 40, weekend: null, woke_at: null }), 6 * 60 + 15);
 });

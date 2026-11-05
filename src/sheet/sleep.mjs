@@ -55,13 +55,14 @@ export function wakeProfile(nights, now, tz) {
 
 // The plan window's default start, his old fixed 07:00, and its latest.
 export const DEFAULT_START = 7 * 60;
-const LATEST = 12 * 60;
+// 17:00, not noon: he often wakes after 13:00, and a noon cap planned blocks while he slept.
+const LATEST = 17 * 60;
 const AFTER_WAKE = 30;
 const quarter = (m) => Math.ceil(m / 15) * 15;
 
 // When the plan window opens on `day` (minutes past midnight in `tz`), from a wakeProfile:
 // today's actual wake + 30 minutes on today, else the day's kind's typical wake + 30, else
-// `fallback` (07:00); rounded up to the quarter hour and never after 12:00. On today it is never
+// `fallback` (07:00); rounded up to the quarter hour and never after 17:00. On today it is never
 // before now rounded up, so a replan never plans the past.
 export function windowStart(day, now, tz, profile, fallback = DEFAULT_START) {
   const here = localNow(now, tz);
