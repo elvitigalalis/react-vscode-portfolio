@@ -30,6 +30,8 @@ the AI suggests, Lisul decides, and the nudges follow only what he decided.
     secret, given to `setWebhook` as its `secret_token`) and ignores, without a reply, any chat
     that isn't Lisul's (the chat ID is in `settings`). The same module reads the tap (`readTap`) and decides what it changes
     (`handleTap`); the function writes it, answers the tap and edits the message.
+    It also takes Lisul's texts to the bot, which are messages to Claude
+    ([sheet-messages.md](sheet-messages.md), "From Telegram").
 
   The bot token is a function secret. Messages are fixed templates.
 

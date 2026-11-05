@@ -30,8 +30,12 @@ An undone task whose due date has passed.
 _Avoid_: Late, past due
 
 **Message**:
-A plain line Lisul types to Claude in /plan, such as "dentist Thu 3pm". Claude answers it with tasks, events and a one-line reply, and nothing else.
+A plain line Lisul types to Claude in /plan or texts to the bot, such as "dentist Thu 3pm". Claude answers it with tasks, events and a one-line reply, and nothing else.
 _Avoid_: Chat, prompt, command
+
+**Receipt**:
+What a message added, item by item, each with an Undo: under the message in /plan, and as the bot's reply to a text.
+_Avoid_: Confirmation, summary, result
 
 **Block**:
 A stretch of time on a day reserved for one task, mirrored to the "Time blocks" calendar.
