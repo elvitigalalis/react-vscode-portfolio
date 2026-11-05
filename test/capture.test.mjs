@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readText, ackText } from "../src/sheet/capture.mjs";
+import { readText, ackText, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
 
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42 };
 // A text from Lisul's own chat, as Telegram's webhook sends it (core.telegram.org/bots/api#update).
@@ -37,4 +37,86 @@ test("ackText: the bot says at once where the message stands, in the box's words
   assert.equal(ackText({ fired: false, why: "rate_limited" }), "Sent to Claude. Queued: Claude is busy, so this runs with the next plan.");
   assert.equal(ackText({ fired: false, why: "not connected" }), "Sent to Claude. Queued: this runs with the next plan.");
   assert.equal(ackText({ fired: false, why: "failed" }), "Sent to Claude. Queued: this runs with the next plan.");
+});
+
+// ---------------------------------------------------------------- receipt
+
+const TZ = "America/New_York";
+const M = "0b6f3c1e-0000-4000-8000-000000000001";
+const T1 = "7d0e2a4b-1111-4c3d-9e8f-aabbccddeeff";
+const E1 = "00000000-0000-4000-8000-000000000abc";
+// The ids as the Undo buttons carry them: each UUID's 16 bytes in base64url, 22 characters.
+const UNDO_T1 = "mu:C288HgAAQACAAAAAAAAAAQ:fQ4qSxERTD2ej6q7zN3u_w";
+const UNDO_E1 = "mu:C288HgAAQACAAAAAAAAAAQ:AAAAAAAAQACAAAAAAAAKvA";
+const answered = (extra = {}) => ({
+  id: M, status: "done", reply: "Added the lab report and the dentist.", tasks_added: 1,
+  tasks: [{ id: T1, title: "Lab report", day: "2026-11-06", list: null, due: "2026-11-06", at_time: null }],
+  events: [{ id: E1, title: "Dentist", starts_at: "2026-11-05T20:00:00.000Z", ends_at: "2026-11-05T21:00:00.000Z" }],
+  ...extra,
+});
+
+test("receipt: what was added, Claude's reply and each item, with an Undo for each, as /plan lists them", () => {
+  assert.deepEqual(receipt(answered(), TZ), {
+    text: "Added: 1 task, 1 event\nAdded the lab report and the dentist.\nTo-do: Lab report · Fri Nov 6 · due Fri Nov 6\nEvent: Dentist · Thu Nov 5, 3–4 pm",
+    buttons: [[{ text: "Undo to-do: Lab report", callback_data: UNDO_T1 }], [{ text: "Undo event: Dentist", callback_data: UNDO_E1 }]],
+  });
+  // Every Undo fits Telegram's 64 bytes of callback data (core.telegram.org/bots/api#inlinekeyboardbutton).
+  assert.ok(UNDO_T1.length <= 64);
+});
+
+test("receipt: a message Claude couldn't act on says so with its reply, and has nothing to undo", () => {
+  assert.deepEqual(receipt({ id: M, status: "failed", reply: "No date or time in it.", tasks_added: 0, tasks: [], events: [] }, TZ), {
+    text: "Couldn't parse it: nothing added\nNo date or time in it.", buttons: [],
+  });
+});
+
+test("receipt: after an Undo it names what was undone and keeps the rest", () => {
+  const m = answered({ tasks: [], tasks_added: 0 });
+  assert.deepEqual(receipt(m, TZ, "Undone: Lab report"), {
+    text: "Undone: Lab report\nAdded: 1 event\nAdded the lab report and the dentist.\nEvent: Dentist · Thu Nov 5, 3–4 pm",
+    buttons: [[{ text: "Undo event: Dentist", callback_data: UNDO_E1 }]],
+  });
+  assert.equal(receipt({ ...m, events: [] }, TZ, "Undone: Dentist").text, "Undone: Dentist\nAll undone\nAdded the lab report and the dentist.");
+});
+
+// ---------------------------------------------------------------- readUndo and undoChanges
+
+const tap = (data, chat = 42) => ({ callback_query: { id: "q1", data, message: { message_id: 9, chat: { id: chat } } } });
+
+test("readUndo: an Undo tap from Lisul's chat names the message and the item", () => {
+  assert.deepEqual(readUndo(tap(UNDO_T1), settings), { message: M, item: T1, query_id: "q1", chat_id: 42, message_id: 9 });
+  assert.deepEqual(readUndo(tap(UNDO_E1), settings).item, E1);
+});
+
+test("readUndo: another chat, another button or a malformed id is not one", () => {
+  assert.equal(readUndo(tap(UNDO_T1, 99), settings), null);
+  assert.equal(readUndo(tap("done:7d0e2a4b-1111-4c3d-9e8f-aabbccddeeff"), settings), null);
+  assert.equal(readUndo(tap("mu:short:fQ4qSxERTD2ej6q7zN3u_w"), settings), null);
+  assert.equal(readUndo(text("mu:x"), settings), null);
+});
+
+test("undoChanges: a to-do comes off as /plan's Undo takes it: its blocks' Google events, then the item", () => {
+  const blocks = [
+    { id: "b1", task_id: T1, gcal_id: "g1" },
+    { id: "b2", task_id: T1, gcal_id: null },
+    { id: "b3", task_id: "other", gcal_id: "g3" },
+  ];
+  assert.deepEqual(undoChanges(answered(), T1, blocks), {
+    title: "Lab report",
+    changes: [
+      { table: "gcal_pending", insert: { gcal_id: "g1", ends_at: null } },
+      { rpc: "undo_message_item", args: { m: M, item: T1 } },
+    ],
+  });
+});
+
+test("undoChanges: an event's Google event goes when /plan made one, then the item; one already undone changes nothing", () => {
+  assert.deepEqual(undoChanges(answered(), E1, []), { title: "Dentist", changes: [{ rpc: "undo_message_item", args: { m: M, item: E1 } }] });
+  const made = answered({ events: [{ ...answered().events[0], gcal_id: "gE" }] });
+  assert.deepEqual(undoChanges(made, E1, []).changes, [
+    { table: "gcal_pending", insert: { gcal_id: "gE", ends_at: null } },
+    { rpc: "undo_message_item", args: { m: M, item: E1 } },
+  ]);
+  assert.equal(undoChanges(answered({ events: [] }), E1, []), null);
+  assert.equal(undoChanges(null, E1, []), null);
 });

@@ -21,7 +21,7 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackText, readText } from "../../../src/sheet/capture.mjs";
+import { ackText, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
 
@@ -39,7 +39,9 @@ Deno.serve(async (req) => {
     const now = new Date();
     // A replan that fails to start must not stop the messages, and the other way round.
     const replan = await replanTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now)), replan });
+    // Nor must a receipt for a text to the bot.
+    const receipted = await receipts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    return Response.json({ ...(await send(now)), replan, receipts: receipted });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -211,6 +213,8 @@ async function webhook(update: unknown, now: Date) {
   const [settings] = await db("settings?select=*");
   const t = readText(update, settings);
   if (t) return capture(t, now);
+  const u = readUndo(update, settings);
+  if (u) return undo(u, settings);
   return tap(update, now);
 }
 
@@ -233,6 +237,60 @@ async function capture(t: { text: string; chat_id: number; message_id: number },
     ...PLAIN,
     reply_parameters: { message_id: t.message_id, allow_sending_without_reply: true },
   }).catch((e) => console.error("telegram capture:", e.message));
+}
+
+// The receipt for each text Claude has answered since yesterday, once: a reply to his text with
+// what was added and an Undo for each item (capture.mjs's receipt), whatever the hour, since he
+// asked. Claimed first by filling in tg_receipt_at, which only one run can do, and given back
+// if Telegram refuses it, so the next minute tries again.
+async function receipts(now: Date) {
+  const [settings] = await db("settings?select=time_zone,telegram_chat_id");
+  if (!settings?.telegram_chat_id) return [];
+  const since = new Date(now.getTime() - 86_400_000).toISOString();
+  const rows = await db(`messages?select=*&tg_message_id=not.is.null&tg_receipt_at=is.null&status=neq.pending&answered_at=gte.${since}&order=at`);
+  const sent = [];
+  for (const m of rows) {
+    const [claimed] = await db(`messages?id=eq.${m.id}&tg_receipt_at=is.null`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ tg_receipt_at: now.toISOString() }),
+    });
+    if (!claimed) continue;
+    const { text, buttons } = receipt(m, settings.time_zone);
+    try {
+      await telegram("sendMessage", {
+        chat_id: settings.telegram_chat_id,
+        text,
+        ...PLAIN,
+        reply_parameters: { message_id: m.tg_message_id, allow_sending_without_reply: true },
+        reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
+      });
+    } catch (e) {
+      await db(`messages?id=eq.${m.id}`, { method: "PATCH", body: JSON.stringify({ tg_receipt_at: null }) });
+      throw e;
+    }
+    sent.push(m.id);
+  }
+  return sent;
+}
+
+// Undo on a receipt: the item comes off as /plan's Undo takes it (undoChanges), then the receipt
+// is edited to say so, with the Undo buttons left (editMessageText takes reply_markup, an
+// InlineKeyboardMarkup: core.telegram.org/bots/api#editmessagetext). An item undone already
+// changes nothing.
+async function undo(u: { message: string; item: string; query_id: string; chat_id: number; message_id: number }, settings: { time_zone: string }) {
+  const [m = null] = await db(`messages?select=*&id=eq.${u.message}`);
+  const blocks = await db(`blocks?select=id,task_id,gcal_id&task_id=eq.${u.item}`);
+  const r = undoChanges(m, u.item, blocks) as { title: string; changes: Change[] } | null;
+  for (const c of r?.changes ?? []) {
+    if (c.rpc) await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
+    else await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table!]}` }, body: JSON.stringify(c.insert) });
+  }
+  await telegram("answerCallbackQuery", { callback_query_id: u.query_id });
+  if (!m) return;
+  const [fresh = m] = r ? await db(`messages?select=*&id=eq.${u.message}`) : [m];
+  const { text, buttons } = receipt(fresh, settings.time_zone, r ? `Undone: ${r.title}` : null);
+  await telegram("editMessageText", { chat_id: u.chat_id, message_id: u.message_id, text, ...PLAIN, reply_markup: { inline_keyboard: buttons } }).catch(() => {});
 }
 
 // --- Taps ---------------------------------------------------------------------------------
