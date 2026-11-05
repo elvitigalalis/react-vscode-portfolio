@@ -180,6 +180,8 @@ export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", {
 export const ouraAccount = async () => (await rest("oura_account?select=connected_at,synced_at,last_error").catch(() => []))[0] ?? null;
 export const deleteOuraAccount = () => rest("oura_account?id=eq.true", { method: "DELETE" });
 export const listSleep = () => rest("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
+// A week's Oura day numbers for /plan's chips, and the 6 days before it for the sparklines.
+export const listSleepDays = (from, to) => rest(`sleep_days?select=*&day=gte.${from}&day=lte.${to}&order=day`).catch(() => []);
 // Wind-down: Oura's bedtime windows, for tonight's bedtime without a target.
 export const listSleepTimes = () => rest("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []);
 

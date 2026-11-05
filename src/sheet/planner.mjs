@@ -11,6 +11,7 @@ import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
+import { chipsLabel, dayChips } from "./oura-day.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 
@@ -61,6 +62,7 @@ export const state = {
   settings: null,   // the settings row
   sleep: [],        // Oura: the sleep_nights rows, for when each day starts
   sleepTimes: [],   // Wind-down: Oura's bedtime windows (sleep_times)
+  sleepDays: [],    // Oura: the week's sleep_days rows (and the 6 days before), for the chips
   events: [],       // the week's Google events, never saved
   todoEvents: [],   // the same with "Time blocks" too, for event to-dos (never saved)
   todos: [],        // event_todos rows: done, hidden and Claude's titles
@@ -422,10 +424,27 @@ function dayColumn(day, rows, items) {
       allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
       day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     el("p", { className: "sheet-stamps", textContent: marks }),
+    day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
     day === state.today ? windDownMark() : null,
     ul);
   section.dataset.day = day;
   return section;
+}
+
+// Oura (oura-day.mjs): a past day's or today's "☾ 82 · ⚡ 86 · 7h 40m", a button that opens the
+// day's numbers; nothing on future days or without a row.
+function ouraChips(day, when) {
+  const chips = dayChips(state.sleepDays.find((r) => r.day === day));
+  if (!chips.length) return null;
+  const kids = chips.flatMap((c, i) => [
+    i ? el("span", { className: "sheet-oura-sep", textContent: "·" }) : null,
+    c.icon ? icon(c.icon) : null,
+    el("span", { className: c.band ? `is-${c.band}` : "", textContent: c.text }),
+  ]);
+  const button = el("button", { type: "button", className: "sheet-oura", ariaLabel: chipsLabel(chips, when) }, ...kids);
+  button.dataset.act = "oura-day";
+  button.dataset.day = day;
+  return button;
 }
 
 // Wind-down (bedtime.mjs): today's thin "Wind down 11:30 pm · Bed 12:30 am" line, for tonight
@@ -480,7 +499,7 @@ export const renderHooks = [];
 
 export async function load() {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes] = await Promise.all([
+  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
@@ -489,8 +508,10 @@ export async function load() {
     api.listEventTodos(addDays(days[0], -1), addDays(days[6], 1)).catch((e) => { console.error(e); return []; }),
     api.listSleep(),
     api.listSleepTimes(),
+    api.listSleepDays(addDays(days[0], -6), days[6]),
   ]);
   state.sleepTimes = sleepTimes;
+  state.sleepDays = sleepDays;
   state.todos = todos;
   state.settings = settings;
   state.sleep = sleep;
@@ -502,6 +523,17 @@ export async function load() {
   state.parked = parked.length;
   render();
   scrollToToday($("[data-week]"));
+}
+
+// Oura: the week's day numbers and sleep again, redrawn only when something changed.
+async function refreshOura() {
+  if (document.visibilityState !== "visible" || !state.week) return;
+  const days = weekDays(state.week);
+  const [sleepDays, sleep] = await Promise.all([api.listSleepDays(addDays(days[0], -6), days[6]), api.listSleep()]);
+  if (JSON.stringify(sleepDays) === JSON.stringify(state.sleepDays) && sleep.length === state.sleep.length) return;
+  state.sleepDays = sleepDays;
+  state.sleep = sleep;
+  render();
 }
 
 export const eventHooks = [];
@@ -823,6 +855,8 @@ function wire() {
       if (act === "close-calendars") return $("[data-calendars]").close();
       if (act === "save-calendars") return saveCalendars();
       if (act === "settings") return openSettings();
+      if (act === "oura-day") return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, e.target.closest("[data-act]").dataset.day), failed);
+      if (act === "close-oura-day") return $("[data-oura-day]").close();
       if (act === "save-interests") return saveInterests();
       if (act === "save-cap") return saveCap();
       if (act === "telegram") return toggleTelegram();
@@ -891,6 +925,9 @@ function wire() {
   });
 
   for (const menu of root.querySelectorAll(".sheet-menu")) menuKeys(menu);
+  // Oura: oura-sync runs every 10 minutes, so today's chips refresh as often while /plan shows.
+  setInterval(refreshOura, 10 * 60_000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshOura(); });
   root.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
   document.addEventListener("pointerup", (e) => { if (drag?.on) wasDrag.at = Date.now(); onPointerUp(e); });

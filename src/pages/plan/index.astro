@@ -126,6 +126,13 @@ import "../../styles/sheet.css";
       <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
+    <!-- A day's Oura numbers (docs/sheet-v5.md, "Day numbers"): src/sheet/oura-popover.mjs fills it. -->
+    <dialog class="sheet-dialog sheet-oura-dialog" data-oura-day aria-labelledby="sheet-oura-day-title">
+      <h2 id="sheet-oura-day-title">Oura</h2>
+      <dl class="sheet-oura-list" data-oura-list></dl>
+      <p class="small">From your Oura ring. Only you see these.</p>
+      <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
+    </dialog>
     <dialog class="sheet-dialog" data-calendars aria-labelledby="sheet-cal-title">
       <h2 id="sheet-cal-title">Calendars</h2>
       <p class="small">Your main Google calendar always shows. To add another one, like a class schedule: in Google Calendar, open Settings, click the calendar under "Settings for my calendars", and copy its Calendar ID from "Integrate calendar". Paste one ID per line.</p>
@@ -312,6 +319,8 @@ import "../../styles/sheet.css";
       <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
       <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" /><path d="m2.5 21.5 1.4-1.4" /><path d="m20.1 3.9 1.4-1.4" /><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" /><path d="m9.6 14.4 4.8-4.8" /></symbol>
       <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></symbol>
+      <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
       <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
     </svg>
 
