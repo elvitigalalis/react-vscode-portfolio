@@ -8,6 +8,9 @@
 //
 // Oura's side: the token refresh (cloud.ouraring.com/docs/authentication: "The refresh token is
 // single-use"), GET /v2/usercollection/sleep and /daily_readiness (cloud.ouraring.com/v2/docs).
+// Wind-down: GET /v2/usercollection/sleep_time, Oura's optimal bedtime window, keeping only its
+// day and offsets (sleep_times). The spec maps no endpoint to a scope; if the daily grant doesn't
+// cover it, the run carries on without it.
 // Sleep data reaches Oura only once he opens the Oura app, so a run can find nothing new.
 //
 // Deploy from the repo root:
@@ -17,7 +20,7 @@
 //
 // Secrets: SHEET_CRON_SECRET, OURA_CLIENT_ID and OURA_CLIENT_SECRET. The tokens come from Vault
 // (oura_tokens) and are never logged or written anywhere else.
-import { dayRows, freshAccess, ouraDocs, Refused, sleepRows, syncRange } from "../../../src/sheet/oura.mjs";
+import { dayRows, freshAccess, ouraDocs, Refused, sleepRows, sleepTimeRows, syncRange } from "../../../src/sheet/oura.mjs";
 import { wakeProfile, wokeLate } from "../../../src/sheet/sleep.mjs";
 import { changeRow } from "../../../src/sheet/replan.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
@@ -70,6 +73,7 @@ async function sync(tokens: Tokens, now: Date) {
     ouraDocs(fetch, "sleep", range, access),
     ouraDocs(fetch, "daily_readiness", range, access),
   ]);
+  const times = sleepTimeRows(await ouraDocs(fetch, "sleep_time", range, access).catch(() => []));
   const nights = sleepRows(sleepDocs);
   const days = dayRows(sleepDocs, readinessDocs);
 
@@ -84,6 +88,6 @@ async function sync(tokens: Tokens, now: Date) {
   // The ref is the wake's instant, written one way, so the same wake is logged once.
   const change = wokeLate(profile, revision, now, tz) ? changeRow("woke_late", new Date(profile.woke_at_iso).toISOString()) : null;
 
-  await db("rpc/oura_sync_save", { method: "POST", body: JSON.stringify({ nights, days, change }) });
-  return { items: nights.length, days: days.length, woke_late: Boolean(change) };
+  await db("rpc/oura_sync_save", { method: "POST", body: JSON.stringify({ nights, days, change, times }) });
+  return { items: nights.length, days: days.length, times: times.length, woke_late: Boolean(change) };
 }

@@ -4,8 +4,9 @@
 //   Auth: cloud.ouraring.com/docs/authentication (authorize and token URLs, scopes, PKCE, "The
 //     refresh token is single-use, meaning it is invalidated after being used", and "All requests
 //     to the Oura API must include a non-empty User-Agent header").
-//   Data: cloud.ouraring.com/v2/docs (spec 1.43): /v2/usercollection/sleep and daily_readiness,
-//     paged by next_token; "the dates are interpreted in the user's local timezone".
+//   Data: cloud.ouraring.com/v2/docs (spec 1.43): /v2/usercollection/sleep, daily_readiness and
+//     sleep_time (PublicSleepTime: day, optimal_bedtime { day_tz, start_offset, end_offset } "offset
+//     from midnight in second", status), paged by next_token; "the dates are interpreted in the user's local timezone".
 import { addDays, localNow } from "./logic.mjs";
 
 export const AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
@@ -124,3 +125,14 @@ export function dayRows(sleepDocs, readinessDocs) {
   }
   return [...days.values()].sort((a, b) => (a.day < b.day ? -1 : 1));
 }
+
+// Wind-down: the sleep_times rows from /sleep_time documents, { day, start_offset, end_offset }
+// and nothing else, only when Oura found a window (status optimal_found or only_recommended_found,
+// the two that come with one). Offsets are seconds from the day's midnight, within a day.
+const WINDOW_FOUND = ["optimal_found", "only_recommended_found"];
+const offset = (s) => Number.isInteger(s) && Math.abs(s) <= 86400;
+export const sleepTimeRows = (docs) => docs.flatMap((d) => {
+  const w = d?.optimal_bedtime;
+  return DAY.test(d?.day ?? "") && WINDOW_FOUND.includes(d.status) && offset(w?.start_offset) && offset(w?.end_offset)
+    ? [{ day: d.day, start_offset: w.start_offset, end_offset: w.end_offset }] : [];
+});

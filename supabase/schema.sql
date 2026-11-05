@@ -181,6 +181,7 @@ begin
   -- Oura: sleep rows are kept 60 days.
   delete from sleep_nights where bedtime_end < now() - interval '60 days';
   delete from sleep_days where day < current_date - 60;
+  delete from sleep_times where day < current_date - 60;
 end $$;
 revoke execute on function nightly_roll() from public, anon, authenticated;
 
@@ -495,7 +496,7 @@ alter table settings add column if not exists morning_on boolean not null defaul
 -- one Postgres gave the inline check), so a re-run is safe.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime'));
 
 -- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
 -- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
@@ -871,7 +872,7 @@ revoke insert, update, delete on actuals from authenticated;
 -- The Finished? check, and the replan message (R1), in the nudges log.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime'));
 
 -- --- v5 H1, habits (docs/sheet-v5.md) ----------------------------------------------------------
 -- Things Lisul does on set weekdays (gym, lunch, a weekly review), edited in /plan's Settings.
@@ -1435,6 +1436,25 @@ create table if not exists sleep_days (
   readiness int check (readiness between 0 and 100),
   sleep_s int check (sleep_s between 0 and 86400)
 );
+-- Wind-down: Oura's optimal bedtime window by its day (/v2/usercollection/sleep_time), only its
+-- start and end as seconds from that day's midnight, for tonight's bedtime when none is set.
+create table if not exists sleep_times (
+  day date primary key,
+  start_offset int not null check (start_offset between -86400 and 86400),
+  end_offset int not null check (end_offset between -86400 and 86400)
+);
+alter table sleep_times enable row level security;
+drop policy if exists owner_all on sleep_times;
+create policy owner_all on sleep_times for all using (is_owner()) with check (is_owner());
+revoke all on sleep_times from anon;
+revoke insert, update, delete on sleep_times from authenticated;
+-- Wind-down's settings (Settings, Oura): a bedtime target, whether to ease in toward it 15
+-- minutes a night (bedtime_set_on is the night it was set, where easing starts), and the switch
+-- for all of it (the planning limit, the Telegram nudges and /plan's marker).
+alter table settings add column if not exists bedtime_target time;
+alter table settings add column if not exists bedtime_ease boolean not null default true;
+alter table settings add column if not exists bedtime_set_on date;
+alter table settings add column if not exists wind_down_on boolean not null default true;
 alter table oura_account enable row level security;
 alter table sleep_nights enable row level security;
 alter table sleep_days enable row level security;
@@ -1456,6 +1476,7 @@ begin
   delete from vault.secrets where id in (old.refresh_secret_id, old.access_secret_id);
   delete from sleep_nights where true;
   delete from sleep_days where true;
+  delete from sleep_times where true;
   return old;
 end $$;
 drop trigger if exists oura_account_forget on oura_account;
@@ -1508,11 +1529,16 @@ grant execute on function oura_tokens() to service_role;
 
 -- oura-sync's write, in one transaction: the sleep periods upserted by oura_id ([{ oura_id, day,
 -- type, bedtime_start, bedtime_end }]), the days ([{ day, readiness, sleep_s }], a null keeps
--- what was there), synced_at stamped, and the woke-late change inserted once per wake (its ref).
--- Service key only.
-create or replace function oura_sync_save(nights jsonb, days jsonb default '[]', change jsonb default null)
+-- what was there), Oura's optimal bedtime windows ([{ day, start_offset, end_offset }]),
+-- synced_at stamped, and the woke-late change inserted once per wake (its ref). Service key only.
+drop function if exists oura_sync_save(jsonb, jsonb, jsonb);
+create or replace function oura_sync_save(nights jsonb, days jsonb default '[]', change jsonb default null, times jsonb default '[]')
 returns void language plpgsql security invoker set search_path = public as $$
 begin
+  insert into sleep_times (day, start_offset, end_offset)
+  select x.day, x.start_offset, x.end_offset
+  from jsonb_to_recordset(coalesce(times, '[]')) as x(day date, start_offset int, end_offset int)
+  on conflict (day) do update set start_offset = excluded.start_offset, end_offset = excluded.end_offset;
   insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end)
   select x.oura_id, x.day, x.type, x.bedtime_start, x.bedtime_end
   from jsonb_to_recordset(coalesce(nights, '[]')) as x(oura_id text, day date, type text, bedtime_start timestamptz, bedtime_end timestamptz)
@@ -1529,8 +1555,8 @@ begin
     values (change->>'kind', change->>'reason', (change->>'weight')::int, change->>'ref');
   end if;
 end $$;
-revoke execute on function oura_sync_save(jsonb, jsonb, jsonb) from public, anon, authenticated;
-grant execute on function oura_sync_save(jsonb, jsonb, jsonb) to service_role;
+revoke execute on function oura_sync_save(jsonb, jsonb, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function oura_sync_save(jsonb, jsonb, jsonb, jsonb) to service_role;
 
 -- A refused refresh marks the grant broken (Settings shows Reconnect). Service key only.
 create or replace function oura_broken(why text) returns void

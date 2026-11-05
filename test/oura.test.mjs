@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { dayRows, freshAccess, ouraAuthUrl, pkce, Refused, sleepRows, syncRange } from "../src/sheet/oura.mjs";
+import { dayRows, freshAccess, ouraAuthUrl, pkce, Refused, sleepRows, sleepTimeRows, syncRange } from "../src/sheet/oura.mjs";
 
 test("ouraAuthUrl: Oura's authorize URL, scope daily, with the state and an S256 challenge", () => {
   const url = new URL(ouraAuthUrl({ clientId: "cid", redirectUri: "https://x.supabase.co/functions/v1/oura-connect/callback", state: "st", challenge: "ch" }));
@@ -104,5 +104,17 @@ test("dayRows: per day, readiness's score and the longest long_sleep's total sec
     { day: "2026-11-02", readiness: 88, sleep_s: null },
     { day: "2026-11-03", readiness: null, sleep_s: 20400 },
     { day: "2026-11-04", readiness: 64, sleep_s: 27000 },
+  ]);
+});
+
+test("sleepTimeRows: only day and the optimal window's offsets, when Oura found one", () => {
+  const st = (extra) => ({ id: "t1", day: "2026-11-05", recommendation: "earlier_bedtime", status: "optimal_found", optimal_bedtime: { day_tz: -18000, start_offset: -3600, end_offset: 0 }, ...extra });
+  assert.deepEqual(sleepTimeRows([
+    st(), st({ day: "2026-11-04", status: "only_recommended_found", optimal_bedtime: { day_tz: -18000, start_offset: 1800, end_offset: 5400 } }),
+    st({ day: "2026-11-03", status: "not_enough_nights" }), st({ day: "2026-11-02", optimal_bedtime: null }),
+    st({ day: "bad" }), st({ day: "2026-11-01", optimal_bedtime: { start_offset: 99999, end_offset: 0 } }),
+  ]), [
+    { day: "2026-11-05", start_offset: -3600, end_offset: 0 },
+    { day: "2026-11-04", start_offset: 1800, end_offset: 5400 },
   ]);
 });

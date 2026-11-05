@@ -1448,10 +1448,10 @@ end $$;
 -- --- Oura (docs/sheet-v5.md, "Oura") ---------------------------------------------------------
 reset role;
 do $$ begin
-  if exists (select 1 from pg_class where relname in ('oura_account', 'sleep_nights', 'sleep_days') and not relrowsecurity)
+  if exists (select 1 from pg_class where relname in ('oura_account', 'sleep_nights', 'sleep_days', 'sleep_times') and not relrowsecurity)
     then raise exception 'RLS off on an Oura table'; end if;
   if exists (select 1 from information_schema.view_column_usage
-             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('oura_account', 'sleep_nights', 'sleep_days'))
+             where view_name in ('public_week', 'public_days', 'public_now') and table_name in ('oura_account', 'sleep_nights', 'sleep_days', 'sleep_times'))
     then raise exception 'a public view exposes Oura data'; end if;
   if (select schedule from cron.job where jobname = 'sheet-oura') is distinct from '4-59/10 * * * *'
     or (select count(*) from cron.job where jobname = 'sheet-oura') <> 1
@@ -1460,12 +1460,12 @@ do $$ begin
     or has_function_privilege('authenticated', 'oura_token_save(text, text, timestamptz, text)', 'execute')
     or has_function_privilege('anon', 'oura_tokens()', 'execute')
     or has_function_privilege('authenticated', 'oura_tokens()', 'execute')
-    or has_function_privilege('authenticated', 'oura_sync_save(jsonb, jsonb, jsonb)', 'execute')
+    or has_function_privilege('authenticated', 'oura_sync_save(jsonb, jsonb, jsonb, jsonb)', 'execute')
     or has_function_privilege('authenticated', 'oura_broken(text)', 'execute')
     then raise exception 'Oura functions callable by anon or authenticated'; end if;
   if not has_function_privilege('service_role', 'oura_token_save(text, text, timestamptz, text)', 'execute')
     or not has_function_privilege('service_role', 'oura_tokens()', 'execute')
-    or not has_function_privilege('service_role', 'oura_sync_save(jsonb, jsonb, jsonb)', 'execute')
+    or not has_function_privilege('service_role', 'oura_sync_save(jsonb, jsonb, jsonb, jsonb)', 'execute')
     then raise exception 'service_role cannot call the Oura functions'; end if;
 
   -- Connect, then rotate: the new pair is saved only over the token it replaced.
@@ -1495,6 +1495,13 @@ do $$ begin
     then raise exception 'oura_sync_save lost a readiness or took the new sleep total'; end if;
   if (select count(*) from changes where reason = 'woke_late') <> 1 then raise exception 'the woke-late change was not logged once'; end if;
   if (select synced_at from oura_account) is null then raise exception 'oura_sync_save did not stamp synced_at'; end if;
+  -- Wind-down: Oura's bedtime windows upsert by day.
+  perform oura_sync_save('[]', '[]', null, '[{"day": "2030-01-02", "start_offset": -3600, "end_offset": 0}]');
+  perform oura_sync_save('[]', '[]', null, '[{"day": "2030-01-02", "start_offset": -1800, "end_offset": 1800}]');
+  if (select count(*) from sleep_times) <> 1 or (select start_offset from sleep_times) <> -1800
+    then raise exception 'oura_sync_save did not upsert sleep_times by day'; end if;
+  if (select wind_down_on and bedtime_ease and bedtime_target is null from settings) is not true
+    then raise exception 'wind-down settings did not default on with no target'; end if;
   delete from changes where reason = 'woke_late';
   raise notice '✓ Oura: private, functions service-only, tokens rotate in place, sync upserts and logs woke-late once';
 end $$;
@@ -1505,10 +1512,12 @@ do $$ begin
   exception when insufficient_privilege then null; end;
   begin perform 1 from oura_account; raise exception 'anon read oura_account';
   exception when insufficient_privilege then null; end;
+  begin perform 1 from sleep_times; raise exception 'anon read sleep_times';
+  exception when insufficient_privilege then null; end;
 end $$;
 select pg_temp.as_user('authenticated', 'stranger@example.com');
 do $$ begin
-  if (select count(*) from sleep_nights) + (select count(*) from sleep_days) + (select count(*) from oura_account) <> 0
+  if (select count(*) from sleep_nights) + (select count(*) from sleep_days) + (select count(*) from oura_account) + (select count(*) from sleep_times) <> 0
     then raise exception 'a non-owner sees Oura data'; end if;
 end $$;
 select pg_temp.as_user('authenticated', 'owner@example.com');
@@ -1527,14 +1536,18 @@ end $$;
 reset role;
 do $$ begin
   if exists (select 1 from vault.secrets where name in ('oura_refresh', 'oura_access'))
-    or exists (select 1 from sleep_nights) or exists (select 1 from sleep_days)
+    or exists (select 1 from sleep_nights) or exists (select 1 from sleep_days) or exists (select 1 from sleep_times)
     then raise exception 'Disconnect kept a token or sleep rows'; end if;
   -- Kept 60 days.
   insert into sleep_nights (oura_id, day, type, bedtime_start, bedtime_end) values
     ('old', current_date - 62, 'long_sleep', now() - interval '61 days 8 hours', now() - interval '61 days'),
     ('new', current_date - 58, 'long_sleep', now() - interval '59 days 8 hours', now() - interval '59 days');
   insert into sleep_days (day, readiness) values (current_date - 61, 70), (current_date - 59, 80);
+  insert into sleep_times (day, start_offset, end_offset) values (current_date - 61, 0, 0), (current_date - 59, 0, 0);
   perform nightly_roll();
+  if exists (select 1 from sleep_times where day = current_date - 61) or not exists (select 1 from sleep_times where day = current_date - 59)
+    then raise exception 'nightly_roll should keep 60 days of sleep_times'; end if;
+  delete from sleep_times where true;
   if exists (select 1 from sleep_nights where oura_id = 'old') or not exists (select 1 from sleep_nights where oura_id = 'new')
     or exists (select 1 from sleep_days where day = current_date - 61) or not exists (select 1 from sleep_days where day = current_date - 59)
     then raise exception 'nightly_roll should keep 60 days of sleep'; end if;
