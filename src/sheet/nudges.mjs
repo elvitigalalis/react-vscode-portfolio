@@ -536,6 +536,9 @@ export function readTap(update, settings) {
   // v5: an optional revision after the day, 1-999 with no leading zeros.
   const [, plan, day, rev] = /^(pa|ps):([^:]+)(?::([1-9]\d{0,2}))?$/.exec(q.data ?? "") ?? [];
   if (plan) return DATE.test(day) ? { action: plan, day, ...(rev ? { rev: Number(rev) } : {}), ...from } : null;
+  // Didn't start's slot button: "move:<block id>:<the slot's start, in minutes since the epoch>".
+  const [, moved, minute] = /^move:([^:]+):(\d{1,9})$/.exec(q.data ?? "") ?? [];
+  if (moved) return UUID.test(moved) ? { action: "move", block_id: moved, at: Number(minute) * 60_000, ...from } : null;
   const [, action, block_id] = /^(done|snooze|finished|more|nostart|tomorrow):(.+)$/.exec(q.data ?? "") ?? [];
   if (!action || !UUID.test(block_id)) return null;
   return { action, block_id, ...from };
@@ -568,7 +571,7 @@ export function handleTap(tap, snapshot, now) {
   // A block deleted or moved off the plan since its nudge went out: nothing left to act on.
   if (!task) return { changes: [], text: GONE };
   if (task.done) return { changes: [], text: DONE };
-  if (FINISHED_ANSWERS[tap.action]) return FINISHED_ANSWERS[tap.action](b, task, snapshot, now);
+  if (FINISHED_ANSWERS[tap.action]) return FINISHED_ANSWERS[tap.action](b, task, snapshot, now, tap);
   return tap.action === "snooze" ? snooze(b, task, snapshot, now) : done(task, snapshot, now);
 }
 
@@ -623,6 +626,23 @@ function planDecision(tap, { proposal, blocks, settings }) {
 }
 
 // --- The Finished? answers (v5, docs/sheet-v5.md "The Finished? answers") ------------------
+
+// Didn't start's slot starts at least this long after the tap, on a quarter hour.
+const SLOT_LEAD = 5;
+// Whether `b` could run from `start` (ms) for `len` ms today: after now, by the day's shutdown
+// line and quiet hours, over no busy time (with travel_min each side) and no other approved
+// block. Proposed blocks don't count, as for More time.
+const TRAVEL_MS = 10 * 60_000;
+function slotFree(b, start, len, snapshot, now) {
+  const tz = snapshot.settings.time_zone;
+  const { day: today } = localNow(now, tz);
+  if (!Number.isFinite(start) || start <= now.getTime() || localNow(new Date(start), tz).day !== today) return false;
+  const line = shutdownFor(today, { line: snapshot.day?.shutdown_at, settings: snapshot.settings, sleep: snapshot.sleep ?? [], sleepTimes: snapshot.sleepTimes ?? [], tz });
+  const end = start + len;
+  if (minutesOn(new Date(end).toISOString(), today, tz) > Math.min(QUIET_FROM, Number(line.slice(0, 2)) * 60 + Number(line.slice(3, 5)))) return false;
+  const hit = (x, pad) => Date.parse(x.starts_at) - pad < end && Date.parse(x.ends_at) + pad > start;
+  return !(snapshot.busy ?? []).some((x) => hit(x, TRAVEL_MS)) && !snapshot.blocks.some((x) => x.id !== b.id && !x.proposed && hit(x, 0));
+}
 // Only Finished writes actuals, which is what pace learns from (src/sheet/pace.mjs).
 
 const FINISHED_ANSWERS = {
@@ -636,7 +656,9 @@ const FINISHED_ANSWERS = {
     const minutes = Math.min(Math.round(ms / 60_000), 960);
     const { changes } = done(task, snapshot, now);
     if (minutes < 1) return { changes, text: DONE };
-    const row = { day: localNow(now, snapshot.settings.time_zone).day, task_id: task.id, block_id: b.id, kind: paceKind(task), est_min: task.est_min ?? null, minutes };
+    // A late tap counts each block only to its end, on the block's own day (docs/sheet-v5.md,
+    // "Day rules and first steps"), so tap latency never inflates pace.
+    const row = { day: localNow(new Date(b.starts_at), snapshot.settings.time_zone).day, task_id: task.id, block_id: b.id, kind: paceKind(task), est_min: task.est_min ?? null, minutes };
     return { changes: [...changes, { table: "actuals", insert: row }], text: `✓ Done in ${minutes} min · ${task.title}` };
   },
   // Thirty minutes more, when nothing approved or busy takes them and they end by quiet hours.
@@ -654,7 +676,36 @@ const FINISHED_ANSWERS = {
     const pending = b.gcal_id ? [{ table: "gcal_pending", insert: { gcal_id: b.gcal_id, ends_at } }] : [];
     return { changes: [{ table: "blocks", id: b.id, update: { ends_at } }, ...pending], text: `More time: until ${formatClock(minutesOn(ends_at, on, tz))} · ${task.title}` };
   },
-  nostart: (b, task) => ({ changes: [], text: `Left open · ${task.title}` }),
+  // The next free slot today that holds the block (docs/sheet-v5.md, "Day rules and first
+  // steps"), as a button that moves it there, and Tomorrow; with none, Tomorrow alone.
+  nostart(b, task, snapshot, now) {
+    const tz = snapshot.settings.time_zone;
+    const len = Date.parse(b.ends_at) - Date.parse(b.starts_at);
+    const tomorrowButton = { text: "Tomorrow", callback_data: `tomorrow:${b.id}` };
+    const { day: today, minutes } = localNow(now, tz);
+    for (let m = Math.ceil((minutes + SLOT_LEAD) / 15) * 15; m < 1440; m += 15) {
+      const start = Date.parse(zonedIso(today, m, tz));
+      if (!slotFree(b, start, len, snapshot, now)) continue;
+      const at = formatClock(m);
+      return {
+        changes: [],
+        text: `Next free slot: ${at} (${Math.round(len / 60_000)} min) · ${task.title}`,
+        buttons: [{ text: `Move to ${at}`, callback_data: `move:${b.id}:${start / 60_000}` }, tomorrowButton],
+      };
+    }
+    return { changes: [], text: `No free slot left today · ${task.title}`, buttons: [tomorrowButton] };
+  },
+  // A tap on the slot's button moves the block there once it is still free, as Lisul's own move:
+  // locked (auto off), with its Google event deleted for /plan to make again.
+  move(b, task, snapshot, now, tap) {
+    const len = Date.parse(b.ends_at) - Date.parse(b.starts_at);
+    if (!slotFree(b, tap.at, len, snapshot, now)) return { changes: [], text: `That slot isn't free any more · ${task.title}` };
+    const starts_at = new Date(tap.at).toISOString();
+    const ends_at = new Date(tap.at + len).toISOString();
+    const pending = b.gcal_id ? [{ table: "gcal_pending", insert: { gcal_id: b.gcal_id, ends_at: null } }] : [];
+    const at = formatClock(localNow(new Date(starts_at), snapshot.settings.time_zone).minutes);
+    return { changes: [{ table: "blocks", id: b.id, update: { starts_at, ends_at, auto: false, gcal_id: null } }, ...pending], text: `Moved to ${at} · ${task.title}` };
+  },
   // The task's blocks today that haven't started go (proposed ones too). A task on a day with no
   // set time rolls, as the nightly roll would; any other task moves onto tomorrow.
   tomorrow(b, task, snapshot, now) {
