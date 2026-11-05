@@ -83,8 +83,8 @@ day of a task that won't fit).
    their free time, rounded down to 15; today takes all of it. The slack absorbs the overruns a
    far-off day's estimate hides (Zauberman & Lynch 2005). A task the plain pass can't finish may
    top up days it already has in 15-minute steps, but only when that places all of what is left.
-4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day, the due day too; a task with 60
-   minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
+4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day, the due day too
+   (rule 8 has the one exception); a task with 60 minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
    90 + 75 + 30). All minutes move in 15-minute steps.
 5. **Exam spacing:** an `exam` task with more than 60 minutes spreads over at least `EXAM_DAYS`
    (3) days, a day apart, before its target (Cepeda 2006, Dunlosky 2013): its share a day is
@@ -189,6 +189,19 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
    `sleep_days` row, `horizon_alloc` from today) and `horizonInput(rows, now)`, which builds the
    input above, and `horizonKey(input)`: SHA-256 hex of the canonical JSON of every input field
    except `previous`.
+
+   **What each task in the input must carry** for the blocking rules (all optional; the engine
+   is safe without them, so they can land after the rest):
+
+   | field | value | without it |
+   | --- | --- | --- |
+   | `minutes_p80` | `horizonMinutes(task, paceP80ByKind(actuals))`, from the same `actuals` rows as `paceByKind` | states judged at the median (`minutes`) |
+   | `kind` | `workKind(task)` on the task row (needs `title`, `source`, and `kind` if the row ever has one) | no exam spacing, no 120-minute stretch |
+
+   Both go in the key, so a pace or title change re-flows. Nothing else changes for the caller:
+   the 85% fill of later days and the 20% buffer work from `free` and `minutes` as passed now.
+   The output only gains `remaining_p80_min` per task; every other field keeps its name and
+   meaning (`short_min` and `over_min` can now also count minutes past the daily maximum).
 2. **The re-flow**, `reflowHorizon(db, now)` in both functions: build, key, skip when equal,
    else `planHorizon` and `replace_horizon(today, key, allocations, states)`. Triggers: the tick
    (cheap thanks to the key: task edits, done tasks, busy syncs, Finished? answers, approved or
