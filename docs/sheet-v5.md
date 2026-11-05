@@ -831,7 +831,7 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
   median of the newest 14 weekday and 14 weekend (a Saturday or Sunday wake) days, each null with
   fewer than 3. Today's wake is today's main sleep.
 - **Window start** (`windowStart`): today's wake + 30, else the day's typical wake + 30, else
-  07:00; rounded up to the quarter hour; never after 12:00; on today never before now. read_planner's
+  07:00; rounded up to the quarter hour; never after 17:00; on today never before now. read_planner's
   `window.from`, checkProposal's earliest start and /plan's day start (dayCapacity, 9:30 am without
   Oura) all use it. read_planner says nothing more about his sleep (see Oura and AI).
 - **Day rules** (`dayCap`): on a day with a `sleep_days` row, readiness under 70 takes 0.8 of the
