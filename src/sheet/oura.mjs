@@ -117,11 +117,19 @@ export const sleepRows = (docs) => docs.flatMap((d) => {
 // appears only with at least one. Field names and types: cloud.ouraring.com/v2/docs (spec 1.43,
 // PublicDailyReadiness, PublicModifiedSleepModel, PublicDailySleep, PublicDailyActivity,
 // PublicDailyStress). Nothing else in the payloads is kept.
-const KEYS = ["readiness", "sleep_s", "sleep_score", "efficiency", "deep_s", "rem_s", "rhr_low", "rhr_avg", "hrv_avg", "temp_dev", "activity_score", "steps", "stress"];
+const KEYS = ["contributors", "readiness", "sleep_s", "sleep_score", "efficiency", "deep_s", "rem_s", "rhr_low", "rhr_avg", "hrv_avg", "temp_dev", "activity_score", "steps", "stress"];
 const STRESS = ["restored", "normal", "stressful"];
+export const SLEEP_CONTRIBUTORS = ["total_sleep", "efficiency", "restfulness", "rem_sleep", "deep_sleep", "latency", "timing"];
+export const READINESS_CONTRIBUTORS = ["activity_balance", "body_temperature", "hrv_balance", "previous_day_activity", "previous_night", "recovery_index", "resting_heart_rate", "sleep_balance", "sleep_regularity"];
 const int = (v, lo, hi) => (Number.isFinite(v) && v >= lo && v <= hi ? Math.round(v) : null);
 export function dayRows(sleepDocs, readinessDocs, { dailySleep = [], activity = [], stress = [] } = {}) {
   const days = new Map();
+  // The score contributors (0-100 each, PublicSleepContributors and PublicReadinessContributors),
+  // merged into one object per day; none of their names are shared.
+  const addContributors = (day, c, names) => {
+    const kept = Object.fromEntries(names.map((k) => [k, int(c?.[k], 0, 100)]).filter(([, v]) => v != null));
+    if (Object.keys(kept).length) put(day, "contributors", { ...(days.get(day)?.contributors ?? {}), ...kept });
+  };
   const put = (day, key, v) => {
     if (v == null || !DAY.test(day ?? "")) return;
     if (!days.has(day)) days.set(day, { day, ...Object.fromEntries(KEYS.map((k) => [k, null])) });
@@ -131,6 +139,7 @@ export function dayRows(sleepDocs, readinessDocs, { dailySleep = [], activity = 
     put(r?.day, "readiness", Number.isInteger(r?.score) ? int(r.score, 0, 100) : null);
     const t = r?.temperature_deviation;
     put(r?.day, "temp_dev", Number.isFinite(t) && Math.abs(t) <= 10 ? Math.round(t * 100) / 100 : null);
+    addContributors(r?.day, r?.contributors, READINESS_CONTRIBUTORS);
   }
   const main = new Map();
   for (const s of sleepDocs) {
@@ -147,7 +156,10 @@ export function dayRows(sleepDocs, readinessDocs, { dailySleep = [], activity = 
     put(day, "rhr_avg", int(s.average_heart_rate, 20, 250));
     put(day, "hrv_avg", int(s.average_hrv, 0, 500));
   }
-  for (const d of dailySleep) put(d?.day, "sleep_score", int(d?.score, 0, 100));
+  for (const d of dailySleep) {
+    put(d?.day, "sleep_score", int(d?.score, 0, 100));
+    addContributors(d?.day, d?.contributors, SLEEP_CONTRIBUTORS);
+  }
   for (const a of activity) {
     put(a?.day, "activity_score", int(a?.score, 0, 100));
     put(a?.day, "steps", int(a?.steps, 0, 200000));
@@ -164,5 +176,31 @@ const offset = (s) => Number.isInteger(s) && Math.abs(s) <= 86400;
 export const sleepTimeRows = (docs) => docs.flatMap((d) => {
   const w = d?.optimal_bedtime;
   return DAY.test(d?.day ?? "") && WINDOW_FOUND.includes(d.status) && offset(w?.start_offset) && offset(w?.end_offset)
-    ? [{ day: d.day, start_offset: w.start_offset, end_offset: w.end_offset }] : [];
+    ? [{ day: d.day, start_offset: w.start_offset, end_offset: w.end_offset, hint: HINTS.includes(d.recommendation) ? d.recommendation : null }] : [];
 });
+// PublicSleepTimeRecommendation's values.
+const HINTS = ["improve_efficiency", "earlier_bedtime", "later_bedtime", "earlier_wake_up_time", "later_wake_up_time", "follow_optimal_bedtime"];
+
+// Ring workouts (scope workout; PublicWorkout: activity, day, start_datetime, end_datetime): only
+// the day, start, end and activity of strength-type and generic ones, never calories, intensity,
+// distance or label. Oura's activity is free text; these are matched loosely.
+export const GYM_ACTIVITY = /strength|weight|lift|resistance|crossfit|functional|bodybuilding|gym|other|workout|unknown/i;
+export const workoutRows = (docs) => docs.flatMap((d) => {
+  const row = { oura_id: d?.id, day: d?.day, starts_at: iso(d?.start_datetime), ends_at: iso(d?.end_datetime), activity: typeof d?.activity === "string" ? d.activity.slice(0, 40) : null };
+  return typeof row.oura_id === "string" && row.oura_id.length <= 100 && DAY.test(row.day ?? "") && row.starts_at && row.ends_at
+    && row.starts_at < row.ends_at && row.activity && GYM_ACTIVITY.test(row.activity) ? [row] : [];
+});
+
+// Rest Mode (PublicRestModePeriod): only its start and end days (end null while it is on); its
+// episodes' tags (symptoms) are never kept.
+export const restRows = (docs) => docs.flatMap((d) => (typeof d?.id === "string" && d.id.length <= 100 && DAY.test(d.start_day ?? "")
+  && (d.end_day == null || (DAY.test(d.end_day) && d.end_day >= d.start_day)) ? [{ oura_id: d.id, start_day: d.start_day, end_day: d.end_day ?? null }] : []));
+
+// The ring's battery from /ring_battery_level?latest=true (PublicRingBatteryLevelRow: level,
+// charging, in_charger): true when under 20% and off the charger, false otherwise, null with no
+// sample. Only this flag is kept, never the level.
+export function ringLow(rows) {
+  const r = (rows ?? []).at(-1);
+  if (!r || !Number.isFinite(r.level)) return null;
+  return r.level < 20 && !r.charging && !r.in_charger;
+}

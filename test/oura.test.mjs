@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { dayRows, freshAccess, ouraAuthUrl, pkce, Refused, sleepRows, sleepTimeRows, syncRange } from "../src/sheet/oura.mjs";
+import { dayRows, freshAccess, ouraAuthUrl, pkce, Refused, restRows, ringLow, sleepRows, sleepTimeRows, syncRange, workoutRows } from "../src/sheet/oura.mjs";
 
 test("ouraAuthUrl: Oura's authorize URL, scope daily, with the state and an S256 challenge", () => {
   const url = new URL(ouraAuthUrl({ clientId: "cid", redirectUri: "https://x.supabase.co/functions/v1/oura-connect/callback", state: "st", challenge: "ch" }));
@@ -119,7 +119,7 @@ test("dayRows: the day's numbers for /plan, from made-up Oura payloads; nothing 
   // Out-of-range or unknown values are dropped, and make no row of their own.
   const stress = [{ id: "x1", day: "2026-11-04", day_summary: "restored", stress_high: 600 }, { day: "2026-11-03", day_summary: "panic" }];
   assert.deepEqual(dayRows(sleep, readiness, { dailySleep, activity, stress }), [
-    { day: "2026-11-04", readiness: 86, sleep_s: 27000, sleep_score: 82, efficiency: 91, deep_s: 4800, rem_s: 6000, rhr_low: 48, rhr_avg: 54, hrv_avg: 41, temp_dev: -0.23, activity_score: 77, steps: 8412, stress: "restored" },
+    { day: "2026-11-04", contributors: { deep_sleep: 90 }, readiness: 86, sleep_s: 27000, sleep_score: 82, efficiency: 91, deep_s: 4800, rem_s: 6000, rhr_low: 48, rhr_avg: 54, hrv_avg: 41, temp_dev: -0.23, activity_score: 77, steps: 8412, stress: "restored" },
   ]);
 });
 
@@ -130,7 +130,36 @@ test("sleepTimeRows: only day and the optimal window's offsets, when Oura found 
     st({ day: "2026-11-03", status: "not_enough_nights" }), st({ day: "2026-11-02", optimal_bedtime: null }),
     st({ day: "bad" }), st({ day: "2026-11-01", optimal_bedtime: { start_offset: 99999, end_offset: 0 } }),
   ]), [
-    { day: "2026-11-05", start_offset: -3600, end_offset: 0 },
-    { day: "2026-11-04", start_offset: 1800, end_offset: 5400 },
+    { day: "2026-11-05", start_offset: -3600, end_offset: 0, hint: "earlier_bedtime" },
+    { day: "2026-11-04", start_offset: 1800, end_offset: 5400, hint: "earlier_bedtime" },
   ]);
+});
+
+test("dayRows: the score contributors, as integers, merged per day; others dropped", () => {
+  const [row] = dayRows([], [{ day: "2026-11-04", score: 80, contributors: { hrv_balance: 62, recovery_index: 90, mystery: 5, sleep_balance: null } }], {
+    dailySleep: [{ day: "2026-11-04", score: 75, contributors: { timing: 41, latency: 88, total_sleep: 300 } }],
+  });
+  assert.deepEqual(row.contributors, { hrv_balance: 62, recovery_index: 90, timing: 41, latency: 88 });
+});
+
+test("workoutRows: strength and generic workouts, day, start, end and activity only", () => {
+  const w = (extra) => ({ id: "w1", day: "2026-11-04", activity: "strengthTraining", start_datetime: "2026-11-04T17:00:00-05:00", end_datetime: "2026-11-04T18:12:00-05:00", calories: 310, intensity: "hard", distance: 0, label: "Push", source: "autodetected", ...extra });
+  assert.deepEqual(workoutRows([w(), w({ id: "w2", activity: "walking" }), w({ id: "w3", activity: "other" }), w({ id: "w4", end_datetime: "2026-11-04T16:00:00-05:00" })]), [
+    { oura_id: "w1", day: "2026-11-04", starts_at: "2026-11-04T22:00:00.000Z", ends_at: "2026-11-04T23:12:00.000Z", activity: "strengthTraining" },
+    { oura_id: "w3", day: "2026-11-04", starts_at: "2026-11-04T22:00:00.000Z", ends_at: "2026-11-04T23:12:00.000Z", activity: "other" },
+  ]);
+});
+
+test("restRows: start and end days only, the episodes' tags never", () => {
+  assert.deepEqual(restRows([
+    { id: "r1", start_day: "2026-11-01", end_day: null, start_time: "x", episodes: [{ tags: ["sick"], timestamp: "y" }] },
+    { id: "r2", start_day: "2026-10-20", end_day: "2026-10-23" }, { id: "r3", start_day: "2026-10-20", end_day: "2026-10-19" },
+  ]), [{ oura_id: "r1", start_day: "2026-11-01", end_day: null }, { oura_id: "r2", start_day: "2026-10-20", end_day: "2026-10-23" }]);
+});
+
+test("ringLow: under 20% and off the charger; null with no sample", () => {
+  assert.equal(ringLow([{ level: 15, charging: false, in_charger: false }]), true);
+  assert.equal(ringLow([{ level: 15, charging: true, in_charger: true }]), false);
+  assert.equal(ringLow([{ level: 60, charging: false, in_charger: false }]), false);
+  assert.equal(ringLow([]), null);
 });

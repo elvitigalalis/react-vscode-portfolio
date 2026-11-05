@@ -3,7 +3,7 @@
 // it, so 00:30 and 02:00 are minutes 1470 and 1560 of the night before. Expected values by hand.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bedtimeFor, bedtimeStatus, nightAt, nightOf, typicalBedtime } from "../src/sheet/bedtime.mjs";
+import { bedtimeFor, bedtimeMarker, bedtimeStatus, nightAt, nightOf, ouraWindow, ouraWindowLine, typicalBedtime } from "../src/sheet/bedtime.mjs";
 
 const TZ = "America/New_York";
 // A long_sleep that starts at `start`, "YYYY-MM-DDTHH:MM" local in New York (EDT, UTC-4, until
@@ -99,4 +99,16 @@ test("bedtimeStatus: Settings' line for tonight", () => {
   assert.equal(bedtimeStatus(null, s), "No bedtime tonight");
   assert.equal(bedtimeStatus(null, { ...s, wind_down_on: false }), "Wind-down is off");
   assert.equal(bedtimeStatus(null, { ...s, bedtime_target: null }), "No bedtime set, and Oura hasn't suggested one yet");
+});
+
+test("ouraWindow: Oura's window and hint for a night, in words", () => {
+  const rows = [{ day: "2026-11-05", start_offset: 900, end_offset: 2700, hint: "earlier_bedtime" }];
+  const w = ouraWindow("2026-11-04", rows);
+  assert.deepEqual(w, { start: 1455, end: 1485, hint: "earlier_bedtime" });
+  assert.equal(ouraWindowLine(w), "Oura: 12:15–12:45 am, earlier bedtime");
+  assert.equal(ouraWindowLine({ start: 1410, end: 1470, hint: null }), "Oura: 11:30 pm–12:30 am");
+  assert.equal(ouraWindowLine(null), null);
+  const b = { minutes: 1575, wind_down: 1515, source: "easing", target: 1470 };
+  assert.equal(bedtimeMarker(b, w), "Wind down 1:15 am · Bed 2:15 am · Oura: 12:15–12:45 am, earlier bedtime");
+  assert.equal(bedtimeMarker(b), "Wind down 1:15 am · Bed 2:15 am");
 });

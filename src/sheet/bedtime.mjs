@@ -46,12 +46,31 @@ export function typicalBedtime(sleep, tz, before = null) {
 // "HH:MM[:SS]" as night minutes, or null.
 const targetOf = (t) => (typeof t === "string" && /^\d{2}:\d{2}/.test(t) ? evening(Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))) : null);
 
-// Oura's window start for `night`: the newest sleep_times row up to the next day, its start_offset
-// from that day's midnight read as a clock time (Oura gives evening ones as negative offsets).
-function ouraBedtime(night, sleepTimes) {
+// Oura's optimal bedtime window for `night`: the newest sleep_times row up to the next day, its
+// offsets from that day's midnight read as clock times (Oura gives evening ones as negative
+// offsets), as night minutes, with its recommendation; or null.
+const clockOf = (secs) => evening((((Math.round(secs / 60)) % 1440) + 1440) % 1440);
+export function ouraWindow(night, sleepTimes) {
   const row = (sleepTimes ?? []).filter((r) => r?.day && r.day <= addDays(night, 1) && Number.isFinite(r.start_offset))
     .sort((a, b) => (a.day < b.day ? 1 : -1))[0];
-  return row ? evening((((Math.round(row.start_offset / 60)) % 1440) + 1440) % 1440) : null;
+  if (!row) return null;
+  const start = clockOf(row.start_offset);
+  const end = Number.isFinite(row.end_offset) ? clockOf(row.end_offset) : start;
+  return { start, end: end < start ? start : end, hint: row.hint ?? null };
+}
+const ouraBedtime = (night, sleepTimes) => ouraWindow(night, sleepTimes)?.start ?? null;
+
+// Oura's recommendation in words.
+const HINT_WORDS = {
+  earlier_bedtime: "earlier bedtime", later_bedtime: "later bedtime", improve_efficiency: "improve efficiency",
+  earlier_wake_up_time: "wake earlier", later_wake_up_time: "wake later", follow_optimal_bedtime: "keep to it",
+};
+// "Oura: 12:15–12:45 am, earlier bedtime", or null without a window.
+export function ouraWindowLine(w) {
+  if (!w) return null;
+  const [a, b] = [clock(w.start), clock(w.end)];
+  const span = a === b ? a : a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`;
+  return `Oura: ${span}${HINT_WORDS[w.hint] ? `, ${HINT_WORDS[w.hint]}` : ""}`;
 }
 
 // Tonight's bedtime for `night`: { minutes, wind_down, source, target } in night minutes, source
@@ -88,8 +107,9 @@ export function bedtimeStatus(b, settings) {
   return `Tonight: bed ${clock(b.minutes)}, ${why}`;
 }
 
-// The day header's marker: "Wind down 11:30 pm · Bed 12:30 am".
-export const bedtimeMarker = (b) => `Wind down ${clock(b.wind_down)} · Bed ${clock(b.minutes)}`;
+// The day header's marker: "Wind down 11:30 pm · Bed 12:30 am", and Oura's window when it has
+// one and it isn't already what set bedtime ("· Oura: 12:15–12:45 am, earlier bedtime").
+export const bedtimeMarker = (b, w = null) => [`Wind down ${clock(b.wind_down)}`, `Bed ${clock(b.minutes)}`, b.source === "oura" && !w?.hint ? null : ouraWindowLine(w)].filter(Boolean).join(" · ");
 
 // Today's night: the evening of today, or before noon the night still going.
 export const tonight = (now, tz) => nightOf(now, tz).night;
