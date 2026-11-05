@@ -4,7 +4,7 @@
 // pass reflowHorizon their own read and rpc, so node --test covers it.
 import { addDays, blockMinutes, freeMinutes, localNow, minutesOn, zonedIso } from "./logic.mjs";
 import { paceByKind } from "./pace.mjs";
-import { dayCap, sleepDebt, windowStart } from "./sleep.mjs";
+import { dayCap, sleepDebt, wakeOn, wakeProfile, windowStart } from "./sleep.mjs";
 import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
 import { HORIZON_RULES, confirmedDoneMin, dayFree, horizonMinutes, paceP80ByKind, planHorizon, workKind } from "./horizon.mjs";
 
@@ -12,6 +12,8 @@ import { HORIZON_RULES, confirmedDoneMin, dayFree, horizonMinutes, paceP80ByKind
 // default.
 const TRAVEL = 10;
 const DEFAULT_CAP = 360;
+// read_planner's window also ends by his wake + 16 hours (proposal.mjs's AWAKE_MAX).
+const AWAKE_MAX = 16 * 60;
 const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const isoWeekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay() || 7;
 
@@ -26,6 +28,10 @@ export function horizonQueries(today, timeZone) {
     days: { table: "days", select: "day,shutdown,shutdown_at", filters: [["day", "eq", today]] },
     // Today's and the two nights before it, for the rolling sleep debt (sleepDebt).
     sleepDay: { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "gte", addDays(today, -2)], ["day", "lte", today]] },
+    // Oura: the sleep periods (his wake, so the window opens where read_planner's does) and the
+    // bedtime windows (wind-down). Only the free minutes that follow from them leave the server.
+    sleep: { table: "sleep_nights", select: "oura_id,day,type,bedtime_start,bedtime_end", order: "bedtime_end" },
+    sleepTimes: { table: "sleep_times", select: "day,start_offset,end_offset", order: "day" },
     previous: { table: "horizon_alloc", select: "task_id,day,minutes,over_min", filters: [["day", "gte", today]], order: "day" },
     // Today to the latest due date.
     busy: (last) => ({ table: "busy", select: "starts_at,ends_at", filters: [["starts_at", "lt", midnight(addDays(last, 1))], ["ends_at", "gt", midnight(today)]], order: "starts_at" }),
@@ -51,6 +57,7 @@ const locked = (b, now) => !b.proposed && !(b.auto && Date.parse(b.starts_at) > 
 //   feedback  its More time rows    day      today's days row or null  sleepDay today's sleep_days row or null
 //   sleepDays the sleep_days rows of today and the two days before (the rolling sleep debt)
 //   previous  horizon_alloc from today
+//   sleep     sleep_nights rows        sleepTimes sleep_times rows (both optional, for the window)
 export function horizonInput(rows, now) {
   const { settings } = rows;
   const tz = settings.time_zone;
@@ -72,13 +79,20 @@ export function horizonInput(rows, now) {
   const base = settings.workload_cap_min ?? DEFAULT_CAP;
   const last = tasks.reduce((d, t) => (t.due > d ? t.due : d), today);
   const free = {};
+  const sleep = rows.sleep ?? [];
+  const sleepTimes = rows.sleepTimes ?? [];
+  const profile = wakeProfile(sleep, now, tz);
   for (let d = today; d <= last; d = addDays(d, 1)) {
-    // The plan window, as planSnapshot's: from windowStart (on today, not before now) to the
-    // shutdown line, or wind-down when that comes first.
-    const from = windowStart(d, now, tz, null);
-    const shutdown = toMin(shutdownFor(d, { line: d === today ? rows.day?.shutdown_at ?? null : null, settings, tz }));
-    const bed = bedtimeFor(d, { settings, sleep: [], sleepTimes: [], tz });
-    const to = bed && bed.wind_down < 1440 ? Math.min(shutdown, bed.wind_down) : shutdown;
+    // The plan window, exactly as planSnapshot's: from windowStart (30 minutes after his wake,
+    // today's or his usual one, else 07:00; on today not before now) to the shutdown line, or
+    // wind-down when that comes first, and by his wake + 16 hours. Counting from 07:00 instead
+    // took the hours he sleeps through as free (2026-11-05: on track with no time left).
+    const from = windowStart(d, now, tz, profile);
+    const shutdown = toMin(shutdownFor(d, { line: d === today ? rows.day?.shutdown_at ?? null : null, settings, sleep, sleepTimes, tz }));
+    const bed = bedtimeFor(d, { settings, sleep, sleepTimes, tz });
+    const wake = wakeOn(d, now, tz, profile);
+    const end = bed && bed.wind_down < 1440 ? Math.min(shutdown, bed.wind_down) : shutdown;
+    const to = wake != null ? Math.min(end, wake + AWAKE_MAX) : end;
     const spans = (rows.busy ?? []).map((b) => ({ start: minutesOn(b.starts_at, d, tz) - TRAVEL, end: minutesOn(b.ends_at, d, tz) + TRAVEL }));
     const blocked = new Set(d === today ? onToday.map((b) => b.habit_id).filter(Boolean) : []);
     for (const h of rows.habits ?? []) {
@@ -121,14 +135,16 @@ export async function reflowHorizon(io, now) {
   if (!settings) throw new Error("settings: no row");
   const today = localNow(now, settings.time_zone).day;
   const q = horizonQueries(today, settings.time_zone);
-  const [tasks, actuals, habits, [day = null], sleepDays, previous] = await Promise.all([
-    io.read(q.tasks), io.read(q.actuals), io.read(q.habits), io.read(q.days), io.read(q.sleepDay).catch(() => []), io.read(q.previous),
+  const none = () => [];
+  const [tasks, actuals, habits, [day = null], sleepDays, previous, sleep, sleepTimes] = await Promise.all([
+    io.read(q.tasks), io.read(q.actuals), io.read(q.habits), io.read(q.days), io.read(q.sleepDay).catch(none), io.read(q.previous),
+    io.read(q.sleep).catch(none), io.read(q.sleepTimes).catch(none),
   ]);
   const last = tasks.reduce((d, t) => (t.due > d ? t.due : d), today);
   const [busy, blocks] = await Promise.all([io.read(q.busy(last)), io.read(q.blocks(tasks.map((t) => t.id)))]);
   const ids = blocks.filter((b) => b.task_id).map((b) => b.id);
   const feedback = ids.length ? await io.read(q.feedback(ids)) : [];
-  const input = horizonInput({ settings, tasks, blocks, busy, habits, actuals, feedback, day, sleepDay: sleepDays.find((d) => d.day === today) ?? null, sleepDays, previous }, now);
+  const input = horizonInput({ settings, tasks, blocks, busy, habits, actuals, feedback, day, sleepDay: sleepDays.find((d) => d.day === today) ?? null, sleepDays, previous, sleep, sleepTimes }, now);
   const key = await horizonKey(input);
   if (key === settings.horizon_key) return { skipped: true, key };
   const out = planHorizon(input);

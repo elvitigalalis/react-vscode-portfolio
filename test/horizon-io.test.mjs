@@ -150,3 +150,30 @@ test("reflowHorizon: with no due tasks it still clears the old plan once", async
   assert.deepEqual(io.calls[0][1].allocs, []);
   assert.deepEqual(io.calls[0][1].states, []);
 });
+
+// 2026-11-05 live: he usually wakes at 3:45 pm, so read_planner's window opened at 4:15 pm and the
+// morning plan saw only 5:10–7:05 pm free. The re-flow counted from 7:00 (or now) instead, saw the
+// hours he was asleep as free, and called all five tasks due today on track.
+test("reflowHorizon: today's free time starts where read_planner's window does, after his usual wake", async () => {
+  const noon = new Date(at(TODAY, "12:00"));
+  // Three weekday nights ending at 3:45 pm: his typical weekday wake.
+  const sleep_nights = ["2026-11-02", "2026-11-03", "2026-11-04"].map((d, i) => ({ oura_id: `n${i}`, day: d, type: "long_sleep", bedtime_start: at(d, "06:00"), bedtime_end: at(d, "15:45") }));
+  const busy = [
+    { starts_at: at(TODAY, "14:00"), ends_at: at(TODAY, "15:20") },
+    { starts_at: at(TODAY, "15:30"), ends_at: at(TODAY, "17:00") },
+    { starts_at: at(TODAY, "19:15"), ends_at: at(TODAY, "20:15") },
+    { starts_at: at(TODAY, "19:15"), ends_at: at("2026-11-06", "00:00") },
+  ];
+  const ids = ["a", "b", "c", "d", "e"].map((x) => `6f1c2a3b-0000-4000-8000-00000000000${x}`);
+  const tasks = ids.map((id, i) => task(id, TODAY, { est_min: i < 3 ? 30 : null }));
+  // The morning plan's three auto blocks, 5:15–6:45 pm, not started yet.
+  const blocks = [0, 1, 2].map((i) => ({ id: `b${i}`, task_id: ids[i], habit_id: null, starts_at: at(TODAY, ["17:15", "17:45", "18:15"][i]), ends_at: at(TODAY, ["17:45", "18:15", "18:45"][i]), proposed: false, auto: true }));
+  const s = { ...settings, workload_cap_min: 360, wind_down_on: true, bedtime_target: "00:30", bedtime_ease: false };
+  const io = fakeIo({ settings: [s], tasks, busy, blocks, sleep_nights });
+  const r = await reflowHorizon(io, noon);
+  const states = Object.fromEntries(r.states.map((x) => [x.task_id, x]));
+  // 5:10–7:05 pm is 115 minutes, 105 in quarter hours, for 150 minutes of work due today.
+  assert.ok(io.calls[0][1].allocs.filter((a) => a.day === TODAY).reduce((n, a) => n + a.minutes - a.over_min, 0) <= 105);
+  assert.ok(ids.every((id) => states[id].state !== "on_track"), JSON.stringify(r.states));
+  assert.ok(ids.some((id) => states[id].state === "wont_fit" && states[id].short_min > 0));
+});

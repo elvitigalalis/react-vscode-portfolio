@@ -18,7 +18,12 @@ test("atRisk: a task with a horizon state is at risk when tight or won't fit, wh
   assert.equal(atRisk(far, [], DAY, TZ, state("a", { state: "tight" })), true);
   assert.equal(atRisk(far, [], DAY, TZ, state("a", { state: "wont_fit" })), true);
   const near = { id: "a", due: DAY, done: false };
-  assert.equal(atRisk(near, [], DAY, TZ, state("a")), false);
+  const approved = [{ task_id: "a", starts_at: "2026-11-04T20:00:00Z", proposed: false }];
+  assert.equal(atRisk(near, approved, DAY, TZ, state("a")), false);
+  // Due today (or overdue) with no approved block: it didn't fit today, whatever the state says.
+  assert.equal(atRisk(near, [], DAY, TZ, state("a")), true);
+  assert.equal(atRisk({ ...near, due: "2026-11-03" }, [], DAY, TZ, state("a")), true);
+  assert.equal(atRisk({ ...near, due: "2026-11-05" }, [], DAY, TZ, state("a")), false);
   assert.equal(atRisk({ ...far, done: true }, [], DAY, TZ, state("a", { state: "tight" })), false);
   // Without a state, the old rule.
   assert.equal(atRisk(near, [], DAY, TZ), true);
@@ -74,6 +79,16 @@ test("checkProposal: a horizon task with no minutes on plan_day gets no block, a
   assert.deepEqual(proposalFor(snap, [], { next_day: ["os"] }).errors,
     ["next_day[0]: os has horizon minutes, which the server moves; leave it out"]);
   assert.equal(proposalFor(snap, [], { next_day: ["hw"] }).ok, true);
+});
+
+test("checkProposal: a task due on or before plan_day never goes in next_day, which would pass its deadline", () => {
+  const tasks = [taskRow("webassign", { due: DAY, est_min: null }), taskRow("old", { due: "2026-11-02" }), taskRow("hw", { due: "2026-11-05" })];
+  const snap = planSnapshot(rows({ tasks }), sixOhSeven);
+  assert.deepEqual(proposalFor(snap, [], { next_day: ["webassign", "old"] }).errors, [
+    "next_day[0]: webassign is due 2026-11-04, so moving it to the next day would pass its deadline; put it in couldnt_fit instead",
+    "next_day[1]: old is due 2026-11-02, so moving it to the next day would pass its deadline; put it in couldnt_fit instead",
+  ]);
+  assert.equal(proposalFor(snap, [], { next_day: ["hw"], couldnt_fit: ["webassign"] }).ok, true);
 });
 
 test("checkProposal: horizon minutes over 240 (a due-day crunch) go in several blocks that add up", () => {

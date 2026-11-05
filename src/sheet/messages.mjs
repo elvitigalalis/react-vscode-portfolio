@@ -3,7 +3,7 @@
 // side: when the message function fires the task, what answer_messages may write, and what
 // read_planner adds for them. Kept free of the network and of Node APIs so node --test covers
 // it; the message and planner-mcp Edge Functions import it.
-import { addDays, dayLabel, formatClock, formatSpan, localNow, minutesOn, plural, weekdayName, zonedIso } from "./logic.mjs";
+import { addDays, dayLabel, formatClock, formatSpan, localNow, minutesOn, plural, titleDue, weekdayName, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 
 // --- Sending (the message function) ----------------------------------------------------------
@@ -88,7 +88,7 @@ const whyOf = (item, name, errors) => {
 
 // One task: the tasks row it becomes ({ title, day, list, due, at_time, est_min }), or null with
 // errors pushed. No day puts it on the Inbox Someday list; a fixed time needs a day and a length.
-function taskRow(t, name, errors) {
+function taskRow(t, name, errors, today) {
   const before = errors.length;
   const title = text(t?.title, `${name}.title`, 120, errors);
   const day = t?.day ?? null, due = t?.due ?? null, at = t?.at_time ?? null, est = t?.est_min ?? null;
@@ -101,7 +101,8 @@ function taskRow(t, name, errors) {
   else if (est === null && typeof at === "string" && HHMM.test(at) && day !== null) errors.push(`${name}.est_min: a task with at_time needs est_min (15 to 480): estimate a reasonable length if none was given`);
   const why = whyOf(t, name, errors);
   if (errors.length > before) return null;
-  return { title, day, list: day ? null : "Inbox", due, at_time: at, est_min: est, ...why };
+  // A deadline written only in the title ("… Thu, Nov 5, 2026, 11:59 PM EST") becomes the due date.
+  return { title, day, list: day ? null : "Inbox", due: due ?? titleDue(title, today), at_time: at, est_min: est, ...why };
 }
 
 // One event: { title, starts_at, ends_at } (ISO, UTC), or null with errors pushed. start is local
@@ -140,7 +141,8 @@ function many(value, name, max, errors) {
 // against the pending messages ({ id }), with local times in `timeZone`. Each problem is its own
 // error, naming its field, and makes only its own answer fail: `answers` holds the others,
 // shaped for answer_message (supabase/schema.sql), with events as { title, starts_at, ends_at }.
-export function checkAnswers(input, pending, timeZone) {
+export function checkAnswers(input, pending, timeZone, now = new Date()) {
+  const today = localNow(now, timeZone).day;
   const errors = [];
   const answers = [];
   const items = list(input?.answers);
@@ -154,7 +156,7 @@ export function checkAnswers(input, pending, timeZone) {
     if (!open.has(a?.id)) errors.push(`${name}.id: not a pending message (already answered, or not one read_planner gave)`);
     else if (seen.has(a.id)) errors.push(`${name}.id: that message is already answered above`);
     seen.add(a?.id);
-    const tasks = many(a?.tasks, `${name}.tasks`, MAX_TASKS, errors).map((t, j) => taskRow(t, `${name}.tasks[${j}]`, errors));
+    const tasks = many(a?.tasks, `${name}.tasks`, MAX_TASKS, errors).map((t, j) => taskRow(t, `${name}.tasks[${j}]`, errors, today));
     const events = many(a?.events, `${name}.events`, MAX_EVENTS, errors).map((e, j) => eventRow(e, `${name}.events[${j}]`, timeZone, errors));
     const reply = text(a?.reply, `${name}.reply`, MAX_REPLY, errors);
     if (errors.length === before) answers.push({ id: a.id, tasks, events, reply });
