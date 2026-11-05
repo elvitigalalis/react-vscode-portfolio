@@ -236,3 +236,12 @@ test("later days fill to 85% of their free time, today to all of it", () => {
   const r = plan({ tasks: [task("a", "2026-11-20", 240)], free: days(30, 90) });
   assert.deepEqual(on(r, "a"), [["2026-11-05", 90], ["2026-11-06", 75], ["2026-11-07", 75]]);
 });
+
+test("a big task's buffer holds a fifth of its minutes, a small one's one working day", () => {
+  // 600 minutes: the buffer must hold 120, and a later day holds 102 (85% of 120), so two days.
+  const r = plan({ tasks: [task("a", "2026-11-15", 600), task("b", "2026-11-15", 60)], free: days(30, 120) });
+  assert.equal(r.tasks.a.target_day, "2026-11-13");
+  assert.equal(r.tasks.b.target_day, "2026-11-14");
+  assert.ok(on(r, "a").every(([d]) => d <= "2026-11-13"));
+  assert.equal(r.tasks.a.state, "on_track");
+});

@@ -46,7 +46,7 @@ Helpers in the same module:
     planSnapshot's `window`) after the day's busy times widened by `travel_min` (10) on each side,
     that weekday's habits at their ideal times, and the day's locked blocks;
   - `locked_min` is the minutes of the day's locked task blocks (habits stay out, as in the cap).
-- **`targetDay(due, today, working)`**: see "Buffer" below.
+- **`targetDay(due, today, working, buffer_min = 0, room = () => 0)`**: see "Buffer" below.
 
 ### Output
 
@@ -77,8 +77,11 @@ day's free time (only ever on the due day of a task that won't fit).
    90 + 75 + 30). All minutes move in 15-minute steps.
 5. **Buffer (R4):** the **target day** is the last working day before the due day when the due
    day is 2 or more days off, else the due day. A **working day** has free time, is frozen, or
-   holds a locked block. Fill runs to the target day first, then into the buffer (target + 1 to
-   the due day).
+   holds a locked block. The buffer (target + 1 to the due day) must also hold `BUFFER_SHARE`
+   (20%) of the task's `minutes`, counted in the days' fill room: the target steps back a working
+   day at a time until it does, never before today (overruns grow with size: Buehler 1994). So a
+   60-minute task keeps a one-day buffer and a 10-hour one on 2-hour days gets two. Fill runs to
+   the target day first, then into the buffer.
 6. **Earlier deadlines win:** when a task can't reach its target (or then its due day) in free
    time, it takes kept minutes from tasks due later, only as many as it needs: the smallest cut
    first, then one the later task can take back on its other days, then latest due, then latest

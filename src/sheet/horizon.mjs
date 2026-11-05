@@ -55,13 +55,23 @@ export function confirmedDoneMin(blocks, feedback) {
 export const dayFree = ({ cap, window_free_min, locked_min = 0 }) =>
   down(Math.max(0, Math.min(cap - locked_min, window_free_min)));
 
+// A task's buffer must hold at least this share of its minutes (Buehler 1994: overruns grow
+// with size), and never less than one working day.
+export const BUFFER_SHARE = 0.2;
+
 // The day a task should be finished by: the last working day before its due day when the due day
-// is 2 or more days off, else the due day. An overdue task's due day reads as today.
-export function targetDay(due, today, working) {
+// is 2 or more days off, else the due day. An overdue task's due day reads as today. With
+// buffer_min and room (day -> minutes it can hold), the target steps back a working day at a
+// time until the days after it, up to the due day, hold buffer_min, while a working day remains.
+export function targetDay(due, today, working, buffer_min = 0, room = () => 0) {
   const d = due < today ? today : due;
   if (diff(d, today) < 2) return d;
-  for (let x = addDays(d, -1); x >= today; x = addDays(x, -1)) if (working(x)) return x;
-  return d;
+  let tg = null, held = room(d);
+  for (let x = addDays(d, -1); x >= today; x = addDays(x, -1)) {
+    if (working(x)) { tg = x; if (held >= buffer_min) break; }
+    held += room(x);
+  }
+  return tg ?? d;
 }
 
 // The plan. Input (all minutes are whole numbers):
@@ -145,7 +155,7 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
   const free_ = (d) => room0(d) - used(d);
 
   const working = (d) => room0(d) > 0 || frozen.has(d) || locked.some((b) => b.day === d);
-  const target = new Map(order.map((t) => [t.id, targetDay(t.due, today, working)]));
+  const target = new Map(order.map((t) => [t.id, targetDay(t.due, today, working, BUFFER_SHARE * t.minutes, room0)]));
 
   // The largest piece of `left` minutes task t may add on day d, or 0.
   const piece = (t, d, left) => {

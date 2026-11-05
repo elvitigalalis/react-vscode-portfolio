@@ -118,7 +118,7 @@ A day of the horizon with free time for tasks, or one that is frozen or holds a 
 _Avoid_: Business day, weekday
 
 **Target day**:
-The day horizon planning aims to finish a task by: the last working day before its due day, when that is 2 or more days off, else the due day. The days after it are the task's buffer.
+The day horizon planning aims to finish a task by: the last working day before its due day, when that is 2 or more days off, else the due day; earlier still when the days after it can't hold a fifth of the task's minutes. The days after it are the task's buffer.
 _Avoid_: Soft deadline, internal deadline
 
 **Slack**:
