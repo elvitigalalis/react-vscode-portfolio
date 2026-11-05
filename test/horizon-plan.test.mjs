@@ -76,6 +76,16 @@ test("checkProposal: a horizon task with no minutes on plan_day gets no block, a
   assert.equal(proposalFor(snap, [], { next_day: ["hw"] }).ok, true);
 });
 
+test("checkProposal: a task due on or before plan_day never goes in next_day, which would pass its deadline", () => {
+  const tasks = [taskRow("webassign", { due: DAY, est_min: null }), taskRow("old", { due: "2026-11-02" }), taskRow("hw", { due: "2026-11-05" })];
+  const snap = planSnapshot(rows({ tasks }), sixOhSeven);
+  assert.deepEqual(proposalFor(snap, [], { next_day: ["webassign", "old"] }).errors, [
+    "next_day[0]: webassign is due 2026-11-04, so moving it to the next day would pass its deadline; put it in couldnt_fit instead",
+    "next_day[1]: old is due 2026-11-02, so moving it to the next day would pass its deadline; put it in couldnt_fit instead",
+  ]);
+  assert.equal(proposalFor(snap, [], { next_day: ["hw"], couldnt_fit: ["webassign"] }).ok, true);
+});
+
 test("checkProposal: horizon minutes over 240 (a due-day crunch) go in several blocks that add up", () => {
   const tasks = [taskRow("os", { due: DAY, est_min: 600 })];
   const horizon = { alloc: [{ task_id: "os", day: DAY, minutes: 300, over_min: 0 }], states: [state("os", { state: "tight" })] };

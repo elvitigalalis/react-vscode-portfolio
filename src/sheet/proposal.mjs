@@ -726,7 +726,8 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
 
 // next_day: the ids of plan_day's untimed tasks that couldn't fit, which move to the next day so
 // its plan times them. Each must be on plan_day, with no fixed time, no approved block and no
-// block in this revision.
+// block in this revision, and due after plan_day: moving a task due by then would pass its
+// deadline, so it goes in couldnt_fit instead.
 function nextDayIds(input, snapshot, blocks, errors) {
   const ids = list(input?.next_day);
   if (!Array.isArray(ids)) return errors.push("next_day: must be a list of task ids"), [];
@@ -739,6 +740,7 @@ function nextDayIds(input, snapshot, blocks, errors) {
     const t = tasks.get(id);
     if (!t) errors.push(`${name}: not one of the tasks read_planner gave`);
     else if (t.day !== snapshot.plan_day) errors.push(`${name}: ${id} is not on ${snapshot.plan_day}, so it can't move to the next day`);
+    else if (t.due && t.due <= snapshot.plan_day) errors.push(`${name}: ${id} is due ${t.due}, so moving it to the next day would pass its deadline; put it in couldnt_fit instead`);
     else if (t.horizon?.today_min > 0) errors.push(`${name}: ${id} has horizon minutes, which the server moves; leave it out`);
     else if (t.at_time) errors.push(`${name}: ${id} is fixed at ${t.at_time.slice(0, 5)}, so it stays`);
     else if (placed.has(id)) errors.push(`${name}: ${id} has a block in this revision, so it stays`);
