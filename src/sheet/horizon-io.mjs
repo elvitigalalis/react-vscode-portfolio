@@ -6,7 +6,7 @@ import { addDays, blockMinutes, freeMinutes, localNow, minutesOn, zonedIso } fro
 import { paceByKind } from "./pace.mjs";
 import { dayCap, sleepDebt, windowStart } from "./sleep.mjs";
 import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
-import { confirmedDoneMin, dayFree, horizonMinutes, planHorizon } from "./horizon.mjs";
+import { HORIZON_RULES, confirmedDoneMin, dayFree, horizonMinutes, paceP80ByKind, planHorizon, workKind } from "./horizon.mjs";
 
 // read_planner's day rules: 10 minutes of travel on each side of a busy time, and the cap's
 // default.
@@ -56,9 +56,11 @@ export function horizonInput(rows, now) {
   const tz = settings.time_zone;
   const today = localNow(now, tz).day;
   const paces = paceByKind(rows.actuals ?? []);
+  // The states are judged at the 80th-percentile pace, and the kind of work sets the per-day rules.
+  const p80 = paceP80ByKind(rows.actuals ?? []);
   const done = confirmedDoneMin((rows.blocks ?? []).filter((b) => b.task_id), rows.feedback ?? []);
   const tasks = rows.tasks.filter((t) => !t.done && t.due && !t.at_time)
-    .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0 }))
+    .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0, minutes_p80: horizonMinutes(t, p80), kind: workKind(t) }))
     .sort((a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id));
 
   const onToday = (rows.blocks ?? []).filter((b) => localNow(new Date(b.starts_at), tz).day === today && locked(b, now));
@@ -103,10 +105,11 @@ const canonical = (v) => (Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
   : v && typeof v === "object" ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
   : JSON.stringify(v));
 
-// SHA-256 hex of the input without previous: what settings.horizon_key holds after a re-flow.
-export async function horizonKey(input) {
+// SHA-256 hex of the input without previous, and of the engine's rules version: what
+// settings.horizon_key holds after a re-flow. A new version re-flows unchanged inputs.
+export async function horizonKey(input, rules = HORIZON_RULES) {
   const { previous: _, ...rest } = input;
-  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical(rest)));
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical({ ...rest, rules })));
   return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
