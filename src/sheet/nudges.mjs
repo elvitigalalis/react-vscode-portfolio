@@ -151,6 +151,13 @@ function capLine({ settings, sleepDay, today }) {
   return `${why[0].toUpperCase()}${why.slice(1)}: cap ${formatMinutes(workload_cap_min)}.`;
 }
 
+// Oura: "Sleep score 82, good.", from today's sleep_days row, by Oura's bands (85+ optimal,
+// 70-84 good, under 70 pay attention). Composed here, never by the routine (docs/adr/0005).
+function scoreLine({ sleepDay, today }) {
+  const s = sleepDay?.day === today ? sleepDay.sleep_score : null;
+  return s == null ? null : `Sleep score ${s}, ${s >= 85 ? "optimal" : s >= 70 ? "good" : "pay attention"}.`;
+}
+
 const BUDGETED = ["start", "repeat", "snooze"];
 
 // The budget, kept predictable: the nudges at the start of the day's first six blocks that can
@@ -186,6 +193,8 @@ function brief(day) {
   const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
   if (risky.length) lines.push(`At risk: ${risky.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
   const cap = capLine(day);
+  const score = scoreLine(day);
+  if (score) lines.push(score);
   if (cap) lines.push(cap);
   // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;

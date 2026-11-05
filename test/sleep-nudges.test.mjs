@@ -83,3 +83,11 @@ test("replan message: a woke-late change says when he woke", () => {
   assert.equal(whatToSend(s, at("10:41"))[0].text.split("\n")[0], "Replan: you woke up at 10:20 am.");
   assert.equal(whatToSend({ ...s, replanChanges: [] }, at("10:41"))[0].text.split("\n")[0], "Replan: you woke up later than planned.");
 });
+
+test("the brief says today's sleep score and its band, from the server's own row", () => {
+  const s = (score) => snap({ sleep: [...past, long("08:50")], sleepDay: { day: D, readiness: 75, sleep_s: 7 * 3600, sleep_score: score } });
+  assert.match(whatToSend(s(82), at("09:05"))[0].text, /^Sleep score 82, good\.$/m);
+  assert.match(whatToSend(s(88), at("09:05"))[0].text, /^Sleep score 88, optimal\.$/m);
+  assert.match(whatToSend(s(61), at("09:05"))[0].text, /^Sleep score 61, pay attention\.$/m);
+  assert.doesNotMatch(whatToSend(s(null), at("09:05"))[0].text, /Sleep score/);
+});

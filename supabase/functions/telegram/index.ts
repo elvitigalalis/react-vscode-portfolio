@@ -81,7 +81,7 @@ async function snapshot(now: Date) {
   // Oura: his sleep periods, for quiet until he's up and the brief's time, and today's readiness
   // and sleep, for the brief's cap line. None until the Oura schema has run.
   const sleep = await db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
-  const [sleepDay = null] = await db(`sleep_days?select=day,readiness,sleep_s&day=eq.${today}`).catch(() => []);
+  const [sleepDay = null] = await db(`sleep_days?select=day,readiness,sleep_s,sleep_score&day=eq.${today}`).catch(() => []);
   // Wind-down: Oura's bedtime windows, and the night's Wind down and Bedtime rows since yesterday
   // (after midnight, tonight's log day is yesterday's).
   const sleepTimes = await db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []);
