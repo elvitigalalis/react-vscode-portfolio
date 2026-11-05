@@ -360,7 +360,8 @@ weather_cache id boolean pk default true check (id), point text not null,
     `todayReplanQueries(now, time_zone)` reads the two rows it is decided from. A `replan` row
     of another day never makes a replan run.
   - `window.from` is 07:00, or, when plan_day is today, the later of 07:00 and now rounded up
-    to the next quarter hour (9:07 → 09:15, 9:15 → 09:15). `window.to` is `shutdown`.
+    to the next quarter hour (9:07 → 09:15, 9:15 → 09:15). `window.to` is `shutdown`
+    (`shutdownFor`, "Every to-do gets a time" below).
   - **Decided:** locked blocks stay in `blocks` with `proposed: false` rather than being copied
     into `busy`, so the travel gap applies to busy times only, not between his own blocks.
 - **`checkProposal(input, snapshot, senders = {})`**. With `version: 5`, `input` also takes
@@ -369,7 +370,8 @@ weather_cache id boolean pk default true check (id), point text not null,
   `senders` maps `"<account> <message_id>"` to the message's sender hashes, `{ address,
   domains }` (planner-mcp reads them from `message_senders`), and a fourth argument
   `hashOf(pattern)` hashes a rule's pattern the same way (planner-mcp, with `SHEET_SENDER_SALT`;
-  null without it). With `version: 5` it returns `{ ok, errors, rows, dropped }`
+  null without it). With `version: 5` it returns `{ ok, errors, rows, dropped }` (and, when ok,
+  `next_day`: "Every to-do gets a time" below)
   (`rows` null and `dropped` `[]` when it fails), and v4's rules hold, plus:
   - **day and revision:** the proposal may be absent, `pending` or `approved` (a replan after
     approval). `skipped` and `lapsed` are refused as in v4 (field `day`). `replaces` must equal
@@ -870,8 +872,8 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **Sync.** oura-sync also reads `/v2/usercollection/sleep_time` and keeps only `sleep_times { day,
   start_offset, end_offset }` (seconds from that day's midnight) when `status` is `optimal_found`
   or `only_recommended_found`; 60 days; a refused read is skipped, not a failed run.
-- **Planning.** read_planner's `window.to` is the earlier of the shutdown line and bedtime − 60
-  when that falls on plan_day; `day_rules.bedtime` and `wind_down_from` give both as "HH:MM" (or
+- **Planning.** read_planner's `window.to` is the earlier of the shutdown line (which itself
+  follows wind-down, "Every to-do gets a time" below) and bedtime − 60 when that falls on plan_day; `day_rules.bedtime` and `wind_down_from` give both as "HH:MM" (or
   null). checkProposal holds blocks and habits to `window.to` and names wind-down when it bites.
 - **Telegram.** "Wind down: lights out at 12:30 am. Wrap up and put the screens away." at
   bedtime − 60 (until bedtime) and "Bedtime: lights out now. Sleep well." at bedtime (until 30
@@ -935,6 +937,69 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
    walks through 2-5.
 6. Update the live routine's prompt from docs/sheet-morning-task.md.
 
+## Every to-do gets a time
+
+Lisul wakes between noon and 4:30 pm, so a 5 pm shutdown left almost no plan window, and blocks
+waiting for Approve all never got events or nudges. Three changes, built on the contracts above.
+
+### Shutdown follows wind-down
+
+- **`shutdownFor(day, { line, settings, sleep, sleepTimes, tz })`** (src/sheet/bedtime.mjs)
+  returns the day's shutdown line, "HH:MM": `line` (`days.shutdown_at`, moved by hand) when set;
+  else, with wind-down on and a bedtime (`bedtimeFor`), bedtime − 60, kept between 17:00 and
+  23:00; else `SHEET.shutdownAt` (17:00). A wind-down after midnight gives 23:00.
+- Every user of the line takes it from there: planSnapshot's `shutdown` and `window.to` (and so
+  checkProposal), `replanState`'s `shutdown` (it now takes `today`, `sleep` and `sleepTimes`;
+  the telegram replan tick reads `sleep_nights` and `sleep_times` for it), the check-in nudge,
+  and /plan's `shutdownAt` (Plan today, the Plan dialog's day and line, the Shut down button).
+
+### Auto-approval
+
+- `settings.auto_approve boolean not null default true`; /plan → Settings → Auto-approve
+  toggles it. read_planner carries `auto_approve` (`settings.auto_approve !== false`).
+- With it on, submit_proposal calls **`auto_approve_proposal(d date, rev int) returns int`**
+  (owner, `security invoker`) right after `apply_proposal`: it sets `blocks.auto = true` on d's
+  proposed blocks, then returns `approve_proposal(d, rev)`, so the revision is `approved`, its
+  suggested tasks are made, and its blocks are approved exactly as Approve all does them: they
+  get Google events when /plan next loads (off-page approvals) and block-start nudges. Its
+  result gains `approved` (and `approve_error` if the call failed; the revision then stays
+  pending). With it off, nothing changes from above.
+- **`blocks.auto boolean not null default false`**: a block a run approved by itself. **Decided:**
+  locking these would leave a replan nothing to move (a busy time landing on one, or a late
+  wake, could only add blocks around it), so an auto block stays the plan's until it starts or
+  Lisul touches it:
+  - planSnapshot sends an auto block that hasn't started as `proposed: true, auto: true`, so
+    checkProposal treats it as replaceable (no overlap error, not in the cap's locked minutes).
+  - `apply_proposal` deletes d's auto blocks that start after `now()`, alongside the proposed
+    ones, and queues each one's Google event for deletion (`gcal_pending`, `ends_at` null).
+  - /plan's `saveBlock` (moving, resizing or approving a block) clears `auto`, so a block he
+    moved stays put. A started auto block, and any block approved by hand, is locked as before.
+- Telegram's plan and replan messages, with their Approve all and Skip buttons, go only for a
+  pending revision, so with Auto-approve on the brief's block count is what he sees.
+
+### Every untimed to-do gets a time
+
+- The routine (docs/sheet-morning-task.md, step 5) gives a block to every task with day plan_day
+  and no `at_time` that fits, by due date then `paced_min`, within the busy gaps, break rule and
+  cap. One that can't fit goes in submit_proposal's **`next_day`** ([task_id], at most 50), and
+  the note names it; at-risk ones still go in `couldnt_fit`.
+- checkProposal checks each `next_day` id: one of the snapshot's tasks, on plan_day, no
+  `at_time`, no block in the revision and no approved block. It returns them as `next_day`
+  (not one of apply_proposal's arguments).
+- After apply_proposal, planner-mcp calls **`move_to_next_day(d date, ids uuid[]) returns int`**
+  (owner, `security invoker`): each undone, untimed task among `ids` on d moves to the bottom of
+  d + 1. It is not a roll (`rolls` is unchanged). The result gains `next_day` (the count moved).
+
+### Deploy
+
+1. In the SQL editor, run the additive part: the two `alter table … add column if not exists
+   auto` / `auto_approve` lines, the `apply_proposal` definition (13 arguments, as it stands),
+   and `auto_approve_proposal` and `move_to_next_day` with their grants. Or the whole of
+   `supabase/schema.sql`, which is safe to re-run.
+2. Deploy `planner-mcp` and `telegram` with `--use-api --no-verify-jwt`, and the site.
+3. Paste the prompt from docs/sheet-morning-task.md into the live routine.
+
+## Out of scope
 ## Out of scope
 
 As spec 47: push notifications, solvers, Brightspace's API, scrapers, mail text on the server,

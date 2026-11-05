@@ -2,7 +2,7 @@
 // each change they find as a `changes` row with a fixed reason and weight; the telegram minute
 // tick asks shouldReplan whether those changes matter enough to start the morning task again.
 // Kept free of the network so node --test covers it.
-import { SHEET } from "../site.mjs";
+import { shutdownFor } from "./bedtime.mjs";
 import { localNow } from "./logic.mjs";
 
 // Every reason a change can carry: its kind (routine-fire.mjs's REASONS), weight and words.
@@ -96,10 +96,11 @@ export function shouldReplan(changes, state, now) {
 }
 
 // The `state` shouldReplan takes, from today's rows as the telegram tick reads them: settings,
-// today's days row (or null), today's proposals rows and today's replans rows. The shutdown
-// line is the day's, or the default; a morning revision counts as one plan and each replan as
+// today's days row (or null), today's proposals rows and today's replans rows, with `today` and
+// the sleep_nights and sleep_times rows for the shutdown line: the day's, or when wind-down
+// starts (bedtime.mjs, shutdownFor); a morning revision counts as one plan and each replan as
 // another; the last plan is the newest of either.
-export function replanState({ settings, day, proposals, replans }) {
+export function replanState({ settings, day, today = day?.day, proposals, replans, sleep = [], sleepTimes = [] }) {
   // A replan that failed or was rate limited never ran, so it counts for neither.
   const fired = replans.filter((r) => r.result == null || r.result === "started");
   const times = [...proposals.map((p) => p.created_at), ...fired.map((r) => r.at)].filter(Boolean);
@@ -110,7 +111,7 @@ export function replanState({ settings, day, proposals, replans }) {
   return {
     settings: { time_zone: settings.time_zone, replans_on: !!settings.replans_on, morning_on: !!settings.morning_on },
     day: day ?? null,
-    shutdown: String(day?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5),
+    shutdown: shutdownFor(today, { line: day?.shutdown_at, settings, sleep, sleepTimes, tz: settings.time_zone }),
     plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length,
     last_plan_at: last == null ? null : new Date(last).toISOString(),
     seen_until: cut == null ? null : new Date(cut).toISOString(),

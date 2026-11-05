@@ -406,6 +406,70 @@ begin
   raise notice '✓ v5: approve_proposal and skip_proposal act only on the newest pending revision';
 end $$;
 
+-- Auto-approval (docs/sheet-v5.md, "Auto-approval"): auto_approve_proposal approves the revision
+-- as Approve all does and marks its blocks auto; the next revision replaces the auto blocks still
+-- ahead (their Google events go to gcal_pending), never a block moved by hand or one started.
+do $$
+declare
+  tz text := (select time_zone from settings);
+  d date := sheet_today() + 7;
+  past date := sheet_today() - 3;
+  t1 uuid := '00000000-0000-4000-8000-0000000000c1';
+begin
+  insert into tasks (id, title, day) values (t1, 'Auto task', d);
+  perform apply_proposal(d => d, replaces => null, blocks => jsonb_build_array(
+    jsonb_build_object('task_id', t1, 'starts_at', (d + time '11:00') at time zone tz, 'ends_at', (d + time '11:45') at time zone tz),
+    jsonb_build_object('task_id', t1, 'starts_at', (d + time '13:00') at time zone tz, 'ends_at', (d + time '13:45') at time zone tz)));
+  if auto_approve_proposal(d, 1) <> 2 then raise exception 'auto_approve_proposal did not count its two blocks'; end if;
+  if (select status from proposals where day = d and rev = 1) <> 'approved'
+    or exists (select 1 from blocks where task_id = t1 and (proposed or not auto))
+    then raise exception 'auto_approve_proposal did not approve revision 1 as auto'; end if;
+  -- /plan made the 11:00 block's event; he moved the 13:00 one, which clears auto.
+  update blocks set gcal_id = 'auto-event' where task_id = t1 and starts_at = (d + time '11:00') at time zone tz;
+  update blocks set auto = false, starts_at = (d + time '16:00') at time zone tz, ends_at = (d + time '16:45') at time zone tz
+    where task_id = t1 and starts_at = (d + time '13:00') at time zone tz;
+  perform apply_proposal(d => d, replaces => 1, blocks => jsonb_build_array(
+    jsonb_build_object('task_id', t1, 'starts_at', (d + time '12:00') at time zone tz, 'ends_at', (d + time '12:45') at time zone tz)),
+    run_trigger => 'replan', reasons => array['busy_overlap']);
+  if exists (select 1 from blocks where task_id = t1 and starts_at = (d + time '11:00') at time zone tz)
+    then raise exception 'a revision left the auto block ahead in place'; end if;
+  if (select ends_at from gcal_pending where gcal_id = 'auto-event') is not null
+    or not exists (select 1 from gcal_pending where gcal_id = 'auto-event')
+    then raise exception 'the replaced auto block''s event was not queued for deletion'; end if;
+  if not exists (select 1 from blocks where task_id = t1 and not proposed and starts_at = (d + time '16:00') at time zone tz)
+    then raise exception 'a revision moved the block he moved'; end if;
+  -- One auto block already started, on a day of its own: a revision leaves it.
+  update tasks set day = past where id = t1;
+  insert into blocks (task_id, starts_at, ends_at, auto) values (t1, (past + time '10:00') at time zone tz, (past + time '10:45') at time zone tz, true);
+  perform apply_proposal(d => past, replaces => null, blocks => '[]');
+  if not exists (select 1 from blocks where task_id = t1 and auto and starts_at = (past + time '10:00') at time zone tz)
+    then raise exception 'a revision removed an auto block that had started'; end if;
+  delete from gcal_pending where gcal_id = 'auto-event';
+  raise notice '✓ auto-approval: approves as Approve all, and the next revision moves only auto blocks ahead';
+end $$;
+
+-- move_to_next_day: the untimed, undone tasks named on d go to the bottom of d + 1, unrolled;
+-- a fixed-time, done or other day's task stays.
+do $$
+declare
+  d date := sheet_today() + 8;
+begin
+  insert into tasks (id, title, day, position) values ('00000000-0000-4000-8000-0000000000d9', 'Already there', d + 1, 4);
+  insert into tasks (id, title, day, position, at_time, done) values
+    ('00000000-0000-4000-8000-0000000000d1', 'Slides', d, 2, null, false),
+    ('00000000-0000-4000-8000-0000000000d2', 'Read', d, 1, null, false),
+    ('00000000-0000-4000-8000-0000000000d3', 'Call', d, 3, '16:00', false),
+    ('00000000-0000-4000-8000-0000000000d4', 'Done', d, 4, null, true);
+  if move_to_next_day(d, array['00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000d2',
+      '00000000-0000-4000-8000-0000000000d3', '00000000-0000-4000-8000-0000000000d4', '00000000-0000-4000-8000-0000000000d9']::uuid[]) <> 2
+    then raise exception 'move_to_next_day did not move exactly two tasks'; end if;
+  if (select array_agg(title order by position) from tasks where day = d + 1) <> array['Already there', 'Read', 'Slides']
+    or exists (select 1 from tasks where day = d + 1 and rolls > 0)
+    or (select count(*) from tasks where day = d) <> 2
+    then raise exception 'move_to_next_day moved the wrong tasks or rolled them'; end if;
+  raise notice '✓ move_to_next_day: untimed undone tasks go to the bottom of the next day, unrolled';
+end $$;
+
 do $$
 declare
   d date := sheet_today() + 6;

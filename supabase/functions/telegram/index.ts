@@ -119,14 +119,17 @@ async function replanTick(now: Date) {
   if (!ROUTINE_ID || !ROUTINE_TOKEN) return { hold: "not connected" };
   const [settings] = await db("settings?select=*");
   const { day: today } = localNow(now, settings.time_zone);
-  const [[day = null], proposals, replans, changes] = await Promise.all([
+  // Oura's rows only set the shutdown line (bedtime.mjs, shutdownFor); none until its schema ran.
+  const [[day = null], proposals, replans, changes, sleep, sleepTimes] = await Promise.all([
     db(`days?select=*&day=eq.${today}`),
     db(`proposals?select=rev,status,run_trigger,created_at,read_at&day=eq.${today}`),
     db(`replans?select=at,result,retry_after&day=eq.${today}`),
     db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
+    db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []),
+    db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []),
   ]);
   if (rateLimited(replans, now)) return { hold: "rate_limited" };
-  const r = shouldReplan(changes, replanState({ settings, day, proposals, replans }), now) as
+  const r = shouldReplan(changes, replanState({ settings, day, today, proposals, replans, sleep, sleepTimes }), now) as
     { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
   if (!r.fire) return { hold: r.hold };
   const id = await db("rpc/claim_replan", {

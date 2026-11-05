@@ -58,8 +58,16 @@ A revision made during the day because something changed. It plans only from now
 _Avoid_: Re-run, refresh, update
 
 **Locked block**:
-An approved block. A replan never moves it or removes it.
+An approved block, other than an auto block not yet started. A replan never moves it or removes it.
 _Avoid_: Pinned block, fixed block, confirmed block
+
+**Auto-approve**:
+The setting (on by default) that approves each revision as soon as Claude submits it, as Approve all would.
+_Avoid_: Auto-accept, auto-confirm
+
+**Auto block**:
+A block an auto-approved revision placed. Until it starts, and until Lisul moves it, a later revision may move or remove it; then it is a locked block.
+_Avoid_: Soft block, tentative block
 
 **Approve**:
 To accept a proposed block (or a whole proposal), turning it into a real block.
@@ -76,6 +84,10 @@ _Avoid_: Carry over, postpone
 **Shutdown**:
 The end-of-day step that moves missed tasks to tomorrow and closes the day.
 _Avoid_: Review, wrap-up
+
+**Shutdown line**:
+When the day's plan window ends: the time Lisul set for the day, else when wind-down starts (5 pm to 11 pm), else 5 pm.
+_Avoid_: Cutoff, end of day
 
 **Pace**:
 For one kind of task, the median of actual time over estimate, which shows how far off Lisul's guesses run.
@@ -98,7 +110,7 @@ A recurring time Lisul protects, such as gym or lunch, with set days, an ideal t
 _Avoid_: Routine, recurring task, ritual
 
 **Morning plan**:
-The proposal Claude makes on its own at 6:07 each morning, delivered with the morning brief for Lisul to approve or skip.
+The proposal Claude makes on its own at 6:07 each morning, delivered with the morning brief for Lisul to approve or skip, or approved at once with Auto-approve on.
 _Avoid_: Auto-plan, daily run, routine
 
 **Busy time**:

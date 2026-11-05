@@ -60,7 +60,7 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
 - `planSnapshot(rows, now)` shapes what `read_planner` returns (see below) from the raw rows:
   - `rows` is `{ settings, tasks, blocks, busy, days, campus, proposal, needsOpen, accounts }`;
   - `plan_day` follows the 3 pm rule (`planningDay`);
-  - `shutdown` is that day's line;
+  - `shutdown` is that day's line (v5: else when wind-down starts, `shutdownFor`);
   - the task list holds `plan_day`'s undone tasks, then every undone task `atRisk` on it, then
     undone course tasks due within 7 days. No task appears twice.
 - `checkProposal(input, snapshot)` returns `{ ok, errors, rows }`.

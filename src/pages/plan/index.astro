@@ -229,8 +229,14 @@ import "../../styles/sheet.css";
       <!-- Replans (docs/sheet-v5.md, "/plan"): src/sheet/replan-settings.mjs fills and saves it. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-replans-title">
         <h3 id="sheet-replans-title">Replans</h3>
-        <p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. You still approve every change.</p>
+        <p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. A replan may move a block it placed until the block starts; one you moved stays put.</p>
         <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
+      </section>
+
+      <section class="sheet-settings-part" aria-labelledby="sheet-auto-approve-title">
+        <h3 id="sheet-auto-approve-title">Auto-approve</h3>
+        <p class="small">A plan's blocks count as soon as Claude makes them: they get calendar events and nudges without Approve all. Move or remove any of them here.</p>
+        <p class="sheet-dialog-end"><span class="small" role="status" data-auto-approve-note></span> <button type="button" class="sheet-btn" data-act="auto-approve" aria-pressed="false">Auto-approve</button></p>
       </section>
 
       <!-- Enrollment time (docs/sheet-v5.md, "/plan"): src/sheet/enrollment-settings.mjs fills and saves it. -->

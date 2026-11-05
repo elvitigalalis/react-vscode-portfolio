@@ -4,14 +4,13 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { localNow, byPosition } from "./logic.mjs";
 import { el, state, render, load, completeTask, keyHooks, actHooks, renderHooks, failed } from "./planner.mjs";
+import { shutdownAt } from "./plan-today.mjs";
 
 let dialog;
 let today;
 let done;          // id → done, as edited in the dialog
 let reflection = "";
 
-const clock = (hhmm) => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
-const shutdownAt = (d) => clock((state.days[d]?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5));
 const todays = () => [...state.tasks.values()].filter((t) => t.day === today).sort(byPosition);
 
 function column(title, isDone) {

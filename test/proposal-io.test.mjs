@@ -32,10 +32,10 @@ test("snapshotQueries: at 6:07 am it reads today's rows, in New York's day bound
 test("snapshotQueries: blocks are plan_day's, plus every block of the tasks read, for atRisk", () => {
   const { blocks } = snapshotQueries(sixOhSeven, TZ);
   assert.equal(queryPath(blocks([T1, T4])),
-    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed" +
+    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed,auto" +
     `&or=(and(starts_at.lt.2026-11-05T05:00:00.000Z,ends_at.gt.2026-11-04T05:00:00.000Z),task_id.in.(${T1},${T4}))&order=starts_at`);
   assert.equal(queryPath(blocks([])),
-    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed" +
+    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed,auto" +
     "&or=(and(starts_at.lt.2026-11-05T05:00:00.000Z,ends_at.gt.2026-11-04T05:00:00.000Z))&order=starts_at");
 });
 
@@ -90,13 +90,18 @@ test("planner-mcp: only the owner's user-scoped client, and no fetch of its own"
 });
 
 test("planner-mcp: submit_proposal writes only through apply_proposal, after checkProposal", () => {
-  assert.deepEqual([...code.matchAll(/\.rpc\("(\w+)"/g)].map((m) => m[1]), ["is_owner", "apply_proposal", "answer_message", "add_message_step", "set_event_titles"]);
+  // Then auto_approve_proposal and move_to_next_day, after apply_proposal (docs/sheet-v5.md,
+  // "Every to-do gets a time").
+  assert.deepEqual([...code.matchAll(/\.rpc\("(\w+)"/g)].map((m) => m[1]), ["is_owner", "apply_proposal", "auto_approve_proposal", "move_to_next_day", "answer_message", "add_message_step", "set_event_titles"]);
   assert.doesNotMatch(code, /\.(insert|update|upsert|delete)\(/);
   const submit = code.split('registerTool("submit_proposal"')[1];
   assert.ok(submit.indexOf("checkProposal(") < submit.indexOf('rpc("apply_proposal"'));
   assert.match(submit, /if \(!check\.ok \|\| !rows\) return/);
   // A message run's revision is recorded as a replan (src/sheet/messages.mjs, proposalTrigger).
   assert.ok(submit.indexOf("proposalTrigger(") < submit.indexOf('rpc("apply_proposal"'));
+  assert.ok(submit.indexOf('rpc("apply_proposal"') < submit.indexOf('rpc("auto_approve_proposal"'));
+  assert.match(submit, /snap\.auto_approve \? await db\.rpc\("auto_approve_proposal"/);
+  assert.match(submit, /rpc\("move_to_next_day", \{ d: rows\.d, ids: check\.next_day \}\)/);
 });
 
 test("planner-mcp: answer_messages writes only through answer_message, each answer after checkAnswers", () => {

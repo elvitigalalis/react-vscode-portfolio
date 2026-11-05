@@ -10,7 +10,7 @@ import { messageKey, neverRule } from "./triage.mjs";
 import { dayLabel } from "./logic.mjs";
 import { dayCap, hhmm, wakeProfile, windowStart } from "./sleep.mjs";
 import { businessDays } from "./mail.mjs";
-import { bedtimeFor } from "./bedtime.mjs";
+import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
 import { restMode } from "./ring.mjs";
 import { threadLink } from "./morning.mjs";
 
@@ -18,8 +18,6 @@ import { threadLink } from "./morning.mjs";
 
 // Course tasks due within this many days of the planning day go in the task list.
 const COURSE_AHEAD = 7;
-// The day's shutdown line when it has none of its own.
-const DEFAULT_SHUTDOWN = "17:00";
 // v5 D2: the day rules checkProposal holds a plan to (settings.workload_cap_min's default).
 const DEFAULT_CAP = 360;
 // Oura: the day's readiness and sleep (sleep_days) scale the cap and can shorten the break rule
@@ -147,7 +145,8 @@ export function planSnapshot(rows, now) {
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
     source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
   }));
-  const shutdown = line ? line.slice(0, 5) : DEFAULT_SHUTDOWN;
+  // The day's line, else when wind-down starts (bedtime.mjs, shutdownFor).
+  const shutdown = shutdownFor(day, { line, settings, sleep: rows.sleep, sleepTimes: rows.sleepTimes, tz });
   const profile = wakeProfile(rows.sleep ?? [], now, tz);
   const wind = windDownOf(settings, rows, day, tz, shutdown);
   const rest = restMode(day, rows.restPeriods ?? []);
@@ -161,11 +160,16 @@ export function planSnapshot(rows, now) {
     plan_day: day,
     shutdown,
     run: runOf(rows, now, day),
+    // Auto-approval: submit_proposal approves the revision at once (settings.auto_approve, on
+    // unless he turned it off).
+    auto_approve: settings.auto_approve !== false,
     window: { from: windowFrom(now, day, tz, profile), to: wind.to },
     turned_down: turnedDown,
     tasks,
+    // An auto-approved block not yet started goes out as proposed, with auto: true: the new
+    // revision replaces it (apply_proposal), so the run plans its task again.
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
-      .map((b) => ({ task_id: b.task_id, ...(b.habit_id ? { habit_id: b.habit_id } : {}), starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
+      .map((b) => ({ task_id: b.task_id, ...(b.habit_id ? { habit_id: b.habit_id } : {}), starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed || movable(b, now), ...(movable(b, now) ? { auto: true } : {}) })),
     busy: rows.busy.filter((b) => onDay(b, day, tz)).map((b) => ({ starts_at: b.starts_at, ends_at: b.ends_at })),
     busy_as_of: settings.busy_as_of ?? null,
     interests: settings.interests ?? null,
@@ -179,7 +183,7 @@ export function planSnapshot(rows, now) {
       : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
-    day_rules: { ...dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks, day, tz), rest), bedtime: wind.bedtime, wind_down_from: wind.wind_down_from },
+    day_rules: { ...dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks.filter((b) => !movable(b, now)), day, tz), rest), bedtime: wind.bedtime, wind_down_from: wind.wind_down_from },
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
     // v5 L1: the triage rules, which submit_proposal enforces for never.
@@ -196,6 +200,11 @@ export function planSnapshot(rows, now) {
     habits: dayHabits(rows.habits, day).filter((h) => !rest?.firm_only || h.defence === "firm"),
   };
 }
+
+// Auto-approval (docs/sheet-v5.md, "Auto-approval"): a block a run's revision placed and
+// approved by itself (blocks.auto) stays the plan's to move until it starts, or until Lisul moves
+// it in /plan, which clears auto. Any other approved block is locked.
+const movable = (b, now) => Boolean(!b.proposed && b.auto && Date.parse(b.starts_at) > now.getTime());
 
 // Oura: the approved task minutes on `day`, which a lower cap never drops below.
 const approvedMinutes = (blocks, day, tz) => blocks
@@ -541,6 +550,7 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
   const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
   const suggested = v5 ? suggestedTasks(input, errors) : null;
   const readAt = v5 ? readAtOf(input, snapshot, errors) : null;
+  const nextDay = v5 ? nextDayIds(input, snapshot, blocks, errors) : null;
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
@@ -550,7 +560,32 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
     ok: true, errors: [],
     rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons, ...(readAt ? { read_at: readAt } : {}) },
     dropped: kept.dropped,
+    // Not one of apply_proposal's arguments: planner-mcp moves these after it (move_to_next_day).
+    next_day: nextDay,
   };
+}
+
+// next_day: the ids of plan_day's untimed tasks that couldn't fit, which move to the next day so
+// its plan times them. Each must be on plan_day, with no fixed time, no approved block and no
+// block in this revision.
+function nextDayIds(input, snapshot, blocks, errors) {
+  const ids = list(input?.next_day);
+  if (!Array.isArray(ids)) return errors.push("next_day: must be a list of task ids"), [];
+  const tasks = new Map(snapshot.tasks.map((t) => [t.id, t]));
+  const placed = new Set(blocks.map((b) => b.task_id));
+  const locked = new Set(snapshot.blocks.filter((b) => !b.proposed).map((b) => b.task_id));
+  const out = [];
+  ids.forEach((id, i) => {
+    const name = `next_day[${i}]`;
+    const t = tasks.get(id);
+    if (!t) errors.push(`${name}: not one of the tasks read_planner gave`);
+    else if (t.day !== snapshot.plan_day) errors.push(`${name}: ${id} is not on ${snapshot.plan_day}, so it can't move to the next day`);
+    else if (t.at_time) errors.push(`${name}: ${id} is fixed at ${t.at_time.slice(0, 5)}, so it stays`);
+    else if (placed.has(id)) errors.push(`${name}: ${id} has a block in this revision, so it stays`);
+    else if (locked.has(id)) errors.push(`${name}: ${id} already has an approved block, so it stays`);
+    else if (!out.includes(id)) out.push(id);
+  });
+  return out;
 }
 
 // read_at, the read_planner snapshot's time the run submits against: optional (without it

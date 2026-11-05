@@ -265,6 +265,22 @@ test("planSnapshot: a bedtime cuts window.to to an hour before it when that fall
   assert.deepEqual(oura.window, { from: "09:15", to: "21:30" });
 });
 
+test("planSnapshot: with no line of its own, the day shuts down when wind-down starts, by 11 pm", () => {
+  const at = (hhmm, line = null) => planSnapshot(v5Rows({
+    settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: hhmm, bedtime_ease: false },
+    days: [{ day: DAY, shutdown_at: line, turned_down: [] }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  // Bed 10:30 pm: shutdown and the window's end at 9:30 pm, not 5 pm.
+  assert.equal(at("22:30:00").shutdown, "21:30");
+  assert.deepEqual(at("22:30:00").window, { from: "09:15", to: "21:30" });
+  // Bed 3:00 am: wind-down is after midnight, so 11 pm.
+  assert.equal(at("03:00:00").shutdown, "23:00");
+  assert.deepEqual(at("03:00:00").window, { from: "09:15", to: "23:00" });
+  // A line moved by hand still wins.
+  assert.equal(at("03:00:00", "18:00:00").shutdown, "18:00");
+  assert.deepEqual(at("03:00:00", "18:00:00").window, { from: "09:15", to: "18:00" });
+});
+
 test("checkProposal: a block or habit running into wind-down is refused, naming it", () => {
   const s = planSnapshot(v5Rows({
     settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: "23:00:00", bedtime_ease: false },
@@ -297,4 +313,56 @@ test("planSnapshot: Rest Mode cuts the cap to essentials and keeps firm habits o
   assert.equal(back.day_rules.cap_reason, "easing back from rest mode");
   assert.deepEqual(back.habits.map((h) => h.id), ["h2", "h1"]);
   assert.equal(s([]).day_rules.workload_cap_min, 360);
+});
+
+// --- Auto-approval: a run's blocks count at once, and a later run may move them -------------
+
+test("planSnapshot: an auto-approved block not yet started is the plan's to move; started or hand-approved, it's locked", () => {
+  const blocks = [
+    { task_id: "t1", starts_at: "2026-11-04T19:00:00Z", ends_at: "2026-11-04T19:45:00Z", proposed: false, auto: true }, // 2 pm, ahead
+    { task_id: "t2", starts_at: "2026-11-04T13:30:00Z", ends_at: "2026-11-04T14:30:00Z", proposed: false, auto: true }, // 8:30 am, started
+    { task_id: "t3", starts_at: "2026-11-04T20:00:00Z", ends_at: "2026-11-04T21:00:00Z", proposed: false, auto: false }, // 3 pm, approved by hand
+  ];
+  const s = planSnapshot(v5Rows({ blocks, days: [{ day: DAY, shutdown_at: "22:00:00", turned_down: [] }] }), new Date("2026-11-04T14:07:00Z"));
+  assert.deepEqual(s.blocks.map((b) => [b.task_id, b.proposed, b.auto ?? false]), [["t1", true, true], ["t2", false, false], ["t3", false, false]]);
+  // A new revision may put a block where the movable one was, not on the locked ones.
+  const input = (start) => ({ version: 5, day: DAY, replaces: 2, blocks: [{ task_id: "t1", start, minutes: 45 }], needs_you: [], picks: [] });
+  assert.equal(checkProposal(input("14:00"), s).ok, true, checkProposal(input("14:00"), s).errors?.join("; "));
+  assert.match(checkProposal(input("15:00"), s).errors.join("\n"), /overlaps an approved block/);
+});
+
+test("planSnapshot: auto_approve says whether a submitted revision is approved at once (on unless turned off)", () => {
+  const at = (settings) => planSnapshot(v5Rows({ settings: { time_zone: "America/New_York", ...settings } }), new Date("2026-11-04T14:07:00Z")).auto_approve;
+  assert.equal(at({}), true);
+  assert.equal(at({ auto_approve: true }), true);
+  assert.equal(at({ auto_approve: false }), false);
+});
+
+// --- Every untimed to-do gets a time, or moves to the next day ------------------------------
+
+test("checkProposal: next_day moves plan_day's untimed tasks that couldn't fit, and nothing else", () => {
+  const s = planSnapshot(v5Rows({
+    tasks: [
+      { id: "t1", title: "OS homework", day: DAY, done: false, est_min: 45 },
+      { id: "t2", title: "Laundry", day: DAY, done: false, est_min: 30 },
+      { id: "t3", title: "Call", day: DAY, done: false, est_min: 15, at_time: "16:00:00" },
+      { id: "t4", title: "Essay", day: "2026-11-06", done: false, est_min: 60, source: "brightspace", due: "2026-11-06" },
+      { id: "t5", title: "Slides", day: DAY, done: false, est_min: 60 },
+    ],
+    blocks: [{ task_id: "t5", starts_at: "2026-11-04T20:00:00Z", ends_at: "2026-11-04T21:00:00Z", proposed: false }],
+    days: [{ day: DAY, shutdown_at: null, turned_down: [] }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  const submit = (next_day) => checkProposal({ version: 5, day: DAY, replaces: 2, blocks: [{ task_id: "t1", start: "10:00", minutes: 45 }], next_day, needs_you: [], picks: [] }, s);
+  const ok = submit(["t2"]);
+  assert.equal(ok.ok, true, ok.errors?.join("; "));
+  assert.deepEqual(ok.next_day, ["t2"]);
+  assert.equal("next_day" in ok.rows, false); // not one of apply_proposal's arguments
+  assert.deepEqual(submit(undefined).next_day, []);
+  assert.deepEqual(submit(["t1", "t3", "t4", "t5", "nope"]).errors, [
+    "next_day[0]: t1 has a block in this revision, so it stays",
+    "next_day[1]: t3 is fixed at 16:00, so it stays",
+    "next_day[2]: t4 is not on 2026-11-04, so it can't move to the next day",
+    "next_day[3]: t5 already has an approved block, so it stays",
+    "next_day[4]: not one of the tasks read_planner gave",
+  ]);
 });

@@ -7,6 +7,7 @@
 // minutes from that day's midnight, so 11:30 pm is 1410 and 00:30 or 02:00 the next morning are
 // 1470 and 1560. Kept free of the network so node --test covers it; /plan, planner-mcp and the
 // telegram function import it.
+import { SHEET } from "../site.mjs";
 import { addDays, formatClock, localNow, zonedIso } from "./logic.mjs";
 
 const NOON = 12 * 60;
@@ -94,6 +95,21 @@ export function bedtimeFor(night, { settings, sleep, sleepTimes, tz }) {
 }
 
 const clock = (m) => formatClock(m % 1440);
+
+// The latest default shutdown line, 11 pm; the earliest is the old fixed one, 5 pm.
+const SHUTDOWN_LATEST = 23 * 60;
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+// A day's shutdown line, "HH:MM" (docs/sheet-v5.md, "Shutdown follows wind-down"): the one he
+// set for the day (`line`, days.shutdown_at), else when wind-down starts that night, kept from
+// 5 pm to 11 pm, else 5 pm (SHEET.shutdownAt). read_planner, checkProposal, replans, the
+// check-in and /plan all take it from here, so they never disagree.
+export function shutdownFor(day, { line = null, settings, sleep = [], sleepTimes = [], tz }) {
+  if (line) return String(line).slice(0, 5);
+  const bed = bedtimeFor(day, { settings, sleep: sleep ?? [], sleepTimes: sleepTimes ?? [], tz });
+  const [h, m] = SHEET.shutdownAt.split(":").map(Number);
+  return bed ? hhmm(Math.min(SHUTDOWN_LATEST, Math.max(h * 60 + m, bed.wind_down))) : SHEET.shutdownAt;
+}
 
 // Settings' line: "Tonight: bed 2:15 am, easing 15 min earlier a night toward 12:30 am".
 export function bedtimeStatus(b, settings) {

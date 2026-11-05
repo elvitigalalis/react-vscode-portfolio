@@ -130,7 +130,8 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
   day's budget (5 h 30, or the free time around his events, as in the week). Amber within 15 %
   of it, red over it.
 - **Finish line:** "Done ≈ 4:40 pm · shutdown 5:00 pm". The shutdown line on the timeline can be
-  dragged; it is saved per day.
+  dragged; it is saved per day. Undragged, it sits where wind-down starts (5 pm to 11 pm), else at
+  5 pm ([sheet-v5.md](sheet-v5.md), "Shutdown follows wind-down").
 - **Drag a task onto the timeline → a block as tall as its estimate** (30 min if none). The block
   is created as an event on the "Time blocks" Google calendar: its title is the task's title if
   public, **"Busy" if private** (Ellie's privacy mode). One task may have several blocks.

@@ -732,6 +732,10 @@ drop function if exists apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, te
 -- Oura: window_from, the window start the revision was planned from (the column is with Oura's
 -- section, below). The signature without it is dropped.
 drop function if exists apply_proposal(date, int, jsonb, jsonb, jsonb, jsonb, text, uuid[], jsonb, text, text[], timestamptz);
+-- Auto-approval (docs/sheet-v5.md, "Auto-approval"): a block a run's revision approved by itself
+-- (auto_approve_proposal, below). Until it starts, and until /plan moves it (which clears auto),
+-- the next revision may move it: apply_proposal replaces it like a proposed one.
+alter table blocks add column if not exists auto boolean not null default false;
 create or replace function apply_proposal(d date, replaces int, blocks jsonb, habit_blocks jsonb default '[]',
   needs jsonb default '[]', picks jsonb default '[]', note text default null,
   couldnt_fit uuid[] default '{}', suggested jsonb default '[]',
@@ -757,6 +761,13 @@ begin
   end if;
   update proposals p set status = 'superseded' where p.day = d and p.rev = newest.rev and p.status = 'pending';
   delete from public.blocks b where b.proposed and (b.starts_at at time zone tz)::date = d;
+  -- Auto-approval: the earlier revisions' blocks still ahead go too, and /plan deletes their
+  -- Google events when it next opens (gcal_pending, ends_at null).
+  insert into gcal_pending (gcal_id, ends_at)
+  select b.gcal_id, null from public.blocks b
+  where b.auto and not b.proposed and b.starts_at > now() and b.gcal_id is not null and (b.starts_at at time zone tz)::date = d
+  on conflict (gcal_id) do update set ends_at = null;
+  delete from public.blocks b where b.auto and not b.proposed and b.starts_at > now() and (b.starts_at at time zone tz)::date = d;
   insert into public.blocks (task_id, starts_at, ends_at, proposed)
   select x.task_id, x.starts_at, x.ends_at, true
   from jsonb_to_recordset(coalesce(apply_proposal.blocks, '[]')) as x(task_id uuid, starts_at timestamptz, ends_at timestamptz);
@@ -836,6 +847,39 @@ end $$;
 -- The telegram function calls these with the service key.
 revoke execute on function approve_proposal(date, int), skip_proposal(date, int) from public, anon;
 grant execute on function approve_proposal(date, int), skip_proposal(date, int) to authenticated, service_role;
+
+-- Auto-approval (docs/sheet-v5.md, "Auto-approval"): with settings.auto_approve on, submit_proposal
+-- approves the revision it just saved, exactly as Approve all does, and marks its blocks auto so a
+-- later revision may still move them until they start.
+alter table settings add column if not exists auto_approve boolean not null default true;
+create or replace function auto_approve_proposal(d date, rev int) returns int
+language plpgsql security invoker set search_path = public as $$
+begin
+  update blocks b set auto = true
+  where b.proposed and (b.starts_at at time zone (select time_zone from settings))::date = d;
+  return approve_proposal(d, auto_approve_proposal.rev);
+end $$;
+revoke execute on function auto_approve_proposal(date, int) from public, anon;
+grant execute on function auto_approve_proposal(date, int) to authenticated;
+-- A revision's untimed tasks that couldn't fit (checkProposal's next_day) move to the bottom of
+-- the next day, so its plan times them. Not a roll: rolls counts missed days, and these weren't.
+-- Returns how many moved.
+create or replace function move_to_next_day(d date, ids uuid[]) returns int
+language plpgsql security invoker set search_path = public as $$
+declare
+  base double precision;
+  n int;
+begin
+  select coalesce(max(t.position), 0) into base from tasks t where t.day = d + 1;
+  update tasks t set day = d + 1, position = base + r.k
+  from (select x.id, row_number() over (order by x.position) as k from tasks x
+        where x.id = any(ids) and x.day = d and not x.done and x.at_time is null) r
+  where t.id = r.id;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke execute on function move_to_next_day(date, uuid[]) from public, anon;
+grant execute on function move_to_next_day(date, uuid[]) to authenticated;
 
 -- /plan's × on a proposed block: it goes, and its task stays turned down for the rest of the day.
 create or replace function turn_down(d date, task uuid) returns void

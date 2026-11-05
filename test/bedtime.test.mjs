@@ -3,7 +3,7 @@
 // it, so 00:30 and 02:00 are minutes 1470 and 1560 of the night before. Expected values by hand.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { bedtimeFor, bedtimeMarker, bedtimeStatus, nightAt, nightOf, ouraWindow, ouraWindowLine, typicalBedtime } from "../src/sheet/bedtime.mjs";
+import { bedtimeFor, bedtimeMarker, bedtimeStatus, shutdownFor, nightAt, nightOf, ouraWindow, ouraWindowLine, typicalBedtime } from "../src/sheet/bedtime.mjs";
 
 const TZ = "America/New_York";
 // A long_sleep that starts at `start`, "YYYY-MM-DDTHH:MM" local in New York (EDT, UTC-4, until
@@ -111,4 +111,22 @@ test("ouraWindow: Oura's window and hint for a night, in words", () => {
   const b = { minutes: 1575, wind_down: 1515, source: "easing", target: 1470 };
   assert.equal(bedtimeMarker(b, w), "Wind down 1:15 am · Bed 2:15 am · Oura: 12:15–12:45 am, earlier bedtime");
   assert.equal(bedtimeMarker(b), "Wind down 1:15 am · Bed 2:15 am");
+});
+
+test("shutdownFor: the line he set for the day wins; else wind-down's start, from 5 pm to 11 pm; else 5 pm", () => {
+  const at = (s, line = null, sleepTimes = []) => shutdownFor("2026-11-05", { line, settings: s, sleep: week, sleepTimes, tz: TZ });
+  // Bed 12:30 am: wind-down from 11:30 pm, capped at 11 pm.
+  assert.equal(at(settings({ bedtime_ease: false })), "23:00");
+  // Bed 10:00 pm: wind-down from 9:00 pm.
+  assert.equal(at(settings({ bedtime_ease: false, bedtime_target: "22:00:00" })), "21:00");
+  // Bed 5:30 pm: never earlier than 5 pm.
+  assert.equal(at(settings({ bedtime_ease: false, bedtime_target: "17:30:00" })), "17:00");
+  // Oura's window when no target is set: bed 11 pm, so 10 pm.
+  assert.equal(at(settings({ bedtime_target: null }), null, [{ day: "2026-11-05", start_offset: -3600, end_offset: 0 }]), "22:00");
+  // No bedtime, or wind-down off: the old 5 pm.
+  assert.equal(at(settings({ bedtime_target: null })), "17:00");
+  assert.equal(at(settings({ wind_down_on: false })), "17:00");
+  assert.equal(at(null), "17:00");
+  // A line moved by hand.
+  assert.equal(at(settings({ bedtime_ease: false }), "18:30:00"), "18:30");
 });

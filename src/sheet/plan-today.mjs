@@ -9,6 +9,7 @@ import * as api from "./api.mjs";
 import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep } from "./logic.mjs";
 import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap } from "./planner.mjs";
 import { loadShare, stripSegments } from "./glance.mjs";
+import { shutdownFor } from "./bedtime.mjs";
 
 const START = 7 * 60;
 const END = 23 * 60;
@@ -23,7 +24,8 @@ let planDialog = null; // plan-dialog.mjs, once Plan today has opened
 
 export const tasksOn = (d) => [...state.tasks.values()].filter((t) => t.day === d).sort(byPosition);
 export const blocksOn = (d) => state.blocks.filter((b) => minutesOn(b.starts_at, d, SHEET.timeZone) >= 0 && minutesOn(b.starts_at, d, SHEET.timeZone) < 1440);
-export const shutdownAt = (d) => clock((state.days[d]?.shutdown_at ?? SHEET.shutdownAt).slice(0, 5));
+// The day's shutdown line in minutes: his, else when wind-down starts (bedtime.mjs, shutdownFor).
+export const shutdownAt = (d) => clock(shutdownFor(d, { line: state.days[d]?.shutdown_at, settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz: SHEET.timeZone }));
 
 // A day's load as a 4px bar on a track (docs/sheet-glance.md, change 4).
 function loadBar(d) {
@@ -48,6 +50,8 @@ export async function saveBlock(b, times = {}) {
   if (step === "create") change.gcal_id = await api.createEvent(t.title, t.public, starts_at, ends_at);
   if (step === "patch") await api.patchEvent(b.gcal_id, api.eventTimes(starts_at, ends_at));
   if (b.proposed) change.proposed = false;
+  // Auto-approval: a block he moves or approves here is his, so no revision moves it again.
+  if (b.auto) change.auto = false;
   Object.assign(b, await api.updateBlock(b.id, change));
 }
 

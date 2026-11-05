@@ -130,6 +130,8 @@ test("checkProposal v5: a valid replan gives apply_proposal's named arguments", 
       reasons: ["busy_overlap"],
     },
     dropped: [],
+    // Every to-do gets a time (docs/sheet-v5.md): the tasks moved to the next day, none here.
+    next_day: [],
   });
 });
 

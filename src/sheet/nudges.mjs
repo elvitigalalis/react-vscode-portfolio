@@ -5,14 +5,14 @@
 //
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
-import { ORIGIN, SHEET } from "../site.mjs";
+import { ORIGIN } from "../site.mjs";
 import { clockSpan, couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
 import { addDays, localNow, weekdayName, zonedIso, minutesOn, atRisk, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
 import { REASON_WORDS } from "./replan.mjs";
 import { dayCap, isWeekend, wakeProfile } from "./sleep.mjs";
-import { bedtimeFor, nightAt, tonight } from "./bedtime.mjs";
+import { bedtimeFor, nightAt, shutdownFor, tonight } from "./bedtime.mjs";
 import { lateNap } from "./oura-day.mjs";
 import { pickTips, tipContext } from "./tips.mjs";
 import { GYM_HABIT } from "./ring.mjs";
@@ -413,14 +413,14 @@ function finishedChecks(day) {
   });
 }
 
-// The check-in: at the day's shutdown line (the default unless he moved it), asking for the
-// shutdown. Once the day is shut down, or on a day with no tasks, there's nothing to ask.
-// It also says what's due tomorrow and how many Needs you rows, mail and Slack, are
+// The check-in: at the day's shutdown line (his, else when wind-down starts: shutdownFor),
+// asking for the shutdown. Once the day is shut down, or on a day with no tasks, there's nothing
+// to ask. It also says what's due tomorrow and how many Needs you rows, mail and Slack, are
 // still open (docs/sheet-morning.md).
-function checkin({ tasks, day: row, today, tz, needsOpen }) {
+function checkin({ tasks, day: row, today, tz, needsOpen, settings, sleep, sleepTimes }) {
   const todays = tasks.filter((t) => t.day === today);
   if (row?.shutdown || !todays.length) return [];
-  const [h, m] = (row?.shutdown_at ?? SHEET.shutdownAt).split(":").map(Number);
+  const [h, m] = shutdownFor(today, { line: row?.shutdown_at, settings, sleep, sleepTimes, tz }).split(":").map(Number);
   // A shutdown line in quiet hours still gets its check-in, just before them.
   const at = Math.min(h * 60 + m, CHECKIN_LATEST);
   const done = todays.filter((t) => t.done).length;
