@@ -1410,8 +1410,9 @@ grant execute on function set_event_titles(date, jsonb) to authenticated;
 -- --- Oura: the plan starts when he wakes (docs/sheet-v5.md, "Oura") -------------------------
 -- oura-connect connects his Oura account (OAuth2 with PKCE, scope daily); oura-sync reads his
 -- sleep periods and daily readiness every 10 minutes. Only these fields are kept, 60 days
--- (nightly_roll), never shared and never used to train anything (Oura's API agreement,
--- cloud.ouraring.com/legal/api-agreement): no scores but readiness, no heart rate, no stages.
+-- (nightly_roll), never shared, never sent to an AI model and never used to train anything (Oura's
+-- API agreement, cloud.ouraring.com/legal/api-agreement; docs/adr/0005). Below: sleep times and
+-- each day's numbers for /plan, Oura's bedtime window, workouts and Rest Mode, nothing else.
 -- Oura's refresh tokens are single-use and rotate, so each refresh's new token is saved before
 -- its access token is used (oura_token_save); both tokens live only in Vault.
 create table if not exists oura_account (

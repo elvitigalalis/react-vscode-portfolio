@@ -881,6 +881,44 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **/plan.** Today's column shows "Wind down 11:30 pm · Bed 12:30 am"; Settings shows "Tonight:
   bed 2:15 am, easing 15 min earlier a night toward 12:30 am".
 
+### Day numbers, tips and the ring
+
+- **Day numbers.** oura-sync also reads `/daily_sleep`, `/daily_activity` and `/daily_stress`, and
+  keeps per day in `sleep_days`: `sleep_score`, `efficiency`, `deep_s`, `rem_s`, `rhr_low`,
+  `rhr_avg`, `hrv_avg` (the day's longest long_sleep), `temp_dev` (daily_readiness),
+  `activity_score`, `steps`, `stress` (`day_summary`), and `contributors` (the sleep and
+  readiness contributor scores by Oura's names, integers). A refused read is skipped.
+- **/plan.** Each past day's and today's header gets one quiet chip line, "☾ 82 · ⚡ 86 · 7h 40m",
+  scores in Oura's bands (85+ optimal `--accent`, 70-84 good, under 70 `--warn`), named for screen
+  readers ("Sleep score 82, good"). It opens a dialog (lazy `oura-popover.mjs`) with the full set,
+  each with a 7-day sparkline, "How to raise it" (1-2 tips with a "why" link to Oura's article),
+  and "Sleep this week": 7 nights of bed-to-wake bars against the bedtime target and each one's
+  spread ("Bedtime ±42 min · Wake ±15 min"). Settings → Oura → Sleep this week opens it for today.
+  Today's chip adds "late nap 5:10–6:20 pm" (a `late_nap` ending after 6 pm) and "1 tip". /plan
+  re-reads the numbers every 10 minutes while it shows. Never on /now.
+- **Tips** (`pickTips`, src/sheet/tips.mjs): one tip per contributor from Oura's guidance, with
+  his own times (bedtime, wind-down, target, gym). A day takes its lowest contributors under 70,
+  at most 2, leaving out any picked on the 2 days before (worked forward from 13 days back).
+  The brief adds "Tip: …" and Wind down adds today's first evening tip (timing, latency,
+  recovery_index and others marked evening), composed by the telegram function.
+- **Brief.** "Sleep score 82, good." from today's row.
+- **Bedtime window.** `sleep_times.hint` keeps Oura's `recommendation`; the marker and Settings
+  add "Oura: 12:15–12:45 am, earlier bedtime".
+- **Workouts** (scope `workout`; oura-connect now asks for `daily workout`). `ring_workouts {
+  oura_id, day, starts_at, ends_at, activity }`, strength-type and generic activities only, never
+  calories or intensity. A 401/403 sets `oura_account.workouts_ok = false` and Settings says
+  "Reconnect to add workouts". A workout overlapping a Gym habit block (or a lifting one on its
+  day) ends it as a Done tap does (`gymMatches`, src/sheet/ring.mjs; Google through
+  `gcal_pending`). The gym page shows "Ring: 1h 12m" for today.
+- **Rest Mode** (`/rest_mode_period`, `rest_periods { oura_id, start_day, end_day }`, no episode
+  tags). While on, the cap is 40% of the base and only firm habits are offered; after, it eases
+  back evenly over as many days as it lasted, at most 7 (`restMode`). `cap_reason` is "rest mode"
+  or "easing back from rest mode".
+- **Ring battery.** `/ring_battery_level?latest=true` each sync; only `oura_account.ring_low`
+  (under 20% and off the charger) and when it was checked. Wind down adds "Charge your ring."
+  when the last check, within 30 minutes, was low; "After a late nap, keep to your bedtime." after
+  a late nap.
+
 ### Deploy
 
 1. Run `supabase/schema.sql` in the SQL editor (it adds the Oura section, `apply_proposal`'s
