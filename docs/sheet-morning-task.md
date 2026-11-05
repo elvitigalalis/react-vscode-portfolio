@@ -265,7 +265,8 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes, first_
 - Every task in tasks with day D and no at_time gets a block, unless it truly can't fit: no
   free gap in the window holds its paced_min within the travel, break and cap rules. Put each
   such task in next_day (it moves to the day after D, whose plan times it), unless it is
-  at_risk or has a horizon today_min above 0 (that goes in couldnt_fit), and name it in the note.
+  at_risk, has a horizon today_min above 0 or is due on or before D (that goes in couldnt_fit:
+  moving it would pass its deadline), and name it in the note.
 - A task with horizon gets a block only when its today_min is above 0, and then its minutes are
   today_min less the minutes of its blocks with proposed false on D, instead of paced_min (no
   block when that leaves under 15; over 240, split it into blocks that add up to it). Give it no
@@ -331,8 +332,9 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes, first_
 couldnt_fit: the ids of at_risk tasks you couldn't place, from tasks, each once, none that has
 a block of yours, at most 12. Leave it empty when every at_risk task fit.
 next_day: the ids of tasks with day D and no at_time that you couldn't place, each once, none
-that has a block of yours or one with proposed false, none at_risk and none with a horizon
-today_min above 0 (the server moves those minutes itself). Leave it empty when every one fit.
+that has a block of yours or one with proposed false, none at_risk, none due on or before D
+(those go in couldnt_fit) and none with a horizon today_min above 0 (the server moves those
+minutes itself). Leave it empty when every one fit.
 note: one line, at most 280 characters, no URL: what didn't fit and why (the cap, breaks or
 travel time included, any habit left out, and what moved to the next day), e.g. "Read ch. 4
 (1 h): only 30 min free before 11:00 pm shutdown, moved to tomorrow." If busy_as_of is null or more than a day

@@ -984,7 +984,8 @@ waiting for Approve all never got events or nudges. Three changes, built on the 
   cap. One that can't fit goes in submit_proposal's **`next_day`** ([task_id], at most 50), and
   the note names it; at-risk ones still go in `couldnt_fit`.
 - checkProposal checks each `next_day` id: one of the snapshot's tasks, on plan_day, no
-  `at_time`, no block in the revision and no approved block. It returns them as `next_day`
+  `at_time`, no block in the revision, no approved block, and due after plan_day (one due by
+  then is refused: "put it in couldnt_fit instead", since moving it would pass its deadline). It returns them as `next_day`
   (not one of apply_proposal's arguments).
 - After apply_proposal, planner-mcp calls **`move_to_next_day(d date, ids uuid[]) returns int`**
   (owner, `security invoker`): each undone, untimed task among `ids` on d moves to the bottom of

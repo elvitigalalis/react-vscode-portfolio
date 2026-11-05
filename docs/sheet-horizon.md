@@ -192,8 +192,11 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
    from today) and `horizonInput(rows, now)`, which builds the input above, and
    `horizonKey(input)`: SHA-256 hex of the canonical JSON (keys sorted) of every input field
    except `previous`. A block is locked when approved and not an auto-approved one still to
-   start (proposal.mjs's `movable`). The window is planSnapshot's without Oura's wake: windowStart
-   (07:00, on today from now) to the shutdown line or wind-down.
+   start (proposal.mjs's `movable`). The window is planSnapshot's, Oura's wake included (it also
+   reads `sleep_nights` and `sleep_times`): windowStart (30 minutes after today's or his usual
+   wake, else 07:00; on today from now) to the shutdown line or wind-down, and by wake + 16 h.
+   Counting from 07:00 took the hours he slept through as free (2026-11-05: five tasks due that
+   day on track with only 1h45 left).
 
    **What each task in the input must carry** for the blocking rules (all optional; the engine
    is safe without them, so they can land after the rest):
@@ -228,11 +231,12 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
 4. **checkProposal**: a task with a horizon state gets a block only with `today_min` above 0
    (else "no horizon minutes on D"), and its block runs `today_min` less its locked minutes on
    plan_day instead of `paced_min`; none when that is under 15. Over 240 (a due-day crunch) it may
-   take several blocks that add up to it. A task with `today_min` is never in `next_day`, so
+   take several blocks that add up to it. A task due on or before plan_day is never in
+   `next_day` ("put it in couldnt_fit instead"). A task with `today_min` is never in `next_day`, so
    `move_to_next_day` leaves it alone (the re-flow moves its minutes instead).
 5. **At risk**: `atRisk(task, blocks, today, tz, horizon)` (logic.mjs) reads the task's
    `horizon_state` row when it has one: at risk is `tight` or `wont_fit`, however far off its due
-   date. planSnapshot's `at_risk`, the brief and /plan's due look follow; Glance's other callers
+   date, or due today (or overdue) with no approved block by its due date's end: it didn't fit. planSnapshot's `at_risk`, the brief and /plan's due look follow; Glance's other callers
    pass no row and keep the old rule.
 6. **/plan** (`src/sheet/horizon-view.mjs`, small so the page's script stays in budget): a state
    chip in the task's details ("On track", amber "Tight", red "Won't fit · 2h short"), replacing

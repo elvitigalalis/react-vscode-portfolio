@@ -182,7 +182,7 @@ function plannerServer(db: Db) {
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
       "at-risk tasks that couldn't fit, next_day, the ids of plan_day's untimed tasks that couldn't fit, which move " +
-      "to the next day so its plan times them (never a task with horizon minutes on plan_day), habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
+      "to the next day so its plan times them (never a task with horizon minutes on plan_day, and never one due on or before plan_day: that goes in couldnt_fit), habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
       "time ± flex_min and running its minutes (a habit that can't fit is left out), and suggested tasks ({ account, " +
       "message_id, title, due, kind: assessment | interview }) for Needs you items from assessment or " +
       "interview-scheduling senders, which become Inbox tasks only once the revision is approved; event_todos ({ calendar_id, " +
