@@ -87,7 +87,7 @@
     {
       "slug": "micromouse",
       "title": "Micromouse Maze-Solving Robot",
-      "url": "https://github.com/IEEE-StonyBrook/Jurababa_2025-2026/tree/NEW_ROBOT",
+      "url": "https://github.com/IEEE-StonyBrook/micromouse_2026-2027",
       "role": "IEEE Stony Brook",
       "dates": "Aug 2024 – Present",
       "stack": [
@@ -104,7 +104,7 @@
     {
       "slug": "workit",
       "title": "WorkIt: Early-Career Job Aggregator",
-      "url": "https://github.com/WorkIt-CSE-416/WorkIt-CSE416",
+      "url": "https://workitjobs.ai",
       "dates": "Aug 2026 – Present",
       "stack": [
         "Python",

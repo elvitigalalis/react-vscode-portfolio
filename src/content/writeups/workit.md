@@ -17,7 +17,7 @@ photo:
   src: /images/workit.webp
   alt: WorkIt's job board, listing internship postings with location, pay and start date beside a match score for each
 demo:
-  url: https://workit-web-gamma.vercel.app
+  url: https://workitjobs.ai
   label: Demo (in development, sign-in required)
 screenshot:
   src: /images/workit/landing.webp
