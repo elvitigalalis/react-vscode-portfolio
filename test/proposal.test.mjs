@@ -265,6 +265,22 @@ test("planSnapshot: a bedtime cuts window.to to an hour before it when that fall
   assert.deepEqual(oura.window, { from: "09:15", to: "21:30" });
 });
 
+test("planSnapshot: with no line of its own, the day shuts down when wind-down starts, by 11 pm", () => {
+  const at = (hhmm, line = null) => planSnapshot(v5Rows({
+    settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: hhmm, bedtime_ease: false },
+    days: [{ day: DAY, shutdown_at: line, turned_down: [] }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  // Bed 10:30 pm: shutdown and the window's end at 9:30 pm, not 5 pm.
+  assert.equal(at("22:30:00").shutdown, "21:30");
+  assert.deepEqual(at("22:30:00").window, { from: "09:15", to: "21:30" });
+  // Bed 3:00 am: wind-down is after midnight, so 11 pm.
+  assert.equal(at("03:00:00").shutdown, "23:00");
+  assert.deepEqual(at("03:00:00").window, { from: "09:15", to: "23:00" });
+  // A line moved by hand still wins.
+  assert.equal(at("03:00:00", "18:00:00").shutdown, "18:00");
+  assert.deepEqual(at("03:00:00", "18:00:00").window, { from: "09:15", to: "18:00" });
+});
+
 test("checkProposal: a block or habit running into wind-down is refused, naming it", () => {
   const s = planSnapshot(v5Rows({
     settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: "23:00:00", bedtime_ease: false },

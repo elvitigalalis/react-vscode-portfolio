@@ -10,7 +10,7 @@ import { messageKey, neverRule } from "./triage.mjs";
 import { dayLabel } from "./logic.mjs";
 import { dayCap, hhmm, wakeProfile, windowStart } from "./sleep.mjs";
 import { businessDays } from "./mail.mjs";
-import { bedtimeFor } from "./bedtime.mjs";
+import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
 import { restMode } from "./ring.mjs";
 import { threadLink } from "./morning.mjs";
 
@@ -18,8 +18,6 @@ import { threadLink } from "./morning.mjs";
 
 // Course tasks due within this many days of the planning day go in the task list.
 const COURSE_AHEAD = 7;
-// The day's shutdown line when it has none of its own.
-const DEFAULT_SHUTDOWN = "17:00";
 // v5 D2: the day rules checkProposal holds a plan to (settings.workload_cap_min's default).
 const DEFAULT_CAP = 360;
 // Oura: the day's readiness and sleep (sleep_days) scale the cap and can shorten the break rule
@@ -147,7 +145,8 @@ export function planSnapshot(rows, now) {
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
     source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
   }));
-  const shutdown = line ? line.slice(0, 5) : DEFAULT_SHUTDOWN;
+  // The day's line, else when wind-down starts (bedtime.mjs, shutdownFor).
+  const shutdown = shutdownFor(day, { line, settings, sleep: rows.sleep, sleepTimes: rows.sleepTimes, tz });
   const profile = wakeProfile(rows.sleep ?? [], now, tz);
   const wind = windDownOf(settings, rows, day, tz, shutdown);
   const rest = restMode(day, rows.restPeriods ?? []);
