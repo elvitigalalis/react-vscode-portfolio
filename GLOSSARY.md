@@ -22,7 +22,7 @@ The day a task must be finished by. It is optional and separate from the day the
 _Avoid_: Deadline
 
 **At risk**:
-An undone task due today or within the next two days, with no approved block starting before its due day ends. A block any time on the due day clears it.
+An undone task that is tight or won't fit. A due task with no horizon state yet (one with a fixed time, or before the first re-flow) is at risk when due today or within the next two days with no approved block starting before its due day ends.
 _Avoid_: Urgent
 
 **Overdue**:
@@ -105,6 +105,10 @@ _Avoid_: Backlog plan, long-range plan
 The minutes of one task planned on one day of its horizon. Future days hold minutes only, never times; today's become blocks in the morning plan or a replan.
 _Avoid_: Ghost block, tentative block, reservation
 
+**Today's minutes**:
+A task's allocation on the day being planned, less any part past the workload cap. The morning plan or a replan turns it into blocks; it never moves minutes to another day.
+_Avoid_: Daily quota, today's share
+
 **Re-flow**:
 Server code working the allocations out again after something changed, keeping the last ones and moving only the minutes the change forces. It is not a replan: Claude takes no part.
 _Avoid_: Reschedule, rebalance
@@ -130,8 +134,8 @@ A task whose allocations finish by its target day with at least one day's chunk 
 _Avoid_: On time, safe
 
 **Tight**:
-A task whose allocations fit by its due day only by using its buffer, or with less than one day's chunk of slack, or that is already overdue.
-_Avoid_: At risk, close
+A task whose allocations fit by its due day only by using its buffer, or with less than one day's chunk of slack, or that is already overdue. Tight and won't fit are what at risk means for a task with a due date.
+_Avoid_: Close
 
 **Won't fit**:
 A task with more minutes left than its horizon's free time holds. The rest sits on its due day past the workload cap, with the hours short, and is never dropped.
