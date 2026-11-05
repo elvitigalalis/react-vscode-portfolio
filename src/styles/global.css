@@ -192,6 +192,8 @@ section.hero { padding-top: 2.5rem; }
 }
 .card img { border-radius: 0.4rem; aspect-ratio: 4 / 3; object-fit: cover; width: 100%; }
 .card h3 { margin-top: 0.15rem; }
+.card h3 a, .writeup-head h1 a { color: inherit; text-decoration: none; }
+.card h3 a:hover, .writeup-head h1 a:hover { text-decoration: underline; }
 .card .role { font-weight: 400; color: var(--muted); }
 .card .buttons { margin-top: 0.9rem; }
 .card .btn { font-size: 0.875rem; padding: 0.4rem 0.8rem; }

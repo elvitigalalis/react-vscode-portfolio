@@ -1,6 +1,7 @@
 ---
 // Project cards: photo, dates, title and role, summary, the résumé bullets verbatim, tags,
-// and Write-up / Code / Demo buttons, each shown only when its target exists.
+// and Write-up / Code / Demo buttons, each shown only when its target exists. The title links
+// to the project's résumé URL, as on the PDF; Code may point at Lisul's own commits instead.
 // Photos come in 640 px and 360 px widths (<name>.webp, <name>-360.webp). The first card's
 // photo can be in a phone's first viewport, so it is not lazy-loaded.
 // A project's photo and demo come from its write-up's front matter, or from home.md for a
@@ -36,7 +37,7 @@ const writeups = new Map((await getCollection("writeups")).map((w) => [w.id, w.d
         )}
         <div>
           <p class="dates">{p.dates}</p>
-          <h3>{p.title}{p.role && <span class="role"> · {p.role}</span>}</h3>
+          <h3><a href={p.url}>{p.title}</a>{p.role && <span class="role"> · {p.role}</span>}</h3>
           {extra.summary && <p class="summary">{extra.summary}</p>}
           <ul class="bullets">{p.bullets.map((b) => <li>{b}</li>)}</ul>
           <Tags items={p.stack} />
