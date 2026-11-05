@@ -42,15 +42,15 @@ const svgEl = (tag, attrs) => {
 function strip(day, target) {
   const s = sleepStrip(state.sleep, day, SHEET.timeZone);
   const l = stripLayout(s, target);
-  const box = svgEl("svg", { class: "sheet-strip", viewBox: "0 0 280 100", role: "img" });
-  box.setAttribute("aria-label", l ? `Bedtime and wake, 7 nights to ${day}${target != null ? ", against your bedtime target" : ""}` : "No nights synced this week");
+  const box = svgEl("svg", { class: "sheet-sleepweek", viewBox: "0 0 280 100", role: "img" });
+  box.setAttribute("aria-label", l ? `Bedtime and wake, the 7 nights to ${dayLabel(day).weekday} ${dayLabel(day).date}${target != null ? ", against your bedtime target" : ""}` : "No nights synced this week");
   if (!l) return { box, spread: "A few more nights to show your week." };
   for (const r of l.rows) {
-    box.append(Object.assign(svgEl("text", { x: 0, y: r.y + 9, class: "sheet-strip-day" }), { textContent: r.label }));
-    if (r.x1 != null) box.append(svgEl("rect", { x: r.x1, y: r.y + 2, width: Math.max(2, r.x2 - r.x1), height: 8, rx: 4, class: "sheet-strip-bar" }));
+    box.append(Object.assign(svgEl("text", { x: 0, y: r.y + 9, class: "sheet-sleepweek-day" }), { textContent: r.label }));
+    if (r.x1 != null) box.append(svgEl("rect", { x: r.x1, y: r.y + 2, width: Math.max(2, r.x2 - r.x1), height: 8, rx: 4, class: "sheet-sleepweek-bar" }));
   }
-  for (const t of l.ticks) box.append(Object.assign(svgEl("text", { x: t.x, y: 98, class: "sheet-strip-tick", "text-anchor": "middle" }), { textContent: t.label }));
-  if (l.target != null) box.append(svgEl("line", { x1: l.target, x2: l.target, y1: 0, y2: 86, class: "sheet-strip-target" }));
+  for (const t of l.ticks) box.append(Object.assign(svgEl("text", { x: t.x, y: 98, class: "sheet-sleepweek-tick", "text-anchor": "middle" }), { textContent: t.label }));
+  if (l.target != null) box.append(svgEl("line", { x1: l.target, x2: l.target, y1: 0, y2: 86, class: "sheet-sleepweek-target" }));
   return { box, spread: spreadLine(s.spread) ?? "" };
 }
 

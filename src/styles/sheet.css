@@ -31,11 +31,13 @@
 .is-today .sheet-head { border-bottom-color: var(--accent); }
 .is-today .sheet-wd, .is-today .sheet-dt, .sheet-alldone { color: var(--accent); }
 .sheet-stamps { margin: 0.2rem 0 0; min-height: 1.2rem; color: var(--muted); font-size: 0.75rem; }
+/* The stamps row holds the stamps, the Oura chips and wind-down; it stays its column's width. */
+.sheet-stamps-row { min-width: 0; }
 /* A day's Oura chips (oura-day.mjs): one quiet tabular line, the scores in Oura's band colours. */
 .sheet-oura {
-  display: flex; align-items: center; gap: 0.3rem; max-width: 100%; margin: 0.15rem 0 0; padding: 0.05rem 0.2rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.1rem 0.3rem; max-width: 100%; margin: 0.15rem 0 0; padding: 0.05rem 0.2rem;
   background: none; border: 0; border-radius: 0.25rem; color: var(--muted); font: inherit; font-size: 0.75rem;
-  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; cursor: pointer;
+  font-variant-numeric: tabular-nums; white-space: nowrap; text-align: left; cursor: pointer;
 }
 .sheet-oura:hover { background: var(--chip); }
 .sheet-oura .sheet-icon { width: 0.8rem; height: 0.8rem; }
@@ -48,17 +50,17 @@
 .sheet-oura-list dt { color: var(--muted); }
 .sheet-oura-list dd { margin: 0; text-align: right; }
 .sheet-oura-list .sheet-spark { width: 3rem; height: 0.9rem; color: var(--muted); }
-.sheet-oura-note { color: var(--muted); }
+.sheet-oura-note { flex-basis: 100%; color: var(--muted); white-space: normal; }
 .sheet-oura-h { font-size: 0.875rem; margin: 0.75rem 0 0.35rem; }
 .sheet-oura-tips { margin: 0; padding-left: 1rem; font-size: 0.875rem; }
 .sheet-oura-tips li { margin-bottom: 0.35rem; }
 .sheet-oura-tip-for { color: var(--muted); font-variant-numeric: tabular-nums; }
-.sheet-strip { display: block; width: 100%; height: auto; font-size: 8px; }
-.sheet-strip-day, .sheet-strip-tick { fill: var(--muted); font-family: var(--sans); }
-.sheet-strip-bar { fill: var(--accent); opacity: 0.75; }
-.sheet-strip-target { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 2; }
+.sheet-sleepweek { display: block; width: 100%; height: auto; font-size: 8px; }
+.sheet-sleepweek-day, .sheet-sleepweek-tick { fill: var(--muted); font-family: var(--sans); }
+.sheet-sleepweek-bar { fill: var(--accent); opacity: 0.75; }
+.sheet-sleepweek-target { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 3 2; }
 /* Wind-down: today's bedtime line, thin and quiet (bedtime.mjs). */
-.sheet-winddown { margin: 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; border-left: 2px solid var(--line-strong); padding-left: 0.4rem; }
+.sheet-winddown { margin: 0.1rem 0 0.2rem; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; border-left: 2px solid var(--line-strong); padding-left: 0.4rem; }
 
 .sheet-rows { list-style: none; }
 /* Side by side, each day's head, stamps, calendar and tasks share the week's grid rows, so the
@@ -66,7 +68,7 @@
    whole week too (--rows, set when the week is drawn), so when a long title wraps, that row
    grows in every column and the lines stay level. */
 @media (min-width: 48.01rem) {
-  .sheet-day { display: grid; grid-template-rows: subgrid; align-content: start; }
+  .sheet-day { display: grid; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); align-content: start; }
   .sheet-planner .sheet-day { grid-row: span calc(3 + var(--rows, 1)); }
   .sheet-week-public .sheet-day { grid-row: span calc(2 + var(--rows, 1)); }
   .sheet-day > .sheet-rows { display: grid; grid-template-columns: minmax(0, 1fr); grid-row: span var(--rows, 1); grid-template-rows: subgrid; }

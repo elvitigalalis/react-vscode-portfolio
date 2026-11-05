@@ -424,9 +424,12 @@ function dayColumn(day, rows, items) {
       el("span", { className: "sheet-dt", textContent: date }),
       allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
       day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
-    el("p", { className: "sheet-stamps", textContent: marks }),
-    day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
-    day === state.today ? windDownMark() : null,
+    // The stamps row of the week's grid (sheet.css, subgrid): the Oura chips and wind-down sit in
+    // it, so every column's tasks still start level.
+    el("div", { className: "sheet-stamps-row" },
+      el("p", { className: "sheet-stamps", textContent: marks }),
+      day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
+      day === state.today ? windDownMark() : null),
     ul);
   section.dataset.day = day;
   return section;
@@ -447,7 +450,7 @@ function ouraChips(day, when) {
     c.icon ? icon(c.icon) : null,
     el("span", { className: c.band ? `is-${c.band}` : "", textContent: c.text }),
   ]);
-  for (const x of extra) kids.push(el("span", { className: "sheet-oura-sep", textContent: "·" }), el("span", { className: "sheet-oura-note", textContent: x }));
+  if (extra.length) kids.push(el("span", { className: "sheet-oura-note", textContent: extra.join(" · ") }));
   const label = `${chipsLabel(chips, when).replace(/\. Open details$/, "")}${extra.length ? `; ${extra.join("; ")}` : ""}. Open details`;
   const button = el("button", { type: "button", className: "sheet-oura", ariaLabel: label }, ...kids);
   button.dataset.act = "oura-day";
@@ -460,7 +463,10 @@ function ouraChips(day, when) {
 function windDownMark() {
   const tz = SHEET.timeZone;
   const b = bedtimeFor(tonight(new Date(), tz), { settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
-  return b ? el("p", { className: "sheet-winddown", textContent: bedtimeMarker(b, ouraWindow(tonight(new Date(), tz), state.sleepTimes)) }) : null;
+  if (!b) return null;
+  // Oura's window and hint go in its hover text, and in Settings, to keep the line short.
+  const full = bedtimeMarker(b, ouraWindow(tonight(new Date(), tz), state.sleepTimes));
+  return el("p", { className: "sheet-winddown", textContent: bedtimeMarker(b), title: full });
 }
 
 function listColumn(name) {
