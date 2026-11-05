@@ -17,7 +17,7 @@
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../../../src/sheet/nudges.mjs";
-import { localNow } from "../../../src/sheet/logic.mjs";
+import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
@@ -82,7 +82,11 @@ async function snapshot(now: Date) {
   // and sleep, for the brief's cap line. None until the Oura schema has run.
   const sleep = await db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
   const [sleepDay = null] = await db(`sleep_days?select=day,readiness,sleep_s&day=eq.${today}`).catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay };
+  // Wind-down: Oura's bedtime windows, and the night's Wind down and Bedtime rows since yesterday
+  // (after midnight, tonight's log day is yesterday's).
+  const sleepTimes = await db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []);
+  const nightLog = await db(`nudges?select=kind,day,send_at,sent_at&kind=in.(wind_down,bedtime)&day=gte.${addDays(today, -1)}`).catch(() => []);
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for

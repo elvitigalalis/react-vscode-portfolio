@@ -12,6 +12,7 @@ import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, 
 import { paceKind } from "./pace.mjs";
 import { REASON_WORDS } from "./replan.mjs";
 import { dayCap, isWeekend, wakeProfile } from "./sleep.mjs";
+import { bedtimeFor, nightAt, tonight } from "./bedtime.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -56,8 +57,10 @@ const PLAN_URL = `${ORIGIN}/plan/`;
 // and a button has either a url or callback data ("done:<block id>", "snooze:<block id>").
 export function whatToSend(snapshot, now) {
   if (!telegramOn(snapshot.settings)) return [];
+  // Wind-down's two messages go through quiet hours, on a budget of their own.
+  const night = windDownMessages(snapshot, now);
   const day = dayOf(snapshot, now);
-  if (day.minutes < day.openAt || day.minutes >= QUIET_FROM) return [];
+  if (day.minutes < day.openAt || day.minutes >= QUIET_FROM) return night;
   // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
   // wake syncs, so it goes once a day, whenever it went.
   const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
@@ -67,14 +70,47 @@ export function whatToSend(snapshot, now) {
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
   let { kept, used, held } = budget(day);
   let checks = day.log.filter((n) => n.kind === "finished").length;
-  return due.filter((m) => {
+  return [...due.filter((m) => {
     if (m.kind === "finished") return checks++ < FINISHED_BUDGET;
     if (!BUDGETED.includes(m.kind) || m.kind === "snooze") return true;
     if (m.kind === "start" && kept.has(m.block_id)) held--;
     if (used + held >= BUDGET) return false;
     used++;
     return true;
-  });
+  }), ...night];
+}
+
+// --- Wind-down (docs/sheet-v5.md, "Wind-down") -----------------------------------------------
+
+// At most two a night, Wind down and Bedtime, outside the nudge budget. A late run sends Wind
+// down until bedtime and Bedtime until 30 minutes after it.
+export const WIND_DOWN_BUDGET = 2;
+const BEDTIME_LATE = 30 * 60_000;
+const NIGHT_KINDS = ["wind_down", "bedtime"];
+
+// Tonight's (bedtime.mjs): "Wind down" at bedtime - 60 and "Bedtime" at bedtime, each once a
+// night, by kind and the night's day in snapshot.nightLog (the nudges rows of those kinds since
+// yesterday). None once a synced Oura sleep began after wind-down started, and none without a
+// bedtime (wind-down off, or no target and no Oura window). Plain text, no buttons.
+function windDownMessages(snapshot, now) {
+  const tz = snapshot.settings.time_zone;
+  const n = tonight(now, tz);
+  const bed = bedtimeFor(n, { settings: snapshot.settings, sleep: snapshot.sleep ?? [], sleepTimes: snapshot.sleepTimes ?? [], tz });
+  if (!bed) return [];
+  const t = now.getTime();
+  const windAt = nightAt(n, bed.wind_down, tz), bedAt = nightAt(n, bed.minutes, tz);
+  if ((snapshot.sleep ?? []).some((r) => r.type !== "deleted" && Date.parse(r.bedtime_start) <= t && Date.parse(r.bedtime_end) > Date.parse(windAt))) return [];
+  const sent = (snapshot.nightLog ?? []).filter((r) => NIGHT_KINDS.includes(r.kind) && r.day === n);
+  const msg = (kind, send_at, text) => ({ kind, block_id: null, day: n, send_at, text, buttons: [] });
+  const out = [];
+  const lightsOut = formatClock(bed.minutes % 1440);
+  if (t >= Date.parse(windAt) && t < Date.parse(bedAt) && !sent.some((r) => r.kind === "wind_down")) {
+    out.push(msg("wind_down", windAt, `Wind down: lights out at ${lightsOut}. Wrap up and put the screens away.`));
+  }
+  if (t >= Date.parse(bedAt) && t < Date.parse(bedAt) + BEDTIME_LATE && !sent.some((r) => r.kind === "bedtime")) {
+    out.push(msg("bedtime", bedAt, "Bedtime: lights out now. Sleep well."));
+  }
+  return out.slice(0, Math.max(0, WIND_DOWN_BUDGET - sent.length));
 }
 
 // The day as the rules see it. Proposed blocks aren't part of the plan until approved: they
