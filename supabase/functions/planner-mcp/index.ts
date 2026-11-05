@@ -100,6 +100,8 @@ const ProposalInput = z.object({
   note: line.nullish(),
   // v5 D2: the task ids of at-risk tasks that couldn't fit (checkProposal checks each).
   couldnt_fit: z.array(z.string().max(64)).max(50).default([]),
+  // The ids of plan_day's untimed tasks that couldn't fit, moved to the next day.
+  next_day: z.array(z.string().max(64)).max(50).default([]),
   // v5 H1: habit blocks, each at a start within its ideal ± flex (checkProposal checks it).
   habits: z.array(z.object({ habit_id: z.string().max(64), start: z.string().max(5) })).max(50).default([]),
   // v5 A1: tasks to add from assessment and interview mail, one per needs_you item.
@@ -120,7 +122,9 @@ function plannerServer(db: Db) {
   server.registerTool("read_planner", {
     description: "Read the day to plan: plan_day (today, or tomorrow from 3 pm; a replan run always plans the rest of today), read_at (when this was read; pass it to submit_proposal), its shutdown time, the plan " +
       "window (blocks go only inside it), its tasks (with tasks at risk and course tasks due within 7 days; tasks " +
-      "turned down today are left out), blocks (proposed: false is approved and locked, treat it as busy), busy " +
+      "turned down today are left out), blocks (proposed: false is approved and locked, treat it as busy; proposed: true " +
+      "with auto: true is an earlier revision's block not yet started, which your revision replaces, so give its task a " +
+      "block again), auto_approve (whether your revision is approved as soon as it is saved), busy " +
       "times, campus events, Lisul's interests, the day's newest proposal revision, the Needs you rows still open, " +
       "the connected mail accounts, the day rules (workload cap, breaks, travel time), the day's habits (firm " +
       "first, then flexible) and the hourly weather " +
@@ -163,7 +167,8 @@ function plannerServer(db: Db) {
       "there is none), read_at (read_planner's read_at, as given), blocks ({ task_id, start: \"HH:MM\", minutes }) inside the plan window and clear of approved " +
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
-      "at-risk tasks that couldn't fit, habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
+      "at-risk tasks that couldn't fit, next_day, the ids of plan_day's untimed tasks that couldn't fit, which move " +
+      "to the next day so its plan times them, habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
       "time ± flex_min and running its minutes (a habit that can't fit is left out), and suggested tasks ({ account, " +
       "message_id, title, due, kind: assessment | interview }) for Needs you items from assessment or " +
       "interview-scheduling senders, which become Inbox tasks only when Lisul approves; event_todos ({ calendar_id, " +
@@ -173,8 +178,8 @@ function plannerServer(db: Db) {
       "from read_planner's day_rules: the workload cap (task blocks only; habits stay out of it), a break after " +
       "every 90 minutes in a row and travel time around busy times. It is checked against a fresh " +
       "read_planner: on { ok: false, errors } nothing was saved, so fix each error and submit again. On " +
-      "{ ok: true, rev } the revision waits for Lisul to approve it; submitting again (replaces: that rev) " +
-      "supersedes it. " + UNTRUSTED,
+      "{ ok: true, rev, approved } the revision is approved at once when approved is true (auto_approve), and " +
+      "otherwise waits for Lisul to approve it; submitting again (replaces: that rev) supersedes it. " + UNTRUSTED,
     inputSchema: ProposalInput,
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   }, async (input: Proposal) => {
@@ -192,8 +197,16 @@ function plannerServer(db: Db) {
       rows.window_from = snap.window.from;
       const { data: rev, error } = await db.rpc("apply_proposal", rows);
       if (error) return failed(`apply_proposal: ${error.message}`);
+      // Auto-approval (docs/sheet-v5.md): approved at once, as Approve all does, with its blocks
+      // marked auto so a later revision may still move them until they start. Should it fail,
+      // the revision stays saved and pending, for Lisul to approve.
+      const auto = snap.auto_approve ? await db.rpc("auto_approve_proposal", { d: rows.d, rev }) : null;
+      // Untimed tasks that couldn't fit move to the next day, so its plan times them.
+      const moved = check.next_day?.length ? await db.rpc("move_to_next_day", { d: rows.d, ids: check.next_day }) : null;
       return { content: [text({
-        ok: true, rev, blocks: rows.blocks.length, habits: rows.habit_blocks.length, needs_you: rows.needs.length,
+        ok: true, rev, approved: Boolean(auto && !auto.error), ...(auto?.error ? { approve_error: auto.error.message } : {}),
+        ...(moved ? (moved.error ? { next_day_error: moved.error.message } : { next_day: moved.data }) : {}),
+        blocks: rows.blocks.length, habits: rows.habit_blocks.length, needs_you: rows.needs.length,
         dropped: check.dropped.map((x: { message_id: string }) => x.message_id),
         ...await saveEventTitles(db, snap.plan_day, input.event_todos),
       })] };

@@ -160,6 +160,9 @@ export function planSnapshot(rows, now) {
     plan_day: day,
     shutdown,
     run: runOf(rows, now, day),
+    // Auto-approval: submit_proposal approves the revision at once (settings.auto_approve, on
+    // unless he turned it off).
+    auto_approve: settings.auto_approve !== false,
     window: { from: windowFrom(now, day, tz, profile), to: wind.to },
     turned_down: turnedDown,
     tasks,
@@ -547,6 +550,7 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
   const couldntFit = v5 ? couldntFitIds(input, snapshot, errors) : null;
   const suggested = v5 ? suggestedTasks(input, errors) : null;
   const readAt = v5 ? readAtOf(input, snapshot, errors) : null;
+  const nextDay = v5 ? nextDayIds(input, snapshot, blocks, errors) : null;
 
   if (!v5) return errors.length ? { ok: false, errors, rows: null } : { ok: true, errors: [], rows: { d: day, blocks, needs, picks, note } };
   if (errors.length) return { ok: false, errors, rows: null, dropped: [] };
@@ -556,7 +560,32 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
     ok: true, errors: [],
     rows: { d: day, replaces, blocks, habit_blocks: habitBlocks.rows, needs: kept.needs, picks, note, couldnt_fit: couldntFit, suggested: kept.suggested, run_trigger, reasons, ...(readAt ? { read_at: readAt } : {}) },
     dropped: kept.dropped,
+    // Not one of apply_proposal's arguments: planner-mcp moves these after it (move_to_next_day).
+    next_day: nextDay,
   };
+}
+
+// next_day: the ids of plan_day's untimed tasks that couldn't fit, which move to the next day so
+// its plan times them. Each must be on plan_day, with no fixed time, no approved block and no
+// block in this revision.
+function nextDayIds(input, snapshot, blocks, errors) {
+  const ids = list(input?.next_day);
+  if (!Array.isArray(ids)) return errors.push("next_day: must be a list of task ids"), [];
+  const tasks = new Map(snapshot.tasks.map((t) => [t.id, t]));
+  const placed = new Set(blocks.map((b) => b.task_id));
+  const locked = new Set(snapshot.blocks.filter((b) => !b.proposed).map((b) => b.task_id));
+  const out = [];
+  ids.forEach((id, i) => {
+    const name = `next_day[${i}]`;
+    const t = tasks.get(id);
+    if (!t) errors.push(`${name}: not one of the tasks read_planner gave`);
+    else if (t.day !== snapshot.plan_day) errors.push(`${name}: ${id} is not on ${snapshot.plan_day}, so it can't move to the next day`);
+    else if (t.at_time) errors.push(`${name}: ${id} is fixed at ${t.at_time.slice(0, 5)}, so it stays`);
+    else if (placed.has(id)) errors.push(`${name}: ${id} has a block in this revision, so it stays`);
+    else if (locked.has(id)) errors.push(`${name}: ${id} already has an approved block, so it stays`);
+    else if (!out.includes(id)) out.push(id);
+  });
+  return out;
 }
 
 // read_at, the read_planner snapshot's time the run submits against: optional (without it

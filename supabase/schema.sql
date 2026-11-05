@@ -861,6 +861,25 @@ begin
 end $$;
 revoke execute on function auto_approve_proposal(date, int) from public, anon;
 grant execute on function auto_approve_proposal(date, int) to authenticated;
+-- A revision's untimed tasks that couldn't fit (checkProposal's next_day) move to the bottom of
+-- the next day, so its plan times them. Not a roll: rolls counts missed days, and these weren't.
+-- Returns how many moved.
+create or replace function move_to_next_day(d date, ids uuid[]) returns int
+language plpgsql security invoker set search_path = public as $$
+declare
+  base double precision;
+  n int;
+begin
+  select coalesce(max(t.position), 0) into base from tasks t where t.day = d + 1;
+  update tasks t set day = d + 1, position = base + r.k
+  from (select x.id, row_number() over (order by x.position) as k from tasks x
+        where x.id = any(ids) and x.day = d and not x.done and x.at_time is null) r
+  where t.id = r.id;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+revoke execute on function move_to_next_day(date, uuid[]) from public, anon;
+grant execute on function move_to_next_day(date, uuid[]) to authenticated;
 
 -- /plan's × on a proposed block: it goes, and its task stays turned down for the rest of the day.
 create or replace function turn_down(d date, task uuid) returns void

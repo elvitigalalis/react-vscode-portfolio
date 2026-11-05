@@ -330,3 +330,39 @@ test("planSnapshot: an auto-approved block not yet started is the plan's to move
   assert.equal(checkProposal(input("14:00"), s).ok, true, checkProposal(input("14:00"), s).errors?.join("; "));
   assert.match(checkProposal(input("15:00"), s).errors.join("\n"), /overlaps an approved block/);
 });
+
+test("planSnapshot: auto_approve says whether a submitted revision is approved at once (on unless turned off)", () => {
+  const at = (settings) => planSnapshot(v5Rows({ settings: { time_zone: "America/New_York", ...settings } }), new Date("2026-11-04T14:07:00Z")).auto_approve;
+  assert.equal(at({}), true);
+  assert.equal(at({ auto_approve: true }), true);
+  assert.equal(at({ auto_approve: false }), false);
+});
+
+// --- Every untimed to-do gets a time, or moves to the next day ------------------------------
+
+test("checkProposal: next_day moves plan_day's untimed tasks that couldn't fit, and nothing else", () => {
+  const s = planSnapshot(v5Rows({
+    tasks: [
+      { id: "t1", title: "OS homework", day: DAY, done: false, est_min: 45 },
+      { id: "t2", title: "Laundry", day: DAY, done: false, est_min: 30 },
+      { id: "t3", title: "Call", day: DAY, done: false, est_min: 15, at_time: "16:00:00" },
+      { id: "t4", title: "Essay", day: "2026-11-06", done: false, est_min: 60, source: "brightspace", due: "2026-11-06" },
+      { id: "t5", title: "Slides", day: DAY, done: false, est_min: 60 },
+    ],
+    blocks: [{ task_id: "t5", starts_at: "2026-11-04T20:00:00Z", ends_at: "2026-11-04T21:00:00Z", proposed: false }],
+    days: [{ day: DAY, shutdown_at: null, turned_down: [] }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  const submit = (next_day) => checkProposal({ version: 5, day: DAY, replaces: 2, blocks: [{ task_id: "t1", start: "10:00", minutes: 45 }], next_day, needs_you: [], picks: [] }, s);
+  const ok = submit(["t2"]);
+  assert.equal(ok.ok, true, ok.errors?.join("; "));
+  assert.deepEqual(ok.next_day, ["t2"]);
+  assert.equal("next_day" in ok.rows, false); // not one of apply_proposal's arguments
+  assert.deepEqual(submit(undefined).next_day, []);
+  assert.deepEqual(submit(["t1", "t3", "t4", "t5", "nope"]).errors, [
+    "next_day[0]: t1 has a block in this revision, so it stays",
+    "next_day[1]: t3 is fixed at 16:00, so it stays",
+    "next_day[2]: t4 is not on 2026-11-04, so it can't move to the next day",
+    "next_day[3]: t5 already has an approved block, so it stays",
+    "next_day[4]: not one of the tasks read_planner gave",
+  ]);
+});

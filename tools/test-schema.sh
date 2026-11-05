@@ -448,6 +448,28 @@ begin
   raise notice '✓ auto-approval: approves as Approve all, and the next revision moves only auto blocks ahead';
 end $$;
 
+-- move_to_next_day: the untimed, undone tasks named on d go to the bottom of d + 1, unrolled;
+-- a fixed-time, done or other day's task stays.
+do $$
+declare
+  d date := sheet_today() + 8;
+begin
+  insert into tasks (id, title, day, position) values ('00000000-0000-4000-8000-0000000000d9', 'Already there', d + 1, 4);
+  insert into tasks (id, title, day, position, at_time, done) values
+    ('00000000-0000-4000-8000-0000000000d1', 'Slides', d, 2, null, false),
+    ('00000000-0000-4000-8000-0000000000d2', 'Read', d, 1, null, false),
+    ('00000000-0000-4000-8000-0000000000d3', 'Call', d, 3, '16:00', false),
+    ('00000000-0000-4000-8000-0000000000d4', 'Done', d, 4, null, true);
+  if move_to_next_day(d, array['00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000d2',
+      '00000000-0000-4000-8000-0000000000d3', '00000000-0000-4000-8000-0000000000d4', '00000000-0000-4000-8000-0000000000d9']::uuid[]) <> 2
+    then raise exception 'move_to_next_day did not move exactly two tasks'; end if;
+  if (select array_agg(title order by position) from tasks where day = d + 1) <> array['Already there', 'Read', 'Slides']
+    or exists (select 1 from tasks where day = d + 1 and rolls > 0)
+    or (select count(*) from tasks where day = d) <> 2
+    then raise exception 'move_to_next_day moved the wrong tasks or rolled them'; end if;
+  raise notice '✓ move_to_next_day: untimed undone tasks go to the bottom of the next day, unrolled';
+end $$;
+
 do $$
 declare
   d date := sheet_today() + 6;
