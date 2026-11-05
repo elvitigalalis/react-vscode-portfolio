@@ -12,6 +12,7 @@ summary: >-
   new-grad roles, and the GitHub Actions workflow that imports its results into PostgreSQL.
   Routine runs fell from 9.5 to about 3 minutes with every site paced as before, and the
   workflow's dry run on pull requests caught a database schema mismatch before it merged.
+code: https://github.com/workitjobs/workit/tree/main/scraper
 photo:
   src: /images/workit.webp
   alt: WorkIt's job board, listing internship postings with location, pay and start date beside a match score for each

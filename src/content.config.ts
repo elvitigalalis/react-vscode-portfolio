@@ -16,6 +16,9 @@ const writeups = defineCollection({
     photo: z.object({ src: z.string(), alt: z.string() }).optional(),
     // The card's and the header's Demo or Video button, label and all.
     demo: z.object({ url: z.string(), label: z.string() }).optional(),
+    // The card's and the header's Code link, when it should land on Lisul's own work rather than
+    // the résumé's repo link (resume.json mirrors the PDF, so its url stays as the PDF has it).
+    code: z.string().optional(),
     // Click-to-play clip under the summary: muted, captioned, never preloaded.
     video: z
       .object({
