@@ -57,8 +57,7 @@ export function setupMessages(root) {
     form.hidden = false;
     rows = await api.recentMessages();
     showAll();
-    // Open while something is on its way or just came back.
-    recent.open = rows.some((m) => m.status === "pending" || Date.now() - Date.parse(m.at) < 3_600_000);
+    // The list starts closed; sending a message opens it (send).
     for (const m of rows) if (messageState(m, rows, new Date()).key === "reading") poll(m.id);
     return createLeftovers();
   }).catch((e) => console.error(e));
