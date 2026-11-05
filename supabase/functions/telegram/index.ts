@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
     const replan = await replanTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // Nor must a receipt for a text to the bot.
     const receipted = await receipts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now)), replan, receipts: receipted });
+    const hook = await ensureWebhook().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    return Response.json({ ...(await send(now)), replan, receipts: receipted, hook });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -403,6 +404,26 @@ async function tap(update: unknown, now: Date) {
   await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
   await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN }).catch(() => {});
+}
+
+// The webhook must ask for texts as well as taps, or Telegram never delivers a text to the bot
+// (docs/sheet-messages.md, "From Telegram"). A webhook set before texts were handled asked for
+// callback_query only, so the minute tick checks it and widens it in place, keeping its URL and
+// secret. getWebhookInfo leaves allowed_updates out when it is the default, which includes
+// message. https://core.telegram.org/bots/api#getwebhookinfo, #setwebhook
+const UPDATES = ["callback_query", "message"];
+let hookChecked = false;
+async function ensureWebhook() {
+  if (hookChecked || !WEBHOOK_SECRET) return "checked";
+  const info = await telegram("getWebhookInfo", {});
+  const allowed: string[] | undefined = info.allowed_updates;
+  if (!info.url || !allowed || UPDATES.every((u) => allowed.includes(u))) {
+    hookChecked = true;
+    return info.url ? "ok" : "no webhook";
+  }
+  await telegram("setWebhook", { url: info.url, secret_token: WEBHOOK_SECRET, allowed_updates: UPDATES });
+  hookChecked = true;
+  return "widened";
 }
 
 async function telegram(method: string, body: unknown) {
