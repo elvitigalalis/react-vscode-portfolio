@@ -4,7 +4,7 @@
 // The toggles keep one label and say their state with aria-pressed, as Replans does.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { bedtimeFor, bedtimeStatus, tonight } from "./bedtime.mjs";
+import { bedtimeFor, bedtimeStatus, ouraWindow, ouraWindowLine, tonight } from "./bedtime.mjs";
 import { actHooks, failed, render, settingsHooks, state } from "./planner.mjs";
 
 let root;
@@ -17,8 +17,11 @@ function draw() {
   $('[data-act="bedtime-ease"]').setAttribute("aria-pressed", String(s.bedtime_ease !== false));
   $('[data-act="wind-down"]').setAttribute("aria-pressed", String(s.wind_down_on !== false));
   const tz = SHEET.timeZone;
-  const b = bedtimeFor(tonight(new Date(), tz), { settings: s, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
-  $("[data-bedtime-note]").textContent = bedtimeStatus(b, s);
+  const n = tonight(new Date(), tz);
+  const b = bedtimeFor(n, { settings: s, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
+  // Oura's own window and hint, when it has one ("Oura: 12:15–12:45 am, earlier bedtime").
+  const w = ouraWindowLine(ouraWindow(n, state.sleepTimes));
+  $("[data-bedtime-note]").textContent = [bedtimeStatus(b, s), w].filter(Boolean).join(" · ");
 }
 
 async function save(patch) {

@@ -130,6 +130,15 @@ import "../../styles/sheet.css";
     <dialog class="sheet-dialog sheet-oura-dialog" data-oura-day aria-labelledby="sheet-oura-day-title">
       <h2 id="sheet-oura-day-title">Oura</h2>
       <dl class="sheet-oura-list" data-oura-list></dl>
+      <section data-oura-tips hidden aria-labelledby="sheet-oura-tips-title">
+        <h3 id="sheet-oura-tips-title" class="sheet-oura-h">How to raise it</h3>
+        <ul class="sheet-oura-tips" data-oura-tip-list></ul>
+      </section>
+      <section aria-labelledby="sheet-oura-week-title">
+        <h3 id="sheet-oura-week-title" class="sheet-oura-h">Sleep this week</h3>
+        <div data-oura-strip></div>
+        <p class="small" data-oura-spread></p>
+      </section>
       <p class="small">From your Oura ring. Only you see these.</p>
       <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
     </dialog>
@@ -181,6 +190,7 @@ import "../../styles/sheet.css";
         <p class="small">No block or habit goes in the hour before bed, and Telegram says when to wind down and when it's bedtime. With no bedtime set, Oura's suggested one is used when it has one.</p>
         <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn" data-act="bedtime-ease" aria-pressed="true">Ease in</button> <button type="button" class="sheet-btn" data-act="wind-down" aria-pressed="true">Wind-down</button> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
         <p class="small" role="status" data-bedtime-note></p>
+        <p><button type="button" class="sheet-link" data-act="oura-week">Sleep this week</button></p>
       </section>
 
       <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->

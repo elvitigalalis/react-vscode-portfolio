@@ -177,11 +177,13 @@ export const deleteCalendarAccount = () => rest("calendar_account?id=eq.true", {
 // Oura (docs/sheet-v5.md, "Oura"): the grant's row and the sleep periods oura-sync keeps, read
 // here; connecting goes through oura-connect. Deleting the row deletes its tokens and every sleep
 // row (a trigger). Before the Oura schema has run, there is no row and no sleep.
-export const ouraAccount = async () => (await rest("oura_account?select=connected_at,synced_at,last_error").catch(() => []))[0] ?? null;
+export const ouraAccount = async () => (await rest("oura_account?select=connected_at,synced_at,last_error,workouts_ok").catch(() => []))[0] ?? null;
 export const deleteOuraAccount = () => rest("oura_account?id=eq.true", { method: "DELETE" });
 export const listSleep = () => rest("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []);
 // A week's Oura day numbers for /plan's chips, and the 6 days before it for the sparklines.
 export const listSleepDays = (from, to) => rest(`sleep_days?select=*&day=gte.${from}&day=lte.${to}&order=day`).catch(() => []);
+// The ring's strength and generic workouts (oura-sync), for the gym page's "Ring: 1h 12m".
+export const listRingWorkouts = (from) => rest(`ring_workouts?select=day,starts_at,ends_at,activity&day=gte.${from}&order=starts_at`).catch(() => []);
 // Wind-down: Oura's bedtime windows, for tonight's bedtime without a target.
 export const listSleepTimes = () => rest("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []);
 

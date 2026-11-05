@@ -24,7 +24,9 @@ async function draw() {
   const [account, nights] = await Promise.all([api.ouraAccount(), api.listSleep()]);
   state.sleep = nights;
   $("[data-oura-status]").textContent = ouraStatus(account, wakeProfile(nights, new Date(), SHEET.timeZone), new Date());
-  $("[data-oura-error]").textContent = account?.last_error ? `Last error: ${account.last_error}. Reconnect to fix.` : "";
+  // A grant from before workouts were asked for can't read them (oura-sync marks workouts_ok).
+  $("[data-oura-error]").textContent = account?.last_error ? `Last error: ${account.last_error}. Reconnect to fix.`
+    : account?.workouts_ok === false ? "Reconnect to add workouts, so a ring workout ticks your Gym habit." : "";
   $('[data-act="oura-connect"]').textContent = account ? "Reconnect" : "Connect";
   $('[data-act="oura-disconnect"]').hidden = !account;
 }

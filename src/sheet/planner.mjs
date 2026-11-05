@@ -10,8 +10,9 @@ import {
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart } from "./sleep.mjs";
-import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
-import { chipsLabel, dayChips } from "./oura-day.mjs";
+import { bedtimeFor, bedtimeMarker, ouraWindow, tonight } from "./bedtime.mjs";
+import { chipsLabel, dayChips, lateNap } from "./oura-day.mjs";
+import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 
@@ -62,7 +63,7 @@ export const state = {
   settings: null,   // the settings row
   sleep: [],        // Oura: the sleep_nights rows, for when each day starts
   sleepTimes: [],   // Wind-down: Oura's bedtime windows (sleep_times)
-  sleepDays: [],    // Oura: the week's sleep_days rows (and the 6 days before), for the chips
+  sleepDays: [],    // Oura: the week's sleep_days rows (and the 13 days before), for the chips and tips
   events: [],       // the week's Google events, never saved
   todoEvents: [],   // the same with "Time blocks" too, for event to-dos (never saved)
   todos: [],        // event_todos rows: done, hidden and Claude's titles
@@ -433,15 +434,22 @@ function dayColumn(day, rows, items) {
 
 // Oura (oura-day.mjs): a past day's or today's "☾ 82 · ⚡ 86 · 7h 40m", a button that opens the
 // day's numbers; nothing on future days or without a row.
+// Today's also says a late nap ("late nap 5:10–6:20 pm") and "1 tip" when there is one.
 function ouraChips(day, when) {
   const chips = dayChips(state.sleepDays.find((r) => r.day === day));
   if (!chips.length) return null;
+  const today = day === state.today;
+  const nap = today ? lateNap(state.sleep, day, SHEET.timeZone) : null;
+  const tips = today ? pickTips(state.sleepDays, day).length : 0;
+  const extra = [nap, tips ? plural(tips, "tip") : null].filter(Boolean);
   const kids = chips.flatMap((c, i) => [
     i ? el("span", { className: "sheet-oura-sep", textContent: "·" }) : null,
     c.icon ? icon(c.icon) : null,
     el("span", { className: c.band ? `is-${c.band}` : "", textContent: c.text }),
   ]);
-  const button = el("button", { type: "button", className: "sheet-oura", ariaLabel: chipsLabel(chips, when) }, ...kids);
+  for (const x of extra) kids.push(el("span", { className: "sheet-oura-sep", textContent: "·" }), el("span", { className: "sheet-oura-note", textContent: x }));
+  const label = `${chipsLabel(chips, when).replace(/\. Open details$/, "")}${extra.length ? `; ${extra.join("; ")}` : ""}. Open details`;
+  const button = el("button", { type: "button", className: "sheet-oura", ariaLabel: label }, ...kids);
   button.dataset.act = "oura-day";
   button.dataset.day = day;
   return button;
@@ -452,7 +460,7 @@ function ouraChips(day, when) {
 function windDownMark() {
   const tz = SHEET.timeZone;
   const b = bedtimeFor(tonight(new Date(), tz), { settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
-  return b ? el("p", { className: "sheet-winddown", textContent: bedtimeMarker(b) }) : null;
+  return b ? el("p", { className: "sheet-winddown", textContent: bedtimeMarker(b, ouraWindow(tonight(new Date(), tz), state.sleepTimes)) }) : null;
 }
 
 function listColumn(name) {
@@ -508,7 +516,7 @@ export async function load() {
     api.listEventTodos(addDays(days[0], -1), addDays(days[6], 1)).catch((e) => { console.error(e); return []; }),
     api.listSleep(),
     api.listSleepTimes(),
-    api.listSleepDays(addDays(days[0], -6), days[6]),
+    api.listSleepDays(addDays(days[0], -13), days[6]),
   ]);
   state.sleepTimes = sleepTimes;
   state.sleepDays = sleepDays;
@@ -529,7 +537,7 @@ export async function load() {
 async function refreshOura() {
   if (document.visibilityState !== "visible" || !state.week) return;
   const days = weekDays(state.week);
-  const [sleepDays, sleep] = await Promise.all([api.listSleepDays(addDays(days[0], -6), days[6]), api.listSleep()]);
+  const [sleepDays, sleep] = await Promise.all([api.listSleepDays(addDays(days[0], -13), days[6]), api.listSleep()]);
   if (JSON.stringify(sleepDays) === JSON.stringify(state.sleepDays) && sleep.length === state.sleep.length) return;
   state.sleepDays = sleepDays;
   state.sleep = sleep;
@@ -857,6 +865,7 @@ function wire() {
       if (act === "settings") return openSettings();
       if (act === "oura-day") return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, e.target.closest("[data-act]").dataset.day), failed);
       if (act === "close-oura-day") return $("[data-oura-day]").close();
+      if (act === "oura-week") { $("[data-settings]").close(); return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, state.today), failed); }
       if (act === "save-interests") return saveInterests();
       if (act === "save-cap") return saveCap();
       if (act === "telegram") return toggleTelegram();
