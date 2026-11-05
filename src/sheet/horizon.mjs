@@ -221,9 +221,10 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
     // The cut from v on day d that would make room for t, or 0 when none is needed.
     const cutAt = (v, d) => {
       const k = kept.get(v.id)?.get(d) ?? 0;
-      const want = up(Math.max(Math.min(need.get(t.id), lim - at(t.id, d)) - Math.max(0, down(free_(d))), 0));
+      const f = Math.max(0, down(free_(d)));
+      const want = up(Math.max(Math.min(need.get(t.id), lim - at(t.id, d)) - f, 0));
       if (!k || want <= 0) return 0;
-      const cut = Math.min(k, Math.max(want, at(t.id, d) ? 0 : Math.min(CHUNK_MIN, need.get(t.id))));
+      const cut = Math.min(k, want);
       return k - cut > 0 && k - cut + (fixed.get(v.id)?.get(d) ?? 0) < CHUNK_MIN ? k : cut;
     };
     // 1 when v could not take the cut back on its other days by its due day (it would cascade).
