@@ -86,7 +86,12 @@ async function snapshot(now: Date) {
   // (after midnight, tonight's log day is yesterday's).
   const sleepTimes = await db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []);
   const nightLog = await db(`nudges?select=kind,day,send_at,sent_at&kind=in.(wind_down,bedtime)&day=gte.${addDays(today, -1)}`).catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog };
+  // Tips: two weeks of score contributors and the Gym habit's time; and whether the ring's battery
+  // was low at the last sync. The words are composed here (nudges.mjs), never by the routine.
+  const tipDays = await db(`sleep_days?select=day,contributors&day=gte.${addDays(today, -14)}&contributors=not.is.null`).catch(() => []);
+  const gymHabits = await db("habits?select=name,ideal").catch(() => []);
+  const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, ringLow };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for

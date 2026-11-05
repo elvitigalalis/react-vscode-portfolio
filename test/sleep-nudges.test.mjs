@@ -91,3 +91,9 @@ test("the brief says today's sleep score and its band, from the server's own row
   assert.match(whatToSend(s(61), at("09:05"))[0].text, /^Sleep score 61, pay attention\.$/m);
   assert.doesNotMatch(whatToSend(s(null), at("09:05"))[0].text, /Sleep score/);
 });
+
+test("the brief carries one tip from today's lowest contributor", () => {
+  const s = snap({ sleep: [...past, long("08:50")], tipDays: [{ day: D, contributors: { restfulness: 52, timing: 66 } }] });
+  assert.match(whatToSend(s, at("09:05"))[0].text, /^Tip: Cooler, darker room, and no caffeine after 2 pm\.$/m);
+  assert.doesNotMatch(whatToSend(snap({ sleep: [...past, long("08:50")] }), at("09:05"))[0].text, /Tip:/);
+});

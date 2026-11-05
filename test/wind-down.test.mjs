@@ -60,3 +60,14 @@ test("the wind-down messages don't use the start-nudge budget", () => {
   // A 9:30 pm bedtime's wind-down at 8:30 pm goes alongside the day's other messages.
   assert.equal(night(snap({ log }, { bedtime_target: "21:30:00" }), at("20:30"))[0].text, "Wind down: lights out at 9:30 pm. Wrap up and put the screens away.");
 });
+
+test("wind down adds a late nap's warning, a low ring and an evening tip, all from server rows", () => {
+  const nap = { oura_id: "n1", day: "2026-11-05", type: "late_nap", bedtime_start: at("17:10").toISOString(), bedtime_end: at("18:20").toISOString() };
+  const ringLow = { ring_low: true, ring_checked_at: at("23:20").toISOString() };
+  const tipDays = [{ day: D, contributors: { latency: 50, efficiency: 60 } }];
+  const [m] = night(snap({ sleep: [nap], ringLow, tipDays }), at("23:30"));
+  assert.equal(m.text, "Wind down: lights out at 12:30 am. Wrap up and put the screens away. After a late nap, keep to your bedtime. Charge your ring.\nTip: Screens off and lights dim for the last hour: your wind-down starts at 11:30 pm.");
+  // A stale battery reading, and a day tip that isn't about the evening, add nothing.
+  const [plain] = night(snap({ ringLow: { ring_low: true, ring_checked_at: at("21:00").toISOString() }, tipDays: [{ day: D, contributors: { efficiency: 60 } }] }), at("23:30"));
+  assert.equal(plain.text, "Wind down: lights out at 12:30 am. Wrap up and put the screens away.");
+});

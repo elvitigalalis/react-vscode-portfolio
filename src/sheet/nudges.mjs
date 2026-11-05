@@ -13,6 +13,9 @@ import { paceKind } from "./pace.mjs";
 import { REASON_WORDS } from "./replan.mjs";
 import { dayCap, isWeekend, wakeProfile } from "./sleep.mjs";
 import { bedtimeFor, nightAt, tonight } from "./bedtime.mjs";
+import { lateNap } from "./oura-day.mjs";
+import { pickTips, tipContext } from "./tips.mjs";
+import { GYM_HABIT } from "./ring.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -105,7 +108,12 @@ function windDownMessages(snapshot, now) {
   const out = [];
   const lightsOut = formatClock(bed.minutes % 1440);
   if (t >= Date.parse(windAt) && t < Date.parse(bedAt) && !sent.some((r) => r.kind === "wind_down")) {
-    out.push(msg("wind_down", windAt, `Wind down: lights out at ${lightsOut}. Wrap up and put the screens away.`));
+    // Oura, composed here: after a late nap today, a low ring battery at the last sync (within
+    // 30 minutes), and today's first evening tip on a line of its own.
+    const nap = lateNap(snapshot.sleep, n, tz) ? " After a late nap, keep to your bedtime." : "";
+    const ring = snapshot.ringLow?.ring_low && t - Date.parse(snapshot.ringLow.ring_checked_at ?? 0) < 30 * 60_000 ? " Charge your ring." : "";
+    const tip = tipsFor(snapshot, n).find((x) => x.evening);
+    out.push(msg("wind_down", windAt, [`Wind down: lights out at ${lightsOut}. Wrap up and put the screens away.${nap}${ring}`, tip && `Tip: ${tip.text}`].filter(Boolean).join("\n")));
   }
   if (t >= Date.parse(bedAt) && t < Date.parse(bedAt) + BEDTIME_LATE && !sent.some((r) => r.kind === "bedtime")) {
     out.push(msg("bedtime", bedAt, "Bedtime: lights out now. Sleep well."));
@@ -158,6 +166,16 @@ function scoreLine({ sleepDay, today }) {
   return s == null ? null : `Sleep score ${s}, ${s >= 85 ? "optimal" : s >= 70 ? "good" : "pay attention"}.`;
 }
 
+// Tips (tips.mjs) for `day`, from snapshot.tipDays (sleep_days { day, contributors } of the last
+// two weeks), with tonight's bedtime and the Gym habit's time in the words.
+function tipsFor(snapshot, day) {
+  if (!snapshot.tipDays?.length) return [];
+  const tz = snapshot.settings.time_zone;
+  const bed = bedtimeFor(day, { settings: snapshot.settings, sleep: snapshot.sleep ?? [], sleepTimes: snapshot.sleepTimes ?? [], tz });
+  const gym = (snapshot.gymHabits ?? []).find((h) => GYM_HABIT.test(h.name ?? ""));
+  return pickTips(snapshot.tipDays, day, tipContext(bed, gym?.ideal ?? null));
+}
+
 const BUDGETED = ["start", "repeat", "snooze"];
 
 // The budget, kept predictable: the nudges at the start of the day's first six blocks that can
@@ -195,6 +213,8 @@ function brief(day) {
   const cap = capLine(day);
   const score = scoreLine(day);
   if (score) lines.push(score);
+  const [tip] = tipsFor(day, today);
+  if (tip) lines.push(`Tip: ${tip.text}`);
   if (cap) lines.push(cap);
   // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
