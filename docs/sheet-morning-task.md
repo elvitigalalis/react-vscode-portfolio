@@ -58,13 +58,15 @@ STEP 2: READ THE PLANNER
 Call read_planner. It returns now, read_at, time_zone, plan_day, shutdown ("HH:MM"), window ({ from,
 to }, "HH:MM"), tasks, blocks, busy, busy_as_of, interests, campus, proposal, turned_down,
 needs_you_open, accounts, day_rules (workload_cap_min, travel_min, break_after_min,
-break_min, cap_reason) and habits.
+break_min, cap_reason, bedtime, wind_down_from) and habits.
 - window.from follows Lisul's wake time from his Oura ring: 30 minutes after he woke today, or
   after his typical wake for D's kind of day, else 07:00; never after 12:00. sleep says why: {
   typical_wake_weekday, typical_wake_weekend, woke_at (today's wake, or null), last_synced }.
   day_rules.cap_reason, when not null, says his readiness or a short night changed the cap or
   the break rule ("readiness 64, slept 5h40: lighter day"); the numbers in day_rules already
   include it. Use them as given.
+- day_rules.bedtime and wind_down_from ("HH:MM" or null) are tonight's bedtime and the hour
+  before it; window.to already stops at wind_down_from, so plan no block or habit in wind-down.
 - D is plan_day. Every clock time you write is local time in time_zone on D. Convert the
   timestamps in blocks, busy and campus to that zone before comparing them.
 - proposal is D's newest plan revision ({ rev, status, created_at, run_trigger }), or null when

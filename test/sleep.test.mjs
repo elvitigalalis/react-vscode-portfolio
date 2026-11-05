@@ -230,7 +230,7 @@ test("planSnapshot: today's readiness and sleep set day_rules; checkProposal hol
   const at6 = new Date("2026-11-04T11:00:00Z");
   const sleepDays = [{ day: "2026-11-04", readiness: 64, sleep_s: 5 * 3600 + 40 * 60 }, { day: "2026-11-03", readiness: 90, sleep_s: 8 * 3600 }];
   const snap = planSnapshot(rows([], { sleepDays }), at6);
-  assert.deepEqual(snap.day_rules, { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "readiness 64, slept 5h40: lighter day" });
+  assert.deepEqual(snap.day_rules, { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "readiness 64, slept 5h40: lighter day", bedtime: null, wind_down_from: null });
   const tasks = [{ id: "t1", title: "A", est_min: 45, day: "2026-11-04", done: false }, { id: "t2", title: "B", est_min: 45, day: "2026-11-04", done: false }];
   // Two 45-minute blocks back to back run 90 minutes: fine on a normal day, too long after a short night.
   const two = (s) => checkProposal({ day: "2026-11-04", replaces: null, blocks: [{ task_id: "t1", start: "08:00", minutes: 45 }, { task_id: "t2", start: "08:45", minutes: 45 }] }, s);

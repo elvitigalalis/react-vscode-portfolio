@@ -89,7 +89,7 @@ test("proposalLines: a campus pick whose title could become a link stays off Tel
 test("planSnapshot: day_rules carry the workload cap from settings, 6 hours without one", () => {
   const rows = (settings) => ({ settings: { time_zone: "America/New_York", ...settings }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] });
   const now = new Date("2026-11-04T11:07:00Z");
-  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10, cap_reason: null });
+  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10, cap_reason: null, bedtime: null, wind_down_from: null });
   assert.equal(planSnapshot(rows({}), now).day_rules.workload_cap_min, 360);
 });
 
@@ -235,4 +235,49 @@ test("planDayOf: a message run that goes on as a replan of today plans today fro
   assert.equal(planDayOf(four, "America/New_York", null, { created_at: "2026-11-04T20:58:00Z" }, message), "2026-11-05");
   assert.equal(planDayOf(four, "America/New_York", null, morning, null), "2026-11-05");
   assert.equal(messageRunOf(four, { fired_at: null }, morning), false);
+});
+
+// --- Wind-down: no block or habit in the hour before tonight's bedtime ----------------------
+
+test("planSnapshot: a bedtime cuts window.to to an hour before it when that falls on the day", () => {
+  const at = (hhmm, extra = {}) => planSnapshot(v5Rows({
+    settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: hhmm, bedtime_ease: false, ...extra },
+    days: [{ day: DAY, shutdown_at: "23:30:00", turned_down: [] }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  // Bed 12:30 am: wind-down from 11:30 pm, the shutdown line itself here.
+  assert.deepEqual(at("00:30:00").window, { from: "09:15", to: "23:30" });
+  // Bed 11:00 pm: the window ends at 10:00 pm, before the 11:30 pm shutdown.
+  assert.deepEqual(at("23:00:00").window, { from: "09:15", to: "22:00" });
+  assert.equal(at("23:00:00").day_rules.bedtime, "23:00");
+  assert.equal(at("23:00:00").day_rules.wind_down_from, "22:00");
+  // Bed 2:00 am: wind-down from 1:00 am is tomorrow; the window keeps the shutdown line.
+  assert.deepEqual(at("02:00:00").window, { from: "09:15", to: "23:30" });
+  assert.equal(at("02:00:00").day_rules.wind_down_from, "01:00");
+  // Wind-down off: no bedtime.
+  assert.deepEqual(at("23:00:00", { wind_down_on: false }).window, { from: "09:15", to: "23:30" });
+  assert.equal(at("23:00:00", { wind_down_on: false }).day_rules.bedtime, null);
+  // Oura's window when no target is set: start 10:30 pm, from the next day's row.
+  const oura = planSnapshot(v5Rows({
+    settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: null },
+    days: [{ day: DAY, shutdown_at: "23:30:00", turned_down: [] }],
+    sleepTimes: [{ day: "2026-11-05", start_offset: -5400, end_offset: -1800 }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  assert.deepEqual(oura.window, { from: "09:15", to: "21:30" });
+});
+
+test("checkProposal: a block or habit running into wind-down is refused, naming it", () => {
+  const s = planSnapshot(v5Rows({
+    settings: { time_zone: "America/New_York", wind_down_on: true, bedtime_target: "23:00:00", bedtime_ease: false },
+    tasks: [{ id: "t1", title: "OS homework", day: DAY, done: false, est_min: 45 }],
+    days: [{ day: DAY, shutdown_at: "23:30:00", turned_down: [] }],
+    proposal: null,
+    habits: [{ id: "h1", name: "Read", days: [3], ideal: "21:30:00", minutes: 30, flex_min: 15, defence: "flexible", position: 0 }],
+  }), new Date("2026-11-04T14:07:00Z"));
+  const ok = checkProposal({ version: 5, day: DAY, replaces: null, blocks: [{ task_id: "t1", start: "21:00", minutes: 45 }], needs_you: [], picks: [] }, s);
+  assert.equal(ok.ok, true, ok.errors?.join("; "));
+  const late = checkProposal({ version: 5, day: DAY, replaces: null, blocks: [{ task_id: "t1", start: "21:30", minutes: 45 }], needs_you: [], picks: [] }, s);
+  assert.equal(late.ok, false);
+  assert.match(late.errors.join("\n"), /blocks\[0\]: ends after 22:00, when wind-down starts \(bed 11:00 pm\)/);
+  const habit = checkProposal({ version: 5, day: DAY, replaces: null, blocks: [], habits: [{ habit_id: "h1", start: "21:45" }], needs_you: [], picks: [] }, s);
+  assert.match(habit.errors.join("\n"), /habits\[0\]: ends after 22:00, when wind-down starts/);
 });
