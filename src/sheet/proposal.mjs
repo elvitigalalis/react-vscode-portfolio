@@ -163,8 +163,10 @@ export function planSnapshot(rows, now) {
     window: { from: windowFrom(now, day, tz, profile), to: wind.to },
     turned_down: turnedDown,
     tasks,
+    // An auto-approved block not yet started goes out as proposed, with auto: true: the new
+    // revision replaces it (apply_proposal), so the run plans its task again.
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)
-      .map((b) => ({ task_id: b.task_id, ...(b.habit_id ? { habit_id: b.habit_id } : {}), starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed })),
+      .map((b) => ({ task_id: b.task_id, ...(b.habit_id ? { habit_id: b.habit_id } : {}), starts_at: b.starts_at, ends_at: b.ends_at, proposed: b.proposed || movable(b, now), ...(movable(b, now) ? { auto: true } : {}) })),
     busy: rows.busy.filter((b) => onDay(b, day, tz)).map((b) => ({ starts_at: b.starts_at, ends_at: b.ends_at })),
     busy_as_of: settings.busy_as_of ?? null,
     interests: settings.interests ?? null,
@@ -178,7 +180,7 @@ export function planSnapshot(rows, now) {
       : null,
     needs_you_open: rows.needsOpen.map((n) => ({ account: n.account, message_id: n.message_id })),
     accounts: rows.accounts.map((a) => a.email),
-    day_rules: { ...dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks, day, tz), rest), bedtime: wind.bedtime, wind_down_from: wind.wind_down_from },
+    day_rules: { ...dayRules(settings, (rows.sleepDays ?? []).find((d) => d.day === day) ?? null, approvedMinutes(rows.blocks.filter((b) => !movable(b, now)), day, tz), rest), bedtime: wind.bedtime, wind_down_from: wind.wind_down_from },
     // v5 W1: the weather_cache row's hours for plan_day, [] without a cache.
     weather: rows.weather ? weatherHours(rows.weather.periods ?? [], day, tz) : [],
     // v5 L1: the triage rules, which submit_proposal enforces for never.
@@ -195,6 +197,11 @@ export function planSnapshot(rows, now) {
     habits: dayHabits(rows.habits, day).filter((h) => !rest?.firm_only || h.defence === "firm"),
   };
 }
+
+// Auto-approval (docs/sheet-v5.md, "Auto-approval"): a block a run's revision placed and
+// approved by itself (blocks.auto) stays the plan's to move until it starts, or until Lisul moves
+// it in /plan, which clears auto. Any other approved block is locked.
+const movable = (b, now) => Boolean(!b.proposed && b.auto && Date.parse(b.starts_at) > now.getTime());
 
 // Oura: the approved task minutes on `day`, which a lower cap never drops below.
 const approvedMinutes = (blocks, day, tz) => blocks

@@ -314,3 +314,19 @@ test("planSnapshot: Rest Mode cuts the cap to essentials and keeps firm habits o
   assert.deepEqual(back.habits.map((h) => h.id), ["h2", "h1"]);
   assert.equal(s([]).day_rules.workload_cap_min, 360);
 });
+
+// --- Auto-approval: a run's blocks count at once, and a later run may move them -------------
+
+test("planSnapshot: an auto-approved block not yet started is the plan's to move; started or hand-approved, it's locked", () => {
+  const blocks = [
+    { task_id: "t1", starts_at: "2026-11-04T19:00:00Z", ends_at: "2026-11-04T19:45:00Z", proposed: false, auto: true }, // 2 pm, ahead
+    { task_id: "t2", starts_at: "2026-11-04T13:30:00Z", ends_at: "2026-11-04T14:30:00Z", proposed: false, auto: true }, // 8:30 am, started
+    { task_id: "t3", starts_at: "2026-11-04T20:00:00Z", ends_at: "2026-11-04T21:00:00Z", proposed: false, auto: false }, // 3 pm, approved by hand
+  ];
+  const s = planSnapshot(v5Rows({ blocks, days: [{ day: DAY, shutdown_at: "22:00:00", turned_down: [] }] }), new Date("2026-11-04T14:07:00Z"));
+  assert.deepEqual(s.blocks.map((b) => [b.task_id, b.proposed, b.auto ?? false]), [["t1", true, true], ["t2", false, false], ["t3", false, false]]);
+  // A new revision may put a block where the movable one was, not on the locked ones.
+  const input = (start) => ({ version: 5, day: DAY, replaces: 2, blocks: [{ task_id: "t1", start, minutes: 45 }], needs_you: [], picks: [] });
+  assert.equal(checkProposal(input("14:00"), s).ok, true, checkProposal(input("14:00"), s).errors?.join("; "));
+  assert.match(checkProposal(input("15:00"), s).errors.join("\n"), /overlaps an approved block/);
+});

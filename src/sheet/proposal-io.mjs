@@ -47,7 +47,7 @@ export function snapshotQueries(now, timeZone, plan_day = planningDay(localNow(n
     // Task ids are uuids from the tasks read, so they go into in.() as they are.
     blocks: (taskIds) => ({
       table: "blocks",
-      select: "task_id,habit_id,starts_at,ends_at,proposed",
+      select: "task_id,habit_id,starts_at,ends_at,proposed,auto",
       or: [`and(starts_at.lt.${to},ends_at.gt.${from})`, ...(taskIds.length ? [`task_id.in.(${taskIds.join(",")})`] : [])].join(","),
       order: "starts_at",
     }),

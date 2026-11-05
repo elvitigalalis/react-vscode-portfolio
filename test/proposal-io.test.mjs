@@ -32,10 +32,10 @@ test("snapshotQueries: at 6:07 am it reads today's rows, in New York's day bound
 test("snapshotQueries: blocks are plan_day's, plus every block of the tasks read, for atRisk", () => {
   const { blocks } = snapshotQueries(sixOhSeven, TZ);
   assert.equal(queryPath(blocks([T1, T4])),
-    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed" +
+    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed,auto" +
     `&or=(and(starts_at.lt.2026-11-05T05:00:00.000Z,ends_at.gt.2026-11-04T05:00:00.000Z),task_id.in.(${T1},${T4}))&order=starts_at`);
   assert.equal(queryPath(blocks([])),
-    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed" +
+    "blocks?select=task_id,habit_id,starts_at,ends_at,proposed,auto" +
     "&or=(and(starts_at.lt.2026-11-05T05:00:00.000Z,ends_at.gt.2026-11-04T05:00:00.000Z))&order=starts_at");
 });
 
