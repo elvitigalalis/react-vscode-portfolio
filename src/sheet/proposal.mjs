@@ -23,9 +23,12 @@ const DEFAULT_SHUTDOWN = "17:00";
 const DEFAULT_CAP = 360;
 // Oura: the day's readiness and sleep (sleep_days) scale the cap and can shorten the break rule
 // (dayCap, sleep.mjs); `approved` is the day's approved task minutes, which a lower cap keeps.
+// Oura's API agreement (§4(d), docs/adr/0005-oura-data-never-reaches-claude.md) bars giving its
+// data to an AI model, so read_planner gets only what code derives: the numbers and "lighter
+// day" or "fuller day", never the readiness or hours behind them.
 const dayRules = (settings, sleepDay = null, approved = 0) => {
   const { workload_cap_min, break_after_min, cap_reason } = dayCap(settings.workload_cap_min ?? DEFAULT_CAP, sleepDay, approved);
-  return { workload_cap_min, travel_min: 10, break_after_min, break_min: 10, cap_reason };
+  return { workload_cap_min, travel_min: 10, break_after_min, break_min: 10, cap_reason: cap_reason ? cap_reason.split(": ").pop() : null };
 };
 
 // Whether an ISO span overlaps the local day `day` in `timeZone`.
@@ -44,13 +47,6 @@ const windDownOf = (settings, rows, day, tz, shutdown) => {
   return { to, bedtime: bed ? hhmm(bed.minutes % 1440) : null, wind_down_from: bed ? hhmm(bed.wind_down % 1440) : null };
 };
 
-// Oura: what read_planner says about his sleep, local "HH:MM" times, and when it last synced.
-const sleepOf = (profile, synced) => ({
-  typical_wake_weekday: profile.weekday == null ? null : hhmm(profile.weekday),
-  typical_wake_weekend: profile.weekend == null ? null : hhmm(profile.weekend),
-  woke_at: profile.woke_at == null ? null : hhmm(profile.woke_at),
-  last_synced: synced ?? null,
-});
 
 // A replan the server started for this run: started, after the newest revision and under 30
 // minutes old. Otherwise this is the morning run. The changes since the newest revision go in as
@@ -111,7 +107,8 @@ function replyStateOf(rows, timeZone, now) {
 //   habits     v5 H1: the habits rows
 //   academic   v5 SRC3: plan_day's academic_days entries, [{ title, all_day }]
 //   replyState v5 M1: the reply_state rows
-//   sleep      Oura: the sleep_nights rows, and sleepSynced the oura feed's last good fetched_at
+//   sleep      Oura: the sleep_nights rows, which only window.from and the bedtime are worked out
+//              from; none of it goes out (docs/adr/0005-oura-data-never-reaches-claude.md)
 //   sleepDays  Oura: the sleep_days rows ({ day, readiness, sleep_s })
 //   sleepTimes Wind-down: the sleep_times rows ({ day, start_offset, end_offset })
 // The task list is plan_day's undone tasks, then every undone task at risk on plan_day, then
@@ -154,8 +151,6 @@ export function planSnapshot(rows, now) {
     shutdown,
     run: runOf(rows, now, day),
     window: { from: windowFrom(now, day, tz, profile), to: wind.to },
-    // Oura: his typical and actual wake, which window.from follows.
-    sleep: sleepOf(profile, rows.sleepSynced),
     turned_down: turnedDown,
     tasks,
     blocks: rows.blocks.filter((b) => localNow(new Date(b.starts_at), tz).day === day)

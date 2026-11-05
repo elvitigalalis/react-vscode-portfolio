@@ -831,13 +831,13 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **Window start** (`windowStart`): today's wake + 30, else the day's typical wake + 30, else
   07:00; rounded up to the quarter hour; never after 12:00; on today never before now. read_planner's
   `window.from`, checkProposal's earliest start and /plan's day start (dayCapacity, 9:30 am without
-  Oura) all use it. read_planner adds `sleep { typical_wake_weekday, typical_wake_weekend, woke_at,
-  last_synced }`, local "HH:MM" times.
+  Oura) all use it. read_planner says nothing more about his sleep (see Oura and AI).
 - **Day rules** (`dayCap`): on a day with a `sleep_days` row, readiness under 70 takes 0.8 of the
   workload cap, 85 or more 1.1; a main sleep under 6 hours takes 0.85 and `break_after_min` 60.
   With both, the lower multiplier. Rounded to 15 minutes, and never below the day's approved task
-  minutes. `day_rules.cap_reason` says why ("readiness 64, slept 5h40: lighter day"), or null.
-  Late numbers only change later revisions.
+  minutes. `dayCap`'s reason says why ("readiness 64, slept 5h40: lighter day"); read_planner's
+  `day_rules.cap_reason` keeps only "lighter day" or "fuller day", or null. Late numbers only
+  change later revisions.
 - **Woke late.** apply_proposal saves each revision's `window_from`. When today's wake syncs 45+
   minutes after the newest pending or approved revision's `window_from` (07:00, or when it was
   read today, for a revision without one), oura-sync logs one change `{ kind: 'sleep', reason:
@@ -847,6 +847,11 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
   syncs), never before 8:00, and the brief goes 15 minutes after the wake, or 90 after the typical
   one while the ring hasn't synced; it goes once a day. The brief adds "Readiness 64, slept 5h40:
   cap 4h45." when the cap changed. Without sleep rows, nothing changes.
+- **Oura and AI** ([ADR 0005](adr/0005-oura-data-never-reaches-claude.md)). Oura's agreement
+  (§4(d)) bars giving its data to an AI model, so no Oura field or figure goes to the routine.
+  read_planner carries only constraints code derives: `window.from`, `window.to`, the cap and
+  break rule with a figure-free `cap_reason`, `bedtime` and `wind_down_from` as plain times, and
+  the reason name `woke_late`. Messages with Oura numbers are composed by the telegram function.
 - **Privacy.** Only the fields above, 60 days, never on /now, never shared or used to train or
   evaluate a model (cloud.ouraring.com/legal/api-agreement). /privacy says so.
 

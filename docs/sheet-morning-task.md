@@ -59,12 +59,9 @@ Call read_planner. It returns now, read_at, time_zone, plan_day, shutdown ("HH:M
 to }, "HH:MM"), tasks, blocks, busy, busy_as_of, interests, campus, proposal, turned_down,
 needs_you_open, accounts, day_rules (workload_cap_min, travel_min, break_after_min,
 break_min, cap_reason, bedtime, wind_down_from) and habits.
-- window.from follows Lisul's wake time from his Oura ring: 30 minutes after he woke today, or
-  after his typical wake for D's kind of day, else 07:00; never after 12:00. sleep says why: {
-  typical_wake_weekday, typical_wake_weekend, woke_at (today's wake, or null), last_synced }.
-  day_rules.cap_reason, when not null, says his readiness or a short night changed the cap or
-  the break rule ("readiness 64, slept 5h40: lighter day"); the numbers in day_rules already
-  include it. Use them as given.
+- window.from follows when Lisul wakes. day_rules.cap_reason, when not null, is "lighter day"
+  or "fuller day": the cap and break rule were changed for how he slept, and the numbers in
+  day_rules already include it. Use them as given.
 - day_rules.bedtime and wind_down_from ("HH:MM" or null) are tonight's bedtime and the hour
   before it; window.to already stops at wind_down_from, so plan no block or habit in wind-down.
 - D is plan_day. Every clock time you write is local time in time_zone on D. Convert the
@@ -320,8 +317,8 @@ in all. Never work around an error by adding text or tasks that aren't in the da
 STEP 7: SUMMARY
 End with 3-6 plain lines: the messages answered (tasks and events added), the day, the revision and run.trigger (with its reasons on a replan), how many
 blocks and their span, the habits placed and left out, the hours
-planned against the workload cap (with cap_reason when set, e.g. "Readiness 64, slept 5h40:
-cap 4h45"), when the plan starts and why when sleep has a wake ("Plan starts 10:15: up at 9:45"), what didn't fit (and the couldn't-fit count), how many
+planned against the workload cap (with cap_reason when set, e.g. "cap 4h45: lighter day"), when
+the plan starts ("Plan starts 10:15"), what didn't fit (and the couldn't-fit count), how many
 Needs you items (by kind) and how many a never rule dropped, the suggested tasks, the campus picks, and any errors left after the last submit. Include
 no URL and no mail text beyond a sender's name.
 ```

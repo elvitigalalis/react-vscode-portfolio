@@ -197,21 +197,18 @@ const rows = (sleep, extra = {}) => ({
 const week = [night("2026-11-02T09:30"), night("2026-11-03T09:50"), night("2026-10-30T09:40"),
   night("2026-10-31T11:00"), night("2026-11-01T10:40"), night("2026-10-25T10:50")];
 
-test("planSnapshot: the window follows his wake, and sleep says why", async () => {
+test("planSnapshot: the window follows his wake", async () => {
   const { planSnapshot } = await import("../src/sheet/proposal.mjs");
   const at6 = new Date("2026-11-04T11:00:00Z"); // Wed 6:00 am, not up yet
   const snap = planSnapshot(rows(week, { sleepSynced: "2026-11-04T10:55:00Z" }), at6);
   assert.deepEqual(snap.window, { from: "10:15", to: "17:00" });
-  assert.deepEqual(snap.sleep, { typical_wake_weekday: "09:40", typical_wake_weekend: "10:50", woke_at: null, last_synced: "2026-11-04T10:55:00Z" });
   // Up at 8:05 and synced: today's wake wins.
   const at815 = new Date("2026-11-04T13:15:00Z");
   const up = planSnapshot(rows([...week, night("2026-11-04T08:05")]), at815);
   assert.equal(up.window.from, "08:45");
-  assert.equal(up.sleep.woke_at, "08:05");
   // No Oura: 07:00, as before.
   const none = planSnapshot(rows(undefined), at6);
   assert.equal(none.window.from, "07:00");
-  assert.deepEqual(none.sleep, { typical_wake_weekday: null, typical_wake_weekend: null, woke_at: null, last_synced: null });
 });
 
 test("checkProposal: a block may start at the wake-based window start, not before", async () => {
@@ -230,7 +227,7 @@ test("planSnapshot: today's readiness and sleep set day_rules; checkProposal hol
   const at6 = new Date("2026-11-04T11:00:00Z");
   const sleepDays = [{ day: "2026-11-04", readiness: 64, sleep_s: 5 * 3600 + 40 * 60 }, { day: "2026-11-03", readiness: 90, sleep_s: 8 * 3600 }];
   const snap = planSnapshot(rows([], { sleepDays }), at6);
-  assert.deepEqual(snap.day_rules, { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "readiness 64, slept 5h40: lighter day", bedtime: null, wind_down_from: null });
+  assert.deepEqual(snap.day_rules, { workload_cap_min: 285, travel_min: 10, break_after_min: 60, break_min: 10, cap_reason: "lighter day", bedtime: null, wind_down_from: null });
   const tasks = [{ id: "t1", title: "A", est_min: 45, day: "2026-11-04", done: false }, { id: "t2", title: "B", est_min: 45, day: "2026-11-04", done: false }];
   // Two 45-minute blocks back to back run 90 minutes: fine on a normal day, too long after a short night.
   const two = (s) => checkProposal({ day: "2026-11-04", replaces: null, blocks: [{ task_id: "t1", start: "08:00", minutes: 45 }, { task_id: "t2", start: "08:45", minutes: 45 }] }, s);
@@ -249,4 +246,27 @@ test("ouraStatus: when it last synced and his usual wake times", async () => {
   assert.equal(ouraStatus({ synced_at: "2026-11-04T12:00:00Z" }, { weekday: null, weekend: null }, now), "Synced 3 hours ago · a few more nights to learn when you wake");
   assert.equal(ouraStatus({ synced_at: null }, profile, now), "Not synced yet");
   assert.equal(ouraStatus(null, profile, now), "Not connected");
+});
+
+// Oura's API agreement §4(d) (docs/adr/0005-oura-data-never-reaches-claude.md): read_planner goes
+// to Claude, so it carries only what code derives, never an Oura figure or field.
+test("planSnapshot: no Oura-sourced field or figure reaches read_planner", async () => {
+  const { planSnapshot } = await import("../src/sheet/proposal.mjs");
+  const sleepDays = [{ day: "2026-11-04", readiness: 64, sleep_s: 5 * 3600 + 40 * 60, sleep_score: 71, hrv_avg: 38, rhr_low: 51 }];
+  const sleepTimes = [{ day: "2026-11-05", start_offset: -3600, end_offset: 0 }];
+  const snap = planSnapshot(rows([...week, night("2026-11-04T08:05")], {
+    sleepDays, sleepTimes, sleepSynced: "2026-11-04T13:10:00Z",
+    settings: { time_zone: TZ, wind_down_on: true, bedtime_target: "23:30:00", bedtime_ease: false },
+  }), new Date("2026-11-04T13:15:00Z"));
+  const keys = [];
+  const walk = (v) => { if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { keys.push(k); walk(x); } };
+  walk(snap);
+  for (const k of ["sleep", "readiness", "sleep_s", "sleep_score", "hrv", "hrv_avg", "rhr_low", "bedtime_start", "bedtime_end", "woke_at",
+    "typical_wake_weekday", "typical_wake_weekend", "last_synced", "start_offset", "end_offset"]) assert.ok(!keys.includes(k), k);
+  const text = JSON.stringify(snap);
+  assert.doesNotMatch(text, /readiness|slept|\b64\b|5h40|08:05|oura/i);
+  // What it does carry: the derived window, cap and wind-down times.
+  assert.equal(snap.window.from, "08:45");
+  assert.equal(snap.day_rules.cap_reason, "lighter day");
+  assert.equal(snap.day_rules.bedtime, "23:30");
 });
