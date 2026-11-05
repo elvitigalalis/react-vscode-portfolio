@@ -18,7 +18,12 @@ test("atRisk: a task with a horizon state is at risk when tight or won't fit, wh
   assert.equal(atRisk(far, [], DAY, TZ, state("a", { state: "tight" })), true);
   assert.equal(atRisk(far, [], DAY, TZ, state("a", { state: "wont_fit" })), true);
   const near = { id: "a", due: DAY, done: false };
-  assert.equal(atRisk(near, [], DAY, TZ, state("a")), false);
+  const approved = [{ task_id: "a", starts_at: "2026-11-04T20:00:00Z", proposed: false }];
+  assert.equal(atRisk(near, approved, DAY, TZ, state("a")), false);
+  // Due today (or overdue) with no approved block: it didn't fit today, whatever the state says.
+  assert.equal(atRisk(near, [], DAY, TZ, state("a")), true);
+  assert.equal(atRisk({ ...near, due: "2026-11-03" }, [], DAY, TZ, state("a")), true);
+  assert.equal(atRisk({ ...near, due: "2026-11-05" }, [], DAY, TZ, state("a")), false);
   assert.equal(atRisk({ ...far, done: true }, [], DAY, TZ, state("a", { state: "tight" })), false);
   // Without a state, the old rule.
   assert.equal(atRisk(near, [], DAY, TZ), true);
