@@ -71,6 +71,14 @@ test("horizonInput: a short night lowers today's cap, as read_planner's does", (
   assert.equal(input.free[TODAY], 285); // 360 × 0.8 = 288 → 285
 });
 
+test("horizonInput: three short nights lower today's cap, as read_planner's does", () => {
+  const tasks = [task(A, "2026-11-06")];
+  const s = { ...settings, workload_cap_min: 360 };
+  const h = (x) => x * 3600;
+  const sleepDays = [{ day: TODAY, readiness: 75, sleep_s: h(7) }, { day: "2026-11-04", sleep_s: h(6) }, { day: "2026-11-03", sleep_s: h(6) }];
+  assert.equal(horizonInput(rows({ tasks, settings: s, sleepDays }), eight).free[TODAY], 300); // 360 × 0.85 = 306 → 300
+});
+
 test("horizonKey: the same inputs give the same key; previous and field order don't count", async () => {
   const input = horizonInput(rows({ tasks: [task(A, "2026-11-08")] }), eight);
   const k = await horizonKey(input);

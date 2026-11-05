@@ -4,7 +4,7 @@
 // pass reflowHorizon their own read and rpc, so node --test covers it.
 import { addDays, blockMinutes, freeMinutes, localNow, minutesOn, zonedIso } from "./logic.mjs";
 import { paceByKind } from "./pace.mjs";
-import { dayCap, windowStart } from "./sleep.mjs";
+import { dayCap, sleepDebt, windowStart } from "./sleep.mjs";
 import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
 import { confirmedDoneMin, dayFree, horizonMinutes, planHorizon } from "./horizon.mjs";
 
@@ -24,7 +24,8 @@ export function horizonQueries(today, timeZone) {
     actuals: { table: "actuals", select: "at,kind,est_min,minutes", order: "at" },
     habits: { table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence", order: "position" },
     days: { table: "days", select: "day,shutdown,shutdown_at", filters: [["day", "eq", today]] },
-    sleepDay: { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "eq", today]] },
+    // Today's and the two nights before it, for the rolling sleep debt (sleepDebt).
+    sleepDay: { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "gte", addDays(today, -2)], ["day", "lte", today]] },
     previous: { table: "horizon_alloc", select: "task_id,day,minutes,over_min", filters: [["day", "gte", today]], order: "day" },
     // Today to the latest due date.
     busy: (last) => ({ table: "busy", select: "starts_at,ends_at", filters: [["starts_at", "lt", midnight(addDays(last, 1))], ["ends_at", "gt", midnight(today)]], order: "starts_at" }),
@@ -48,6 +49,7 @@ const locked = (b, now) => !b.proposed && !(b.auto && Date.parse(b.starts_at) > 
 //   settings  the settings row      tasks    horizonQueries' tasks     blocks  its blocks
 //   busy      its busy rows         habits   every habit               actuals for pace
 //   feedback  its More time rows    day      today's days row or null  sleepDay today's sleep_days row or null
+//   sleepDays the sleep_days rows of today and the two days before (the rolling sleep debt)
 //   previous  horizon_alloc from today
 export function horizonInput(rows, now) {
   const { settings } = rows;
@@ -83,7 +85,7 @@ export function horizonInput(rows, now) {
     }
     if (d === today) for (const b of onToday) spans.push({ start: minutesOn(b.starts_at, d, tz), end: minutesOn(b.ends_at, d, tz) });
     const window_free_min = to > from ? freeMinutes(spans.map((s) => ({ ...s, busy: true })), from, to) : 0;
-    const cap = d === today ? dayCap(base, rows.sleepDay?.day === today ? rows.sleepDay : null, lockedMin).workload_cap_min : base;
+    const cap = d === today ? dayCap(base, rows.sleepDay?.day === today ? rows.sleepDay : null, lockedMin, sleepDebt(rows.sleepDays ?? [], today)).workload_cap_min : base;
     free[d] = dayFree({ cap, window_free_min, locked_min: d === today ? lockedMin : 0 });
   }
   return {
@@ -123,7 +125,7 @@ export async function reflowHorizon(io, now) {
   const [busy, blocks] = await Promise.all([io.read(q.busy(last)), io.read(q.blocks(tasks.map((t) => t.id)))]);
   const ids = blocks.filter((b) => b.task_id).map((b) => b.id);
   const feedback = ids.length ? await io.read(q.feedback(ids)) : [];
-  const input = horizonInput({ settings, tasks, blocks, busy, habits, actuals, feedback, day, sleepDay: sleepDays[0] ?? null, previous }, now);
+  const input = horizonInput({ settings, tasks, blocks, busy, habits, actuals, feedback, day, sleepDay: sleepDays.find((d) => d.day === today) ?? null, sleepDays, previous }, now);
   const key = await horizonKey(input);
   if (key === settings.horizon_key) return { skipped: true, key };
   const out = planHorizon(input);

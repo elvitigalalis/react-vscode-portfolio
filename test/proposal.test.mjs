@@ -4,6 +4,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { checkProposal, couldntFitLine, planSnapshot, proposalLines } from "../src/sheet/proposal.mjs";
+// The day rules v5 D2 and Oura set (the later ones have tests of their own, day-rules.test.mjs).
+const pick = (r) => Object.fromEntries(["workload_cap_min", "travel_min", "break_after_min", "break_min", "cap_reason", "bedtime", "wind_down_from"].map((k) => [k, r[k]]));
 
 const DAY = "2026-11-04";
 const SBU = "lisul.elvitigala@stonybrook.edu";
@@ -89,7 +91,7 @@ test("proposalLines: a campus pick whose title could become a link stays off Tel
 test("planSnapshot: day_rules carry the workload cap from settings, 6 hours without one", () => {
   const rows = (settings) => ({ settings: { time_zone: "America/New_York", ...settings }, tasks: [], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] });
   const now = new Date("2026-11-04T11:07:00Z");
-  assert.deepEqual(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules, { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10, cap_reason: null, bedtime: null, wind_down_from: null });
+  assert.deepEqual(pick(planSnapshot(rows({ workload_cap_min: 270 }), now).day_rules), { workload_cap_min: 270, travel_min: 10, break_after_min: 90, break_min: 10, cap_reason: null, bedtime: null, wind_down_from: null });
   assert.equal(planSnapshot(rows({}), now).day_rules.workload_cap_min, 360);
 });
 

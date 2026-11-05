@@ -44,7 +44,7 @@ import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { senderHash } from "../../../src/sheet/mail.mjs";
 import { checkAnswers, checkStep, MAX_ANSWERS, MAX_READ, proposalTrigger, STEP_KINDS, stepTargets, withMessages } from "../../../src/sheet/messages.mjs";
 import { checkEventTodos } from "../../../src/sheet/event-todos.mjs";
-import { localNow } from "../../../src/sheet/logic.mjs";
+import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 
 // The sender hashes' salt (mail-sync's), for hashing triage rule patterns at submit.
 const SALT = Deno.env.get("SHEET_SENDER_SALT") ?? "";
@@ -391,7 +391,8 @@ async function snapshot(db: Db, now: Date) {
   // and wind_down_from as plain times (docs/adr/0005-oura-data-never-reaches-claude.md).
   const [sleep, sleepDays, sleepTimes, restPeriods] = await Promise.all([
     optional(db, { table: "sleep_nights", select: "oura_id,day,type,bedtime_start,bedtime_end", order: "bedtime_end" }),
-    optional(db, { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "eq", planDay]] }),
+    // plan_day's and the two days before it, for the rolling sleep debt (sleep.mjs, sleepDebt).
+    optional(db, { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "gte", addDays(planDay, -2)], ["day", "lte", planDay]] }),
     optional(db, { table: "sleep_times", select: "day,start_offset,end_offset", order: "day" }),
     optional(db, { table: "rest_periods", select: "start_day,end_day", order: "start_day" }),
   ]);
