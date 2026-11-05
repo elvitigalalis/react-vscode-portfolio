@@ -1,0 +1,134 @@
+// Horizon planning, part 2 (docs/sheet-horizon.md, "Part 2: the wiring"; ADR 0006): the rows a
+// re-flow reads, the engine's input built from them, the key that lets an unchanged re-flow be
+// skipped, and the re-flow itself. Free of the network: the telegram and planner-mcp functions
+// pass reflowHorizon their own read and rpc, so node --test covers it.
+import { addDays, blockMinutes, freeMinutes, localNow, minutesOn, zonedIso } from "./logic.mjs";
+import { paceByKind } from "./pace.mjs";
+import { dayCap, windowStart } from "./sleep.mjs";
+import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
+import { confirmedDoneMin, dayFree, horizonMinutes, planHorizon } from "./horizon.mjs";
+
+// read_planner's day rules: 10 minutes of travel on each side of a busy time, and the cap's
+// default.
+const TRAVEL = 10;
+const DEFAULT_CAP = 360;
+const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+const isoWeekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay() || 7;
+
+// The rows, as { table, select, filters, or?, order } queries (proposal-io.mjs's form). The busy
+// times, blocks and feedback depend on the tasks read, so they are functions.
+export function horizonQueries(today, timeZone) {
+  const midnight = (d) => zonedIso(d, 0, timeZone);
+  return {
+    tasks: { table: "tasks", select: "id,title,due,est_min,at_time,source,tag,done", filters: [["done", "is", "false"], ["due", "not.is", "null"]] },
+    actuals: { table: "actuals", select: "at,kind,est_min,minutes", order: "at" },
+    habits: { table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence", order: "position" },
+    days: { table: "days", select: "day,shutdown,shutdown_at", filters: [["day", "eq", today]] },
+    sleepDay: { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "eq", today]] },
+    previous: { table: "horizon_alloc", select: "task_id,day,minutes,over_min", filters: [["day", "gte", today]], order: "day" },
+    // Today to the latest due date.
+    busy: (last) => ({ table: "busy", select: "starts_at,ends_at", filters: [["starts_at", "lt", midnight(addDays(last, 1))], ["ends_at", "gt", midnight(today)]], order: "starts_at" }),
+    // Today's blocks (for what is locked) and every block of the tasks (for confirmed work).
+    blocks: (ids) => ({
+      table: "blocks",
+      select: "id,task_id,habit_id,starts_at,ends_at,proposed,auto",
+      or: [`and(starts_at.lt.${midnight(addDays(today, 1))},ends_at.gt.${midnight(today)})`, ...(ids.length ? [`task_id.in.(${ids.join(",")})`] : [])].join(","),
+      order: "starts_at",
+    }),
+    // The More time answers on those blocks; block ids are uuids, so they go in as they are.
+    feedback: (blockIds) => ({ table: "feedback", select: "at,item,action,ref", filters: [["item", "eq", "finished"], ["action", "eq", "more"], ["ref->>block_id", "in", `(${blockIds.join(",")})`]] }),
+  };
+}
+
+// A block is locked once approved, unless it is an auto-approved one not yet started, which the
+// next revision may move (proposal.mjs's movable).
+const locked = (b, now) => !b.proposed && !(b.auto && Date.parse(b.starts_at) > now.getTime());
+
+// The engine's input (docs/sheet-horizon.md, "Input") from the rows:
+//   settings  the settings row      tasks    horizonQueries' tasks     blocks  its blocks
+//   busy      its busy rows         habits   every habit               actuals for pace
+//   feedback  its More time rows    day      today's days row or null  sleepDay today's sleep_days row or null
+//   previous  horizon_alloc from today
+export function horizonInput(rows, now) {
+  const { settings } = rows;
+  const tz = settings.time_zone;
+  const today = localNow(now, tz).day;
+  const paces = paceByKind(rows.actuals ?? []);
+  const done = confirmedDoneMin((rows.blocks ?? []).filter((b) => b.task_id), rows.feedback ?? []);
+  const tasks = rows.tasks.filter((t) => !t.done && t.due && !t.at_time)
+    .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0 }))
+    .sort((a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id));
+
+  const onToday = (rows.blocks ?? []).filter((b) => localNow(new Date(b.starts_at), tz).day === today && locked(b, now));
+  const lockedBy = new Map();
+  for (const b of onToday) if (b.task_id && !b.habit_id) lockedBy.set(b.task_id, (lockedBy.get(b.task_id) ?? 0) + blockMinutes(b));
+  const lockedRows = [...lockedBy].map(([task_id, minutes]) => ({ task_id, day: today, minutes })).sort((a, b) => a.task_id.localeCompare(b.task_id));
+  const lockedMin = lockedRows.reduce((n, b) => n + b.minutes, 0);
+
+  const base = settings.workload_cap_min ?? DEFAULT_CAP;
+  const last = tasks.reduce((d, t) => (t.due > d ? t.due : d), today);
+  const free = {};
+  for (let d = today; d <= last; d = addDays(d, 1)) {
+    // The plan window, as planSnapshot's: from windowStart (on today, not before now) to the
+    // shutdown line, or wind-down when that comes first.
+    const from = windowStart(d, now, tz, null);
+    const shutdown = toMin(shutdownFor(d, { line: d === today ? rows.day?.shutdown_at ?? null : null, settings, tz }));
+    const bed = bedtimeFor(d, { settings, sleep: [], sleepTimes: [], tz });
+    const to = bed && bed.wind_down < 1440 ? Math.min(shutdown, bed.wind_down) : shutdown;
+    const spans = (rows.busy ?? []).map((b) => ({ start: minutesOn(b.starts_at, d, tz) - TRAVEL, end: minutesOn(b.ends_at, d, tz) + TRAVEL }));
+    const blocked = new Set(d === today ? onToday.map((b) => b.habit_id).filter(Boolean) : []);
+    for (const h of rows.habits ?? []) {
+      if (!(h.days ?? []).includes(isoWeekday(d)) || blocked.has(h.id)) continue;
+      spans.push({ start: toMin(h.ideal), end: toMin(h.ideal) + h.minutes });
+    }
+    if (d === today) for (const b of onToday) spans.push({ start: minutesOn(b.starts_at, d, tz), end: minutesOn(b.ends_at, d, tz) });
+    const window_free_min = to > from ? freeMinutes(spans.map((s) => ({ ...s, busy: true })), from, to) : 0;
+    const cap = d === today ? dayCap(base, rows.sleepDay?.day === today ? rows.sleepDay : null, lockedMin).workload_cap_min : base;
+    free[d] = dayFree({ cap, window_free_min, locked_min: d === today ? lockedMin : 0 });
+  }
+  return {
+    today,
+    tasks,
+    free,
+    locked: lockedRows,
+    frozen_days: rows.day?.day === today && rows.day.shutdown ? [addDays(today, 1)] : [],
+    previous: (rows.previous ?? []).map((p) => ({ task_id: p.task_id, day: p.day, minutes: p.minutes, over_min: p.over_min ?? 0 })),
+  };
+}
+
+// JSON with every object's keys sorted, so the same input always reads the same.
+const canonical = (v) => (Array.isArray(v) ? `[${v.map(canonical).join(",")}]`
+  : v && typeof v === "object" ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`
+  : JSON.stringify(v));
+
+// SHA-256 hex of the input without previous: what settings.horizon_key holds after a re-flow.
+export async function horizonKey(input) {
+  const { previous: _, ...rest } = input;
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical(rest)));
+  return [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// One re-flow (docs/sheet-horizon.md, "Where it runs"). io is { read(query) → rows, rpc(name,
+// args) }, the caller's database. Skipped when the inputs' key equals settings.horizon_key;
+// otherwise planned and saved with replace_horizon, all or nothing.
+export async function reflowHorizon(io, now) {
+  const [settings] = await io.read({ table: "settings", select: "*" });
+  if (!settings) throw new Error("settings: no row");
+  const today = localNow(now, settings.time_zone).day;
+  const q = horizonQueries(today, settings.time_zone);
+  const [tasks, actuals, habits, [day = null], sleepDays, previous] = await Promise.all([
+    io.read(q.tasks), io.read(q.actuals), io.read(q.habits), io.read(q.days), io.read(q.sleepDay).catch(() => []), io.read(q.previous),
+  ]);
+  const last = tasks.reduce((d, t) => (t.due > d ? t.due : d), today);
+  const [busy, blocks] = await Promise.all([io.read(q.busy(last)), io.read(q.blocks(tasks.map((t) => t.id)))]);
+  const ids = blocks.filter((b) => b.task_id).map((b) => b.id);
+  const feedback = ids.length ? await io.read(q.feedback(ids)) : [];
+  const input = horizonInput({ settings, tasks, blocks, busy, habits, actuals, feedback, day, sleepDay: sleepDays[0] ?? null, previous }, now);
+  const key = await horizonKey(input);
+  if (key === settings.horizon_key) return { skipped: true, key };
+  const out = planHorizon(input);
+  const states = Object.entries(out.tasks).map(([task_id, s]) => ({ task_id, ...s }));
+  const allocs = out.allocations.map(({ task_id, day: d, minutes, over_min }) => ({ task_id, day: d, minutes, over_min }));
+  await io.rpc("replace_horizon", { from_day: today, key, allocs, states });
+  return { skipped: false, key, moved_min: out.moved_min, states };
+}

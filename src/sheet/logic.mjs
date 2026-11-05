@@ -247,8 +247,12 @@ export const blockReminders = (settings) => (telegramOn(settings) ? { useDefault
 // A task is at risk when it is due within two days (or already past due), not done, and has no
 // block that starts before its due date is over (midnight after it, in the owner's time zone).
 // Proposed blocks are not planned time yet, so they don't count.
-export function atRisk(task, blocks, today, timeZone) {
-  if (!task.due || task.done || dayDiff(task.due, today) > 2) return false;
+// Horizon planning (docs/sheet-horizon.md): a task with a horizon_state row (`horizon`) is at
+// risk while that state is tight or won't fit, however far off its due date.
+export function atRisk(task, blocks, today, timeZone, horizon = null) {
+  if (!task.due || task.done) return false;
+  if (horizon) return horizon.state === "tight" || horizon.state === "wont_fit";
+  if (dayDiff(task.due, today) > 2) return false;
   const end = Date.parse(zonedIso(addDays(task.due, 1), 0, timeZone));
   return !blocks.some((b) => b.task_id === task.id && !b.proposed && Date.parse(b.starts_at) < end);
 }

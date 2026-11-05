@@ -1836,6 +1836,13 @@ begin
   if (select count(*) from horizon_alloc) <> 2 or not exists (select 1 from horizon_alloc where day = d - 1)
     or (select count(*) from horizon_state) <> 1 or (select state from horizon_state) <> 'tight'
     then raise exception 'replace_horizon second run'; end if;
+  -- Part 2: notified survives a re-flow, and telegram's horizon message is a nudge kind.
+  update horizon_state set notified = 'tight' where task_id = e1;
+  perform replace_horizon(d, 'k2', jsonb_build_array(jsonb_build_object('task_id', e1, 'day', d + 3, 'minutes', 60)),
+    jsonb_build_array(jsonb_build_object('task_id', e1, 'state', 'wont_fit', 'slack_min', -30, 'short_min', 30, 'remaining_min', 60, 'finish_day', d + 3, 'target_day', d + 8)));
+  if (select notified from horizon_state where task_id = e1) is distinct from 'tight'
+    then raise exception 'replace_horizon dropped notified'; end if;
+  insert into nudges (kind, day, send_at) values ('horizon', d, now());
   -- All or nothing: a bad row leaves the last plan in place.
   begin
     perform replace_horizon(d, 'k3', jsonb_build_array(jsonb_build_object('task_id', e1, 'day', d, 'minutes', 0)), '[]');

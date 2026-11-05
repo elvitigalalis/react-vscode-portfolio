@@ -14,11 +14,11 @@ export const sourceOf = (task) => SOURCE_KINDS[task.source] ?? (task.tag === "ca
 export const campusSummary = (events) => ({ n: events.length, food: events.filter(freeFood).length });
 
 // How loudly a due date shows: 'overdue' once its day has passed, 'risk' while atRisk holds,
-// else null. A done task is neither.
-export function dueLevel(task, blocks, today, timeZone) {
+// else null. A done task is neither. `horizon` is its horizon_state row, if any (atRisk).
+export function dueLevel(task, blocks, today, timeZone, horizon = null) {
   if (task.done || !task.due) return null;
   if (task.due < today) return "overdue";
-  return atRisk(task, blocks, today, timeZone) ? "risk" : null;
+  return atRisk(task, blocks, today, timeZone, horizon) ? "risk" : null;
 }
 
 // --- Load and free time, drawn (G3) ------------------------------------------------------

@@ -15,6 +15,7 @@ import { chipsLabel, dayChips, lateNap } from "./oura-day.mjs";
 import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
+import { horizonChip, horizonLine } from "./horizon-view.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -67,6 +68,8 @@ export const state = {
   events: [],       // the week's Google events, never saved
   todoEvents: [],   // the same with "Time blocks" too, for event to-dos (never saved)
   todos: [],        // event_todos rows: done, hidden and Claude's titles
+  horizon: [],      // horizon_alloc rows from today on, each with its task's title
+  states: new Map(), // horizon_state rows by task id
   eventsStale: false,
 };
 
@@ -267,9 +270,10 @@ const DUE = {
 
 // A task's details beside its title: source, time (when its title doesn't show it), clash,
 // estimate, due date and private.
-function detailsOf(t, clash, level, span) {
+function detailsOf(t, clash, level, span, hz) {
   const src = sourceOf(t);
   const due = DUE[level];
+  const chip = hz && !t.done ? horizonChip(hz) : null;
   const kids = [
     // v5 SRC1: a GitHub or Jira task's icon links to its page (tasks.link is https only).
     src ? el(t.link ? "a" : "span", { className: "sheet-meta sheet-source", ...(t.link ? { href: t.link, target: "_blank", rel: "noopener" } : {}) }, sourceIcon(src)) : null,
@@ -278,6 +282,8 @@ function detailsOf(t, clash, level, span) {
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
     t.due ? el("span", { className: `sheet-meta${due?.className ?? ""}`, ...(due ? { title: due.title } : {}) },
       due ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
+    // Horizon planning: the task's state, in the due date's colours.
+    chip ? el("span", { className: `sheet-meta sheet-hz is-${chip.level}`, textContent: chip.text }) : null,
     t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
   ].filter(Boolean);
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
@@ -303,14 +309,18 @@ export function taskRow(t, span = spanOf(t)) {
   const when = span ? spoken(span.start, span.end) : "";
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
-  const level = dueLevel(t, state.blocks, state.today, SHEET.timeZone);
-  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  // Horizon planning: with a state, its chip says at risk, so the due date shows only overdue.
+  const hz = state.states.get(t.id);
+  const level = hz ? (t.due && !t.done && t.due < state.today ? "overdue" : null) : dueLevel(t, state.blocks, state.today, SHEET.timeZone);
+  const line = hz && !t.done ? horizonLine(hz, state.horizon.filter((a) => a.task_id === t.id), t.due, state.today) : null;
+  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
   li.append(...[
     ...withWhen(span?.start, span?.end, [
       rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
       title,
       // The details, kept together so they move under the title as one line when they don't fit.
-      detailsOf(t, clash, level, span)]),
+      detailsOf(t, clash, level, span, hz),
+      line ? el("span", { className: `sheet-hz-line${hz.state === "wont_fit" ? " is-overdue" : ""}`, ariaHidden: "true", textContent: line }) : null]),
     el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
@@ -429,7 +439,8 @@ function dayColumn(day, rows, items) {
     el("div", { className: "sheet-stamps-row" },
       el("p", { className: "sheet-stamps", textContent: marks }),
       day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
-      day === state.today ? windDownMark() : null),
+      day === state.today ? windDownMark() : null,
+      day > state.today ? horizonDay(day) : null),
     ul);
   section.dataset.day = day;
   return section;
@@ -456,6 +467,15 @@ function ouraChips(day, when) {
   button.dataset.act = "oura-day";
   button.dataset.day = day;
   return button;
+}
+
+// Horizon planning: a later day's planned minutes, faded ("OS project 1h30 · Essay 1h"). Only
+// minutes, never times: the morning plan times them on the day.
+function horizonDay(day) {
+  const rows = state.horizon.filter((a) => a.day === day && a.task?.title && !state.tasks.get(a.task_id)?.done);
+  if (!rows.length) return null;
+  const text = rows.map((a) => `${a.task.title} ${formatMinutes(a.minutes)}`).join(" · ");
+  return el("p", { className: "sheet-hz-day", textContent: text, title: `Planned minutes: ${text}` });
 }
 
 // Wind-down (bedtime.mjs): today's thin "Wind down 11:30 pm · Bed 12:30 am" line, for tonight
@@ -513,7 +533,7 @@ export const renderHooks = [];
 
 export async function load() {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays] = await Promise.all([
+  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
@@ -523,7 +543,11 @@ export async function load() {
     api.listSleep(),
     api.listSleepTimes(),
     api.listSleepDays(addDays(days[0], -13), days[6]),
+    api.listHorizon(now().day),
+    api.listHorizonStates(),
   ]);
+  state.horizon = horizon;
+  state.states = new Map(states.map((h) => [h.task_id, h]));
   state.sleepTimes = sleepTimes;
   state.sleepDays = sleepDays;
   state.todos = todos;

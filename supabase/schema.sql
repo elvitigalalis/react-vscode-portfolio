@@ -498,7 +498,7 @@ alter table settings add column if not exists morning_on boolean not null defaul
 -- one Postgres gave the inline check), so a re-run is safe.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon'));
 
 -- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
 -- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
@@ -918,7 +918,7 @@ revoke insert, update, delete on actuals from authenticated;
 -- The Finished? check, and the replan message (R1), in the nudges log.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon'));
 
 -- --- v5 H1, habits (docs/sheet-v5.md) ----------------------------------------------------------
 -- Things Lisul does on set weekdays (gym, lunch, a weekly review), edited in /plan's Settings.
@@ -1869,6 +1869,10 @@ create table if not exists horizon_state (
 -- is skipped).
 alter table settings add column if not exists horizon_at timestamptz;
 alter table settings add column if not exists horizon_key text check (char_length(horizon_key) <= 128);
+-- Part 2: the last state Lisul was told of in Telegram (tight or won't fit), so each is told
+-- once. replace_horizon leaves it as it is; the telegram function clears it once the task is back
+-- on track. The horizon message logs as nudges kind 'horizon' (nudges_kind_check, above).
+alter table horizon_state add column if not exists notified text check (notified in ('tight', 'wont_fit'));
 alter table horizon_alloc enable row level security;
 alter table horizon_state enable row level security;
 drop policy if exists owner_all on horizon_alloc;

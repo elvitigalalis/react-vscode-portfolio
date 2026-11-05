@@ -367,9 +367,15 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
 /* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
 .sheet-overdue { color: var(--danger); cursor: help; }
+/* Horizon planning (docs/sheet-horizon.md): the state chip in the due date's colours, the task's
+   one quiet line under its details, and a later day's planned minutes, faded, in its stamps row. */
+.sheet-hz.is-risk { color: var(--warn); }
+.sheet-hz.is-overdue, .sheet-hz-line.is-overdue { color: var(--danger); }
+.sheet-hz-line { color: var(--muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sheet-hz-day { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.6875rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Amber on --chip is 4.0:1 in light mode, so on a held, picked or drop-target row (all --chip)
    amber text keeps a page-coloured ground. */
-:is(.is-held, .is-picked, .is-drop) :is(.sheet-risk, .sheet-clash) { background: var(--bg); border-radius: 0.2rem; padding: 0 0.2rem; }
+:is(.is-held, .is-picked, .is-drop) :is(.sheet-risk, .sheet-clash, .sheet-hz.is-risk) { background: var(--bg); border-radius: 0.2rem; padding: 0 0.2rem; }
 
 /* Load and free time, drawn (docs/sheet-glance.md, change 4). Under each day's header, a 4px
    load meter on a --line track and a 6px strip of 7 am to 11 pm: busy grey, blocks sage, proposals
