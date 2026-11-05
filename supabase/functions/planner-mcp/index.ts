@@ -140,7 +140,8 @@ function plannerServer(db: Db) {
       "over). run.trigger is message when one of them started this run. today is his date in " +
       "time_zone, and replans_on whether replans are on. " +
       "window.from follows when he wakes, and day_rules.cap_reason (\"lighter day\" or \"fuller day\", or null) " +
-      "says the cap and break rule were changed for how he slept; use them as given. " +
+      "says the cap and break rule were changed for how he slept (\"rest mode\" or \"easing back from rest mode\": " +
+      "essentials only, and habits holds only what's left); use them as given. " +
       "day_rules.bedtime is tonight's bedtime and wind_down_from the hour before it (\"HH:MM\", or null); " +
       "window.to already ends at wind_down_from when that is on plan_day: plan nothing in wind-down. " +
       `${UNTRUSTED}`,
@@ -364,13 +365,14 @@ async function snapshot(db: Db, now: Date) {
   // Oura's bedtime windows. A missing table (the Oura schema not run yet) reads as none. Only what
   // code derives from them goes out: window.from, window.to, the cap and break rule, and bedtime
   // and wind_down_from as plain times (docs/adr/0005-oura-data-never-reaches-claude.md).
-  const [sleep, sleepDays, sleepTimes] = await Promise.all([
+  const [sleep, sleepDays, sleepTimes, restPeriods] = await Promise.all([
     optional(db, { table: "sleep_nights", select: "oura_id,day,type,bedtime_start,bedtime_end", order: "bedtime_end" }),
     optional(db, { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "eq", planDay]] }),
     optional(db, { table: "sleep_times", select: "day,start_offset,end_offset", order: "day" }),
+    optional(db, { table: "rest_periods", select: "start_day,end_day", order: "start_day" }),
   ]);
   const snap = planSnapshot({
-    sleep, sleepDays, sleepTimes,
+    sleep, sleepDays, sleepTimes, restPeriods,
     plan_day: planDay, actuals, past, habits, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,

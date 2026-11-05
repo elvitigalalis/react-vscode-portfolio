@@ -281,3 +281,20 @@ test("checkProposal: a block or habit running into wind-down is refused, naming 
   const habit = checkProposal({ version: 5, day: DAY, replaces: null, blocks: [], habits: [{ habit_id: "h1", start: "21:45" }], needs_you: [], picks: [] }, s);
   assert.match(habit.errors.join("\n"), /habits\[0\]: ends after 22:00, when wind-down starts/);
 });
+
+test("planSnapshot: Rest Mode cuts the cap to essentials and keeps firm habits only, in words with no figures", () => {
+  const habits = [
+    { id: "h1", name: "Gym", days: [3], ideal: "17:00:00", minutes: 60, flex_min: 30, defence: "flexible", position: 0 },
+    { id: "h2", name: "Meds", days: [3], ideal: "09:00:00", minutes: 15, flex_min: 0, defence: "firm", position: 1 },
+  ];
+  const s = (restPeriods) => planSnapshot(v5Rows({ habits, restPeriods }), new Date("2026-11-04T14:07:00Z"));
+  const on = s([{ start_day: "2026-11-03", end_day: null }]);
+  assert.equal(on.day_rules.workload_cap_min, 150); // 0.4 × 6h, to the quarter hour
+  assert.equal(on.day_rules.cap_reason, "rest mode");
+  assert.deepEqual(on.habits.map((h) => h.id), ["h2"]);
+  const back = s([{ start_day: "2026-11-01", end_day: "2026-11-03" }]);
+  assert.equal(back.day_rules.workload_cap_min, 195); // 0.55 × 6h
+  assert.equal(back.day_rules.cap_reason, "easing back from rest mode");
+  assert.deepEqual(back.habits.map((h) => h.id), ["h2", "h1"]);
+  assert.equal(s([]).day_rules.workload_cap_min, 360);
+});
