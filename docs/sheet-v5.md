@@ -855,6 +855,32 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **Privacy.** Only the fields above, 60 days, never on /now, never shared or used to train or
   evaluate a model (cloud.ouraring.com/legal/api-agreement). /privacy says so.
 
+### Wind-down
+
+- **Bedtime** (`bedtimeFor`, src/sheet/bedtime.mjs). A night is the evening of its day: any time
+  from noon to the next noon belongs to it, so 00:30 or 02:00 bedtimes are the night before's.
+  Settings → Oura → Sleep sets `settings.bedtime_target` (a time, optional), `bedtime_ease`
+  (default on) and `wind_down_on` (default on); a new target, or Ease in turned on, stamps
+  `bedtime_set_on` with tonight. With a target and Ease in: start 15 minutes before his typical
+  bedtime (the median of the newest 7 long_sleep `bedtime_start`s of nights before
+  `bedtime_set_on`, rounded to the quarter hour, needing 3) and move 15 minutes earlier each night
+  since, never earlier than the target; without enough nights, the target. Ease in off: the
+  target. No target: the start of Oura's optimal bedtime window (`sleep_times`, the newest row up
+  to the next day), else none. Wind-down off: none.
+- **Sync.** oura-sync also reads `/v2/usercollection/sleep_time` and keeps only `sleep_times { day,
+  start_offset, end_offset }` (seconds from that day's midnight) when `status` is `optimal_found`
+  or `only_recommended_found`; 60 days; a refused read is skipped, not a failed run.
+- **Planning.** read_planner's `window.to` is the earlier of the shutdown line and bedtime − 60
+  when that falls on plan_day; `day_rules.bedtime` and `wind_down_from` give both as "HH:MM" (or
+  null). checkProposal holds blocks and habits to `window.to` and names wind-down when it bites.
+- **Telegram.** "Wind down: lights out at 12:30 am. Wrap up and put the screens away." at
+  bedtime − 60 (until bedtime) and "Bedtime: lights out now. Sleep well." at bedtime (until 30
+  minutes after), once each a night (kinds `wind_down` and `bedtime`, logged on the night's
+  day), through quiet hours, outside the nudge budget. Off with nudges or wind-down off, and once
+  a synced Oura sleep has begun after wind-down started.
+- **/plan.** Today's column shows "Wind down 11:30 pm · Bed 12:30 am"; Settings shows "Tonight:
+  bed 2:15 am, easing 15 min earlier a night toward 12:30 am".
+
 ### Deploy
 
 1. Run `supabase/schema.sql` in the SQL editor (it adds the Oura section, `apply_proposal`'s
