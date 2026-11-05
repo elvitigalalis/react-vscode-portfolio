@@ -102,6 +102,51 @@ function dueDate(word, day) {
   return null;
 }
 
+// --- Deadlines written in titles --------------------------------------------------------
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+// "Nov 5, 2026", "Thu, Nov 5, 2026, 11:59 PM", "Nov 14 11:59pm", "December 1st": a month name and
+// a day not followed by more digits or a colon, then perhaps a 4-digit year.
+const NAMED_DATE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?![\d:])(?:,?\s+(\d{4})(?!\d))?/gi;
+// "11/20/2026" or "11/20/26" anywhere; a bare "11/14" only after "due" ("3/4 cup" is no date).
+const NUMERIC_DATE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?![\d/])/g;
+const DUE_NUMERIC = /\bdue:?\s+(\d{1,2})\/(\d{1,2})(?![\d/])/gi;
+
+// A real "YYYY-MM-DD" from parts, or null ("2/30" never survives the round trip through Date).
+function realDate(y, m, d) {
+  const date = `${y}-${pad(m)}-${pad(d)}`;
+  return m >= 1 && m <= 12 && fromDate(toDate(date)) === date ? date : null;
+}
+
+// Without a year, the month and day nearest `today`: "Sept 3" on Nov 5 has passed (overdue),
+// "Jan 10" is next year's.
+function nearest(m, d, today) {
+  const y = Number(today.slice(0, 4));
+  return [y - 1, y, y + 1].map((x) => realDate(x, m, d)).filter(Boolean)
+    .sort((a, b) => Math.abs(dayDiff(a, today)) - Math.abs(dayDiff(b, today)))[0] ?? null;
+}
+
+// The deadline a task's title names, "YYYY-MM-DD", or null: a date written out ("Thu, Nov 5,
+// 2026, 11:59 PM EST", "Nov 14 11:59pm"), with its year ("11/20/2026"), or after "due"
+// ("due 11/14"). Only explicit dates, never a guess: none, an impossible one, or two different
+// ones give null. A task with no due date takes it where tasks are made (parseEntry,
+// checkAnswers, the feed syncs: withTitleDue).
+export function titleDue(title, today) {
+  const found = new Set();
+  const text = String(title ?? "");
+  for (const m of text.matchAll(NAMED_DATE)) {
+    const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1;
+    const d = m[3] ? realDate(Number(m[3]), month, Number(m[2])) : nearest(month, Number(m[2]), today);
+    found.add(d);
+  }
+  for (const m of text.matchAll(NUMERIC_DATE)) found.add(realDate(Number(m[3].length === 2 ? `20${m[3]}` : m[3]), Number(m[1]), Number(m[2])));
+  for (const m of text.matchAll(DUE_NUMERIC)) found.add(nearest(Number(m[1]), Number(m[2]), today));
+  return found.size === 1 ? [...found][0] : null;
+}
+
+// The task with its title's deadline as `due` when it has none.
+export const withTitleDue = (task, today) => (task.due ? task : { ...task, due: titleDue(task.title, today) ?? task.due ?? null });
+
 // "Ship auth ~45m #workit ^fri" → { title: "Ship auth", est_min: 45, tag: "workit", due: "2026-10-30", ... }.
 // Tasks are public unless marked "!p" (or "!private"). A due date counts from `day`, the task's
 // day. A detail that does not parse stays in the title. Text typed over several lines is one title.

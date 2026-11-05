@@ -397,3 +397,15 @@ test("messageEventBody: a message's event keeps its title, private to the owner,
     reminders: { useDefault: true },
   });
 });
+
+test("checkAnswers: a task with no due date takes the date its title spells out", () => {
+  const title = "Web Assign: Section 14.1 - 14.2 Thu, Nov 5, 2026, 11:59 PM EST";
+  const out = checkAnswers({ answers: [answer({
+    tasks: [
+      { title, day: "2026-11-05", due: null, at_time: null, est_min: null },
+      { title: "Essay due 11/14", day: null, due: "2026-11-13", at_time: null, est_min: null },
+      { title: "Finish MicroMouse slideshows", day: "2026-11-05", due: null, at_time: null, est_min: null },
+    ],
+  })] }, PENDING, TZ, NOW);
+  assert.deepEqual(out.answers[0].tasks.map((t) => t.due), ["2026-11-05", "2026-11-13", null]);
+});
