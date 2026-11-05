@@ -193,6 +193,10 @@ _Avoid_: Check-in, follow-up, time log
 The most nudges Lisul gets in one day: six, counting repeats and snoozes but not the morning brief or the check-in. The first six blocks' nudges are kept for them; repeats and snoozes get only the slots left.
 _Avoid_: Limit, cap
 
+**Now message**:
+The one pinned Telegram message that says which block is on until when, and what's next. It is edited in place, never sent again, so it makes no notification.
+_Avoid_: Status, pinned nudge, ticker
+
 **Quiet hours**:
 11 pm to 8 am, when nothing is sent.
 _Avoid_: Do not disturb, sleep mode
