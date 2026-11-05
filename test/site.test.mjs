@@ -195,7 +195,7 @@ test("a write-up's header repeats its card's Demo link, label and all", () => {
     else assert.doesNotMatch(links, /Demo/, `${slug}: no Demo link`);
   }
   // The demo needs sign-in and is still being built; the label says so.
-  assert.match(writeupHtml("workit"), /href="https:\/\/workit-web-gamma\.vercel\.app">Demo \(in development, sign-in required\)<\/a>/);
+  assert.match(writeupHtml("workit"), /href="https:\/\/workitjobs\.ai">Demo \(in development, sign-in required\)<\/a>/);
 });
 
 test("a write-up ends with links back to all projects and the résumé", () => {
