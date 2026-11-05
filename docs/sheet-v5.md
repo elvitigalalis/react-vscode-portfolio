@@ -999,6 +999,16 @@ waiting for Approve all never got events or nudges. Three changes, built on the 
 2. Deploy `planner-mcp` and `telegram` with `--use-api --no-verify-jwt`, and the site.
 3. Paste the prompt from docs/sheet-morning-task.md into the live routine.
 
+## Horizon planning
+
+[sheet-horizon.md](sheet-horizon.md) spreads each due task's work over the days to its due date
+and wires into the contracts above: `planSnapshot` tasks gain `horizon` (`today_min`, `state`,
+`slack_min`, `short_min`, `finish_day`), and a task with minutes on plan_day joins `tasks`;
+`checkProposal` holds such a task's blocks to `today_min` instead of `paced_min` and keeps it out
+of `next_day`; `atRisk` reads its state (tight or won't fit); the brief gains a "Won't fit" line
+and Telegram a budgeted `horizon` message. The re-flow runs in the telegram tick and in
+read_planner.
+
 ## Out of scope
 ## Out of scope
 

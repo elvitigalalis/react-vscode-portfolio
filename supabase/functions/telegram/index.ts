@@ -16,7 +16,9 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets } from "../../../src/sheet/nudges.mjs";
+import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
+import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
@@ -42,7 +44,10 @@ Deno.serve(async (req) => {
     // Nor must a receipt for a text to the bot.
     const receipted = await receipts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const hook = await ensureWebhook().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now)), replan, receipts: receipted, hook });
+    // Horizon planning: re-flow before the messages, so they see fresh states. Failing (or the
+    // horizon schema not run yet) stops nothing else.
+    const horizon = await horizonTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    return Response.json({ ...(await send(now)), replan, receipts: receipted, hook, horizon });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -96,7 +101,9 @@ async function snapshot(now: Date) {
   const tipDays = await db(`sleep_days?select=day,contributors&day=gte.${addDays(today, -14)}&contributors=not.is.null`).catch(() => []);
   const gymHabits = await db("habits?select=id,name,ideal").catch(() => []);
   const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow };
+  // Horizon planning: each task's state and the last one he was told of. None until its schema has run.
+  const horizon = await db("horizon_state?select=task_id,state,short_min,slack_min,finish_day,notified").catch(() => []);
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -148,9 +155,26 @@ async function replanTick(now: Date) {
   return { fired: outcome.patch.result };
 }
 
+// --- Horizon planning (docs/sheet-horizon.md, "Part 2") ----------------------------------
+// The minute tick's re-flow: skipped while the inputs' key holds (reflowHorizon), so it is cheap
+// on most minutes. Then the states told of in Telegram that no longer hold are reset
+// (horizonResets); each patch names its row, for pg-safeupdate.
+async function horizonTick(now: Date) {
+  const r = await reflowHorizon({
+    read: (q: Parameters<typeof queryPath>[0]) => db(queryPath(q)),
+    rpc: (fn: string, args: unknown) => db(`rpc/${fn}`, { method: "POST", body: JSON.stringify(args) }),
+  }, now);
+  const states = await db("horizon_state?select=task_id,state,notified&notified=not.is.null");
+  for (const x of horizonResets(states)) await setNotified([x.task_id], x.notified);
+  return { skipped: r.skipped };
+}
+
+const setNotified = (ids: string[], notified: string | null) =>
+  db(`horizon_state?task_id=in.(${ids.join(",")})`, { method: "PATCH", body: JSON.stringify({ notified }) });
+
 // --- Sending ------------------------------------------------------------------------------
 
-type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; buttons: { text: string; url?: string; callback_data?: string }[] };
+type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
 
 async function send(now: Date) {
   const snap = await snapshot(now);
@@ -176,6 +200,11 @@ async function send(now: Date) {
     }
     await c.sent();
     sent.push(m.kind);
+    // The horizon states this message told him of (the brief's, or the horizon message's).
+    for (const st of ["tight", "wont_fit"]) {
+      const ids = (m.horizon ?? []).filter((h) => h.state === st).map((h) => h.task_id);
+      if (ids.length) await setNotified(ids, st).catch((e) => console.error("horizon notified:", e instanceof Error ? e.message : e));
+    }
   }
   // The pinned Now message must not stop the messages, nor they it.
   const pin = await pinTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));

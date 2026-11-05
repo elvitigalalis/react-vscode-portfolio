@@ -209,6 +209,10 @@ export const campusByUid = (uids) => (uids.length
 export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,error,items&order=source");
 
 // v5 P1, pace (docs/sheet-v5.md): the actuals rows Telegram's Finished answer wrote. Read-only here.
+// Horizon planning (docs/sheet-horizon.md): the minutes from `from` on, with each task's title,
+// and every task's state. None until the horizon schema has run.
+export const listHorizon = (from) => rest(`horizon_alloc?select=task_id,day,minutes,over_min,task:tasks(title)&day=gte.${from}&order=day`).catch(() => []);
+export const listHorizonStates = () => rest("horizon_state?select=task_id,state,slack_min,short_min,remaining_min,finish_day").catch(() => []);
 export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
 
 // v5 H1, habits (Settings).

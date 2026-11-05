@@ -67,7 +67,7 @@ export function whatToSend(snapshot, now) {
   // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
   // wake syncs, so it goes once a day, whenever it went.
   const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
-  const due = [...(briefOut ? [] : [brief(day)]), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
+  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -176,7 +176,7 @@ function tipsFor(snapshot, day) {
   return pickTips(snapshot.tipDays, day, tipContext(bed, gym?.ideal ?? null));
 }
 
-const BUDGETED = ["start", "repeat", "snooze"];
+const BUDGETED = ["start", "repeat", "snooze", "horizon"];
 
 // The budget, kept predictable: the nudges at the start of the day's first six blocks that can
 // be nudged are kept for them, and repeats, snoozes and later blocks' nudges get only the slots
@@ -206,10 +206,18 @@ function brief(day) {
   const { tasks, blocks, today, tz, plan } = day;
   const todays = tasks.filter((t) => t.day === today);
   const blocksToday = blocks.filter((b) => { const m = minutesOn(b.starts_at, today, tz); return m >= 0 && m < 1440; });
-  const risky = tasks.filter((t) => atRisk(t, blocks, today, tz)).sort((a, b) => a.due.localeCompare(b.due));
+  // Horizon planning: a task with a horizon state is at risk while tight; won't fit has its own line.
+  const hz = horizonStates(day);
+  const risky = tasks.filter((t) => atRisk(t, blocks, today, tz, hz.get(t.id))).sort((a, b) => a.due.localeCompare(b.due));
+  const wont = risky.filter((t) => hz.get(t.id)?.state === "wont_fit");
   const n = blocksToday.length;
   const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
-  if (risky.length) lines.push(`At risk: ${risky.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
+  const tight = risky.filter((t) => !wont.includes(t));
+  if (tight.length) lines.push(`At risk: ${tight.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
+  if (wont.length) lines.push(`Won't fit: ${wont.map((t) => `${t.title}, ${formatMinutes(hz.get(t.id).short_min)} short (${dueLabel(t.due, today)})`).join("; ")}. ${FIXES}`);
+  // What the brief told him of, which telegram marks told (horizon_state.notified).
+  const told = [...wont, ...tight].filter((t) => hz.has(t.id)).map((t) => ({ task_id: t.id, state: hz.get(t.id).state }));
+  const marks = told.length ? { horizon: told } : {};
   const cap = capLine(day);
   const score = scoreLine(day);
   if (score) lines.push(score);
@@ -225,14 +233,47 @@ function brief(day) {
   const send_at = zonedIso(today, day.briefAt, tz);
   // v5 M1: who he's waiting on, after the plan's lines.
   const waiting = awaitingLine(day.awaiting);
-  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan, waiting].filter(Boolean).join("\n"), buttons: planButtons(today, day.proposal?.rev) };
+  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan, waiting].filter(Boolean).join("\n"), buttons: planButtons(today, day.proposal?.rev), ...marks };
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
   const text = (todays.length || n || risky.length ? [...lines, waiting]
     : ["Nothing on today.", wx, cal, missed && empty, waiting]).filter(Boolean).join("\n");
-  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }] };
+  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }], ...marks };
 }
+
+// --- Horizon planning (docs/sheet-horizon.md, "Part 2", 7) ------------------------------------
+
+// What fixes a task that won't fit (R7).
+const FIXES = "Move the due date, cut the estimate or raise a day's cap in /plan.";
+// snapshot.horizon: the horizon_state rows, with notified, the last state he was told of.
+const horizonStates = (day) => new Map((day.horizon ?? []).map((h) => [h.task_id, h]));
+const daysBetween = (a, b) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000);
+// News: tight he hasn't been told of, or won't fit he hasn't been told of as such.
+const news = (h) => (h.state === "wont_fit" && h.notified !== "wont_fit") || (h.state === "tight" && !h.notified);
+
+// After the brief, one message (at this minute) when tasks turned tight or won't fit, inside
+// the nudge budget. Moved minutes alone never send one. It carries `horizon`, the states told.
+function horizonMessage(day) {
+  const hz = horizonStates(day);
+  const tasks = day.tasks.filter((t) => !t.done && hz.has(t.id) && news(hz.get(t.id)))
+    .sort((a, b) => (hz.get(a.id).state === "wont_fit" ? 0 : 1) - (hz.get(b.id).state === "wont_fit" ? 0 : 1) || a.due.localeCompare(b.due));
+  if (!tasks.length) return [];
+  const lines = tasks.map((t) => {
+    const h = hz.get(t.id);
+    if (h.state === "wont_fit") return `${t.title} won't fit: ${formatMinutes(h.short_min)} short by ${weekdayName(t.due)}. ${FIXES}`;
+    const spare = h.finish_day ? daysBetween(h.finish_day, t.due) : 0;
+    return `${t.title} is tight: done ${weekdayName(h.finish_day ?? t.due)}, ${spare > 0 ? `${plural(spare, "day")} spare` : "no day spare"}.`;
+  });
+  const send_at = new Date(Math.floor(day.now / 60_000) * 60_000).toISOString();
+  return [{ kind: "horizon", block_id: null, day: day.today, send_at, text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }], horizon: tasks.map((t) => ({ task_id: t.id, state: hz.get(t.id).state })) }];
+}
+
+// What telegram writes back to horizon_state.notified without a message: back on track forgets
+// what was told, and won't fit eased to tight remembers tight (so won't fit again is news).
+export const horizonResets = (states) => (states ?? []).flatMap((h) =>
+  h.state === "on_track" && h.notified ? [{ task_id: h.task_id, notified: null }]
+  : h.state === "tight" && h.notified === "wont_fit" ? [{ task_id: h.task_id, notified: "tight" }] : []);
 
 // "Calendar: No classes, Last day to withdraw.", or null with no entries. The titles were cut and
 // checked by academicEntries; linkish runs again, as for any outside text bound for Telegram.

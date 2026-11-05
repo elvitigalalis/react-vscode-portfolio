@@ -9,10 +9,10 @@ today's minutes into timed blocks, as they do now. Terms are as in [GLOSSARY.md]
 the research behind the numbers (Motion, Reclaim, Morgen, Sunsama, EDF, Critical Chain) is in
 the horizon-scheduling research notes (R1–R12 below).
 
-It ships in two parts. **Part 1** (this branch) is the contract, the engine
-(`src/sheet/horizon.mjs`, covered by `test/horizon.test.mjs`) and the tables. Nothing calls them
-yet. **Part 2** wires them in: the re-flow on the server, read_planner and checkProposal, /plan,
-Telegram and the routine prompt ("Part 2" below).
+It shipped in two parts. **Part 1** is the contract, the engine (`src/sheet/horizon.mjs`,
+covered by `test/horizon.test.mjs`) and the tables. **Part 2** wires them in: the re-flow on the
+server, read_planner and checkProposal, /plan, Telegram and the routine prompt ("Part 2" below,
+covered by `test/horizon-io.test.mjs`, `horizon-plan`, `horizon-nudges` and `horizon-view`).
 
 ## The engine: `planHorizon(input)`
 
@@ -161,6 +161,8 @@ horizon_state  task_id uuid pk references tasks on delete cascade,
                state in ('on_track','tight','wont_fit'), slack_min, short_min >= 0,
                remaining_min >= 0, finish_day date, target_day date, updated_at
 settings     + horizon_at timestamptz, horizon_key text (<= 128 chars)
+horizon_state + notified text in ('tight','wont_fit')   -- part 2: the last state told in Telegram
+nudges_kind_check + 'horizon'                           -- part 2: the horizon message
 replace_horizon(from_day date, key text, allocs jsonb, states jsonb) returns int
 ```
 
@@ -183,12 +185,15 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
 
 ## Part 2: the wiring
 
-1. **`src/sheet/horizon-io.mjs`**: `horizonQueries(today)` (undone tasks with a due date,
-   today's blocks, the busy rows and habits for today to the latest due date, `actuals`,
-   `feedback` of item `finished` for those tasks' blocks, today's `days` row, today's Oura
-   `sleep_days` row, `horizon_alloc` from today) and `horizonInput(rows, now)`, which builds the
-   input above, and `horizonKey(input)`: SHA-256 hex of the canonical JSON of every input field
-   except `previous`.
+1. **`src/sheet/horizon-io.mjs`**: `horizonQueries(today, timeZone)` (undone tasks with a due
+   date; `busy(last)`, the busy rows from today to the latest due date; `blocks(ids)`, today's
+   blocks and every block of those tasks; habits; `actuals`; `feedback(blockIds)`, the `finished`
+   / `more` rows on those blocks; today's `days` row; today's `sleep_days` row; `horizon_alloc`
+   from today) and `horizonInput(rows, now)`, which builds the input above, and
+   `horizonKey(input)`: SHA-256 hex of the canonical JSON (keys sorted) of every input field
+   except `previous`. A block is locked when approved and not an auto-approved one still to
+   start (proposal.mjs's `movable`). The window is planSnapshot's without Oura's wake: windowStart
+   (07:00, on today from now) to the shutdown line or wind-down.
 
    **What each task in the input must carry** for the blocking rules (all optional; the engine
    is safe without them, so they can land after the rest):
@@ -202,28 +207,53 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
    the 85% fill of later days and the 20% buffer work from `free` and `minutes` as passed now.
    The output only gains `remaining_p80_min` per task; every other field keeps its name and
    meaning (`short_min` and `over_min` can now also count minutes past the daily maximum).
-2. **The re-flow**, `reflowHorizon(db, now)` in both functions: build, key, skip when equal,
-   else `planHorizon` and `replace_horizon(today, key, allocations, states)`. Triggers: the tick
-   (cheap thanks to the key: task edits, done tasks, busy syncs, Finished? answers, approved or
-   locked blocks, shutdown and the day rolling over all change the key) and read_planner.
-3. **read_planner** (`planSnapshot`): each task gains `horizon: { today_min, state, slack_min,
-   short_min, finish_day }`, and a task with a `today_min` that isn't on plan_day (a Someday
-   task, say) joins `tasks`. Tight and won't-fit tasks come first (R8).
-4. **checkProposal**: a block of a task with `today_min` runs `today_min` (less its locked
-   minutes today) instead of `paced_min`; such a task is never in `next_day`, so
+2. **The re-flow**, `reflowHorizon(io, now)` with `io = { read(query), rpc(name, args) }`, each
+   function's own database: build, key, skip when equal to `settings.horizon_key`, else
+   `planHorizon` and `replace_horizon(today, key, allocations, states)`. It runs in the telegram
+   cron tick (before the messages, so they see fresh states; cheap thanks to the key: task edits,
+   done tasks, busy syncs, Finished? answers, approved or locked blocks, shutdown and the day
+   rolling over all change it, and today's free time changes it as the day goes) and in
+   read_planner before it builds the snapshot. A failure there (or the schema not run yet) only
+   logs; the last plan stands.
+3. **read_planner** (`planSnapshot`, `rows.horizon = { alloc, states }`: plan_day's
+   `horizon_alloc` rows and every `horizon_state` row): each task with a state gains `horizon:
+   { today_min, state, slack_min, short_min, finish_day }`, where `today_min` is its minutes on
+   plan_day less `over_min` (the part past the cap never becomes a block); a task with a
+   `today_min` that isn't on plan_day (a Someday task, say) joins `tasks` (planner-mcp reads it
+   through `snapshotQueries`' `horizonIds`). Won't fit, then tight, come first (R8). From 3 pm,
+   when plan_day is tomorrow, it is tomorrow's minutes.
+4. **checkProposal**: a task with a horizon state gets a block only with `today_min` above 0
+   (else "no horizon minutes on D"), and its block runs `today_min` less its locked minutes on
+   plan_day instead of `paced_min`; none when that is under 15. Over 240 (a due-day crunch) it may
+   take several blocks that add up to it. A task with `today_min` is never in `next_day`, so
    `move_to_next_day` leaves it alone (the re-flow moves its minutes instead).
-5. **At risk**: `atRisk` (logic.mjs) reads `horizon_state` when the task has a row: at risk is
-   `tight` or `wont_fit`. Glance, the brief and planSnapshot follow.
-6. **/plan**: a state chip on the task row; one quiet line per task, "OS project · 4h left ·
-   Mon 1h, Tue 1h30, Wed 1h30 · done Wed, 1 day spare" (R11); later days' minutes faded in the
-   week; won't fit in red with the hours short and the fixes (move the due date, cut the estimate,
-   raise one day's cap) (R7).
-7. **Telegram**: one nudge when a task goes on track → tight or → won't fit, in the morning
-   brief, inside the nudge budget (R12); moved minutes get none. **Tomorrow** on a tight or
-   won't-fit task asks to confirm and shows the new state (R8).
-8. **The routine prompt** (docs/sheet-morning-task.md): time each task's `today_min` today,
-   tight and won't-fit first; it never moves minutes to other days.
-9. **Deploy**: run the "Horizon planning" section of `supabase/schema.sql`, then deploy
-   `telegram`, `planner-mcp` and the site, then paste the prompt.
+5. **At risk**: `atRisk(task, blocks, today, tz, horizon)` (logic.mjs) reads the task's
+   `horizon_state` row when it has one: at risk is `tight` or `wont_fit`, however far off its due
+   date. planSnapshot's `at_risk`, the brief and /plan's due look follow; Glance's other callers
+   pass no row and keep the old rule.
+6. **/plan** (`src/sheet/horizon-view.mjs`, small so the page's script stays in budget): a state
+   chip in the task's details ("On track", amber "Tight", red "Won't fit · 2h short"), replacing
+   the due date's at-risk look; one quiet line under it, "4h left · today 1h, Fri 1h30 · done Sat,
+   2 days spare" (R11), at most four days then "+2 days", and for won't fit "2h short: move the
+   due date, cut the estimate or raise a day's cap" in red (R7); later days' minutes faded in the
+   week's stamps row ("OS project 1h30 · Essay 1h"), minutes only. It reads `horizon_alloc` from
+   today (with each task's title) and `horizon_state`; with no tables yet it shows nothing new.
+7. **Telegram** (nudges.mjs): the brief's "At risk" line lists tight tasks, and a "Won't fit"
+   line names each won't-fit task with its hours short and the fixes. After the brief, one
+   `horizon` message at the minute a task goes to tight or to won't fit ("OS project won't fit:
+   1h30 short by Fri. Move the due date, …" / "Essay is tight: done Thu, no day spare."), counted
+   in the nudge budget (R12); moved minutes alone send nothing. Each state is told once:
+   `horizon_state.notified` records it after the brief or the message goes, and the tick clears it
+   when the task is back on track (`horizonResets`; won't fit eased to tight records tight, so
+   won't fit again is news).
+8. **The routine prompt** (docs/sheet-morning-task.md): times each task's `today_min` on D, won't
+   fit then tight first, no block with `today_min` 0, never `next_day` for one with minutes, and
+   names won't-fit tasks with their hours short in the note. It never moves minutes to other days.
+9. **Deploy**: run the "Horizon planning" section of `supabase/schema.sql` and the two
+   `nudges_kind_check` statements (or the whole file, safe to re-run), then deploy `telegram` and
+   `planner-mcp` (`--use-api --no-verify-jwt`) and the site, then paste the prompt.
+
+Not done in part 2: **Tomorrow** on a tight or won't-fit task's Finished? check still moves it
+without asking to confirm or showing the new state (R8).
 
 Later, not in part 2: a per-task "start after" day and "max per day" (R2, R12).

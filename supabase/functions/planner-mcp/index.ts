@@ -39,7 +39,8 @@ import { pipeline } from "npm:@supabase/middleware@1";
 import { withOAuthProtectedResource, withSupabase } from "npm:@supabase/server@^1.9.2";
 import { z } from "npm:zod@^4.3.6";
 import { checkProposal, NEEDS_KINDS, messageRunOf, planDayOf, planSnapshot } from "../../../src/sheet/proposal.mjs";
-import { habitsQuery, paceQueries, replanQueries, snapshotQueries, todayReplanQueries } from "../../../src/sheet/proposal-io.mjs";
+import { habitsQuery, horizonSnapshotQueries, paceQueries, replanQueries, snapshotQueries, todayReplanQueries } from "../../../src/sheet/proposal-io.mjs";
+import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { senderHash } from "../../../src/sheet/mail.mjs";
 import { checkAnswers, checkStep, MAX_ANSWERS, MAX_READ, proposalTrigger, STEP_KINDS, stepTargets, withMessages } from "../../../src/sheet/messages.mjs";
 import { checkEventTodos } from "../../../src/sheet/event-todos.mjs";
@@ -129,7 +130,10 @@ function plannerServer(db: Db) {
       "the connected mail accounts, the day rules (workload cap, breaks, travel time), the day's habits (firm " +
       "first, then flexible) and the hourly weather " +
       "(7 am to 11 pm: °F, chance of precipitation %, short forecast). Each task has paced_min, the minutes its " +
-      "block must run (its estimate times Lisul's pace for its kind); pace gives each kind's pace, and " +
+      "block must run (its estimate times Lisul's pace for its kind), and a task with a due date has horizon " +
+      "({ today_min, state: on_track | tight | wont_fit, slack_min, short_min, finish_day }): the server spreads its " +
+      "work over the days to its due date, today_min is its minutes on plan_day (its block runs that, less any " +
+      "approved block of it; with 0, give it no block), and wont_fit and tight tasks come first; pace gives each kind's pace, and " +
       "planned_vs_done the last 14 days of planned versus done minutes. run says why this run started: trigger " +
       "morning or replan, the replan's reason names, and the changes since the newest revision as kinds and counts. " +
       "triage_rules are Lisul's always-show and never-show rules by sender address or domain (a sender rule's " +
@@ -153,6 +157,9 @@ function plannerServer(db: Db) {
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
   }, async () => {
     try {
+      // Horizon planning: re-flow first, so the run reads fresh minutes (skipped when nothing
+      // changed). A failed re-flow, or the horizon schema not run yet, leaves the last plan.
+      await reflowHorizon(horizonIo(db), new Date()).catch((e) => console.error("horizon:", (e as Error).message));
       const snap = await snapshot(db, new Date());
       // Lisul sees this on /plan under each message the run is reading.
       if (snap.messages.length) await logStep(db, snap.messages.map((m: { id: string }) => m.id), "reading", "Read your planner");
@@ -168,7 +175,7 @@ function plannerServer(db: Db) {
       "blocks, Needs you rows from mail ({ account, message_id, link as search_mail gave it, sender, subject, why, " +
       "kind, due? }), campus picks ({ uid, why }), a one-line note on what didn't fit and couldnt_fit, the ids of " +
       "at-risk tasks that couldn't fit, next_day, the ids of plan_day's untimed tasks that couldn't fit, which move " +
-      "to the next day so its plan times them, habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
+      "to the next day so its plan times them (never a task with horizon minutes on plan_day), habits ({ habit_id, start: \"HH:MM\" }), each starting within its ideal " +
       "time ± flex_min and running its minutes (a habit that can't fit is left out), and suggested tasks ({ account, " +
       "message_id, title, due, kind: assessment | interview }) for Needs you items from assessment or " +
       "interview-scheduling senders, which become Inbox tasks only once the revision is approved; event_todos ({ calendar_id, " +
@@ -355,7 +362,11 @@ async function snapshot(db: Db, now: Date) {
   ]);
   const planDay = planDayOf(now, settings.time_zone, replan, todayRev, message);
   const messageRun = Boolean(settings.replans_on) && messageRunOf(now, message, todayRev);
-  const q = snapshotQueries(now, settings.time_zone, planDay);
+  // Horizon planning: plan_day's minutes and every state; none until its schema has run.
+  const h = horizonSnapshotQueries(planDay);
+  const [alloc, states] = await Promise.all([optional(db, h.alloc), optional(db, h.states)]);
+  const horizonIds = alloc.filter((a: { minutes: number; over_min: number }) => a.minutes - a.over_min > 0).map((a: { task_id: string }) => a.task_id);
+  const q = snapshotQueries(now, settings.time_zone, planDay, horizonIds);
   const { tasks, busy, days, campus, proposal, needsOpen, accounts } = q.queries;
   const rows = await Promise.all([tasks, busy, days, campus, proposal, needsOpen, accounts].map((x) => read(db, x)));
   const blocks = await read(db, q.blocks(rows[0].map((t: { id: string }) => t.id)));
@@ -389,7 +400,7 @@ async function snapshot(db: Db, now: Date) {
     plan_day: planDay, actuals, past, habits, replan, changes, triage, replyState,
     settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
     proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
-    academic: academicDay?.entries ?? [],
+    academic: academicDay?.entries ?? [], horizon: { alloc, states },
   }, now);
   // Messages to Claude: the pending ones, today and replans_on.
   // Whether this may be a message run going on as a replan of today (submit_proposal reads it).
@@ -423,6 +434,16 @@ async function patternHashes(rules: { match: string; pattern: string }[]) {
   if (SALT) for (const r of rules) if (r.match !== "sender") map.set(r.pattern, await senderHash(r.pattern, SALT));
   return (pattern: string) => map.get(pattern) ?? null;
 }
+
+// reflowHorizon's database: reads as read() does, and replace_horizon through supabase-js's rpc.
+const horizonIo = (db: Db) => ({
+  read: (q: Query) => read(db, q),
+  rpc: async (fn: string, args: Record<string, unknown>) => {
+    const { data, error } = await db.rpc(fn, args);
+    if (error) throw new Error(`${fn}: ${error.message}`);
+    return data;
+  },
+});
 
 // A read of a table that may not exist yet: none until its schema section has run.
 async function optional(db: Db, q: Query) {

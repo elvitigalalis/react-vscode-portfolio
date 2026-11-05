@@ -159,3 +159,12 @@ test("snapshotQueries and replanQueries: a replan's plan_day (today, after 3 pm)
   assert.equal(queryPath(t.proposal), "proposals?select=created_at&day=eq.2026-11-04&order=rev.desc");
   assert.equal(queryPath(t.message), "messages?select=fired_at&fired_at=not.is.null&order=fired_at.desc");
 });
+
+test("horizon: plan_day's minutes and every state, and the tasks with minutes on plan_day join the task list", async () => {
+  const { horizonSnapshotQueries } = await import("../src/sheet/proposal-io.mjs");
+  const h = horizonSnapshotQueries("2026-11-04");
+  assert.equal(queryPath(h.alloc), "horizon_alloc?select=task_id,day,minutes,over_min&day=eq.2026-11-04");
+  assert.equal(queryPath(h.states), "horizon_state?select=task_id,state,slack_min,short_min,remaining_min,finish_day,target_day");
+  const q = snapshotQueries(sixOhSeven, TZ, "2026-11-04", [T1]);
+  assert.equal(queryPath(q.queries.tasks), `tasks?select=*&done=is.false&or=(day.eq.2026-11-04,due.lte.2026-11-11,id.in.(${T1}))&order=position`);
+});

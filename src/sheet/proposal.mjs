@@ -127,12 +127,15 @@ export function planSnapshot(rows, now) {
   // A replan run's plan_day comes in as rows.plan_day (planDayOf); otherwise the 3 pm rule.
   const day = rows.plan_day ?? planningDay(localNow(now, tz));
   const line = rows.days.find((d) => d.day === day)?.shutdown_at;
-  const risky = (t) => atRisk(t, rows.blocks, day, tz);
+  // Horizon planning: each task's minutes on plan_day and its state (horizonOf).
+  const hz = horizonOf(rows.horizon, day);
+  const risky = (t) => atRisk(t, rows.blocks, day, tz, hz.get(t.id)?.row);
   const undone = rows.tasks.filter((t) => !t.done);
   const groups = [
     undone.filter((t) => t.day === day),
     undone.filter(risky),
     undone.filter((t) => t.source && t.due && t.due <= addDays(day, COURSE_AHEAD)),
+    undone.filter((t) => hz.get(t.id)?.today_min > 0),
   ];
   // v5: a task turned down today leaves the list, so the planner doesn't offer it again.
   const turnedDown = list(rows.turnedDown ?? rows.days.find((d) => d.day === day)?.turned_down);
@@ -144,7 +147,8 @@ export function planSnapshot(rows, now) {
   const tasks = groups.flat().filter((t) => !seen.has(t.id) && seen.add(t.id)).map((t) => ({
     id: t.id, title: t.title, est_min: t.est_min, at_time: t.at_time, due: t.due, tag: t.tag,
     source: t.source, day: t.day, list: t.list, at_risk: risky(t), paced_min: pacedMinutes(t, pace),
-  }));
+    ...(hz.has(t.id) ? { horizon: hz.get(t.id).out } : {}),
+  })).sort((a, b) => stateRank(a) - stateRank(b));
   // The day's line, else when wind-down starts (bedtime.mjs, shutdownFor).
   const shutdown = shutdownFor(day, { line, settings, sleep: rows.sleep, sleepTimes: rows.sleepTimes, tz });
   const profile = wakeProfile(rows.sleep ?? [], now, tz);
@@ -200,6 +204,25 @@ export function planSnapshot(rows, now) {
     habits: dayHabits(rows.habits, day).filter((h) => !rest?.firm_only || h.defence === "firm"),
   };
 }
+
+// Horizon planning (docs/sheet-horizon.md, "Part 2"): rows.horizon is { alloc, states }, the
+// horizon_alloc rows of plan_day and every horizon_state row. A task with a state gets
+// { today_min, state, slack_min, short_min, finish_day }: today_min is its minutes on plan_day
+// that fit (over_min, past the cap, left out). Won't fit, then tight, go first (R8).
+function horizonOf(horizon, day) {
+  const out = new Map();
+  for (const s of list(horizon?.states)) {
+    const a = list(horizon?.alloc).find((x) => x.task_id === s.task_id && x.day === day);
+    out.set(s.task_id, {
+      row: s,
+      today_min: a ? a.minutes - (a.over_min ?? 0) : 0,
+      out: { today_min: a ? a.minutes - (a.over_min ?? 0) : 0, state: s.state, slack_min: s.slack_min, short_min: s.short_min, finish_day: s.finish_day },
+    });
+  }
+  return out;
+}
+const STATE_RANK = { wont_fit: 0, tight: 1 };
+const stateRank = (t) => STATE_RANK[t.horizon?.state] ?? 2;
 
 // Auto-approval (docs/sheet-v5.md, "Auto-approval"): a block a run's revision placed and
 // approved by itself (blocks.auto) stays the plan's to move until it starts, or until Lisul moves
@@ -478,8 +501,22 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
       const from = toMinutes(start);
       if (win && from < win.from) errors.push(`${name}: starts before ${snapshot.window.from}, the start of the plan window`);
       else if (!win && from < EARLIEST) errors.push(`${name}: starts before 07:00`);
+      // Horizon planning: a horizon task's block runs its minutes on plan_day, less those locked.
+      if (task?.horizon && Number.isInteger(minutes)) {
+        const lockedMin = snapshot.blocks.filter((x) => !x.proposed && x.task_id === task.id).reduce((n, x) => n + minutesOn(x.ends_at, day, tz) - minutesOn(x.starts_at, day, tz), 0);
+        const want = task.horizon.today_min - lockedMin;
+        if (task.horizon.today_min <= 0) errors.push(`${name}: no horizon minutes on ${day}, so no block today`);
+        else if (want < 15) errors.push(`${name}: its ${task.horizon.today_min} horizon minutes on ${day} are already locked`);
+        else {
+          // Over 240 (a due-day crunch) it takes several blocks, which add up to it.
+          const mine = inBlocks.filter((x) => x?.task_id === task.id);
+          const got = mine.reduce((n, x) => n + (Number.isInteger(x?.minutes) ? x.minutes : 0), 0);
+          const why = `the task's horizon minutes on ${day}${lockedMin ? ` less the ${lockedMin} locked` : ""}`;
+          if (mine.length === 1 && minutes !== want) errors.push(`${name}: minutes must be ${want}, ${why}`);
+          else if (mine.length > 1 && mine[0] === b && got !== want) errors.push(`${name}: ${task.id}'s blocks must add up to ${want}, ${why} (they add up to ${got})`);
+        }
       // v5 P1: a block runs the task's paced estimate.
-      if (snapshot.version === 5 && task && Number.isInteger(minutes) && minutes !== task.paced_min) {
+      } else if (snapshot.version === 5 && task && Number.isInteger(minutes) && minutes !== task.paced_min) {
         errors.push(`${name}: minutes must be ${task.paced_min}, the task's paced estimate`);
       }
       if (task?.at_time && task.at_time.slice(0, 5) !== start) errors.push(`${name}: this task is fixed at ${task.at_time.slice(0, 5)}, so it must start then`);
@@ -580,6 +617,7 @@ function nextDayIds(input, snapshot, blocks, errors) {
     const t = tasks.get(id);
     if (!t) errors.push(`${name}: not one of the tasks read_planner gave`);
     else if (t.day !== snapshot.plan_day) errors.push(`${name}: ${id} is not on ${snapshot.plan_day}, so it can't move to the next day`);
+    else if (t.horizon?.today_min > 0) errors.push(`${name}: ${id} has horizon minutes, which the server moves; leave it out`);
     else if (t.at_time) errors.push(`${name}: ${id} is fixed at ${t.at_time.slice(0, 5)}, so it stays`);
     else if (placed.has(id)) errors.push(`${name}: ${id} has a block in this revision, so it stays`);
     else if (locked.has(id)) errors.push(`${name}: ${id} already has an approved block, so it stays`);
