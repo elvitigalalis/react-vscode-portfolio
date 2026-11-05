@@ -367,6 +367,15 @@ test("check-in: follows the shutdown line saved for the day", () => {
   assert.equal(checkin.send_at, "2026-10-26T22:30:00.000Z");
 });
 
+test("check-in: with no line saved, it goes when wind-down starts", () => {
+  const windDown = { ...settings, wind_down_on: true, bedtime_target: "22:30:00", bedtime_ease: false };
+  const snap = snapshot({ settings: windDown, tasks: sixTasks, log: [briefSent] });
+  const checkins = (iso) => whatToSend(snap, at(iso)).filter((m) => m.kind === "checkin");
+  assert.deepEqual(checkins("2026-10-26T21:00:00Z"), []); // 5 pm: not yet
+  const [checkin] = checkins("2026-10-27T01:30:00Z"); // 9:30 pm, an hour before bed
+  assert.equal(checkin.send_at, "2026-10-27T01:30:00.000Z");
+});
+
 test("check-in: a shutdown line at 11 pm or later sends it at 10:55 pm", () => {
   const snap = snapshot({ tasks: sixTasks, day: { day, shutdown: false, shutdown_at: "23:30:00" }, log: [briefSent] });
   assert.deepEqual(whatToSend(snap, at("2026-10-27T02:54:00Z")), []);
