@@ -624,13 +624,14 @@ while :; do
   confirm "Skip this check and go on anyway?" && break
   pause "Press Enter to check again"
 done
-# The bot's webhook: Telegram sends Done and Snooze taps to the function, with the webhook secret
+# The bot's webhook: Telegram sends Done and Snooze taps, and texts to the bot (messages to
+# Claude, docs/sheet-messages.md "From Telegram"), to the function, with the webhook secret
 # in its X-Telegram-Bot-Api-Secret-Token header. The secret is hex, so it needs no escaping, and
 # it goes to curl on stdin with the token.
 say "Pointing the bot's Done and Snooze buttons at the function."
-hook="setWebhook?url=$SHEET_SUPABASE_URL/functions/v1/telegram&secret_token=$TELEGRAM_WEBHOOK_SECRET&allowed_updates=%5B%22callback_query%22%5D"
+hook="setWebhook?url=$SHEET_SUPABASE_URL/functions/v1/telegram&secret_token=$TELEGRAM_WEBHOOK_SECRET&allowed_updates=%5B%22callback_query%22%2C%22message%22%5D"
 if [[ "$(telegram_api "$hook" | json 'j.ok')" == true ]]; then
-  printf '  %s✓ the bot sends taps to the function%s
+  printf '  %s✓ the bot sends taps and texts to the function%s
 ' "$GREEN" "$RESET"
 else
   warn "Telegram refused the webhook. Re-run 'bash tools/sheet-setup.sh telegram' to try again."

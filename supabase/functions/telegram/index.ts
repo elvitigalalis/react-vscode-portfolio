@@ -21,7 +21,9 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
+import { ackText, readText } from "../../../src/sheet/capture.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
+import { saveAndFire } from "../_shared/capture.ts";
 
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -40,7 +42,7 @@ Deno.serve(async (req) => {
     return Response.json({ ...(await send(now)), replan });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
-    await tap(await req.json(), new Date());
+    await webhook(await req.json(), new Date());
     return new Response("ok");
   }
   return new Response("forbidden", { status: 403 });
@@ -200,6 +202,38 @@ async function claim(m: Message) {
 // editMessageText both take link_preview_options, a LinkPreviewOptions with is_disabled: true
 // (core.telegram.org/bots/api#linkpreviewoptions, #sendmessage, #editmessagetext; Bot API 10.3).
 const PLAIN = { link_preview_options: { is_disabled: true } };
+
+// --- The webhook ------------------------------------------------------------------------------
+
+// A text from Lisul's chat is a message to Claude (capture.mjs); anything else is a tap, read as
+// before. Every other update, and any other chat, is ignored without a word.
+async function webhook(update: unknown, now: Date) {
+  const [settings] = await db("settings?select=*");
+  const t = readText(update, settings);
+  if (t) return capture(t, now);
+  return tap(update, now);
+}
+
+// --- Texting the bot (docs/sheet-messages.md, "From Telegram") -----------------------------
+
+// The text goes through the same save and fire as /plan's box (../_shared/capture.ts), with his
+// Telegram message's id on the row, and the bot answers at once with where it stands, as a reply
+// to his text (sendMessage's reply_parameters, a ReplyParameters with message_id;
+// allow_sending_without_reply so a deleted text doesn't stop it: core.telegram.org/bots/api#sendmessage,
+// #replyparameters). The receipt follows from the minute tick once Claude has answered (receipts).
+// Telegram sends an update again when the webhook fails ("we will repeat the request":
+// core.telegram.org/bots/api#setwebhook): a text already saved is not saved again, so a failed
+// save is retried and a saved one never doubles. A failed answer is only logged.
+async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
+  if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
+  const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  await telegram("sendMessage", {
+    chat_id: t.chat_id,
+    text: ackText(saved),
+    ...PLAIN,
+    reply_parameters: { message_id: t.message_id, allow_sending_without_reply: true },
+  }).catch((e) => console.error("telegram capture:", e.message));
+}
 
 // --- Taps ---------------------------------------------------------------------------------
 
