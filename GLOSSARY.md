@@ -97,6 +97,46 @@ _Avoid_: Speed, velocity, accuracy
 The most planned work a day may hold. On a day with Oura numbers it follows his readiness and how long he slept.
 _Avoid_: Daily limit, capacity, budget
 
+**Horizon**:
+The days from today to a task's due date, however far off. Horizon planning gives each undone task with a due date planned minutes on the working days in its horizon.
+_Avoid_: Backlog plan, long-range plan
+
+**Allocation**:
+The minutes of one task planned on one day of its horizon. Future days hold minutes only, never times; today's become blocks in the morning plan or a replan.
+_Avoid_: Ghost block, tentative block, reservation
+
+**Re-flow**:
+Server code working the allocations out again after something changed, keeping the last ones and moving only the minutes the change forces. It is not a replan: Claude takes no part.
+_Avoid_: Reschedule, rebalance
+
+**Frozen day**:
+A day a re-flow leaves as it is: tomorrow, once today is shut down. Today's locked blocks are fixed the same way.
+_Avoid_: Locked day
+
+**Working day**:
+A day of the horizon with free time for tasks, or one that is frozen or holds a locked block.
+_Avoid_: Business day, weekday
+
+**Target day**:
+The day horizon planning aims to finish a task by: the last working day before its due day, when that is 2 or more days off, else the due day. The days after it are the task's buffer.
+_Avoid_: Soft deadline, internal deadline
+
+**Slack**:
+How many minutes of free time a task has to spare by its due day, after every task due by then.
+_Avoid_: Float, margin
+
+**On track**:
+A task whose allocations finish by its target day with at least one day's chunk of slack.
+_Avoid_: On time, safe
+
+**Tight**:
+A task whose allocations fit by its due day only by using its buffer, or with less than one day's chunk of slack, or that is already overdue.
+_Avoid_: At risk, close
+
+**Won't fit**:
+A task with more minutes left than its horizon's free time holds. The rest sits on its due day past the workload cap, with the hours short, and is never dropped.
+_Avoid_: Overbooked, impossible
+
 **Wake time**:
 When Lisul got up today, from the end of his main sleep on his Oura ring. The plan starts 30 minutes after it.
 _Avoid_: Wake-up, alarm, start time
