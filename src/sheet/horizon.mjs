@@ -2,15 +2,25 @@
 // planned minutes on the working days from today up to its due date. Plain code, no network:
 // the server runs it on each change and Claude only turns today's minutes into timed blocks.
 import { addDays, snap } from "./logic.mjs";
-import { paceKind } from "./pace.mjs";
+import { paceKind, PACE_KINDS, PACE_SAMPLES, PACE_WINDOW, PACE_LIMITS } from "./pace.mjs";
 
 // Chunks: at least 30 and at most 90 minutes of one task on one day; a task of 60 minutes or
 // less is never split. Minutes move in 15-minute steps.
 export const CHUNK_MIN = 30;
 export const CHUNK_MAX = 90;
 export const WHOLE_UP_TO = 60;
+// Programming and writing may stretch to this many minutes a day, but only when a task would not
+// fit otherwise: loading the problem has a fixed cost, and spacing helps such work less.
+export const STRETCH_MAX = 120;
+export const STRETCH_KINDS = ["programming", "writing"];
+// Exam study spreads over at least this many days, a day apart, where the horizon allows: spaced
+// study beats massed study (Cepeda 2006, Dunlosky 2013).
+export const EXAM_DAYS = 3;
 const STEP = 15;
 export const STATES = ["on_track", "tight", "wont_fit"];
+// Days after today are filled to at most this share of their free time, leaving slack for the
+// overruns a far-off day's estimate hides (Zauberman & Lynch 2005). Today fills whole.
+export const FUTURE_FILL = 0.85;
 
 const up = (m) => Math.ceil(m / STEP) * STEP;
 const down = (m) => Math.floor(m / STEP) * STEP;
@@ -23,6 +33,37 @@ const sum = (xs) => xs.reduce((s, x) => s + x, 0);
 export function horizonMinutes(task, paces) {
   const pace = paces?.[paceKind(task)]?.pace;
   return Math.max(STEP, snap((task.est_min ?? 30) * (pace ?? 1)));
+}
+
+// The kind of work a task is, for the per-day rules: "exam" (study for an exam, quiz, test, midterm
+// or final), "programming", "writing", or null. An explicit task.kind wins; GitHub and Jira tasks
+// are programming; else the title decides.
+const EXAM = /\b(exams?|quiz(zes)?|tests?|midterms?|finals?)\b/i;
+const NOT_EXAM = /\bfinal\s+(project|paper|report|essay|presentation|draft)\b/i;
+const PROGRAMMING = /\b(programming|program|coding|code|implement\w*|debug\w*)\b/i;
+const WRITING = /\b(essays?|papers?|reports?|write-?ups?|drafts?|writing)\b/i;
+export function workKind(task) {
+  if (task.kind) return task.kind;
+  if (task.source === "github" || task.source === "jira") return "programming";
+  const title = task.title ?? "";
+  if (EXAM.test(title) && !NOT_EXAM.test(title)) return "exam";
+  if (PROGRAMMING.test(title)) return "programming";
+  if (WRITING.test(title)) return "writing";
+  return null;
+}
+
+// Like paceByKind, but the 80th percentile (nearest rank) of minutes / est_min over each kind's
+// newest PACE_WINDOW rows, not the median: { kind: { pace, n } }, a null pace below PACE_SAMPLES.
+// horizonMinutes(task, paceP80ByKind(actuals)) is a task's minutes_p80: a deadline judged at it
+// holds about 4 times in 5, where the median holds half the time (Buehler 1994, Flyvbjerg).
+export function paceP80ByKind(actuals) {
+  const newest = [...actuals].filter((a) => a.est_min > 0).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return Object.fromEntries(PACE_KINDS.map((kind) => {
+    const xs = newest.filter((a) => a.kind === kind).slice(0, PACE_WINDOW).map((a) => a.minutes / a.est_min).sort((a, b) => a - b);
+    const p80 = xs[Math.ceil(0.8 * xs.length) - 1];
+    const pace = xs.length < PACE_SAMPLES ? null : Math.round(Math.min(PACE_LIMITS[1], Math.max(PACE_LIMITS[0], p80)) * 100) / 100;
+    return [kind, { pace, n: xs.length }];
+  }));
 }
 
 // Minutes of work done on undone tasks that Lisul confirmed: a block answered More time on its
@@ -52,33 +93,62 @@ export function confirmedDoneMin(blocks, feedback) {
 export const dayFree = ({ cap, window_free_min, locked_min = 0 }) =>
   down(Math.max(0, Math.min(cap - locked_min, window_free_min)));
 
+// A task's buffer must hold at least this share of its minutes (Buehler 1994: overruns grow
+// with size), and never less than one working day.
+export const BUFFER_SHARE = 0.2;
+
 // The day a task should be finished by: the last working day before its due day when the due day
-// is 2 or more days off, else the due day. An overdue task's due day reads as today.
-export function targetDay(due, today, working) {
+// is 2 or more days off, else the due day. An overdue task's due day reads as today. With
+// buffer_min and room (day -> minutes it can hold), the target steps back a working day at a
+// time until the days after it, up to the due day, hold buffer_min, while a working day remains.
+export function targetDay(due, today, working, buffer_min = 0, room = () => 0) {
   const d = due < today ? today : due;
   if (diff(d, today) < 2) return d;
-  for (let x = addDays(d, -1); x >= today; x = addDays(x, -1)) if (working(x)) return x;
-  return d;
+  let tg = null, held = room(d);
+  for (let x = addDays(d, -1); x >= today; x = addDays(x, -1)) {
+    if (working(x)) { tg = x; if (held >= buffer_min) break; }
+    held += room(x);
+  }
+  return tg ?? d;
 }
 
 // The plan. Input (all minutes are whole numbers):
 //   today         "YYYY-MM-DD"
-//   tasks         [{ id, due, minutes, done_min }]: undone tasks with a due date; minutes is
-//                 horizonMinutes, done_min confirmedDoneMin's (0 without)
+//   tasks         [{ id, due, minutes, done_min, minutes_p80?, kind? }]: undone tasks with a due
+//                 date; minutes is horizonMinutes, done_min confirmedDoneMin's (0 without),
+//                 minutes_p80 horizonMinutes at paceP80ByKind (minutes without), kind workKind's
 //   free          { day: minutes }: dayFree for every day from today to the last due date
 //   locked        [{ task_id, day, minutes }]: today's locked task blocks, kept exactly
 //   frozen_days   [day]: days whose previous allocation is kept and that take nothing new
 //   previous      [{ task_id, day, minutes, over_min }]: the last allocation, for stability
 // Returns { allocations: [{ task_id, day, minutes, over_min }], tasks: { id: { state, slack_min,
-// short_min, finish_day, target_day, remaining_min } }, moved_min }.
-export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days = [], previous = [] }) {
+// short_min, finish_day, target_day, remaining_min, remaining_p80_min } }, moved_min }.
+export function planHorizon(input) {
+  const r = place(input);
+  const p80 = input.tasks.map((t) => ({ ...t, minutes: Math.max(t.minutes, t.minutes_p80 ?? 0) }));
+  const at80 = p80.some((t, i) => t.minutes > input.tasks[i].minutes) ? place({ ...input, tasks: p80 }) : r;
+  // States come from a plan at the P80 minutes; the allocations, finish day, target day and
+  // remaining minutes stay the median plan's.
+  for (const t of input.tasks) {
+    const real = r.tasks[t.id], s = at80.tasks[t.id];
+    const short_min = Math.max(real.short_min, s.short_min);
+    const state = short_min > 0 ? "wont_fit" : s.state === "tight" || real.state === "tight" ? "tight" : "on_track";
+    r.tasks[t.id] = { ...real, state, slack_min: s.slack_min, short_min, remaining_p80_min: s.remaining_min };
+  }
+  return r;
+}
+
+function place({ today, tasks, free = {}, locked = [], frozen_days = [], previous = [] }) {
   const frozen = new Set(frozen_days);
   const due = (t) => (t.due < today ? today : t.due);
   const need0 = new Map(tasks.map((t) => [t.id, up(Math.max(0, t.minutes - (t.done_min ?? 0)))]));
   const order = [...tasks].sort((a, b) => due(a).localeCompare(due(b)) || need0.get(a.id) - need0.get(b.id) || String(a.id).localeCompare(String(b.id)));
   const rank = new Map(order.map((t, i) => [t.id, i]));
   const known = new Set(tasks.map((t) => t.id));
-  const room0 = (d) => (frozen.has(d) ? 0 : down(Math.max(0, free[d] ?? 0)));
+  // The most minutes a task may hold on a day: 90, or 120 for programming and writing (only
+  // reached when it would not fit at 90).
+  const maxFor = (t) => (STRETCH_KINDS.includes(t.kind) ? STRETCH_MAX : CHUNK_MAX);
+  const room0 = (d) => (frozen.has(d) ? 0 : down(Math.max(0, free[d] ?? 0) * (d === today ? 1 : FUTURE_FILL)));
 
   // fixed: minutes no re-flow moves (locked blocks, frozen days); kept: the previous plan's
   // minutes still standing; both task -> day -> minutes.
@@ -113,7 +183,7 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
       .map((p) => [p.day, down(p.minutes - (p.over_min ?? 0))]).filter(([, m]) => m > 0).sort(([a], [b]) => a.localeCompare(b));
     if (need0.get(t.id) <= WHOLE_UP_TO && (mine.length > 1 || total(fixed, t.id) > 0)) continue;
     for (const [d, m] of mine) {
-      const room = CHUNK_MAX - at(t.id, d);
+      const room = maxFor(t) - at(t.id, d);
       let n = Math.min(m, left, Math.max(0, room));
       if (left - n > 0 && left - n < CHUNK_MIN) n = left - CHUNK_MIN;
       if (n < Math.min(CHUNK_MIN, left)) continue;
@@ -142,13 +212,13 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
   const free_ = (d) => room0(d) - used(d);
 
   const working = (d) => room0(d) > 0 || frozen.has(d) || locked.some((b) => b.day === d);
-  const target = new Map(order.map((t) => [t.id, targetDay(t.due, today, working)]));
+  const target = new Map(order.map((t) => [t.id, targetDay(t.due, today, working, BUFFER_SHARE * t.minutes, room0)]));
 
   // The largest piece of `left` minutes task t may add on day d, or 0.
-  const piece = (t, d, left) => {
+  const piece = (t, d, left, lim = CHUNK_MAX) => {
     const has = at(t.id, d);
     const otherDays = [...new Set([...(fixed.get(t.id)?.keys() ?? []), ...(kept.get(t.id)?.keys() ?? [])])].some((x) => x !== d);
-    let n = Math.min(left, down(free_(d)), Math.max(0, CHUNK_MAX - has));
+    let n = Math.min(left, down(free_(d)), Math.max(0, lim - has));
     if (need0.get(t.id) <= WHOLE_UP_TO && !has) return n === left && !otherDays ? n : 0;
     while (n > 0) {
       const rest = left - n;
@@ -157,31 +227,68 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
     }
     return 0;
   };
-  const fill = (t, from, to) => {
+  // With spaced, a day next to one the task already has takes nothing new.
+  const fill = (t, from, to, lim = CHUNK_MAX, spaced = false) => {
     for (let d = from; d <= to && need.get(t.id) > 0; d = addDays(d, 1)) {
-      const n = piece(t, d, need.get(t.id));
+      if (spaced && !at(t.id, d) && (at(t.id, addDays(d, -1)) || at(t.id, addDays(d, 1)))) continue;
+      const n = piece(t, d, need.get(t.id), lim);
       if (n > 0) { add(kept, t.id, d, n); need.set(t.id, need.get(t.id) - n); }
     }
-  };
-  // Make room for t on from..to by taking minutes from tasks due later, latest due first and
-  // only as many as t still needs, then fill again. What a later task gives up it re-places in
-  // its own turn.
-  const evict = (t, from, to) => {
-    for (const v of [...order].reverse()) {
-      if (need.get(t.id) <= 0 || rank.get(v.id) <= rank.get(t.id)) break;
-      for (const d of [...(kept.get(v.id)?.keys() ?? [])].filter((x) => x >= from && x <= to).sort().reverse()) {
-        if (need.get(t.id) <= 0) break;
-        const k = kept.get(v.id).get(d);
-        const want = up(Math.max(Math.min(need.get(t.id), CHUNK_MAX - at(t.id, d)) - Math.max(0, down(free_(d))), 0));
-        if (want <= 0) continue;
-        let cut = Math.min(k, Math.max(want, at(t.id, d) ? 0 : Math.min(CHUNK_MIN, need.get(t.id))));
-        if (k - cut > 0 && k - cut + (fixed.get(v.id)?.get(d) ?? 0) < CHUNK_MIN) cut = k;
-        const before = need.get(t.id);
-        add(kept, v.id, d, -cut);
-        fill(t, d, d);
-        if (need.get(t.id) === before) add(kept, v.id, d, cut); // it didn't help: put it back
-        else need.set(v.id, need.get(v.id) + cut);
+    // Top-ups: what is left may go in smaller steps onto days the task already has, but only
+    // when that places all of it (no stray piece under 30 is ever left).
+    const tops = [];
+    for (let d = from; d <= to && need.get(t.id) > 0; d = addDays(d, 1)) {
+      const has = at(t.id, d);
+      const n = has ? Math.min(down(free_(d)), Math.max(0, lim - has)) : 0;
+      if (n > 0) tops.push([d, n]);
+    }
+    if (need.get(t.id) > 0 && sum(tops.map(([, n]) => n)) >= need.get(t.id)) {
+      for (const [d, n] of tops) {
+        const k = Math.min(n, need.get(t.id));
+        if (k > 0) { add(kept, t.id, d, k); need.set(t.id, need.get(t.id) - k); }
       }
+    }
+  };
+  // Make room for t on from..to by taking minutes from tasks due later, fewest minutes moved
+  // first and only as many as t still needs, then fill again. What a later task gives up it
+  // re-places in its own turn.
+  const evict = (t, from, to, lim = CHUNK_MAX) => {
+    // The cut from v on day d that would make room for t, or 0 when none is needed.
+    const cutAt = (v, d) => {
+      const k = kept.get(v.id)?.get(d) ?? 0;
+      const f = Math.max(0, down(free_(d)));
+      const want = up(Math.max(Math.min(need.get(t.id), lim - at(t.id, d)) - f, 0));
+      if (!k || want <= 0) return 0;
+      const cut = Math.min(k, want);
+      return k - cut > 0 && k - cut + (fixed.get(v.id)?.get(d) ?? 0) < CHUNK_MIN ? k : cut;
+    };
+    // 1 when v could not take the cut back on its other days by its due day (it would cascade).
+    const strands = (v, d) => {
+      let room = 0;
+      for (let x = today; x <= due(v); x = addDays(x, 1)) {
+        if (x === d) continue;
+        const f = down(Math.max(0, free_(x))), has = at(v.id, x);
+        room += has ? Math.min(f, Math.max(0, maxFor(v) - has)) : f >= CHUNK_MIN ? Math.min(f, CHUNK_MAX) : 0;
+      }
+      return room >= cutAt(v, d) ? 0 : 1;
+    };
+    // Candidates: every later task's kept day in range. The fewest minutes moved first, then a
+    // cut the task can take back, then latest due, then the latest day.
+    const later = order.filter((v) => rank.get(v.id) > rank.get(t.id));
+    const key = ([v, d]) => [cutAt(v, d), strands(v, d), -rank.get(v.id)];
+    const cands = later.flatMap((v) => [...(kept.get(v.id)?.keys() ?? [])].filter((x) => x >= from && x <= to).map((d) => [v, d]))
+      .map((c) => [c, key(c)])
+      .sort(([[, a], ka], [[, b], kb]) => ka.reduce((r, x, i) => r || x - kb[i], 0) || b.localeCompare(a))
+      .map(([c]) => c);
+    for (const [v, d] of cands) {
+      if (need.get(t.id) <= 0) break;
+      const cut = cutAt(v, d);
+      if (cut <= 0) continue;
+      const before = need.get(t.id);
+      add(kept, v.id, d, -cut);
+      fill(t, d, d, lim);
+      if (need.get(t.id) === before) add(kept, v.id, d, cut); // it didn't help: put it back
+      else need.set(v.id, need.get(v.id) + cut);
     }
   };
 
@@ -197,12 +304,19 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
         need.set(t.id, need.get(t.id) + back);
       }
     }
+    // Exam study: first a share a day on days a day apart, then that share on any day, then the
+    // plain rules for what is left.
+    if (t.kind === "exam" && need0.get(t.id) > WHOLE_UP_TO) {
+      const m = need0.get(t.id);
+      const share = up(m / (m >= EXAM_DAYS * CHUNK_MIN ? Math.max(EXAM_DAYS, Math.ceil(m / CHUNK_MAX)) : 2));
+      fill(t, today, tg, share, true);
+      fill(t, today, tg, share);
+    }
     fill(t, today, tg);
     evict(t, today, tg);
     if (tg < dd) { fill(t, addDays(tg, 1), dd); evict(t, addDays(tg, 1), dd); }
-    // Last resort: the due day takes what its free time holds, past the 90-minute chunk.
-    const crunch = Math.min(need.get(t.id), down(Math.max(0, free_(dd))));
-    if (crunch > 0 && !frozen.has(dd)) { add(kept, t.id, dd, crunch); need.set(t.id, need.get(t.id) - crunch); }
+    // Last resort for programming and writing: up to 120 a day from today to the due day.
+    if (need.get(t.id) > 0 && maxFor(t) > CHUNK_MAX) { fill(t, today, dd, STRETCH_MAX); evict(t, today, dd, STRETCH_MAX); }
     // Won't fit: what is left goes on the due day past the cap, never dropped.
     const left = need.get(t.id);
     if (left > 0) { add(over, t.id, dd, left); need.set(t.id, 0); }

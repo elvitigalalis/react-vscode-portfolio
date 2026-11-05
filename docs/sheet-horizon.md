@@ -23,7 +23,7 @@ Pure, deterministic, no network. Same input, same output.
 | field | what |
 | --- | --- |
 | `today` | `"YYYY-MM-DD"` in `settings.time_zone` |
-| `tasks` | `[{ id, due, minutes, done_min }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. |
+| `tasks` | `[{ id, due, minutes, done_min, minutes_p80?, kind? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. Optional `minutes_p80` is `horizonMinutes(task, paceP80ByKind(actuals))`, the minutes at his 80th-percentile overrun; without it the states are judged at `minutes`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. |
 | `free` | `{ day: minutes }` for every day from today to the latest due date: `dayFree(...)` of that day. A missing day has 0. |
 | `locked` | `[{ task_id, day, minutes }]`: today's locked task blocks, past ones too (one row per task, minutes summed). |
 | `frozen_days` | `[day]`: tomorrow once today is shut down (`days.shutdown`), else `[]`. |
@@ -46,20 +46,31 @@ Helpers in the same module:
     planSnapshot's `window`) after the day's busy times widened by `travel_min` (10) on each side,
     that weekday's habits at their ideal times, and the day's locked blocks;
   - `locked_min` is the minutes of the day's locked task blocks (habits stay out, as in the cap).
-- **`targetDay(due, today, working)`**: see "Buffer" below.
+- **`paceP80ByKind(actuals)`** → `{ kind: { pace, n } }`, the shape of `paceByKind`: the 80th
+  percentile (nearest rank) of `minutes / est_min` over each kind's newest 20 actuals with an
+  estimate, held to 0.5–3, null below 5 of them. Blocks stay sized at the median (`paceByKind`,
+  since More time absorbs one block's overrun); only deadlines use P80.
+- **`workKind(task)`**: `task.kind` when set; GitHub and Jira tasks are `"programming"`; else the
+  title: exam, quiz, test, midterm or final (not "final project/paper/report/essay/presentation/
+  draft") is `"exam"`, program/coding/code/implement/debug is `"programming"`, essay/paper/report/
+  write-up/draft/writing is `"writing"`, anything else `null`. The caller passes the task row
+  (`title`, `source`) and puts the result in the input's `kind`.
+- **`targetDay(due, today, working, buffer_min = 0, room = () => 0)`**: see "Buffer" below.
 
 ### Output
 
 ```
 {
   allocations: [{ task_id, day, minutes, over_min }],   -- by day, then plan order
-  tasks: { [id]: { state, slack_min, short_min, finish_day, target_day, remaining_min } },
+  tasks: { [id]: { state, slack_min, short_min, finish_day, target_day, remaining_min,
+                   remaining_p80_min } },
   moved_min                                             -- minutes taken off where `previous` had them
 }
 ```
 
-`minutes` on a day includes that task's locked minutes there. `over_min` is the part past the
-day's free time (only ever on the due day of a task that won't fit).
+`minutes` on a day includes that task's locked minutes there. `over_min` is the part the rules
+couldn't place: past the day's free time or past the task's daily maximum (only ever on the due
+day of a task that won't fit).
 
 ### Rules
 
@@ -68,22 +79,38 @@ day's free time (only ever on the due day of a task that won't fit).
 2. **Plan order (EDF):** due date (an overdue one reads as due today), then fewer remaining
    minutes, then id (R3).
 3. **Front-loaded fill:** each task in plan order takes free time from today onward, earliest day
-   first, never as late as possible (R3).
-4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day; a task with 60
-   minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
+   first, never as late as possible (R3). Days after today take at most `FUTURE_FILL` (85%) of
+   their free time, rounded down to 15; today takes all of it. The slack absorbs the overruns a
+   far-off day's estimate hides (Zauberman & Lynch 2005). A task the plain pass can't finish may
+   top up days it already has in 15-minute steps, but only when that places all of what is left.
+4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day, the due day too
+   (rule 8 has the one exception); a task with 60 minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
    90 + 75 + 30). All minutes move in 15-minute steps.
-5. **Buffer (R4):** the **target day** is the last working day before the due day when the due
+5. **Exam spacing:** an `exam` task with more than 60 minutes spreads over at least `EXAM_DAYS`
+   (3) days, a day apart, before its target (Cepeda 2006, Dunlosky 2013): its share a day is
+   its minutes over `max(3, ceil(minutes / 90))` days (over 2 days for 61-89 minutes), rounded
+   up to 15. Fill first places that share on days with no minutes of the task next to them, then
+   the share on any day up to the target, then the plain rules for what is left. So 3 hours
+   due in a week go 1h today, 1h in two days, 1h in four; with only two days to the target they
+   go 90 + 90.
+6. **Buffer (R4):** the **target day** is the last working day before the due day when the due
    day is 2 or more days off, else the due day. A **working day** has free time, is frozen, or
-   holds a locked block. Fill runs to the target day first, then into the buffer (target + 1 to
-   the due day).
-6. **Earlier deadlines win:** when a task can't reach its target (or then its due day) in free
-   time, it takes kept minutes from tasks due later, latest due first, only as many as it needs;
-   those re-place in their own turn.
-7. **Due-day crunch:** before giving up, the due day takes whatever its free time holds, past
-   the 90-minute chunk.
-8. **Won't fit stays visible (R7):** what is still left goes on the due day as `over_min`, past
+   holds a locked block. The buffer (target + 1 to the due day) must also hold `BUFFER_SHARE`
+   (20%) of the task's `minutes`, counted in the days' fill room: the target steps back a working
+   day at a time until it does, never before today (overruns grow with size: Buehler 1994). So a
+   60-minute task keeps a one-day buffer and a 10-hour one on 2-hour days gets two. Fill runs to
+   the target day first, then into the buffer.
+7. **Earlier deadlines win:** when a task can't reach its target (or then its due day) in free
+   time, it takes kept minutes from tasks due later, only as many as it needs: the smallest cut
+   first, then one the later task can take back on its other days, then latest due, then latest
+   day. Those re-place in their own turn.
+8. **Stretch:** before giving up, a `programming` or `writing` task may hold up to `STRETCH_MAX`
+   (120) minutes a day, from today to its due day, filling free time and then under rule 7.
+   Other kinds never pass 90 (study is better spaced; production work has a fixed start-up
+   cost). This replaces the old due-day crunch, which let any task take the whole due day.
+9. **Won't fit stays visible (R7):** what is still left goes on the due day as `over_min`, past
    the cap, never dropped.
-9. **No new minutes before today, after the due day, or on a frozen day.**
+10. **No new minutes before today, after the due day, or on a frozen day.**
 
 ### Stability (R9)
 
@@ -97,7 +124,7 @@ A re-flow starts from `previous` and changes only what the change forces:
   run's `over_min` is not kept; it is planned again.
 - **Forced moves only:** a day whose free time shrank (a busy time landed) gives back only the
   minutes past its free time, from the task due latest. New or grown work takes free time first
-  and displaces kept minutes only under rule 6. Kept minutes past a task's target come forward
+  and displaces kept minutes only under rule 7. Kept minutes past a task's target come forward
   when time before the target is free, so a task doesn't eat its buffer needlessly.
 - Re-planning its own output moves nothing (`moved_min` 0), and after one change (a busy time, a
   new task, a done task) a re-flow never moves more minutes than a fresh plan would; the tests
@@ -107,10 +134,17 @@ A re-flow starts from `previous` and changes only what the change forces:
 
 ### States (R5, R6)
 
+States are judged at P80 (Buehler 1994; Flyvbjerg): the engine also plans every task at
+`max(minutes, minutes_p80)`, from the same input, and reads `state`, `slack_min` and `short_min`
+from that plan, so on track means about 4 in 5 likely, not 1 in 2. The allocations, `finish_day`,
+`target_day` and `remaining_min` stay those of the median plan; `remaining_p80_min` is the P80
+plan's remaining. A task is `wont_fit` when either plan is short, and `tight` when either says
+tight. With no `minutes_p80` both plans are one.
+
 - **`slack_min`**: the running-sum margin at the task's due day: the free minutes from today to
   it, plus the locked and frozen minutes of the tasks due by then, less what those tasks have
   left.
-- **`short_min`**: the task's `over_min`, summed.
+- **`short_min`**: the task's `over_min`, summed (the larger of the two plans').
 - **`finish_day`**: its last day with minutes (null with nothing left).
 - **`wont_fit`** when `short_min > 0`.
 - **`tight`** otherwise when it finishes after its target day, or `slack_min` is under one day's
@@ -160,6 +194,19 @@ resulting minutes and states ever reach Claude, never the Oura numbers (ADR 0005
    except `previous`. A block is locked when approved and not an auto-approved one still to
    start (proposal.mjs's `movable`). The window is planSnapshot's without Oura's wake: windowStart
    (07:00, on today from now) to the shutdown line or wind-down.
+
+   **What each task in the input must carry** for the blocking rules (all optional; the engine
+   is safe without them, so they can land after the rest):
+
+   | field | value | without it |
+   | --- | --- | --- |
+   | `minutes_p80` | `horizonMinutes(task, paceP80ByKind(actuals))`, from the same `actuals` rows as `paceByKind` | states judged at the median (`minutes`) |
+   | `kind` | `workKind(task)` on the task row (needs `title`, `source`, and `kind` if the row ever has one) | no exam spacing, no 120-minute stretch |
+
+   Both go in the key, so a pace or title change re-flows. Nothing else changes for the caller:
+   the 85% fill of later days and the 20% buffer work from `free` and `minutes` as passed now.
+   The output only gains `remaining_p80_min` per task; every other field keeps its name and
+   meaning (`short_min` and `over_min` can now also count minutes past the daily maximum).
 2. **The re-flow**, `reflowHorizon(io, now)` with `io = { read(query), rpc(name, args) }`, each
    function's own database: build, key, skip when equal to `settings.horizon_key`, else
    `planHorizon` and `replace_horizon(today, key, allocations, states)`. It runs in the telegram
