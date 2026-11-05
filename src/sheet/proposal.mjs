@@ -338,6 +338,68 @@ function text(value, name, max, errors) {
 // "6h00", "6h30": a workload in hours and minutes.
 const hoursLabel = (m) => `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}`;
 
+// A task whose kind is known to be hard work: a course, GitHub or Jira task that isn't light.
+const hardKind = (t) => ["brightspace", "github", "jira"].includes(t.source) && !t.light;
+// A habit whose name says it is a meal: its block counts as a meal break.
+const MEAL = /\b(lunch|dinner|breakfast|brunch|meal|eat)\b/i;
+
+// Day rules and first steps (docs/sheet-v5.md): the long break, the meal break and the mail and
+// admin batches, on `work` (the day's task blocks, approved and proposed, { name?, start, end,
+// task_id }, sorted) and `other` (busy times and habit blocks, { start, end, meal }). A rule
+// whose numbers day_rules lacks is skipped. One error per rule broken.
+function laterRuleErrors(work, other, snapshot, errors) {
+  const r = snapshot.day_rules;
+  const tasks = new Map(snapshot.tasks.map((t) => [t.id, t]));
+  // Long break: task blocks under long_break_min apart are one stretch, which holds at most
+  // long_break_after_min minutes of blocks.
+  if (r.long_break_after_min) {
+    let stretch = null;
+    const stretches = [];
+    for (const s of work) {
+      if (stretch && s.start - stretch.end < r.long_break_min) stretch.items.push(s), (stretch.end = Math.max(stretch.end, s.end));
+      else stretches.push((stretch = { end: s.end, items: [s] }));
+    }
+    for (const st of stretches) {
+      let sum = 0;
+      const over = st.items.find((s) => (sum += s.end - s.start) > r.long_break_after_min);
+      const mine = st.items.filter((s) => s.name);
+      if (!over || st.items.length < 2 || !mine.length) continue;
+      const total = st.items.reduce((n, s) => n + s.end - s.start, 0);
+      const named = over.name ? over : mine.at(-1);
+      errors.push(`${named.name}: makes ${total} minutes of blocks with no break of ${r.long_break_min} minutes or more; leave a ${r.long_break_min}-minute break after about ${r.long_break_after_min} minutes of blocks`);
+    }
+  }
+  // Meal break: with meal_after_min or more of task blocks, a free meal_break_min between
+  // meal_from and meal_to, where a meal habit counts as free.
+  const total = work.reduce((n, s) => n + s.end - s.start, 0);
+  if (r.meal_from && total >= r.meal_after_min) {
+    const [from, to] = [toMinutes(r.meal_from), toMinutes(r.meal_to)];
+    const taken = [...work, ...other.filter((s) => !s.meal)].map((s) => [Math.max(from, s.start), Math.min(to, s.end)])
+      .filter(([a, b]) => a < b).sort((a, b) => a[0] - b[0]);
+    let longest = 0, at = from;
+    for (const [a, b] of taken) longest = Math.max(longest, a - at), (at = Math.max(at, b));
+    longest = Math.max(longest, to - at);
+    const named = work.find((s) => s.name && s.start < to && from < s.end);
+    if (longest < r.meal_break_min && named) {
+      errors.push(`${named.name}: leaves no ${r.meal_break_min}-minute break between ${r.meal_from} and ${r.meal_to}, the middle third of the plan window, on a day with ${hoursLabel(total)} of blocks; leave one for a meal`);
+    }
+  }
+  // Mail and admin: back-to-back runs of them (under long_break_min apart, with no other task
+  // block between) are batches, at most mail_admin_batches a day.
+  if (r.mail_admin_batches) {
+    let batches = 0, last = null;
+    for (const s of work) {
+      if (!tasks.get(s.task_id)?.mail_admin) { last = null; continue; }
+      if (!last || s.start - last.end >= r.long_break_min) batches += 1;
+      last = s;
+      if (batches > r.mail_admin_batches && s.name) {
+        errors.push(`${s.name}: starts a third batch of mail and admin tasks; put them in at most ${r.mail_admin_batches} batches a day, back to back`);
+        break;
+      }
+    }
+  }
+}
+
 // The day rules on a proposal's spans ({ name, start, end }, minutes on the day), pushing an
 // error for each: the travel gap, the break rule and the workload cap. The day's approved blocks count; the
 // pending revision's proposed blocks don't, since the new revision replaces them.
@@ -385,6 +447,14 @@ function dayRuleErrors(spans, snapshot, errors) {
   if (planned > rules.workload_cap_min) {
     errors.push(`blocks: ${hoursLabel(planned)} planned, over the ${hoursLabel(rules.workload_cap_min)} workload cap`);
   }
+
+  const meal = new Map(list(snapshot.habits).map((h) => [h.id, MEAL.test(h.name ?? "")]));
+  const work = [...approved.filter((b) => b.task_id && !b.habit_id).map((b) => ({ start: at(b.starts_at), end: at(b.ends_at), task_id: b.task_id })),
+    ...spans.filter((s) => !s.name.startsWith("habits["))].sort((a, b) => a.start - b.start);
+  const other = [...snapshot.busy.map((b) => ({ start: at(b.starts_at), end: at(b.ends_at) })),
+    ...approved.filter((b) => b.habit_id).map((b) => ({ start: at(b.starts_at), end: at(b.ends_at), meal: meal.get(b.habit_id) })),
+    ...spans.filter((s) => s.name.startsWith("habits[")).map((s) => ({ ...s, meal: meal.get(s.habit_id) }))];
+  laterRuleErrors(work, other, snapshot, errors);
 }
 
 // The habit blocks of a proposal ({ habit_id, start: "HH:MM" }): each one of the day's habits, at
@@ -426,7 +496,7 @@ function habitBlockRows(input, snapshot, placed, errors) {
     if (block) errors.push(`${name}: overlaps blocks[${block.i}]`);
     const twin = out.spans.find((p) => from < p.end && p.start < to);
     if (twin) errors.push(`${name}: overlaps ${twin.name}`);
-    out.spans.push({ name, start: from, end: to });
+    out.spans.push({ name, start: from, end: to, habit_id: h.id });
     if (errors.length === before) out.rows.push({ habit_id: h.id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
   });
   return out;
@@ -563,6 +633,11 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
         errors.push(`${name}: minutes must be ${task.paced_min}, the task's paced estimate`);
       }
       if (task?.at_time && task.at_time.slice(0, 5) !== start) errors.push(`${name}: this task is fixed at ${task.at_time.slice(0, 5)}, so it must start then`);
+      // The light start: a task known to be hard work waits for light_until (a fixed time stands).
+      const lightUntil = snapshot.day_rules?.light_until;
+      if (lightUntil && from < toMinutes(lightUntil) && task && !task.at_time && hardKind(task)) {
+        errors.push(`${name}: starts before ${lightUntil}, and until then only light tasks go (mail, admin, or ${LIGHT_MAX} minutes or less); start it at ${lightUntil} or later`);
+      }
       if (errors.length > before && !Number.isInteger(minutes)) return;
       const to = from + minutes;
       if (win && to > win.to) errors.push(`${name}: ends after ${snapshot.window.to}, ${windowEnd(snapshot)}`);
@@ -572,7 +647,7 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
       if (hit) errors.push(`${name}: overlaps ${hit.label} ${clockSpan(hit.start, hit.end)}`);
       const twin = placed.find((p) => from < p.end && p.start < to);
       if (twin) errors.push(`${name}: overlaps blocks[${twin.i}]`);
-      placed.push({ i, start: from, end: to });
+      placed.push({ i, start: from, end: to, task_id: b.task_id });
       if (errors.length === before) {
         blocks.push({ task_id: b.task_id, starts_at: zonedIso(day, from, tz), ends_at: zonedIso(day, to, tz) });
       }
