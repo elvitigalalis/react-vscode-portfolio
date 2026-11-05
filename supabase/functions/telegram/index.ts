@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep } from "../../../src/sheet/nudges.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
@@ -93,9 +93,9 @@ async function snapshot(now: Date) {
   // Tips: two weeks of score contributors and the Gym habit's time; and whether the ring's battery
   // was low at the last sync. The words are composed here (nudges.mjs), never by the routine.
   const tipDays = await db(`sleep_days?select=day,contributors&day=gte.${addDays(today, -14)}&contributors=not.is.null`).catch(() => []);
-  const gymHabits = await db("habits?select=name,ideal").catch(() => []);
+  const gymHabits = await db("habits?select=id,name,ideal").catch(() => []);
   const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, ringLow };
+  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -173,7 +173,48 @@ async function send(now: Date) {
     await c.sent();
     sent.push(m.kind);
   }
-  return { sent };
+  // The pinned Now message must not stop the messages, nor they it.
+  const pin = await pinTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return { sent, pin };
+}
+
+// --- The pinned Now message (docs/sheet-nudges.md, "The pinned Now message") ---------------
+// pinStep decides; this sends, pins and edits. Its id and words live in settings (now_message_id,
+// now_text). Made with sendMessage's disable_notification ("Sends the message silently") and
+// pinned with pinChatMessage's disable_notification ("Notifications are always disabled in ...
+// private chats", and a bot may pin any non-service message there: core.telegram.org/bots/api#sendmessage,
+// #pinchatmessage). Then only editMessageText, which notifies no one (#editmessagetext). Telegram
+// refuses an edit that changes nothing ("message is not modified"), which only records the words;
+// a message he deleted ("message to edit not found") is forgotten, and made again once he's up.
+const saveNow = (patch: Record<string, unknown>) => db("settings?id=eq.true", { method: "PATCH", body: JSON.stringify(patch) });
+
+async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
+  // A block's task may be on another day or a Someday list, outside the snapshot's tasks.
+  const missing = [...new Set(snap.blocks.map((b: { task_id: string | null }) => b.task_id)
+    .filter((id: string | null) => id && !snap.tasks.some((t: { id: string }) => t.id === id)))];
+  const tasks = missing.length ? [...snap.tasks, ...(await db(`tasks?select=id,title&id=in.(${missing.join(",")})`))] : snap.tasks;
+  const step = pinStep({ ...snap, tasks }, now) as { action: "create" | "edit"; text: string; message_id?: number } | null;
+  if (!step) return null;
+  const chat_id = snap.settings.telegram_chat_id;
+  if (step.action === "edit") {
+    try {
+      await telegram("editMessageText", { chat_id, message_id: step.message_id, text: step.text, ...PLAIN });
+    } catch (e) {
+      const why = e instanceof Error ? e.message : "";
+      if (/message to edit not found|message can't be edited/i.test(why)) {
+        await saveNow({ now_message_id: null, now_text: null });
+        return "gone";
+      }
+      if (!/message is not modified/i.test(why)) throw e;
+    }
+    await saveNow({ now_text: step.text });
+    return "edited";
+  }
+  const msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  // Kept before the pin, so a refused pin never makes a second message.
+  await saveNow({ now_message_id: msg.message_id, now_text: step.text });
+  await telegram("pinChatMessage", { chat_id, message_id: msg.message_id, disable_notification: true });
+  return "created";
 }
 
 const setSentAt = (id: string, sent_at: string | null) => db(`nudges?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ sent_at }) });
