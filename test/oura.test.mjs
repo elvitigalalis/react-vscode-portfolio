@@ -100,10 +100,26 @@ test("dayRows: per day, readiness's score and the longest long_sleep's total sec
   const sleep = [doc(), doc({ id: "s2", total_sleep_duration: 9000, type: "long_sleep" }), doc({ id: "s3", type: "sleep", total_sleep_duration: 30000 }),
     doc({ id: "s4", day: "2026-11-03", total_sleep_duration: 20400 })];
   const readiness = [{ id: "r1", day: "2026-11-04", score: 64, contributors: { hrv_balance: 50 } }, { id: "r2", day: "2026-11-02", score: 88 }, { id: "r3", day: "2026-11-01", score: null }];
-  assert.deepEqual(dayRows(sleep, readiness), [
+  const pick = (r) => ({ day: r.day, readiness: r.readiness, sleep_s: r.sleep_s });
+  assert.deepEqual(dayRows(sleep, readiness).map(pick), [
     { day: "2026-11-02", readiness: 88, sleep_s: null },
     { day: "2026-11-03", readiness: null, sleep_s: 20400 },
     { day: "2026-11-04", readiness: 64, sleep_s: 27000 },
+  ]);
+});
+
+test("dayRows: the day's numbers for /plan, from made-up Oura payloads; nothing else is kept", () => {
+  const sleep = [
+    doc({ efficiency: 91, deep_sleep_duration: 4800, rem_sleep_duration: 6000, lowest_heart_rate: 48, average_heart_rate: 53.6, average_hrv: 41 }),
+    doc({ id: "s2", type: "sleep", total_sleep_duration: 1800, efficiency: 50, lowest_heart_rate: 60 }), // a nap: ignored
+  ];
+  const readiness = [{ day: "2026-11-04", score: 86, temperature_deviation: -0.23, contributors: {} }];
+  const dailySleep = [{ id: "d1", day: "2026-11-04", score: 82, contributors: { deep_sleep: 90 } }, { day: "2026-11-03", score: 140 }];
+  const activity = [{ id: "a1", day: "2026-11-04", score: 77, steps: 8412, met: { items: [1, 2] }, class_5_min: "0001" }];
+  // Out-of-range or unknown values are dropped, and make no row of their own.
+  const stress = [{ id: "x1", day: "2026-11-04", day_summary: "restored", stress_high: 600 }, { day: "2026-11-03", day_summary: "panic" }];
+  assert.deepEqual(dayRows(sleep, readiness, { dailySleep, activity, stress }), [
+    { day: "2026-11-04", readiness: 86, sleep_s: 27000, sleep_score: 82, efficiency: 91, deep_s: 4800, rem_s: 6000, rhr_low: 48, rhr_avg: 54, hrv_avg: 41, temp_dev: -0.23, activity_score: 77, steps: 8412, stress: "restored" },
   ]);
 });
 

@@ -1436,6 +1436,21 @@ create table if not exists sleep_days (
   readiness int check (readiness between 0 and 100),
   sleep_s int check (sleep_s between 0 and 86400)
 );
+-- The day's Oura numbers that /plan shows him (never /now, never Claude: docs/adr/0005): the
+-- sleep score, the main sleep's efficiency, deep and REM seconds, lowest and average heart rate
+-- and average HRV, readiness's temperature deviation, the activity score and steps, and the
+-- stress summary.
+alter table sleep_days add column if not exists sleep_score int check (sleep_score between 0 and 100);
+alter table sleep_days add column if not exists efficiency int check (efficiency between 1 and 100);
+alter table sleep_days add column if not exists deep_s int check (deep_s between 0 and 86400);
+alter table sleep_days add column if not exists rem_s int check (rem_s between 0 and 86400);
+alter table sleep_days add column if not exists rhr_low int check (rhr_low between 20 and 250);
+alter table sleep_days add column if not exists rhr_avg int check (rhr_avg between 20 and 250);
+alter table sleep_days add column if not exists hrv_avg int check (hrv_avg between 0 and 500);
+alter table sleep_days add column if not exists temp_dev numeric(4, 2) check (temp_dev between -10 and 10);
+alter table sleep_days add column if not exists activity_score int check (activity_score between 0 and 100);
+alter table sleep_days add column if not exists steps int check (steps between 0 and 200000);
+alter table sleep_days add column if not exists stress text check (stress in ('restored', 'normal', 'stressful'));
 -- Wind-down: Oura's optimal bedtime window by its day (/v2/usercollection/sleep_time), only its
 -- start and end as seconds from that day's midnight, for tonight's bedtime when none is set.
 create table if not exists sleep_times (
@@ -1544,11 +1559,18 @@ begin
   from jsonb_to_recordset(coalesce(nights, '[]')) as x(oura_id text, day date, type text, bedtime_start timestamptz, bedtime_end timestamptz)
   on conflict (oura_id) do update
   set day = excluded.day, type = excluded.type, bedtime_start = excluded.bedtime_start, bedtime_end = excluded.bedtime_end;
-  insert into sleep_days (day, readiness, sleep_s)
-  select x.day, x.readiness, x.sleep_s
-  from jsonb_to_recordset(coalesce(days, '[]')) as x(day date, readiness int, sleep_s int)
+  insert into sleep_days (day, readiness, sleep_s, sleep_score, efficiency, deep_s, rem_s, rhr_low, rhr_avg, hrv_avg, temp_dev, activity_score, steps, stress)
+  select x.day, x.readiness, x.sleep_s, x.sleep_score, x.efficiency, x.deep_s, x.rem_s, x.rhr_low, x.rhr_avg, x.hrv_avg, x.temp_dev, x.activity_score, x.steps, x.stress
+  from jsonb_to_recordset(coalesce(days, '[]')) as x(day date, readiness int, sleep_s int, sleep_score int, efficiency int, deep_s int, rem_s int,
+    rhr_low int, rhr_avg int, hrv_avg int, temp_dev numeric, activity_score int, steps int, stress text)
   on conflict (day) do update
-  set readiness = coalesce(excluded.readiness, sleep_days.readiness), sleep_s = coalesce(excluded.sleep_s, sleep_days.sleep_s);
+  set readiness = coalesce(excluded.readiness, sleep_days.readiness), sleep_s = coalesce(excluded.sleep_s, sleep_days.sleep_s),
+      sleep_score = coalesce(excluded.sleep_score, sleep_days.sleep_score), efficiency = coalesce(excluded.efficiency, sleep_days.efficiency),
+      deep_s = coalesce(excluded.deep_s, sleep_days.deep_s), rem_s = coalesce(excluded.rem_s, sleep_days.rem_s),
+      rhr_low = coalesce(excluded.rhr_low, sleep_days.rhr_low), rhr_avg = coalesce(excluded.rhr_avg, sleep_days.rhr_avg),
+      hrv_avg = coalesce(excluded.hrv_avg, sleep_days.hrv_avg), temp_dev = coalesce(excluded.temp_dev, sleep_days.temp_dev),
+      activity_score = coalesce(excluded.activity_score, sleep_days.activity_score), steps = coalesce(excluded.steps, sleep_days.steps),
+      stress = coalesce(excluded.stress, sleep_days.stress);
   update oura_account set synced_at = now(), last_error = null where id;
   if change is not null and not exists (select 1 from changes c where c.reason = change->>'reason' and c.ref = change->>'ref') then
     insert into changes (kind, reason, weight, ref)

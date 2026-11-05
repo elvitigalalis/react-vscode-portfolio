@@ -8,6 +8,7 @@
 //
 // Oura's side: the token refresh (cloud.ouraring.com/docs/authentication: "The refresh token is
 // single-use"), GET /v2/usercollection/sleep and /daily_readiness (cloud.ouraring.com/v2/docs).
+// /plan's day numbers: GET /daily_sleep, /daily_activity and /daily_stress, scores and steps only.
 // Wind-down: GET /v2/usercollection/sleep_time, Oura's optimal bedtime window, keeping only its
 // day and offsets (sleep_times). The spec maps no endpoint to a scope; if the daily grant doesn't
 // cover it, the run carries on without it.
@@ -75,7 +76,10 @@ async function sync(tokens: Tokens, now: Date) {
   ]);
   const times = sleepTimeRows(await ouraDocs(fetch, "sleep_time", range, access).catch(() => []));
   const nights = sleepRows(sleepDocs);
-  const days = dayRows(sleepDocs, readinessDocs);
+  // The day's other numbers for /plan; like sleep_time, a refused read is skipped.
+  const [dailySleep, activity, stress] = await Promise.all(["daily_sleep", "daily_activity", "daily_stress"]
+    .map((c) => ouraDocs(fetch, c, range, access).catch(() => [])));
+  const days = dayRows(sleepDocs, readinessDocs, { dailySleep, activity, stress });
 
   // Today's wake against today's newest revision, from every night kept (the 14-night medians
   // aren't needed for it, but wakeProfile picks the main sleep the same way).

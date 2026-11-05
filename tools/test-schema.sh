@@ -1493,6 +1493,11 @@ do $$ begin
     then raise exception 'oura_sync_save did not upsert by oura_id'; end if;
   if (select readiness from sleep_days) <> 64 or (select sleep_s from sleep_days) <> 21000
     then raise exception 'oura_sync_save lost a readiness or took the new sleep total'; end if;
+  -- The day's other numbers, kept the same way.
+  perform oura_sync_save('[]', '[{"day": "2030-01-02", "sleep_score": 82, "hrv_avg": 41, "temp_dev": -0.23, "steps": 8412, "stress": "restored"}]');
+  perform oura_sync_save('[]', '[{"day": "2030-01-02", "sleep_score": null, "steps": 9000}]');
+  if (select (sleep_score, hrv_avg, temp_dev, steps, stress, readiness) from sleep_days) is distinct from (82, 41, -0.23::numeric(4, 2), 9000, 'restored'::text, 64)
+    then raise exception 'oura_sync_save did not keep the day''s numbers'; end if;
   if (select count(*) from changes where reason = 'woke_late') <> 1 then raise exception 'the woke-late change was not logged once'; end if;
   if (select synced_at from oura_account) is null then raise exception 'oura_sync_save did not stamp synced_at'; end if;
   -- Wind-down: Oura's bedtime windows upsert by day.
