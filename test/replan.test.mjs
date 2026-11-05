@@ -74,6 +74,19 @@ test("replanState: plans today, the last plan and the shutdown line from today's
   assert.equal(replanState({ settings, day: null, proposals: [proposals[1]], replans: [replans[0]] }).plans_today, 1);
 });
 
+test("replanState: with no line of its own, today shuts down when wind-down starts", async () => {
+  const { replanState, shouldReplan } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null, wind_down_on: true, bedtime_target: "03:00:00", bedtime_ease: false };
+  // Bed 3:00 am: wind-down after midnight, so the line is 11 pm, and a 6 pm change still replans.
+  const s = replanState({ settings, today: "2026-11-04", day: null, proposals: [], replans: [], sleep: [], sleepTimes: [] });
+  assert.equal(s.shutdown, "23:00");
+  const change = { id: "c1", at: "2026-11-04T21:50:00Z", kind: "task", reason: "new task", weight: 8 };
+  assert.equal(shouldReplan([change], s, new Date("2026-11-04T22:00:00Z")).fire, true); // 6 pm
+  // A line he moved wins; wind-down off is the old 5 pm.
+  assert.equal(replanState({ settings, today: "2026-11-04", day: { day: "2026-11-04", shutdown: false, shutdown_at: "18:30:00" }, proposals: [], replans: [] }).shutdown, "18:30");
+  assert.equal(replanState({ settings: { ...settings, wind_down_on: false }, today: "2026-11-04", day: null, proposals: [], replans: [] }).shutdown, "17:00");
+});
+
 test("rateLimited: holds until retry_after", async () => {
   const { rateLimited } = await import("../src/sheet/replan.mjs");
   const rows = [{ retry_after: null }, { retry_after: "2026-11-04T16:00:00Z" }];
