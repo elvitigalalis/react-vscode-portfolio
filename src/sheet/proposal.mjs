@@ -507,7 +507,14 @@ export function checkProposal(input, snapshot, senders = {}, hashOf = () => null
         const want = task.horizon.today_min - lockedMin;
         if (task.horizon.today_min <= 0) errors.push(`${name}: no horizon minutes on ${day}, so no block today`);
         else if (want < 15) errors.push(`${name}: its ${task.horizon.today_min} horizon minutes on ${day} are already locked`);
-        else if (minutes !== want) errors.push(`${name}: minutes must be ${want}, the task's horizon minutes on ${day}${lockedMin ? ` less the ${lockedMin} locked` : ""}`);
+        else {
+          // Over 240 (a due-day crunch) it takes several blocks, which add up to it.
+          const mine = inBlocks.filter((x) => x?.task_id === task.id);
+          const got = mine.reduce((n, x) => n + (Number.isInteger(x?.minutes) ? x.minutes : 0), 0);
+          const why = `the task's horizon minutes on ${day}${lockedMin ? ` less the ${lockedMin} locked` : ""}`;
+          if (mine.length === 1 && minutes !== want) errors.push(`${name}: minutes must be ${want}, ${why}`);
+          else if (mine.length > 1 && mine[0] === b && got !== want) errors.push(`${name}: ${task.id}'s blocks must add up to ${want}, ${why} (they add up to ${got})`);
+        }
       // v5 P1: a block runs the task's paced estimate.
       } else if (snapshot.version === 5 && task && Number.isInteger(minutes) && minutes !== task.paced_min) {
         errors.push(`${name}: minutes must be ${task.paced_min}, the task's paced estimate`);

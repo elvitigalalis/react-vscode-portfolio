@@ -75,3 +75,13 @@ test("checkProposal: a horizon task with no minutes on plan_day gets no block, a
     ["next_day[0]: os has horizon minutes, which the server moves; leave it out"]);
   assert.equal(proposalFor(snap, [], { next_day: ["hw"] }).ok, true);
 });
+
+test("checkProposal: horizon minutes over 240 (a due-day crunch) go in several blocks that add up", () => {
+  const tasks = [taskRow("os", { due: DAY, est_min: 600 })];
+  const horizon = { alloc: [{ task_id: "os", day: DAY, minutes: 300, over_min: 0 }], states: [state("os", { state: "tight" })] };
+  const snap = { ...planSnapshot(rows({ tasks, horizon }), sixOhSeven), day_rules: { workload_cap_min: 600, travel_min: 10, break_after_min: 300, break_min: 10 } };
+  snap.window = { from: "07:00", to: "23:00" };
+  assert.deepEqual(proposalFor(snap, [{ task_id: "os", start: "09:00", minutes: 180 }, { task_id: "os", start: "13:00", minutes: 120 }]).errors, []);
+  assert.deepEqual(proposalFor(snap, [{ task_id: "os", start: "09:00", minutes: 180 }, { task_id: "os", start: "13:00", minutes: 60 }]).errors,
+    ["blocks[0]: os's blocks must add up to 300, the task's horizon minutes on 2026-11-04 (they add up to 240)"]);
+});
