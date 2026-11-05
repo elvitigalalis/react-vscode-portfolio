@@ -18,7 +18,7 @@ const writeups = new Map((await getCollection("writeups")).map((w) => [w.id, w.d
   {resume.projects.map((p, i) => {
     const card = home.projects?.[p.slug] ?? {};
     const w = writeups.get(p.slug);
-    const extra = { summary: card.summary, photo: w ? w.photo : card.photo, demo: w ? w.demo : card.demo };
+    const extra = { summary: card.summary, photo: w ? w.photo : card.photo, demo: w ? w.demo : card.demo, code: w?.code ?? p.url };
     return (
       <article class="card">
         {extra.photo && (
@@ -42,7 +42,7 @@ const writeups = new Map((await getCollection("writeups")).map((w) => [w.id, w.d
           <Tags items={p.stack} />
           <p class="buttons">
             {writeups.has(p.slug) && <a class="btn primary" href={`/projects/${p.slug}/`}>Write-up</a>}
-            <a class="btn" href={p.url}>Code</a>
+            <a class="btn" href={extra.code}>Code</a>
             {extra.demo && <a class="btn" href={extra.demo.url}>{extra.demo.label}</a>}
           </p>
         </div>

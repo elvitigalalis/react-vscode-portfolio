@@ -5,13 +5,14 @@
 # Every number below the front matter traces to resume.json or to a line in `sources:`.
 description: >-
   How I built WorkIt's job scraper and its scheduled database import: a lane per job-board
-  provider that cut routine runs from 9.5 to about 3 minutes, a dry run on pull requests that
+  provider that cut its October 2026 scrape step from 9.5 to about 3 minutes, a dry run on pull requests that
   caught a schema mismatch, and work-style inference right 87% of the time against a 70% baseline.
 summary: >-
   I built the Python scraper behind WorkIt, a five-person team's job board for internship and
   new-grad roles, and the GitHub Actions workflow that imports its results into PostgreSQL.
-  Routine runs fell from 9.5 to about 3 minutes with every site paced as before, and the
+  In October 2026, its scrape step fell from 9.5 to about 3 minutes with every site paced as before, and the
   workflow's dry run on pull requests caught a database schema mismatch before it merged.
+code: https://github.com/workitjobs/workit/tree/main/scraper
 photo:
   src: /images/workit.webp
   alt: WorkIt's job board, listing internship postings with location, pay and start date beside a match score for each
@@ -97,7 +98,7 @@ Speed must never come from less pacing, so I changed two other things. Each prov
 
 <figure>
 <svg class="fig-svg" role="img" aria-labelledby="fig-run-t" viewBox="0 0 400 180" width="400" height="180">
-<title id="fig-run-t">Routine run time: 9.5 minutes before, 5.5 of them Lever's crawl delay; about 3 minutes after.</title>
+<title id="fig-run-t">Scrape step time in October 2026: 9.5 minutes before, 5.5 of them Lever's crawl delay; about 3 minutes after.</title>
 <text x="40" y="28" class="strong">Before: 9.5 min</text>
 <rect x="40" y="38" width="304" height="22" rx="3" class="bar"/>
 <line x1="216" y1="34" x2="216" y2="64" class="grid"/>
@@ -112,10 +113,10 @@ Speed must never come from less pacing, so I changed two other things. Each prov
 <text x="296" y="172" text-anchor="middle">8</text>
 <text x="360" y="172" text-anchor="middle">10 min</text>
 </svg>
-<figcaption>A routine run before and after, drawn to scale; the mark on the old run ends Lever's share of it.</figcaption>
+<figcaption>The scrape step before and after, October 2026, drawn to scale; the mark on the old run ends Lever's share of it.</figcaption>
 </figure>
 
-Routine runs went from 9.5 to about 3 minutes. The 9.5 comes from runs before the workflow existed, how many unrecorded; the 3 held in Actions, where the first 8 scheduled scrapes took 2 min 45 s to 3 min 2 s. More workers could not have fixed Lever: its 333 boards share one server, paced at a request a second, so they take 5.5 minutes regardless. The cost is freshness: a company's first posting on a quiet board can appear up to 2 days late.
+In October 2026, the scrape step fell from 9.5 to about 3 minutes. The 9.5 comes from runs before the workflow existed, how many unrecorded; the 3 held in Actions, where the first 8 scheduled scrapes took 2 min 45 s to 3 min 2 s. More workers could not have fixed Lever: its 333 boards share one server, paced at a request a second, so they take 5.5 minutes regardless. The cost is freshness: a company's first posting on a quiet board can appear up to 2 days late.
 
 ## A dry run of the import on every pull request that touches it
 
@@ -154,7 +155,7 @@ The order was right 87% of the time, against 70% for always guessing "On site", 
 
 ## Result
 
-- **Speed:** routine runs 9.5 → about 3 minutes, pacing unchanged.
+- **Speed:** the scrape step 9.5 → about 3 minutes in October 2026, pacing unchanged.
 - **Safety:** the pull-request dry run caught a schema mismatch before it merged.
 - **Coverage:** a work style on 997 of 1,096 cards, 87% right against 70%.
 - **Tests:** I wrote 145 of the scraper's 252 tests and added its test-and-lint job to CI on every pull request.
@@ -163,7 +164,7 @@ The order was right 87% of the time, against 70% for always guessing "On site", 
 
 - **CI informs; it doesn't gate.** Branch protection is off, so the test-and-lint job and the dry run can fail without blocking a merge.
 - **The 87% was measured where the answer is known.** Postings whose board states nothing may differ, and nothing measures them.
-- **The speed figure predates newer providers:** the 9.5 to 3 minutes covers Greenhouse, Lever and Ashby, and Andrew has since added more.
+- **The speed figure predates newer providers:** October's 9.5 to 3 minutes covers Greenhouse, Lever and Ashby, and Andrew has since added more.
 - **Scout is untested on facts.** My assistant that answers from one posting and the user's resume, has grounding rules and 19 tests but no measure of how often it makes things up; its only users so far are the 4 teammates.
 - **Some of my work hasn't merged** and sits on branches.
 

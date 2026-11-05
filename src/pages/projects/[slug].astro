@@ -22,7 +22,7 @@ const { Content, headings } = await render(entry);
 // "On this page": the write-up's own sections, in order.
 const sections = headings.filter((h) => h.depth === 2);
 // `demo` is the card's Demo link too, label and all, so the two can never disagree.
-const { description, summary, video, screenshot, demo } = entry.data;
+const { description, summary, video, screenshot, demo, code } = entry.data;
 ---
 
 <Base title={`${p.title} · ${siteConfig.title}`} description={description} path={`/projects/${p.slug}/`}>
@@ -34,7 +34,7 @@ const { description, summary, video, screenshot, demo } = entry.data;
       <h1>{p.title}</h1>
       <p class="meta">{p.role && <>{p.role} · </>}{p.dates}</p>
       <Tags items={p.stack} />
-      <p class="links"><a class="btn primary" href={p.url}>Code</a>{demo && <a class="btn" href={demo.url}>{demo.label}</a>}</p>
+      <p class="links"><a class="btn primary" href={code ?? p.url}>Code</a>{demo && <a class="btn" href={demo.url}>{demo.label}</a>}</p>
     </header>
     <p class="tldr">{summary}</p>
     {video && (
