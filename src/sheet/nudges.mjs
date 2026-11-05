@@ -8,7 +8,7 @@
 import { ORIGIN, SHEET } from "../site.mjs";
 import { clockSpan, couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
-import { addDays, localNow, zonedIso, minutesOn, atRisk, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
+import { addDays, localNow, weekdayName, zonedIso, minutesOn, atRisk, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
 import { REASON_WORDS } from "./replan.mjs";
 import { dayCap, isWeekend, wakeProfile } from "./sleep.mjs";
@@ -429,6 +429,46 @@ function checkin({ tasks, day: row, today, tz, needsOpen }) {
   if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
   if (needsOpen.length) lines.push(`Needs you: ${needsOpen.length}.`);
   return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
+}
+
+// --- The pinned Now message (docs/sheet-nudges.md, "The pinned Now message") ---------------
+
+// One line for the top of the chat, from the approved blocks (proposed ones aren't on the plan):
+// "Now: OS homework until 3:40 pm · Next: Gym at 4:00 pm", "Next: Gym at 4:00 pm" between blocks,
+// "Next: Gym tomorrow at 8:00 am" when the next is on a later day, or "Nothing scheduled". A
+// block is named by its task, or its habit (snapshot.habits, { id, name }).
+export function nowText(snapshot, now) {
+  const tz = snapshot.settings.time_zone;
+  const t = now.getTime();
+  const { day: today } = localNow(now, tz);
+  const name = (b) => (b.task_id ? snapshot.tasks.find((x) => x.id === b.task_id)?.title
+    : (snapshot.habits ?? []).find((h) => h.id === b.habit_id)?.name) ?? "A block";
+  const blocks = snapshot.blocks.filter((b) => !b.proposed).sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at));
+  const on = blocks.find((b) => Date.parse(b.starts_at) <= t && t < Date.parse(b.ends_at));
+  const next = blocks.find((b) => Date.parse(b.starts_at) > t);
+  const clock = (iso) => { const l = localNow(new Date(iso), tz); return { day: l.day, at: formatClock(l.minutes) }; };
+  const parts = [];
+  if (on) parts.push(`Now: ${name(on)} until ${clock(on.ends_at).at}`);
+  if (next) {
+    const { day, at } = clock(next.starts_at);
+    const when = day === today ? "" : day === addDays(today, 1) ? "tomorrow " : `${weekdayName(day)} `;
+    parts.push(`Next: ${name(next)} ${when}at ${at}`);
+  }
+  return parts.join(" · ") || "Nothing scheduled";
+}
+
+// What the minute tick does with the pinned message (its id and words in settings.now_message_id
+// and now_text): { action: "create", text } to send and pin it, made only while he's up (not in
+// quiet hours or before his wake, as the brief); { action: "edit", message_id, text } once the
+// words change, at any hour, since an edit makes no notification; or null. Nothing while
+// Telegram is off.
+export function pinStep(snapshot, now) {
+  if (!telegramOn(snapshot.settings)) return null;
+  const text = nowText(snapshot, now);
+  const { now_message_id: id, now_text } = snapshot.settings;
+  if (id != null) return text === now_text ? null : { action: "edit", message_id: id, text };
+  const day = dayOf(snapshot, now);
+  return day.minutes >= day.openAt && day.minutes < QUIET_FROM ? { action: "create", text } : null;
 }
 
 // --- Taps ----------------------------------------------------------------------------------

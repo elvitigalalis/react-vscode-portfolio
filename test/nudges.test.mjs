@@ -577,3 +577,56 @@ test("replan message: a busy time names the block it lands on, a due-soon task i
   // A busy time on no block still says when.
   assert.equal(first(snap([{ reason: "busy_overlap", ref: "2026-11-04T23:00:00.000Z/2026-11-04T23:30:00.000Z" }], ["busy_overlap"])), "Replan: Busy 6:00–6:30 pm now.");
 });
+
+// ---------------------------------------------------------------- the pinned Now message
+
+test("nowText: the block on now and until when, and the next one, as the day's timeline has them", async () => {
+  const { nowText } = await import("../src/sheet/nudges.mjs");
+  const snap = snapshot({
+    tasks: [task("t1", "OS homework"), task("t2", "Read")],
+    habits: [{ id: "h1", name: "Gym" }],
+    blocks: [
+      block("b1", "t1", "2026-10-26T18:00:00Z", "2026-10-26T19:40:00Z"),
+      block("b2", null, "2026-10-26T20:00:00Z", "2026-10-26T21:00:00Z", { habit_id: "h1" }),
+      block("b3", "t2", "2026-10-26T19:50:00Z", "2026-10-26T20:30:00Z", { proposed: true }),
+    ],
+  });
+  assert.equal(nowText(snap, at("2026-10-26T18:30:00Z")), "Now: OS homework until 3:40 pm · Next: Gym at 4:00 pm");
+  // Between blocks, only what's next; a proposed block isn't on the plan.
+  assert.equal(nowText(snap, at("2026-10-26T19:45:00Z")), "Next: Gym at 4:00 pm");
+  assert.equal(nowText(snap, at("2026-10-26T20:15:00Z")), "Now: Gym until 5:00 pm");
+});
+
+test("nowText: the next block on a later day names the day; with none, nothing scheduled", async () => {
+  const { nowText } = await import("../src/sheet/nudges.mjs");
+  const snap = snapshot({
+    tasks: [task("t1", "OS homework", { day: "2026-10-27" })],
+    blocks: [block("b1", "t1", "2026-10-27T13:00:00Z", "2026-10-27T14:00:00Z")],
+  });
+  assert.equal(nowText(snap, at("2026-10-26T22:00:00Z")), "Next: OS homework tomorrow at 9:00 am");
+  assert.equal(nowText(snapshot(), at("2026-10-26T22:00:00Z")), "Nothing scheduled");
+});
+
+test("pinStep: made once while he's up, then edited only when the words change", async () => {
+  const { pinStep } = await import("../src/sheet/nudges.mjs");
+  const snap = (extra) => snapshot({
+    tasks: [task("t1", "OS homework")],
+    blocks: [block("b1", "t1", "2026-10-26T18:00:00Z", "2026-10-26T19:40:00Z")],
+    ...extra,
+  });
+  const noon = at("2026-10-26T16:00:00Z");
+  assert.deepEqual(pinStep(snap(), noon), { action: "create", text: "Next: OS homework at 2:00 pm" });
+  const pinned = { ...settings, now_message_id: 77, now_text: "Next: OS homework at 2:00 pm" };
+  assert.equal(pinStep(snap({ settings: pinned }), noon), null);
+  assert.deepEqual(pinStep(snap({ settings: pinned }), at("2026-10-26T18:00:00Z")), { action: "edit", message_id: 77, text: "Now: OS homework until 3:40 pm" });
+});
+
+test("pinStep: never made while he's asleep or with Telegram off; an edit (silent) still goes at night", async () => {
+  const { pinStep } = await import("../src/sheet/nudges.mjs");
+  const late = at("2026-10-27T03:30:00Z"); // 11:30 pm
+  assert.equal(pinStep(snapshot(), late), null);
+  assert.equal(pinStep(snapshot(), at("2026-10-26T11:00:00Z")), null); // 7:00 am
+  assert.equal(pinStep(snapshot({ settings: { ...settings, nudges_on: false } }), at("2026-10-26T16:00:00Z")), null);
+  const pinned = { ...settings, now_message_id: 77, now_text: "Now: Read until 11:45 pm" };
+  assert.deepEqual(pinStep(snapshot({ settings: pinned }), late), { action: "edit", message_id: 77, text: "Nothing scheduled" });
+});
