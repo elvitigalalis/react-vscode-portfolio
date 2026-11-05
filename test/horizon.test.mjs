@@ -10,6 +10,8 @@ const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({
 }));
 const task = (id, due, minutes, extra = {}) => ({ id, due, minutes, done_min: 0, ...extra });
 const plan = (input) => planHorizon({ today: TODAY, free: days(30), locked: [], frozen_days: [], previous: [], ...input });
+// Later days fill to 85% of their free time: 106 free holds 90, 75 holds 60.
+const free90 = { ...days(30, 106), [TODAY]: 90 };
 const on = (r, id) => r.allocations.filter((a) => a.task_id === id).map(({ day, minutes }) => [day, minutes]);
 
 test("a task that fits goes on today, whole, and is on track", () => {
@@ -33,7 +35,7 @@ test("a task of an hour or less is never split", () => {
 });
 
 test("the plan aims to finish a working day before the due day", () => {
-  const free = { ...days(30), "2026-11-05": 0, "2026-11-06": 0, "2026-11-07": 60 };
+  const free = { ...days(30), "2026-11-05": 0, "2026-11-06": 0, "2026-11-07": 75 };
   const r = plan({ tasks: [task("a", "2026-11-08", 90)], free });
   assert.equal(r.tasks.a.target_day, "2026-11-07");
   assert.deepEqual(on(r, "a"), [["2026-11-07", 60], ["2026-11-08", 30]]);
@@ -45,7 +47,7 @@ test("the plan aims to finish a working day before the due day", () => {
 });
 
 test("earliest due goes first", () => {
-  const r = plan({ tasks: [task("a", "2026-11-20", 120), task("b", "2026-11-07", 90)], free: days(30, 90) });
+  const r = plan({ tasks: [task("a", "2026-11-20", 120), task("b", "2026-11-07", 90)], free: free90 });
   assert.deepEqual(on(r, "b"), [["2026-11-05", 90]]);
   assert.deepEqual(on(r, "a"), [["2026-11-06", 90], ["2026-11-07", 30]]);
   assert.equal(r.tasks.a.state, "on_track");
@@ -84,7 +86,7 @@ test("a re-flow with nothing changed moves nothing", () => {
 });
 
 test("a new task takes free time first and moves only the minutes it must", () => {
-  const free = days(30, 90);
+  const free = free90;
   const previous = [{ task_id: "a", day: "2026-11-05", minutes: 90, over_min: 0 }, { task_id: "a", day: "2026-11-06", minutes: 30, over_min: 0 }];
   const r = plan({ tasks: [task("a", "2026-11-20", 120), task("b", "2026-11-07", 90)], free, previous });
   assert.deepEqual(on(r, "b"), [["2026-11-06", 90]]);
@@ -118,7 +120,7 @@ test("an overdue task is planned from today and is tight at best", () => {
 
 test("an earlier deadline takes kept time from a task due later", () => {
   // b (due Fri) was planned on today; a new a, due tomorrow, needs today's only free time.
-  const free = { ...days(30, 0), "2026-11-05": 90, "2026-11-08": 90 };
+  const free = { ...days(30, 0), "2026-11-05": 90, "2026-11-08": 106 };
   const previous = [{ task_id: "b", day: "2026-11-05", minutes: 90, over_min: 0 }];
   const r = plan({ tasks: [task("a", "2026-11-06", 90), task("b", "2026-11-09", 90)], free, previous });
   assert.deepEqual(on(r, "a"), [["2026-11-05", 90]]);
@@ -228,4 +230,9 @@ test("after a change, a re-flow moves no more minutes than planning afresh would
     assert.ok(r.moved_min <= moved(previous, f.allocations), `run ${run}: moved ${r.moved_min}, fresh ${moved(previous, f.allocations)}`);
   }
   assert.ok(total < fresh, `re-flows moved ${total}, fresh plans ${fresh}`);
+});
+
+test("later days fill to 85% of their free time, today to all of it", () => {
+  const r = plan({ tasks: [task("a", "2026-11-20", 240)], free: days(30, 90) });
+  assert.deepEqual(on(r, "a"), [["2026-11-05", 90], ["2026-11-06", 75], ["2026-11-07", 75]]);
 });

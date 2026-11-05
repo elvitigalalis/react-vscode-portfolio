@@ -68,7 +68,10 @@ day's free time (only ever on the due day of a task that won't fit).
 2. **Plan order (EDF):** due date (an overdue one reads as due today), then fewer remaining
    minutes, then id (R3).
 3. **Front-loaded fill:** each task in plan order takes free time from today onward, earliest day
-   first, never as late as possible (R3).
+   first, never as late as possible (R3). Days after today take at most `FUTURE_FILL` (85%) of
+   their free time, rounded down to 15; today takes all of it. The slack absorbs the overruns a
+   far-off day's estimate hides (Zauberman & Lynch 2005). A task the plain pass can't finish may
+   top up days it already has in 15-minute steps, but only when that places all of what is left.
 4. **Chunks (R2):** one task gets at least 30 and at most 90 minutes on a day; a task with 60
    minutes or less remaining is never split; no piece under 30 is ever left (90 + 90 + 15 becomes
    90 + 75 + 30). All minutes move in 15-minute steps.
@@ -77,8 +80,9 @@ day's free time (only ever on the due day of a task that won't fit).
    holds a locked block. Fill runs to the target day first, then into the buffer (target + 1 to
    the due day).
 6. **Earlier deadlines win:** when a task can't reach its target (or then its due day) in free
-   time, it takes kept minutes from tasks due later, latest due first, only as many as it needs;
-   those re-place in their own turn.
+   time, it takes kept minutes from tasks due later, only as many as it needs: the smallest cut
+   first, then one the later task can take back on its other days, then latest due, then latest
+   day. Those re-place in their own turn.
 7. **Due-day crunch:** before giving up, the due day takes whatever its free time holds, past
    the 90-minute chunk.
 8. **Won't fit stays visible (R7):** what is still left goes on the due day as `over_min`, past

@@ -11,6 +11,9 @@ export const CHUNK_MAX = 90;
 export const WHOLE_UP_TO = 60;
 const STEP = 15;
 export const STATES = ["on_track", "tight", "wont_fit"];
+// Days after today are filled to at most this share of their free time, leaving slack for the
+// overruns a far-off day's estimate hides (Zauberman & Lynch 2005). Today fills whole.
+export const FUTURE_FILL = 0.85;
 
 const up = (m) => Math.ceil(m / STEP) * STEP;
 const down = (m) => Math.floor(m / STEP) * STEP;
@@ -78,7 +81,7 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
   const order = [...tasks].sort((a, b) => due(a).localeCompare(due(b)) || need0.get(a.id) - need0.get(b.id) || String(a.id).localeCompare(String(b.id)));
   const rank = new Map(order.map((t, i) => [t.id, i]));
   const known = new Set(tasks.map((t) => t.id));
-  const room0 = (d) => (frozen.has(d) ? 0 : down(Math.max(0, free[d] ?? 0)));
+  const room0 = (d) => (frozen.has(d) ? 0 : down(Math.max(0, free[d] ?? 0) * (d === today ? 1 : FUTURE_FILL)));
 
   // fixed: minutes no re-flow moves (locked blocks, frozen days); kept: the previous plan's
   // minutes still standing; both task -> day -> minutes.
@@ -162,26 +165,60 @@ export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days 
       const n = piece(t, d, need.get(t.id));
       if (n > 0) { add(kept, t.id, d, n); need.set(t.id, need.get(t.id) - n); }
     }
-  };
-  // Make room for t on from..to by taking minutes from tasks due later, latest due first and
-  // only as many as t still needs, then fill again. What a later task gives up it re-places in
-  // its own turn.
-  const evict = (t, from, to) => {
-    for (const v of [...order].reverse()) {
-      if (need.get(t.id) <= 0 || rank.get(v.id) <= rank.get(t.id)) break;
-      for (const d of [...(kept.get(v.id)?.keys() ?? [])].filter((x) => x >= from && x <= to).sort().reverse()) {
-        if (need.get(t.id) <= 0) break;
-        const k = kept.get(v.id).get(d);
-        const want = up(Math.max(Math.min(need.get(t.id), CHUNK_MAX - at(t.id, d)) - Math.max(0, down(free_(d))), 0));
-        if (want <= 0) continue;
-        let cut = Math.min(k, Math.max(want, at(t.id, d) ? 0 : Math.min(CHUNK_MIN, need.get(t.id))));
-        if (k - cut > 0 && k - cut + (fixed.get(v.id)?.get(d) ?? 0) < CHUNK_MIN) cut = k;
-        const before = need.get(t.id);
-        add(kept, v.id, d, -cut);
-        fill(t, d, d);
-        if (need.get(t.id) === before) add(kept, v.id, d, cut); // it didn't help: put it back
-        else need.set(v.id, need.get(v.id) + cut);
+    // Top-ups: what is left may go in smaller steps onto days the task already has, but only
+    // when that places all of it (no stray piece under 30 is ever left).
+    const tops = [];
+    for (let d = from; d <= to && need.get(t.id) > 0; d = addDays(d, 1)) {
+      const has = at(t.id, d);
+      const n = has ? Math.min(down(free_(d)), Math.max(0, CHUNK_MAX - has)) : 0;
+      if (n > 0) tops.push([d, n]);
+    }
+    if (need.get(t.id) > 0 && sum(tops.map(([, n]) => n)) >= need.get(t.id)) {
+      for (const [d, n] of tops) {
+        const k = Math.min(n, need.get(t.id));
+        if (k > 0) { add(kept, t.id, d, k); need.set(t.id, need.get(t.id) - k); }
       }
+    }
+  };
+  // Make room for t on from..to by taking minutes from tasks due later, fewest minutes moved
+  // first and only as many as t still needs, then fill again. What a later task gives up it
+  // re-places in its own turn.
+  const evict = (t, from, to) => {
+    // The cut from v on day d that would make room for t, or 0 when none is needed.
+    const cutAt = (v, d) => {
+      const k = kept.get(v.id)?.get(d) ?? 0;
+      const want = up(Math.max(Math.min(need.get(t.id), CHUNK_MAX - at(t.id, d)) - Math.max(0, down(free_(d))), 0));
+      if (!k || want <= 0) return 0;
+      const cut = Math.min(k, Math.max(want, at(t.id, d) ? 0 : Math.min(CHUNK_MIN, need.get(t.id))));
+      return k - cut > 0 && k - cut + (fixed.get(v.id)?.get(d) ?? 0) < CHUNK_MIN ? k : cut;
+    };
+    // 1 when v could not take the cut back on its other days by its due day (it would cascade).
+    const strands = (v, d) => {
+      let room = 0;
+      for (let x = today; x <= due(v); x = addDays(x, 1)) {
+        if (x === d) continue;
+        const f = down(Math.max(0, free_(x))), has = at(v.id, x);
+        room += has ? Math.min(f, Math.max(0, CHUNK_MAX - has)) : f >= CHUNK_MIN ? Math.min(f, CHUNK_MAX) : 0;
+      }
+      return room >= cutAt(v, d) ? 0 : 1;
+    };
+    // Candidates: every later task's kept day in range. The fewest minutes moved first, then a
+    // cut the task can take back, then latest due, then the latest day.
+    const later = order.filter((v) => rank.get(v.id) > rank.get(t.id));
+    const key = ([v, d]) => [cutAt(v, d), strands(v, d), -rank.get(v.id)];
+    const cands = later.flatMap((v) => [...(kept.get(v.id)?.keys() ?? [])].filter((x) => x >= from && x <= to).map((d) => [v, d]))
+      .map((c) => [c, key(c)])
+      .sort(([[, a], ka], [[, b], kb]) => ka.reduce((r, x, i) => r || x - kb[i], 0) || b.localeCompare(a))
+      .map(([c]) => c);
+    for (const [v, d] of cands) {
+      if (need.get(t.id) <= 0) break;
+      const cut = cutAt(v, d);
+      if (cut <= 0) continue;
+      const before = need.get(t.id);
+      add(kept, v.id, d, -cut);
+      fill(t, d, d);
+      if (need.get(t.id) === before) add(kept, v.id, d, cut); // it didn't help: put it back
+      else need.set(v.id, need.get(v.id) + cut);
     }
   };
 
