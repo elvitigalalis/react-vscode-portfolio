@@ -13,12 +13,12 @@ const workout = (activity, from, to) => ({ oura_id: `w-${from}`, day: D, activit
 
 test("gymMatches: a ring workout over the Gym block ends it at the workout's end", () => {
   assert.deepEqual(gymMatches([workout("other", "17:10", "18:00")], [block("b1", "h1", "17:00", "18:30")], habits, TZ),
-    [{ block_id: "b1", action: "shrink", ends_at: at("18:00") }]);
+    [{ block_id: "b1", gcal_id: null, action: "shrink", ends_at: at("18:00") }]);
 });
 
 test("gymMatches: a lifting workout anywhere that day counts; a generic one only overlapping", () => {
-  const blocks = [block("b1", "h1", "17:00", "18:30")];
-  assert.deepEqual(gymMatches([workout("strengthTraining", "08:00", "09:10")], blocks, habits, TZ), [{ block_id: "b1", action: "delete" }]);
+  const blocks = [block("b1", "h1", "17:00", "18:30", { gcal_id: "g1" })];
+  assert.deepEqual(gymMatches([workout("strengthTraining", "08:00", "09:10")], blocks, habits, TZ), [{ block_id: "b1", gcal_id: "g1", action: "delete" }]);
   assert.deepEqual(gymMatches([workout("other", "08:00", "09:10")], blocks, habits, TZ), []);
 });
 

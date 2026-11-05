@@ -5,12 +5,12 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { dayRows, freshAccess, ouraAuthUrl, pkce, Refused, restRows, ringLow, sleepRows, sleepTimeRows, syncRange, workoutRows } from "../src/sheet/oura.mjs";
 
-test("ouraAuthUrl: Oura's authorize URL, scope daily, with the state and an S256 challenge", () => {
+test("ouraAuthUrl: Oura's authorize URL, scopes daily and workout, with the state and an S256 challenge", () => {
   const url = new URL(ouraAuthUrl({ clientId: "cid", redirectUri: "https://x.supabase.co/functions/v1/oura-connect/callback", state: "st", challenge: "ch" }));
   assert.equal(url.origin + url.pathname, "https://cloud.ouraring.com/oauth/authorize");
   assert.deepEqual(Object.fromEntries(url.searchParams), {
     response_type: "code", client_id: "cid", redirect_uri: "https://x.supabase.co/functions/v1/oura-connect/callback",
-    scope: "daily", state: "st", code_challenge: "ch", code_challenge_method: "S256",
+    scope: "daily workout", state: "st", code_challenge: "ch", code_challenge_method: "S256",
   });
 });
 

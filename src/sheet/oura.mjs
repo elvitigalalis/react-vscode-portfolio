@@ -12,8 +12,9 @@ import { addDays, localNow } from "./logic.mjs";
 export const AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
 export const TOKEN_URL = "https://api.ouraring.com/oauth/token";
 export const API_URL = "https://api.ouraring.com/v2/usercollection";
-// "daily": "Daily summaries of sleep, activity and readiness", the only scope sleep needs.
-export const SCOPE = "daily";
+// "daily": "Daily summaries of sleep, activity and readiness", the scope sleep needs, and
+// "workout": "Summaries for auto-detected and user entered workouts", for the Gym habit.
+export const SCOPE = "daily workout";
 export const USER_AGENT = "TheSheet/1.0 (+https://lisul-elvi.com/privacy/)";
 
 export const ouraAuthUrl = ({ clientId, redirectUri, state, challenge }) => `${AUTHORIZE_URL}?${new URLSearchParams({
@@ -89,7 +90,7 @@ export async function ouraDocs(fetch, collection, range, access) {
   do {
     const q = new URLSearchParams({ ...range, ...(next ? { next_token: next } : {}) });
     const res = await fetch(`${API_URL}/${collection}?${q}`, { headers: { Authorization: `Bearer ${access}`, "User-Agent": USER_AGENT } });
-    if (!res.ok) throw new Error(`oura ${collection}: HTTP ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(`oura ${collection}: HTTP ${res.status}`), { status: res.status });
     const body = await res.json();
     docs.push(...(body.data ?? []));
     next = body.next_token ?? null;
@@ -203,4 +204,11 @@ export function ringLow(rows) {
   const r = (rows ?? []).at(-1);
   if (!r || !Number.isFinite(r.level)) return null;
   return r.level < 20 && !r.charging && !r.in_charger;
+}
+
+// The newest sample of a time series (ring_battery_level takes latest=true), or [] when refused.
+export async function ouraLatest(fetch, collection, access) {
+  const res = await fetch(`${API_URL}/${collection}?latest=true`, { headers: { Authorization: `Bearer ${access}`, "User-Agent": USER_AGENT } });
+  if (!res.ok) return [];
+  return (await res.json().catch(() => ({})))?.data ?? [];
 }

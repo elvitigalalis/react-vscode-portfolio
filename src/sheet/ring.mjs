@@ -13,7 +13,7 @@ const LIFTING = /strength|weight|lift|resistance|crossfit|bodybuilding|gym/i;
 
 // The Gym habit blocks the ring's workouts finish, as a finished task's block goes
 // (blockOnComplete at the workout's end): [{ block_id, action: "shrink", ends_at } or
-// { block_id, action: "delete" }], at most one per block. `blocks` carry habit_id, `habits` id and
+// { block_id, action: "delete" }], with the block's gcal_id (for gcal_pending), at most one per block. `blocks` carry habit_id, `habits` id and
 // name, `workouts` are ring_workouts rows.
 export function gymMatches(workouts, blocks, habits, tz) {
   const gym = new Set((habits ?? []).filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => h.id));
@@ -27,7 +27,7 @@ export function gymMatches(workouts, blocks, habits, tz) {
     });
     if (!w) continue;
     const r = blockOnComplete(b, new Date(w.ends_at));
-    if (r.action !== "keep") out.set(b.id, { block_id: b.id, ...r });
+    if (r.action !== "keep") out.set(b.id, { block_id: b.id, gcal_id: b.gcal_id ?? null, ...r });
   }
   return [...out.values()];
 }
