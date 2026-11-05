@@ -76,6 +76,11 @@ break_min, cap_reason, bedtime, wind_down_from), habits and auto_approve.
   one line saying so. "approved" is fine: plan around the blocks he approved.
 - habits are Lisul's habits on D's weekday, [{ id, name, ideal: "HH:MM", minutes, flex_min,
   defence }], firm ones first, then flexible. It may be empty.
+- A task with a due date may have horizon: { today_min, state, slack_min, short_min,
+  finish_day }. The server spreads its work over the days up to its due date; today_min is its
+  minutes on D. state is "on_track", "tight" (little or no time to spare) or "wont_fit" (short_min
+  minutes short even past the cap); such tasks are at_risk and come first in tasks. You only
+  time today_min on D: never move minutes to other days.
 - run says why this run started: { trigger, reasons, changes }. trigger "morning" is the
   morning plan. trigger "replan" means the server started this run during the day because
   something changed; reasons are fixed names (busy_overlap: a busy time landed on a block;
@@ -252,16 +257,21 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
 - Every task in tasks with day D and no at_time gets a block, unless it truly can't fit: no
   free gap in the window holds its paced_min within the travel, break and cap rules. Put each
   such task in next_day (it moves to the day after D, whose plan times it), unless it is
-  at_risk (that goes in couldnt_fit), and name it in the note.
+  at_risk or has a horizon today_min above 0 (that goes in couldnt_fit), and name it in the note.
+- A task with horizon gets a block only when its today_min is above 0, and then its minutes are
+  today_min less the minutes of its blocks with proposed false on D, instead of paced_min (no
+  block when that leaves under 15; over 240, split it into blocks that add up to it). Give it no
+  block when today_min is 0.
 - busy holds only times. When knowing what a busy time is helps (a class you could study for
   right after, a meeting across campus), you may read its name with Google Calendar's
   list_events, read-only. Never create, change or answer an event.
 - Tasks Lisul turned down today (turned_down) are left out of tasks. Never place one.
-- Starts fall on quarter hours (:00, :15, :30, :45). minutes is the task's paced_min, exactly:
-  its estimate times Lisul's pace for its kind of task, already rounded to 15 (at least 15, at
-  most 240). Never work it out yourself; submit_proposal refuses any other length.
-- Order: habits with defence "firm" first (see Habits below); then course tasks (source
-  "brightspace") and at_risk tasks, as hard deadlines, earliest due first, each in the earliest
+- Starts fall on quarter hours (:00, :15, :30, :45). minutes is the task's paced_min (or its
+  horizon minutes, above), exactly: its estimate times Lisul's pace for its kind of task,
+  already rounded to 15 (at least 15, at most 240). Never work it out yourself; submit_proposal
+  refuses any other length.
+- Order: habits with defence "firm" first (see Habits below); then tasks whose horizon state is
+  "wont_fit", then "tight"; then course tasks (source "brightspace") and at_risk tasks, as hard deadlines, earliest due first, each in the earliest
   gap that ends before its due date ends; then tasks with at_time, starting exactly at at_time;
   then habits with defence "flexible"; then the rest, in the order given, in the earliest gap
   that fits: by due, earliest first (none last), then by paced_min, shortest first.
@@ -296,12 +306,13 @@ Place one block per task in tasks, as { task_id, start: "HH:MM", minutes }:
 couldnt_fit: the ids of at_risk tasks you couldn't place, from tasks, each once, none that has
 a block of yours, at most 12. Leave it empty when every at_risk task fit.
 next_day: the ids of tasks with day D and no at_time that you couldn't place, each once, none
-that has a block of yours or one with proposed false, and none at_risk. Leave it empty when
-every one fit.
+that has a block of yours or one with proposed false, none at_risk and none with a horizon
+today_min above 0 (the server moves those minutes itself). Leave it empty when every one fit.
 note: one line, at most 280 characters, no URL: what didn't fit and why (the cap, breaks or
 travel time included, any habit left out, and what moved to the next day), e.g. "Read ch. 4
 (1 h): only 30 min free before 11:00 pm shutdown, moved to tomorrow." If busy_as_of is null or more than a day
-old, add "Busy times may be stale." Leave note out when everything fit and busy times are fresh.
+old, add "Busy times may be stale." Name each task whose horizon state is "wont_fit" with its
+short_min ("OS project: 2h short by Fri"). Leave note out when everything fit and busy times are fresh.
 
 STEP 5b: EVENT TO-DOS
 Every calendar event also shows in Lisul's day list as a to-do, so give each a concise title.
@@ -334,7 +345,7 @@ End with 3-6 plain lines: the messages answered (tasks and events added), the da
 blocks and their span, the habits placed and left out, the hours
 planned against the workload cap (with cap_reason when set, e.g. "cap 4h45: lighter day"), when
 the plan starts ("Plan starts 10:15"), whether it was approved at once, what didn't fit (and the
-couldn't-fit count) and what moved to the next day, how many
+couldn't-fit count, and any wont_fit task) and what moved to the next day, how many
 Needs you items (by kind) and how many a never rule dropped, the suggested tasks, the campus picks, and any errors left after the last submit. Include
 no URL and no mail text beyond a sender's name.
 ```
