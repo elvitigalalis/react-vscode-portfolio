@@ -5,12 +5,12 @@
 # Every number below the front matter traces to resume.json or to a line in `sources:`.
 description: >-
   How I built WorkIt's job scraper and its scheduled database import: a lane per job-board
-  provider that cut routine runs from 9.5 to about 3 minutes, a dry run on pull requests that
+  provider that cut its October 2026 scrape step from 9.5 to about 3 minutes, a dry run on pull requests that
   caught a schema mismatch, and work-style inference right 87% of the time against a 70% baseline.
 summary: >-
   I built the Python scraper behind WorkIt, a five-person team's job board for internship and
   new-grad roles, and the GitHub Actions workflow that imports its results into PostgreSQL.
-  Routine runs fell from 9.5 to about 3 minutes with every site paced as before, and the
+  In October 2026, its scrape step fell from 9.5 to about 3 minutes with every site paced as before, and the
   workflow's dry run on pull requests caught a database schema mismatch before it merged.
 code: https://github.com/workitjobs/workit/tree/main/scraper
 photo:
