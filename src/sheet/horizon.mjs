@@ -2,7 +2,7 @@
 // planned minutes on the working days from today up to its due date. Plain code, no network:
 // the server runs it on each change and Claude only turns today's minutes into timed blocks.
 import { addDays, snap } from "./logic.mjs";
-import { paceKind } from "./pace.mjs";
+import { paceKind, PACE_KINDS, PACE_SAMPLES, PACE_WINDOW, PACE_LIMITS } from "./pace.mjs";
 
 // Chunks: at least 30 and at most 90 minutes of one task on one day; a task of 60 minutes or
 // less is never split. Minutes move in 15-minute steps.
@@ -50,6 +50,20 @@ export function workKind(task) {
   if (PROGRAMMING.test(title)) return "programming";
   if (WRITING.test(title)) return "writing";
   return null;
+}
+
+// Like paceByKind, but the 80th percentile (nearest rank) of minutes / est_min over each kind's
+// newest PACE_WINDOW rows, not the median: { kind: { pace, n } }, a null pace below PACE_SAMPLES.
+// horizonMinutes(task, paceP80ByKind(actuals)) is a task's minutes_p80: a deadline judged at it
+// holds about 4 times in 5, where the median holds half the time (Buehler 1994, Flyvbjerg).
+export function paceP80ByKind(actuals) {
+  const newest = [...actuals].filter((a) => a.est_min > 0).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  return Object.fromEntries(PACE_KINDS.map((kind) => {
+    const xs = newest.filter((a) => a.kind === kind).slice(0, PACE_WINDOW).map((a) => a.minutes / a.est_min).sort((a, b) => a - b);
+    const p80 = xs[Math.ceil(0.8 * xs.length) - 1];
+    const pace = xs.length < PACE_SAMPLES ? null : Math.round(Math.min(PACE_LIMITS[1], Math.max(PACE_LIMITS[0], p80)) * 100) / 100;
+    return [kind, { pace, n: xs.length }];
+  }));
 }
 
 // Minutes of work done on undone tasks that Lisul confirmed: a block answered More time on its
@@ -100,15 +114,31 @@ export function targetDay(due, today, working, buffer_min = 0, room = () => 0) {
 
 // The plan. Input (all minutes are whole numbers):
 //   today         "YYYY-MM-DD"
-//   tasks         [{ id, due, minutes, done_min }]: undone tasks with a due date; minutes is
-//                 horizonMinutes, done_min confirmedDoneMin's (0 without)
+//   tasks         [{ id, due, minutes, done_min, minutes_p80?, kind? }]: undone tasks with a due
+//                 date; minutes is horizonMinutes, done_min confirmedDoneMin's (0 without),
+//                 minutes_p80 horizonMinutes at paceP80ByKind (minutes without), kind workKind's
 //   free          { day: minutes }: dayFree for every day from today to the last due date
 //   locked        [{ task_id, day, minutes }]: today's locked task blocks, kept exactly
 //   frozen_days   [day]: days whose previous allocation is kept and that take nothing new
 //   previous      [{ task_id, day, minutes, over_min }]: the last allocation, for stability
 // Returns { allocations: [{ task_id, day, minutes, over_min }], tasks: { id: { state, slack_min,
-// short_min, finish_day, target_day, remaining_min } }, moved_min }.
-export function planHorizon({ today, tasks, free = {}, locked = [], frozen_days = [], previous = [] }) {
+// short_min, finish_day, target_day, remaining_min, remaining_p80_min } }, moved_min }.
+export function planHorizon(input) {
+  const r = place(input);
+  const p80 = input.tasks.map((t) => ({ ...t, minutes: Math.max(t.minutes, t.minutes_p80 ?? 0) }));
+  const at80 = p80.some((t, i) => t.minutes > input.tasks[i].minutes) ? place({ ...input, tasks: p80 }) : r;
+  // States come from a plan at the P80 minutes; the allocations, finish day, target day and
+  // remaining minutes stay the median plan's.
+  for (const t of input.tasks) {
+    const real = r.tasks[t.id], s = at80.tasks[t.id];
+    const short_min = Math.max(real.short_min, s.short_min);
+    const state = short_min > 0 ? "wont_fit" : s.state === "tight" || real.state === "tight" ? "tight" : "on_track";
+    r.tasks[t.id] = { ...real, state, slack_min: s.slack_min, short_min, remaining_p80_min: s.remaining_min };
+  }
+  return r;
+}
+
+function place({ today, tasks, free = {}, locked = [], frozen_days = [], previous = [] }) {
   const frozen = new Set(frozen_days);
   const due = (t) => (t.due < today ? today : t.due);
   const need0 = new Map(tasks.map((t) => [t.id, up(Math.max(0, t.minutes - (t.done_min ?? 0)))]));

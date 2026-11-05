@@ -1,7 +1,7 @@
 // Horizon planning, part 1: the pure engine (docs/sheet-horizon.md, "The engine").
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { planHorizon, horizonMinutes, confirmedDoneMin, dayFree, workKind, CHUNK_MIN, CHUNK_MAX, STRETCH_MAX } from "../src/sheet/horizon.mjs";
+import { planHorizon, horizonMinutes, confirmedDoneMin, dayFree, workKind, paceP80ByKind, CHUNK_MIN, CHUNK_MAX, STRETCH_MAX } from "../src/sheet/horizon.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -181,10 +181,12 @@ test("every plan keeps the rules", () => {
   let seed = 7;
   const rand = (n) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
   const kindOf = kinds(3);
+  let s80 = 9;
+  const p80 = (m) => { s80 = (s80 * 1103515245 + 12345) % 2 ** 31; return s80 % 3 ? m + 15 * (s80 % 20) : undefined; };
   const day = (i) => { const d = new Date(`${TODAY}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); };
   for (let run = 0; run < 300; run++) {
     const free = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [day(i), rand(5) * 60]));
-    const tasks = Array.from({ length: 1 + rand(6) }, (_, i) => task(`t${i}`, day(rand(20) - 2), 15 * (1 + rand(40)), { done_min: rand(3) ? 0 : 15 * rand(4), kind: kindOf() }));
+    const tasks = Array.from({ length: 1 + rand(6) }, (_, i) => task(`t${i}`, day(rand(20) - 2), 15 * (1 + rand(40)), { done_min: rand(3) ? 0 : 15 * rand(4), kind: kindOf() })).map((t) => ({ ...t, minutes_p80: p80(t.minutes) }));
     const frozen_days = rand(2) ? [day(1)] : [];
     const previous = rand(2) ? planHorizon({ today: TODAY, tasks, free }).allocations : [];
     const r = planHorizon({ today: TODAY, tasks, free, frozen_days, previous });
@@ -291,4 +293,29 @@ test("exam study spreads over 3 days or more, a day apart, when the horizon allo
   assert.deepEqual(on(short, "b"), [["2026-11-05", 90], ["2026-11-06", 90]]);
   // An hour or less stays whole.
   assert.deepEqual(on(plan({ tasks: [task("c", "2026-11-12", 60, { kind: "exam" })] }), "c"), [["2026-11-05", 60]]);
+});
+
+test("states are judged at the P80 minutes while the minutes placed stay at the median", () => {
+  const median = plan({ tasks: [task("a", "2026-11-08", 120)] });
+  // At P80 it needs 300: 90 a day reaches past the target into the buffer.
+  const r = plan({ tasks: [task("a", "2026-11-08", 120, { minutes_p80: 300 })] });
+  assert.deepEqual(r.allocations, median.allocations);
+  assert.deepEqual([median.tasks.a.state, r.tasks.a.state], ["on_track", "tight"]);
+  assert.equal(r.tasks.a.finish_day, "2026-11-06");
+  assert.equal(r.tasks.a.remaining_min, 120);
+  assert.equal(r.tasks.a.remaining_p80_min, 300);
+  // At P80 it needs 240 by tomorrow, 60 more than 90 a day holds.
+  const w = plan({ tasks: [task("b", "2026-11-06", 120, { minutes_p80: 240 })] });
+  assert.deepEqual(on(w, "b"), [["2026-11-05", 90], ["2026-11-06", 30]]);
+  assert.deepEqual([w.tasks.b.state, w.tasks.b.short_min], ["wont_fit", 60]);
+});
+
+test("paceP80ByKind is the 80th-percentile overrun of the newest 20, from 5 samples", () => {
+  const row = (kind, est_min, minutes, i) => ({ kind, est_min, minutes, at: `2026-10-${String(10 + i).padStart(2, "0")}T12:00:00Z` });
+  const actuals = [[60, 60], [60, 66], [60, 72], [60, 90], [60, 120]].map(([e, m], i) => row("course", e, m, i))
+    .concat([row("other", 30, 60, 0)]);
+  const p = paceP80ByKind(actuals);
+  assert.deepEqual(p.course, { pace: 1.5, n: 5 });
+  assert.deepEqual(p.other, { pace: null, n: 1 });
+  assert.equal(horizonMinutes({ est_min: 120, source: "brightspace" }, p), 180);
 });

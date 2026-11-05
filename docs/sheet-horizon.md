@@ -23,7 +23,7 @@ Pure, deterministic, no network. Same input, same output.
 | field | what |
 | --- | --- |
 | `today` | `"YYYY-MM-DD"` in `settings.time_zone` |
-| `tasks` | `[{ id, due, minutes, done_min, kind? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. |
+| `tasks` | `[{ id, due, minutes, done_min, minutes_p80?, kind? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. Optional `minutes_p80` is `horizonMinutes(task, paceP80ByKind(actuals))`, the minutes at his 80th-percentile overrun; without it the states are judged at `minutes`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. |
 | `free` | `{ day: minutes }` for every day from today to the latest due date: `dayFree(...)` of that day. A missing day has 0. |
 | `locked` | `[{ task_id, day, minutes }]`: today's locked task blocks, past ones too (one row per task, minutes summed). |
 | `frozen_days` | `[day]`: tomorrow once today is shut down (`days.shutdown`), else `[]`. |
@@ -46,6 +46,10 @@ Helpers in the same module:
     planSnapshot's `window`) after the day's busy times widened by `travel_min` (10) on each side,
     that weekday's habits at their ideal times, and the day's locked blocks;
   - `locked_min` is the minutes of the day's locked task blocks (habits stay out, as in the cap).
+- **`paceP80ByKind(actuals)`** → `{ kind: { pace, n } }`, the shape of `paceByKind`: the 80th
+  percentile (nearest rank) of `minutes / est_min` over each kind's newest 20 actuals with an
+  estimate, held to 0.5–3, null below 5 of them. Blocks stay sized at the median (`paceByKind`,
+  since More time absorbs one block's overrun); only deadlines use P80.
 - **`workKind(task)`**: `task.kind` when set; GitHub and Jira tasks are `"programming"`; else the
   title: exam, quiz, test, midterm or final (not "final project/paper/report/essay/presentation/
   draft") is `"exam"`, program/coding/code/implement/debug is `"programming"`, essay/paper/report/
@@ -58,7 +62,8 @@ Helpers in the same module:
 ```
 {
   allocations: [{ task_id, day, minutes, over_min }],   -- by day, then plan order
-  tasks: { [id]: { state, slack_min, short_min, finish_day, target_day, remaining_min } },
+  tasks: { [id]: { state, slack_min, short_min, finish_day, target_day, remaining_min,
+                   remaining_p80_min } },
   moved_min                                             -- minutes taken off where `previous` had them
 }
 ```
@@ -129,10 +134,17 @@ A re-flow starts from `previous` and changes only what the change forces:
 
 ### States (R5, R6)
 
+States are judged at P80 (Buehler 1994; Flyvbjerg): the engine also plans every task at
+`max(minutes, minutes_p80)`, from the same input, and reads `state`, `slack_min` and `short_min`
+from that plan, so on track means about 4 in 5 likely, not 1 in 2. The allocations, `finish_day`,
+`target_day` and `remaining_min` stay those of the median plan; `remaining_p80_min` is the P80
+plan's remaining. A task is `wont_fit` when either plan is short, and `tight` when either says
+tight. With no `minutes_p80` both plans are one.
+
 - **`slack_min`**: the running-sum margin at the task's due day: the free minutes from today to
   it, plus the locked and frozen minutes of the tasks due by then, less what those tasks have
   left.
-- **`short_min`**: the task's `over_min`, summed.
+- **`short_min`**: the task's `over_min`, summed (the larger of the two plans').
 - **`finish_day`**: its last day with minutes (null with nothing left).
 - **`wont_fit`** when `short_min > 0`.
 - **`tight`** otherwise when it finishes after its target day, or `slack_min` is under one day's
