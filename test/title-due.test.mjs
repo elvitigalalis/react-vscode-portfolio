@@ -28,3 +28,12 @@ test("titleDue: no explicit date, an impossible one, or two different ones give 
     "Feb 30 thing", "Nov 5 or Nov 6", "Meet in Room 2/14", "Section 3.5 2026"]) assert.equal(titleDue(t, TODAY), null, t);
   assert.equal(titleDue("Quiz Nov 5 — reminder: Nov 5, 2026", TODAY), "2026-11-05");
 });
+
+test("jiraTaskChanges: a ticket with no due date takes the one its summary spells out, on insert and update", async () => {
+  const { jiraTaskChanges } = await import("../src/sheet/sources.mjs");
+  const issues = [{ key: "KAN-30", fields: { summary: "Demo slides due 11/14", duedate: null } }];
+  const site = "example-team.atlassian.net";
+  assert.equal(jiraTaskChanges(issues, { tasks: [], seen: [], site, today: TODAY }).insert[0].due, "2026-11-14");
+  const tasks = [{ id: "t1", title: "KAN-30 Demo slides due 11/14", due: "2026-11-14", done: false, source: "jira", source_uid: "KAN-30" }];
+  assert.deepEqual(jiraTaskChanges(issues, { tasks, seen: ["KAN-30"], site, today: TODAY }).update, []);
+});

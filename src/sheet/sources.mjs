@@ -1,6 +1,6 @@
 // Read-only sources for the planner (docs/sheet-v5.md, "sources.mjs"): what the sync functions
 // turn each outside feed into. Pure, so node --test covers it; the Edge Functions import it.
-import { addDays, formatSpan, minutesOn, cutTitle, localNow, zonedIso } from "./logic.mjs";
+import { addDays, formatSpan, minutesOn, cutTitle, localNow, titleDue, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 import { changeRow } from "./replan.mjs";
 import { slackLink } from "./morning.mjs";
@@ -95,8 +95,10 @@ function workTaskChanges(rows, { tasks, seen, today }, source, list) {
   const soon = (due) => due != null && due >= today && due <= addDays(today, 2);
   const insert = [], update = [], added = [], changes = [];
   const open = new Set();
-  for (const { uid, title, link, due } of rows) {
+  for (const { uid, title, link, due: given } of rows) {
     if (!uid || !title || open.has(uid)) continue;
+    // A deadline written only in the title counts as the due date (logic.mjs, titleDue).
+    const due = given ?? titleDue(title, today);
     open.add(uid);
     if (!known.has(uid)) {
       insert.push({ title, day: null, list, due, public: false, source, source_uid: uid, link });

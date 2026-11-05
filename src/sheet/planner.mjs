@@ -3,7 +3,7 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
-  addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, formatMinutes, rowCount,
+  addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
 } from "./logic.mjs";
@@ -159,10 +159,11 @@ export async function addTask(text, where) {
   const parsed = parseEntry(text, where.day ?? state.today);
   if (!parsed.title) return;
   const siblings = where.day ? tasksOn(where.day) : tasksIn(where.list);
-  const task = await api.insertTask({
+  // A deadline written only in the title ("Nov 14 11:59pm") becomes the due date.
+  const task = await api.insertTask(withTitleDue({
     ...parsed, day: where.day ?? null, list: where.day ? null : where.list,
     position: positionBetween(lastPosition(siblings), null),
-  });
+  }, state.today));
   state.tasks.set(task.id, task);
   return task;
 }
@@ -218,6 +219,7 @@ async function editTask(id, text) {
   // Details typed while editing apply; ones not typed stay as they were.
   const change = { title: parsed.title };
   for (const k of ["est_min", "at_time", "tag", "due"]) if (parsed[k] !== null) change[k] = parsed[k];
+  if (!change.due && !t.due) { const due = titleDue(parsed.title, state.today); if (due) change.due = due; }
   if (VIS.test(text)) change.public = parsed.public;
   const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public, due: t.due };
   await patch(id, change);
