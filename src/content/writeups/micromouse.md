@@ -12,6 +12,7 @@ summary: >-
   UKMARS architecture to our Pi Pico robot, and it ran 2nd at NYIT 2026 with a 38 s run. The
   largest accuracy fix, feeding encoder yaw instead of IMU yaw to the turn controller, cut
   worst-case spin error from 2.75° to 1.01°.
+code: https://github.com/IEEE-StonyBrook/Jurababa_2025-2026/commits/NEW_ROBOT/?author=elvitigalalis
 photo:
   src: /images/micromouse.webp
   alt: The team's micromouse on a lab bench, a green circuit board on a black 3D-printed chassis between two wheels
