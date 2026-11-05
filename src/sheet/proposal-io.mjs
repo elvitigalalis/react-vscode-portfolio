@@ -23,14 +23,15 @@ export function queryPath({ table, select, filters = [], or, order }) {
 // Campus events leave out description and url, so their free text never reaches Claude; open
 // needs_you rows and mail accounts are read only as far as the snapshot shows them.
 // A replan run passes its own plan_day (today, planDayOf in proposal.mjs), even from 3 pm.
-export function snapshotQueries(now, timeZone, plan_day = planningDay(localNow(now, timeZone))) {
+// Horizon planning: `horizonIds` are the tasks with minutes on plan_day, which join the list.
+export function snapshotQueries(now, timeZone, plan_day = planningDay(localNow(now, timeZone)), horizonIds = []) {
   const from = zonedIso(plan_day, 0, timeZone);
   const to = zonedIso(addDays(plan_day, 1), 0, timeZone);
   const overlaps = [["starts_at", "lt", to], ["ends_at", "gt", from]];
   return {
     plan_day,
     queries: {
-      tasks: { table: "tasks", select: "*", filters: [["done", "is", "false"]], or: `day.eq.${plan_day},due.lte.${addDays(plan_day, 7)}`, order: "position" },
+      tasks: { table: "tasks", select: "*", filters: [["done", "is", "false"]], or: [`day.eq.${plan_day}`, `due.lte.${addDays(plan_day, 7)}`, ...(horizonIds.length ? [`id.in.(${horizonIds.join(",")})`] : [])].join(","), order: "position" },
       busy: { table: "busy", select: "starts_at,ends_at", filters: overlaps, order: "starts_at" },
       days: { table: "days", select: "*", filters: [["day", "eq", plan_day]] },
       campus: {
@@ -95,3 +96,10 @@ export function todayReplanQueries(now, timeZone) {
     message: { table: "messages", select: "fired_at", filters: [["fired_at", "not.is", "null"]], order: "fired_at.desc" },
   };
 }
+
+// Horizon planning (docs/sheet-horizon.md, "Part 2"): plan_day's horizon_alloc rows and every
+// horizon_state row, which planSnapshot turns into each task's horizon.
+export const horizonSnapshotQueries = (plan_day) => ({
+  alloc: { table: "horizon_alloc", select: "task_id,day,minutes,over_min", filters: [["day", "eq", plan_day]] },
+  states: { table: "horizon_state", select: "task_id,state,slack_min,short_min,remaining_min,finish_day,target_day" },
+});
