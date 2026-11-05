@@ -50,6 +50,8 @@ export async function saveBlock(b, times = {}) {
   if (step === "create") change.gcal_id = await api.createEvent(t.title, t.public, starts_at, ends_at);
   if (step === "patch") await api.patchEvent(b.gcal_id, api.eventTimes(starts_at, ends_at));
   if (b.proposed) change.proposed = false;
+  // Auto-approval: a block he moves or approves here is his, so no revision moves it again.
+  if (b.auto) change.auto = false;
   Object.assign(b, await api.updateBlock(b.id, change));
 }
 
