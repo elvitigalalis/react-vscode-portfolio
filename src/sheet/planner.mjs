@@ -10,6 +10,7 @@ import {
 import { sourceOf, dueLevel } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart } from "./sleep.mjs";
+import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 
@@ -59,6 +60,7 @@ export const state = {
   calendars: [],    // extra Google calendar IDs, from settings
   settings: null,   // the settings row
   sleep: [],        // Oura: the sleep_nights rows, for when each day starts
+  sleepTimes: [],   // Wind-down: Oura's bedtime windows (sleep_times)
   events: [],       // the week's Google events, never saved
   todoEvents: [],   // the same with "Time blocks" too, for event to-dos (never saved)
   todos: [],        // event_todos rows: done, hidden and Claude's titles
@@ -420,9 +422,18 @@ function dayColumn(day, rows, items) {
       allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
       day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     el("p", { className: "sheet-stamps", textContent: marks }),
+    day === state.today ? windDownMark() : null,
     ul);
   section.dataset.day = day;
   return section;
+}
+
+// Wind-down (bedtime.mjs): today's thin "Wind down 11:30 pm · Bed 12:30 am" line, for tonight
+// (after midnight, the night still going), or nothing without a bedtime.
+function windDownMark() {
+  const tz = SHEET.timeZone;
+  const b = bedtimeFor(tonight(new Date(), tz), { settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
+  return b ? el("p", { className: "sheet-winddown", textContent: bedtimeMarker(b) }) : null;
 }
 
 function listColumn(name) {
@@ -469,7 +480,7 @@ export const renderHooks = [];
 
 export async function load() {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayList, parked, settings, todos, sleep] = await Promise.all([
+  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
@@ -477,7 +488,9 @@ export async function load() {
     api.settings(),
     api.listEventTodos(addDays(days[0], -1), addDays(days[6], 1)).catch((e) => { console.error(e); return []; }),
     api.listSleep(),
+    api.listSleepTimes(),
   ]);
+  state.sleepTimes = sleepTimes;
   state.todos = todos;
   state.settings = settings;
   state.sleep = sleep;

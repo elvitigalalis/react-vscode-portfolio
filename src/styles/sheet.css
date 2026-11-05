@@ -31,6 +31,8 @@
 .is-today .sheet-head { border-bottom-color: var(--accent); }
 .is-today .sheet-wd, .is-today .sheet-dt, .sheet-alldone { color: var(--accent); }
 .sheet-stamps { margin: 0.2rem 0 0; min-height: 1.2rem; color: var(--muted); font-size: 0.75rem; }
+/* Wind-down: today's bedtime line, thin and quiet (bedtime.mjs). */
+.sheet-winddown { margin: 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; border-left: 2px solid var(--line-strong); padding-left: 0.4rem; }
 
 .sheet-rows { list-style: none; }
 /* Side by side, each day's head, stamps, calendar and tasks share the week's grid rows, so the
