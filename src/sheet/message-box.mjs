@@ -26,7 +26,9 @@ let rows = [];
 function grow() {
   input.style.height = "auto";
   if (input.value) input.style.height = `${input.scrollHeight}px`;
-  count.textContent = `${(MAX_TEXT - input.value.length).toLocaleString("en-US")} characters left`;
+  // Only near the limit (research U13): the rest of the time the count is noise.
+  const left = MAX_TEXT - input.value.length;
+  count.textContent = left > 500 ? "" : `${left.toLocaleString("en-US")} characters left`;
 }
 
 export function setupMessages(root) {
