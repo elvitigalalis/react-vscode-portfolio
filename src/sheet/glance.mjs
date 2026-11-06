@@ -50,5 +50,14 @@ export function stripSegments(events, blocks, day, timeZone, from = 7 * 60, to =
 
 // --- feedAlert (G4: the top bar's Feed failed chip) ------------------------------------------
 
-// The sources whose last read failed, in row order. ok null means not read yet, not failed.
-export const feedAlert = (feedRows) => feedRows.filter((f) => f.ok === false).map((f) => f.source);
+// How often each feed's cron job reads it, in minutes (supabase/schema.sql: sheet-mail every 5,
+// sheet-busy and sheet-oura every 10, the rest hourly).
+const FEED_EVERY = { gmail: 5, freebusy: 10, oura: 10 };
+const STALE_AFTER = 3; // missed reads before a feed counts as stuck (research R6)
+
+// The sources whose last read failed, in row order. ok null means not read yet (or not
+// connected), not failed. Given `now` (ms), a feed whose last read worked but is over 3× its
+// interval old counts too: a sync that stops running stays "ok" forever otherwise.
+export const feedAlert = (feedRows, now = null) => feedRows.filter((f) => f.ok === false
+  || (now != null && f.ok === true && f.fetched_at
+    && now - new Date(f.fetched_at).getTime() > STALE_AFTER * (FEED_EVERY[f.source] ?? 60) * 60_000)).map((f) => f.source);
