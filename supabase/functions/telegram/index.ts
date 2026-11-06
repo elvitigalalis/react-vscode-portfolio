@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
@@ -191,6 +191,8 @@ async function send(now: Date) {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
         ...PLAIN,
+        // Only what asks him to act now makes a sound (nudges.mjs, silent).
+        ...(silent(m) ? { disable_notification: true } : {}),
         reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
       });
     } catch (e) {
@@ -336,6 +338,9 @@ async function receipts(now: Date) {
         chat_id: settings.telegram_chat_id,
         text,
         ...PLAIN,
+        // He asked and is waiting on it, but it needs no action: silent (disable_notification,
+        // core.telegram.org/bots/api#sendmessage).
+        disable_notification: true,
         reply_parameters: { message_id: m.tg_message_id, allow_sending_without_reply: true },
         reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
       });

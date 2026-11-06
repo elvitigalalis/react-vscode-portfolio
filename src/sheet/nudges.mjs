@@ -42,6 +42,16 @@ const REPLAN_LINES = 6;
 
 const PLAN_URL = `${ORIGIN}/plan/`;
 
+// Which messages arrive without a sound (research/plan-phone.md P2). sendMessage's
+// disable_notification "Sends the message silently. Users will receive a notification with no
+// sound." (core.telegram.org/bots/api#sendmessage, Bot API 10.3). What asks him to act now rings:
+// the brief, the plan, a block's start, its repeat and snooze, wind-down, bedtime and a health
+// alert. What only reports, or can wait for his next look, is silent: Finished?, the check-in,
+// replan and horizon messages (and, in the telegram function, receipts). They still show in the
+// chat and badge the app.
+const SILENT_KINDS = new Set(["finished", "checkin", "replan", "horizon"]);
+export const silent = (m) => SILENT_KINDS.has(m.kind);
+
 // A snapshot of the day, as the Edge Function reads it:
 //   settings  the settings row (time_zone, telegram_chat_id, nudges_on, morning_on)
 //   day       today's days row, or null
