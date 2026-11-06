@@ -15,6 +15,11 @@
 const FIRE_BASE = "https://api.anthropic.com/v1/claude_code/routines";
 // "The endpoint accepts every version from 2023-06-01 on and behaves the same in each."
 const API_VERSION = "2023-06-01";
+// The /fire endpoint "ships under the experimental-cc-routine-2026-04-01 beta header ... Breaking
+// changes ship behind new dated beta header versions, and the two most recent previous header
+// versions continue to work" (code.claude.com/docs/en/routines, "Trigger a scheduled task"), so
+// pinning it keeps a later change from breaking replans and messages without warning.
+const BETA = "experimental-cc-routine-2026-04-01";
 
 // The request for one fire: { url, init } for fetch. A routine id is prefixed trig_ ("Despite
 // the parameter name, the value is prefixed trig_"); anything else is refused before it reaches
@@ -26,7 +31,7 @@ export function fireRequest(routineId, token, text) {
     url: `${FIRE_BASE}/${routineId}/fire`,
     init: {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "anthropic-version": API_VERSION, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${token}`, "anthropic-version": API_VERSION, "anthropic-beta": BETA, "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     },
   };

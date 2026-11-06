@@ -11,7 +11,7 @@ const TOKEN = "sk-ant-oat01-test";
 
 // ---------------------------------------------------------------- fireRequest
 
-test("fireRequest: a POST to the routine's /fire URL with the bearer token, version and JSON text", () => {
+test("fireRequest: a POST to the routine's /fire URL with the bearer token, version, beta and JSON text", () => {
   assert.deepEqual(fireRequest(ID, TOKEN, "trigger: manual"), {
     url: "https://api.anthropic.com/v1/claude_code/routines/trig_011M52jmViV3VFUuYG7o2kg2/fire",
     init: {
@@ -19,6 +19,7 @@ test("fireRequest: a POST to the routine's /fire URL with the bearer token, vers
       headers: {
         Authorization: "Bearer sk-ant-oat01-test",
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "experimental-cc-routine-2026-04-01",
         "Content-Type": "application/json",
       },
       body: '{"text":"trigger: manual"}',
