@@ -1097,7 +1097,8 @@ Each rule is skipped when `day_rules` lacks its numbers, and each error names th
 
 - A start nudge (and a snooze) of a block with `first_step` reads `Now: OS homework — first:
   open HW4, do Q1 (2:00 pm, 45 min)`; without one, as before.
-- **Didn't start** offers the next free quarter hour today, at least 5 minutes on, that holds the
+- **Didn't start** offers the next free quarter hour today, at least 5 minutes on and not before
+  he's up (quiet hours' morning end, 8:00 at the earliest), that holds the
   block's length by the shutdown line and quiet hours, clear of busy times (with 10 minutes of
   travel) and other approved blocks: `Next free slot: 4:15 pm (45 min) · OS homework` with
   **Move to 4:15 pm** (`move:<block id>:<start in epoch minutes>`) and **Tomorrow**. With no slot:

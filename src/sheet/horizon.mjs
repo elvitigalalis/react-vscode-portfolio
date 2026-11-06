@@ -8,7 +8,7 @@ import { paceKind, PACE_KINDS, PACE_SAMPLES, PACE_WINDOW, PACE_LIMITS } from "./
 // less is never split. Minutes move in 15-minute steps.
 // The engine's rules version, folded into horizonKey (horizon-io.mjs): bump it whenever planHorizon's
 // rules change, so the next tick after a deploy re-flows instead of skipping on an unchanged key.
-export const HORIZON_RULES = 3;
+export const HORIZON_RULES = 4;
 export const CHUNK_MIN = 30;
 export const CHUNK_MAX = 90;
 export const WHOLE_UP_TO = 60;
@@ -173,7 +173,8 @@ function place({ today, tasks, free = {}, locked = [], frozen_days = [], previou
   for (const b of locked) if (known.has(b.task_id) && b.minutes > 0) add(fixed, b.task_id, b.day, b.minutes);
   for (const p of previous) {
     if (!known.has(p.task_id) || p.day < today || p.minutes <= 0) continue;
-    if (frozen.has(p.day)) add(fixed, p.task_id, p.day, p.minutes);
+    // Only the minutes that fit freeze; those past the cap are worked out again (over).
+    if (frozen.has(p.day)) add(fixed, p.task_id, p.day, p.minutes - (p.over_min ?? 0));
   }
   const lockedMin = (id, d) => sum(locked.filter((b) => b.task_id === id && b.day === d).map((b) => b.minutes));
   // Frozen minutes never go past what is left to do; the latest go first, locked ones never.

@@ -1,0 +1,39 @@
+/* Focus mode (docs/sheet-focus.md): the Start button on today's current or next block, and the
+   calm full-screen view. Same tokens as global.css; the bar's one-second step is off when motion
+   is reduced, and nothing else moves. */
+.sheet-row:has(.sheet-focus-start) { flex-wrap: wrap; }
+.sheet-focus-line { flex-basis: 100%; display: flex; padding: 0.1rem 0 0.2rem; }
+.sheet-focus-start {
+  flex: none; padding: 0 0.45rem; font: inherit; font-size: 0.75rem;
+  font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; cursor: pointer;
+  color: var(--accent); background: none; border: 1px solid var(--accent); border-radius: 0.25rem;
+}
+.sheet-focus-start:hover { background: var(--chip); }
+
+.sheet-focus {
+  width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 1rem;
+  border: 0; background: var(--bg); color: var(--fg);
+}
+.sheet-focus[open] { display: grid; grid-template-rows: auto 1fr; }
+.sheet-focus::backdrop { background: var(--bg); }
+.sheet-focus-leave { justify-self: start; }
+.sheet-focus-body {
+  align-self: center; justify-self: center; width: min(32rem, 100%); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding-bottom: 10vh;
+}
+.sheet-focus-kicker { margin: 0; color: var(--muted); font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.sheet-focus-title { margin: 0; font-size: clamp(1.375rem, 5vw, 1.875rem); line-height: 1.25; overflow-wrap: anywhere; }
+.sheet-focus-first { margin: 0; color: var(--muted); }
+.sheet-focus-left {
+  margin: 1rem 0 0; font-family: var(--serif); font-size: clamp(4rem, 22vw, 8rem); line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.sheet-focus-sub { margin: 0; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.sheet-focus-bar { display: block; width: 100%; height: 2px; background: var(--line); border-radius: 1px; overflow: hidden; margin: 0.5rem 0; }
+.sheet-focus-fill { display: block; height: 100%; width: 0; background: var(--accent); }
+.sheet-focus-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; }
+.sheet-focus-actions .sheet-btn { min-width: 6.5rem; min-height: 2.75rem; }
+.sheet-focus-note { margin: 0; min-height: 1.5em; color: var(--muted); font-size: 0.875rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-focus-fill { transition: width 1s linear; }
+}

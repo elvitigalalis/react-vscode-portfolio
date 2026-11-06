@@ -4,6 +4,7 @@ import Base from "../../layouts/Base.astro";
 import { siteConfig } from "../../config";
 import { SHEET } from "../../site.mjs";
 import "../../styles/sheet.css";
+import "../../styles/sheet-focus.css";
 ---
 
 <Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
@@ -266,7 +267,7 @@ import "../../styles/sheet.css";
       <!-- Pace (docs/sheet-v5.md, "/plan"): src/sheet/pace-settings.mjs fills the list. -->
       <section class="sheet-settings-part" aria-labelledby="sheet-pace-title">
         <h3 id="sheet-pace-title">Pace</h3>
-        <p class="small">How long each kind of task really takes next to its estimate, from your Finished? answers in Telegram. Claude sizes blocks by it once a kind has 5.</p>
+        <p class="small">How long each kind of task really takes next to its estimate, from your Finished? answers in Telegram and Done in focus. Claude sizes blocks by it once a kind has 5.</p>
         <ul class="sheet-mail" data-pace></ul>
       </section>
 
@@ -361,9 +362,12 @@ import "../../styles/sheet.css";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupMessages } from "../../sheet/message-box.mjs";
+  import { setupFocus } from "../../sheet/focus-start.mjs";
   import { setupProjects } from "../../sheet/project-list.mjs";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupBedtimeSettings]);
+  // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
+  setupFocus(document.querySelector(".sheet-planner"));
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects], settings);
 </script>
