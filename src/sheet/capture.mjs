@@ -19,6 +19,24 @@ export function readText(update, settings) {
   return text ? { text, chat_id: m.chat.id, message_id: m.message_id } : null;
 }
 
+// research/plan-phone.md P8 (the reply only): a voice note, audio, photo, video, video note or
+// file from his chat ("voice", "audio", "photo", "video", "video_note", "document" on a Message,
+// core.telegram.org/bots/api#message) is { chat_id, message_id }, so the bot can say it reads only
+// text; anything else is null. The Bot API can't transcribe a voice note, and a speech-to-text
+// service is Lisul's call (a new key, his audio sent out), so nothing reads it.
+const MEDIA = ["voice", "audio", "photo", "video", "video_note", "document"];
+export function readMedia(update, settings) {
+  const m = update?.message;
+  if (!m || settings?.telegram_chat_id == null || String(m.chat?.id) !== String(settings.telegram_chat_id)) return null;
+  return MEDIA.some((k) => m[k]) ? { chat_id: m.chat.id, message_id: m.message_id } : null;
+}
+
+// The reply, at most once an hour (lastAt: when it last went, settings.media_reply_at), or null.
+const MEDIA_GAP = 60 * 60_000;
+export const MEDIA_WORDS = "I can only read text for now. Hold the mic on your keyboard to dictate, or type it.";
+export const mediaReply = (lastAt, now) =>
+  (lastAt == null || now.getTime() - Date.parse(lastAt) >= MEDIA_GAP ? MEDIA_WORDS : null);
+
 // What the bot answers straight away, from the save's outcome ({ fired, why }, as the message
 // function answers /plan): the box's own words for Sending done (message-box.mjs).
 export function ackText(saved) {

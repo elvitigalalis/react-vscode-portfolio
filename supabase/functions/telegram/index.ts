@@ -23,7 +23,7 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackReaction, ackText, ANSWERED, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
 
@@ -291,7 +291,31 @@ async function webhook(update: unknown, now: Date) {
   if (t) return capture(t, now);
   const u = readUndo(update, settings);
   if (u) return undo(u, settings);
+  const media = readMedia(update, settings);
+  if (media) return mediaAnswer(media, settings, now);
   return tap(update, now);
+}
+
+// A voice note or photo (capture.mjs, readMedia): the bot says once an hour that it reads only
+// text. Claimed by moving settings.media_reply_at forward, which only one run can do while the
+// last reply is under an hour old; Telegram resends a failed update, and the claim keeps that from
+// answering twice.
+async function mediaAnswer(media: { chat_id: number; message_id: number }, settings: { media_reply_at?: string | null }, now: Date) {
+  const text = mediaReply(settings.media_reply_at ?? null, now);
+  if (!text) return;
+  const before = new Date(now.getTime() - 60 * 60_000).toISOString();
+  const [claimed] = await db(`settings?id=eq.true&or=(media_reply_at.is.null,media_reply_at.lte.${before})`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ media_reply_at: now.toISOString() }),
+  });
+  if (!claimed) return;
+  await telegram("sendMessage", {
+    chat_id: media.chat_id,
+    text,
+    ...PLAIN,
+    reply_parameters: { message_id: media.message_id, allow_sending_without_reply: true },
+  }).catch((e) => console.error("telegram media:", e.message));
 }
 
 // --- Texting the bot (docs/sheet-messages.md, "From Telegram") -----------------------------

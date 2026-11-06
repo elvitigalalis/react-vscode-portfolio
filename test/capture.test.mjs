@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readText, ackText, ackReaction, ANSWERED, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
+import { readText, ackText, ackReaction, ANSWERED, readMedia, mediaReply, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
 
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42 };
 // A text from Lisul's own chat, as Telegram's webhook sends it (core.telegram.org/bots/api#update).
@@ -54,6 +54,27 @@ test("ackReaction: a rate-limited fire gets no reaction, so the text ack says wh
 
 test("ANSWERED: the receipt turns the reaction to 👌", () => {
   assert.deepEqual(ANSWERED, [{ type: "emoji", emoji: "👌" }]);
+});
+
+// ---------------------------------------------------------------- voice notes and photos
+
+test("readMedia: a voice note, audio, photo, video or file from Lisul's chat is one; text, stickers and other chats aren't", () => {
+  const msg = (extra) => ({ message: { message_id: 8, chat: { id: 42, type: "private" }, from: { id: 42 }, ...extra } });
+  for (const kind of ["voice", "audio", "photo", "video", "video_note", "document"]) {
+    assert.deepEqual(readMedia(msg({ [kind]: kind === "photo" ? [{}] : {} }), settings), { chat_id: 42, message_id: 8 }, kind);
+  }
+  assert.equal(readMedia(msg({ sticker: {} }), settings), null);
+  assert.equal(readMedia(text("dentist"), settings), null);
+  assert.equal(readMedia({ message: { ...msg({ voice: {} }).message, chat: { id: 99 } } }, settings), null);
+  assert.equal(readMedia({ edited_message: msg({ voice: {} }).message }, settings), null);
+});
+
+test("mediaReply: says the bot reads only text, at most once an hour", () => {
+  const now = new Date("2026-11-04T15:00:00Z");
+  const words = "I can only read text for now. Hold the mic on your keyboard to dictate, or type it.";
+  assert.equal(mediaReply(null, now), words);
+  assert.equal(mediaReply("2026-11-04T14:00:00Z", now), words);
+  assert.equal(mediaReply("2026-11-04T14:00:01Z", now), null);
 });
 
 // ---------------------------------------------------------------- receipt

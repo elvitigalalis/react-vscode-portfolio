@@ -1915,3 +1915,8 @@ begin
 end $$;
 revoke execute on function replace_horizon(date, text, jsonb, jsonb) from public, anon;
 grant execute on function replace_horizon(date, text, jsonb, jsonb) to authenticated, service_role;
+
+-- --- Telegram: quieter, self-checking (docs/sheet-nudges.md, "Health"; 2026-11-06) ------------
+-- When the bot last told him it reads only text, after a voice note or photo (capture.mjs,
+-- mediaReply): at most once an hour.
+alter table settings add column if not exists media_reply_at timestamptz;
