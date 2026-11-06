@@ -1930,6 +1930,25 @@ end $$;
 revoke execute on function replace_horizon(date, text, jsonb, jsonb) from public, anon;
 grant execute on function replace_horizon(date, text, jsonb, jsonb) to authenticated, service_role;
 
+-- --- Focus mode (docs/sheet-focus.md) ---------------------------------------------------------
+-- Done in /plan's focus view records the minutes since Start into actuals, which only the server
+-- may write (v5 P1), so it goes through this owner-only function. It writes nothing, and returns
+-- false, when the task is gone or done, or already has an actuals row from `since` (Start) on: a
+-- Finished? answer in Telegram, or this call retried. So focus time and Telegram never both count.
+create or replace function record_focus(task uuid, block uuid, d date, kind text, est int, minutes int, since timestamptz)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_owner() then raise exception 'not the owner'; end if;
+  perform 1 from tasks t where t.id = task and not t.done for update;
+  if not found then return false; end if;
+  if exists (select 1 from actuals a where a.task_id = task and a.at >= since) then return false; end if;
+  insert into actuals (day, task_id, block_id, kind, est_min, minutes) values (d, task, block, kind, est, minutes);
+  return true;
+end $$;
+revoke execute on function record_focus(uuid, uuid, date, text, int, int, timestamptz) from public, anon;
+grant execute on function record_focus(uuid, uuid, date, text, int, int, timestamptz) to authenticated;
+
 -- --- Projects (docs/sheet-projects.md) ------------------------------------------------------
 -- A project is a due date and a total estimate made of ordered steps, each an ordinary task with
 -- project_id and its position (step), sharing the project's due date. The horizon engine plans
