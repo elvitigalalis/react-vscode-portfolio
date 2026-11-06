@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { planHorizon } from "../src/sheet/horizon.mjs";
+import { horizonInput, horizonQueries } from "../src/sheet/horizon-io.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -53,4 +54,17 @@ test("steps share one buffer, sized by the whole project", () => {
 test("tasks outside a project plan as before", () => {
   const r = plan({ tasks: [{ id: "z", due: "2026-11-20", minutes: 180, done_min: 0 }, { id: "a", due: "2026-11-20", minutes: 60, done_min: 0 }] });
   assert.deepEqual(on(r, "a"), [["2026-11-05", 60]]);
+});
+
+// ---------------------------------------------------------------- the re-flow's input
+
+test("horizonInput: a step carries its project and position; other tasks don't", () => {
+  const settings = { time_zone: "America/New_York", workload_cap_min: 600, wind_down_on: false, horizon_key: null };
+  const row = (id, extra = {}) => ({ id, title: id, day: null, list: "Inbox", due: "2026-11-20", est_min: 60, at_time: null, done: false, source: null, tag: null, ...extra });
+  const tasks = [row("s2", { project_id: "p", step: 2 }), row("x"), row("s1", { project_id: "p", step: 1 })];
+  const input = horizonInput({ settings, tasks, blocks: [], busy: [], habits: [], actuals: [], feedback: [], day: null, sleepDay: null, previous: [] }, new Date("2026-11-05T13:00:00Z"));
+  const by = Object.fromEntries(input.tasks.map((t) => [t.id, [t.project, t.step]]));
+  assert.deepEqual(by, { s1: ["p", 1], s2: ["p", 2], x: [undefined, undefined] });
+  assert.ok(!("project" in input.tasks.find((t) => t.id === "x")));
+  assert.match(horizonQueries("2026-11-05", "America/New_York").tasks.select, /\bproject_id\b.*\bstep\b/);
 });
