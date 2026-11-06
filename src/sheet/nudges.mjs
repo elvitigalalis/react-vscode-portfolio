@@ -599,12 +599,18 @@ export function nowText(snapshot, now) {
 // and now_text): { action: "create", text } to send and pin it, made only while he's up (not in
 // quiet hours or before his wake, as the brief); { action: "edit", message_id, text } once the
 // words change, at any hour, since an edit makes no notification; or null. Nothing while
-// Telegram is off.
+// Telegram is off, or while another tick's claim to make it holds (PIN_CLAIM).
+// How long a claim to make the pinned message holds: a tick that sent it but failed to save its
+// id leaves the claim, and only after this can another one be made.
+export const PIN_CLAIM = 15 * 60_000;
 export function pinStep(snapshot, now) {
   if (!telegramOn(snapshot.settings)) return null;
   const text = nowText(snapshot, now);
   const { now_message_id: id, now_text } = snapshot.settings;
   if (id != null) return text === now_text ? null : { action: "edit", message_id: id, text };
+  // Another tick claimed making it (settings.now_claimed_at) and hasn't saved its id yet.
+  const claimed = snapshot.settings.now_claimed_at;
+  if (claimed && now.getTime() - Date.parse(claimed) < PIN_CLAIM) return null;
   const day = dayOf(snapshot, now);
   return day.minutes >= day.openAt && day.minutes < QUIET_FROM ? { action: "create", text } : null;
 }

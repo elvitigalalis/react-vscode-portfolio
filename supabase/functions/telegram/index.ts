@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonMarks, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
@@ -310,7 +310,7 @@ async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
     } catch (e) {
       const why = e instanceof Error ? e.message : "";
       if (/message to edit not found|message can't be edited/i.test(why)) {
-        await saveNow({ now_message_id: null, now_text: null });
+        await saveNow({ now_message_id: null, now_text: null, now_claimed_at: null });
         return "gone";
       }
       if (!/message is not modified/i.test(why)) throw e;
@@ -318,7 +318,23 @@ async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
     await saveNow({ now_text: step.text });
     return "edited";
   }
-  const msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  // Claimed first (settings.now_claimed_at), which only one tick can do, so two overlapping ticks
+  // never both make one; a claim left by a tick whose save failed lapses after PIN_CLAIM
+  // (nudges.mjs, pinStep). A refused send gives it back.
+  const stale = new Date(now.getTime() - PIN_CLAIM).toISOString();
+  const [mine] = await db(`settings?id=eq.true&now_message_id=is.null&or=(now_claimed_at.is.null,now_claimed_at.lt.${stale})`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ now_claimed_at: now.toISOString() }),
+  });
+  if (!mine) return "claimed";
+  let msg;
+  try {
+    msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  } catch (e) {
+    await saveNow({ now_claimed_at: null }).catch(() => {});
+    throw e;
+  }
   // Kept before the pin, so a refused pin never makes a second message.
   await saveNow({ now_message_id: msg.message_id, now_text: step.text });
   await telegram("pinChatMessage", { chat_id, message_id: msg.message_id, disable_notification: true });

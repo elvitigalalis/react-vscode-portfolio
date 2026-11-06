@@ -639,3 +639,14 @@ test("pinStep: never made while he's asleep or with Telegram off; an edit (silen
   const pinned = { ...settings, now_message_id: 77, now_text: "Now: Read until 11:45 pm" };
   assert.deepEqual(pinStep(snapshot({ settings: pinned }), late), { action: "edit", message_id: 77, text: "Nothing scheduled" });
 });
+
+// Before this two overlapping ticks, or a made message whose id failed to save, each made
+// another pinned message. The tick now claims settings.now_claimed_at first; a fresh claim with
+// no id means one is on its way, and a claim left 15 minutes (its save failed) lets one more go.
+test("pinStep: no second message while one is being made; a stale claim lets one more go", async () => {
+  const { pinStep } = await import("../src/sheet/nudges.mjs");
+  const noon = at("2026-10-26T16:00:00Z");
+  const claimed = (iso) => snapshot({ settings: { ...settings, now_message_id: null, now_claimed_at: iso } });
+  assert.equal(pinStep(claimed("2026-10-26T15:59:00Z"), noon), null);
+  assert.deepEqual(pinStep(claimed("2026-10-26T15:45:00Z"), noon), { action: "create", text: "Nothing scheduled" });
+});
