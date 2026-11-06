@@ -59,7 +59,7 @@ test("a stored session reads back only when whole", () => {
 test("Done records the minutes since Start, on the session's day, as Finished does", () => {
   const s = startSession(blocks[1], at("2026-11-04T19:05:00Z"));
   assert.deepEqual(focusActual(s, task("t1", { source: "brightspace" }), at("2026-11-04T19:52:40Z"), TZ),
-    { task: "t1", block: "b1", d: "2026-11-04", kind: "course", est: 45, minutes: 48 });
+    { task: "t1", block: "b1", d: "2026-11-04", kind: "course", est: 45, minutes: 48, since: "2026-11-04T19:05:00.000Z" });
   // No estimate travels as null; under half a minute records nothing; a forgotten timer stops at 960.
   assert.equal(focusActual(s, task("t1", { est_min: null }), at("2026-11-04T19:35:00Z"), TZ).est, null);
   assert.equal(focusActual(s, task("t1"), at("2026-11-04T19:05:20Z"), TZ), null);

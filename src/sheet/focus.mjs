@@ -58,10 +58,12 @@ export function focusClock(s, now) {
 // Done's actuals row, as record_focus takes it (supabase/schema.sql): the minutes from Start to
 // Done, rounded and held to actuals' 1–960, on the day the session started, with the task's pace
 // kind and estimate, as Telegram's Finished writes them (nudges.mjs). Under a minute: none.
+// `since` is Start: record_focus writes nothing when the task is done or already has a row from
+// then on (a Finished? answer in Telegram), so focus time and Telegram never both count.
 export function focusActual(s, task, now, timeZone) {
   const minutes = Math.min(Math.round((now.getTime() - s.started_at) / 60_000), 960);
   if (minutes < 1) return null;
-  return { task: s.task_id, block: s.block_id, d: localNow(new Date(s.started_at), timeZone).day, kind: paceKind(task), est: task.est_min ?? null, minutes };
+  return { task: s.task_id, block: s.block_id, d: localNow(new Date(s.started_at), timeZone).day, kind: paceKind(task), est: task.est_min ?? null, minutes, since: new Date(s.started_at).toISOString() };
 }
 
 export const EXTEND_MIN = 15;
