@@ -285,8 +285,8 @@ for (const dark of [false, true]) {
 // and standalone hides the site's nav and footer.
 {
   const pg = await b.newPage();
-  const res = await pg.goto(`${BASE}/plan/manifest.webmanifest`);
-  const m = res.ok() ? await res.json().catch(() => null) : null;
+  const res = await fetch(`${BASE}/plan/manifest.webmanifest`);
+  const m = res.ok ? await res.json().catch(() => null) : null;
   if (!m || m.start_url !== "/plan/" || m.scope !== "/plan/" || m.display !== "standalone") failures.push(`manifest: ${JSON.stringify(m)}`);
   await pg.setRequestInterception(true);
   pg.on("request", route);
