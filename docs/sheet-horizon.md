@@ -23,7 +23,7 @@ Pure, deterministic, no network. Same input, same output.
 | field | what |
 | --- | --- |
 | `today` | `"YYYY-MM-DD"` in `settings.time_zone` |
-| `tasks` | `[{ id, due, minutes, done_min, minutes_p80?, kind? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. Optional `minutes_p80` is `horizonMinutes(task, paceP80ByKind(actuals))`, the minutes at his 80th-percentile overrun; without it the states are judged at `minutes`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. |
+| `tasks` | `[{ id, due, minutes, done_min, minutes_p80?, kind? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`, leaving out blocks locked today (they count as `locked`, so a More time answer on one is not counted twice). Optional `minutes_p80` is `horizonMinutes(task, paceP80ByKind(actuals))`, the minutes at his 80th-percentile overrun; without it the states are judged at `minutes`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. |
 | `free` | `{ day: minutes }` for every day from today to the latest due date: `dayFree(...)` of that day. A missing day has 0. |
 | `locked` | `[{ task_id, day, minutes }]`: today's locked task blocks, past ones too (one row per task, minutes summed). |
 | `frozen_days` | `[day]`: tomorrow once today is shut down (`days.shutdown`), else `[]`. |
