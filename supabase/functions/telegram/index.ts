@@ -722,7 +722,8 @@ async function tap(update: unknown, now: Date) {
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
   await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN, ...(buttons?.length ? { reply_markup: { inline_keyboard: [buttons] } } : {}) }).catch(() => {});
   // P5: a block answered for (anything but Snooze) leaves no live buttons on its other messages.
-  if (!planTap(t) && t.block_id && t.action !== "snooze" && changes.length) await clearButtons(t.chat_id, deadButtons({ block_id: t.block_id }, snap.log, t.message_id));
+  const tapped = (t as { block_id?: string }).block_id;
+  if (tapped && t.action !== "snooze" && changes.length) await clearButtons(t.chat_id, deadButtons({ block_id: tapped }, snap.log, t.message_id));
 }
 
 // One change from handleTap or keyStep, made through PostgREST.
