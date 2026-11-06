@@ -16,6 +16,7 @@ import { bedtimeFor, nightAt, shutdownFor, tonight } from "./bedtime.mjs";
 import { lateNap } from "./oura-day.mjs";
 import { pickTips, tipContext } from "./tips.mjs";
 import { GYM_HABIT } from "./ring.mjs";
+import { healthLine } from "./health.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -80,7 +81,7 @@ export function whatToSend(snapshot, now) {
   // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
   // wake syncs, so it goes once a day, whenever it went.
   const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
-  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
+  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day), ...(briefOut ? healthMessage(day) : [])]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -240,9 +241,14 @@ function brief(day) {
   const [tip] = tipsFor(day, today);
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
   const cal = academicLine(day.academic);
-  const tail = [scoreLine(day), tip && `Tip: ${tip.text}`, capLine(day), wx, cal, awaitingLine(day.awaiting)];
+  // The Sheet's health (health.mjs), when the snapshot has it: folded when all green, in view
+  // with its issues, which then count as told (`health`, the keys; no alert repeats them).
+  const h = day.health;
+  const sick = h && !h.green ? healthLine(h) : null;
+  const tail = [scoreLine(day), tip && `Tip: ${tip.text}`, capLine(day), wx, cal, awaitingLine(day.awaiting), h?.green ? healthLine(h) : null];
   const send_at = zonedIso(today, day.briefAt, tz);
-  const brief = (head, buttons) => ({ kind: "brief", block_id: null, day: today, send_at, ...folded(head, tail), buttons, ...marks });
+  const sickKeys = sick ? { health: h.issues.map((i) => i.key) } : {};
+  const brief = (head, buttons) => ({ kind: "brief", block_id: null, day: today, send_at, ...folded([...head, sick], tail), buttons, ...marks, ...sickKeys });
   if (plan) return brief([...lines, ...plan], planButtons(today, day.proposal?.rev));
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
@@ -251,6 +257,23 @@ function brief(day) {
   const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
   const head = todays.length || n || risky.length ? [...lines, needs] : ["Nothing on today.", missed && empty, needs];
   return brief(head, [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }]);
+}
+
+// --- Health alerts (docs/sheet-nudges.md, "Health") ------------------------------------------
+// One message when something breaks that he hasn't been told of (settings.health_told, the keys
+// told and still open): sent after the brief (which lists what is broken by then), only while
+// messages go out at all (from his wake, never before 8 am, until 11 pm), at most HEALTH_BUDGET
+// a day. Beside the nudge budget, like the brief: it takes none of its six slots, and has a cap
+// of its own. A key stays told while the issue lasts, so each incident is told once.
+export const HEALTH_BUDGET = 2;
+function healthMessage(day) {
+  const h = day.health;
+  if (!h || h.green) return [];
+  const told = new Set(day.settings.health_told ?? []);
+  const fresh = h.issues.filter((i) => !told.has(i.key));
+  if (!fresh.length || day.log.filter((n) => n.kind === "health").length >= HEALTH_BUDGET) return [];
+  const send_at = new Date(Math.floor(day.now / 60_000) * 60_000).toISOString();
+  return [{ kind: "health", block_id: null, day: day.today, send_at, text: healthLine(h, fresh), buttons: [{ text: "Open /plan", url: PLAN_URL }], health: fresh.map((i) => i.key) }];
 }
 
 // --- Monday's Last week line (research/plan-insights.md I9) -------------------------------------

@@ -18,6 +18,7 @@
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
+import { health, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
@@ -47,7 +48,7 @@ Deno.serve(async (req) => {
     // Horizon planning: re-flow before the messages, so they see fresh states. Failing (or the
     // horizon schema not run yet) stops nothing else.
     const horizon = await horizonTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now)), replan, receipts: receipted, hook, horizon });
+    return Response.json({ ...(await send(now, { replanHold: replan, hook })), replan, receipts: receipted, hook, horizon });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -60,7 +61,11 @@ Deno.serve(async (req) => {
 // with a due date (which covers the check-in's "due tomorrow"), the blocks of those tasks and of
 // today, and today's log. Then the morning plan's part: today's proposal, the needs_you rows not
 // done, and the campus events the proposal picks.
-async function snapshot(now: Date) {
+// What the tick learned before sending, for the health check: the replan tick's outcome and the
+// webhook's info.
+type TickFacts = { replanHold?: unknown; hook?: unknown };
+
+async function snapshot(now: Date, facts: TickFacts = {}) {
   const [settings] = await db("settings?select=*");
   const { day: today } = localNow(now, settings.time_zone);
   const tasks = await db(`tasks?select=*&or=(day.eq.${today},and(due.not.is.null,done.is.false))`);
@@ -104,7 +109,25 @@ async function snapshot(now: Date) {
   // Horizon planning: each task's state and the last one he was told of. None until its schema has run.
   const horizon = await db("horizon_state?select=task_id,state,short_min,slack_min,finish_day,notified").catch(() => []);
   const lastWeek = await lastWeekRows(today).catch(() => null);
-  return { lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+  // The Sheet's health (health.mjs). A failed read leaves it out: the brief then has no Sheet
+  // line, and nothing is alerted, rather than the messages stopping.
+  const sheetHealth = await healthOf(today, now, settings.time_zone, facts).catch((e) => (console.error("health:", e instanceof Error ? e.message : e), undefined));
+  return { health: sheetHealth, lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+}
+
+// The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the three connected
+// accounts' last errors, and today's replans, with the tick's own facts.
+async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) {
+  const [feeds, mail, [calendar = null], [oura = null], replans] = await Promise.all([
+    db("feed_state?select=*"),
+    db("mail_accounts?select=email,label,last_error").catch(() => []),
+    db("calendar_account?select=last_error").catch(() => []),
+    db("oura_account?select=last_error").catch(() => []),
+    db(`replans?select=at,result&day=eq.${today}`),
+  ]);
+  const hook = facts.hook && typeof facts.hook === "object" && "url" in facts.hook ? facts.hook : undefined;
+  const replanHold = facts.replanHold && typeof facts.replanHold === "object" && "hold" in facts.replanHold ? facts.replanHold : undefined;
+  return health({ tz, feeds, mail, calendar, oura, replans, hook, replanHold }, now);
 }
 
 // Monday's Last week line (nudges.mjs, lastWeekLine): last Mon-Sun's approved task blocks (a day
@@ -188,11 +211,13 @@ const setNotified = (ids: string[], notified: string | null) =>
 
 // --- Sending ------------------------------------------------------------------------------
 
-type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; entities?: unknown[]; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
+type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; entities?: unknown[]; health?: string[]; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
 
-async function send(now: Date) {
-  const snap = await snapshot(now);
+async function send(now: Date, facts: TickFacts = {}) {
+  const snap = await snapshot(now, facts);
   const sent = [];
+  // The health keys the brief or a health message told him of (nudges.mjs).
+  const toldNow: string[] = [];
   for (const m of whatToSend(snap, now) as Message[]) {
     // Claim the log row first: if another run got there, the claim returns nothing and this
     // one skips the message, so it goes out once.
@@ -220,11 +245,18 @@ async function send(now: Date) {
     }
     await c.sent();
     sent.push(m.kind);
+    toldNow.push(...(m.health ?? []));
     // The horizon states this message told him of (the brief's, or the horizon message's).
     for (const st of ["tight", "wont_fit"]) {
       const ids = (m.horizon ?? []).filter((h) => h.state === st).map((h) => h.task_id);
       if (ids.length) await setNotified(ids, st).catch((e) => console.error("horizon notified:", e instanceof Error ? e.message : e));
     }
+  }
+  // What's told and still open (health.mjs, nextTold), written only when it changes.
+  if (snap.health) {
+    const before: string[] = snap.settings.health_told ?? [];
+    const after = nextTold(before, snap.health.issues, toldNow);
+    if (after.join("\n") !== before.join("\n")) await saveNow({ health_told: after }).catch((e) => console.error("health told:", e instanceof Error ? e.message : e));
   }
   // The pinned Now message must not stop the messages, nor they it.
   const pin = await pinTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));

@@ -1920,3 +1920,11 @@ grant execute on function replace_horizon(date, text, jsonb, jsonb) to authentic
 -- When the bot last told him it reads only text, after a voice note or photo (capture.mjs,
 -- mediaReply): at most once an hour.
 alter table settings add column if not exists media_reply_at timestamptz;
+-- The health check (src/sheet/health.mjs): the issue keys already told in Telegram (by the brief
+-- or a health message) and still open. A key that clears is dropped, so it is told again only
+-- if it comes back.
+alter table settings add column if not exists health_told text[] not null default '{}';
+-- A health message in the nudges log (kind 'health', block_id null), at most two a day.
+alter table nudges drop constraint if exists nudges_kind_check;
+alter table nudges add constraint nudges_kind_check
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
