@@ -4,7 +4,7 @@
 // anywhere else; steps stay out of the Someday lists. The rows are drawn on each render from
 // state; the projects and their steps are read again when the planner loads.
 import * as api from "./api.mjs";
-import { el, state, renderHooks, taskRow } from "./planner.mjs";
+import { el, state, render, renderHooks, taskRow } from "./planner.mjs";
 import { projectSummary } from "./project-view.mjs";
 
 let root;
@@ -19,7 +19,9 @@ async function refresh(tasks) {
   projects = rows;
   // Steps on a day outside the week still need to be known for their rows to work.
   for (const t of steps) if (!state.tasks.has(t.id)) state.tasks.set(t.id, t);
-  draw();
+  // A full redraw, not just this list's, so the other hooks see the steps' rows too (focus
+  // Start on a step's block today). The hook below then only draws: state.tasks is `seen`.
+  render();
 }
 
 function row(p, s) {
