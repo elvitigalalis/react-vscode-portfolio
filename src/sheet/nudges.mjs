@@ -41,6 +41,9 @@ export const REPLANS_SENT_MAX = 4;
 const REPLAN_LINES = 6;
 
 const PLAN_URL = `${ORIGIN}/plan/`;
+// research/plan-improvements.md U16: a link can open one of /plan's views on load (plan,
+// shutdown or needs), which /plan reads and strips from the address.
+const planUrl = (view) => `${PLAN_URL}?open=${view}`;
 
 // Which messages arrive without a sound (research/plan-phone.md P2). sendMessage's
 // disable_notification "Sends the message silently. Users will receive a notification with no
@@ -247,9 +250,11 @@ function brief(day) {
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
-  const text = (todays.length || n || risky.length ? [...lines, waiting]
-    : ["Nothing on today.", wx, cal, missed && empty, waiting]).filter(Boolean).join("\n");
-  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }], ...marks };
+  // With no plan to carry it, the brief counts the open Needs you rows, and its link opens them.
+  const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
+  const text = (todays.length || n || risky.length ? [...lines, needs, waiting]
+    : ["Nothing on today.", wx, cal, missed && empty, needs, waiting]).filter(Boolean).join("\n");
+  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }], ...marks };
 }
 
 // --- Horizon planning (docs/sheet-horizon.md, "Part 2", 7) ------------------------------------
@@ -309,7 +314,7 @@ function awaitingLine(rows) {
 // docs/sheet-v5.md), so a tap acts on the plan it showed; the webhook reads them back on a tap.
 const planButtons = (d, rev) => {
   const r = rev == null ? "" : `:${rev}`;
-  return [{ text: "Approve all", callback_data: `pa:${d}${r}` }, { text: "Open /plan", url: PLAN_URL }, { text: "Skip", callback_data: `ps:${d}${r}` }];
+  return [{ text: "Approve all", callback_data: `pa:${d}${r}` }, { text: "Open /plan", url: planUrl("plan") }, { text: "Skip", callback_data: `ps:${d}${r}` }];
 };
 
 // The plan on its own, when today's proposal is pending and the brief went out before it was
@@ -481,7 +486,7 @@ function checkin({ tasks, day: row, today, tz, needsOpen, settings, sleep, sleep
   const tomorrow = tasks.filter((t) => !t.done && t.due === addDays(today, 1));
   if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
   if (needsOpen.length) lines.push(`Needs you: ${needsOpen.length}.`);
-  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
+  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: planUrl("shutdown") }] }];
 }
 
 // --- The pinned Now message (docs/sheet-nudges.md, "The pinned Now message") ---------------

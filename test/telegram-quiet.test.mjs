@@ -38,3 +38,35 @@ test("silent: a repeat, a snooze, wind-down and bedtime still ring; replan and h
   for (const kind of ["repeat", "snooze", "wind_down", "bedtime", "proposal"]) assert.equal(silent({ kind }), false, kind);
   for (const kind of ["replan", "horizon"]) assert.equal(silent({ kind }), true, kind);
 });
+
+// ---------------------------------------------------------------- links that open a view
+
+const plan = (view) => `https://www.lisul-elvi.com/plan/?open=${view}`;
+
+test("links: the check-in's Open /plan opens Shutdown", () => {
+  const snap = snapshot({ tasks: [task("t1", "OS homework")], log: [briefSent] });
+  const [checkin] = whatToSend(snap, at("2026-10-26T21:00:00Z")).filter((m) => m.kind === "checkin");
+  assert.deepEqual(checkin.buttons, [{ text: "Open /plan", url: plan("shutdown") }]);
+});
+
+test("links: a plan's Open /plan opens the plan, between Approve all and Skip", () => {
+  const proposal = { day, rev: 2, status: "pending", created_at: "2026-10-26T10:07:00Z", run_trigger: "morning", note: null, picks: [], blocks: [] };
+  const snap = snapshot({
+    tasks: [task("t1", "OS homework")],
+    blocks: [block("b1", "t1", "2026-10-26T18:00:00Z", "2026-10-26T18:45:00Z", { proposed: true })],
+    proposal,
+  });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.deepEqual(brief.buttons, [
+    { text: "Approve all", callback_data: `pa:${day}:2` },
+    { text: "Open /plan", url: plan("plan") },
+    { text: "Skip", callback_data: `ps:${day}:2` },
+  ]);
+});
+
+test("links: with mail waiting and no plan to approve, the brief says how many and opens Needs you", () => {
+  const snap = snapshot({ tasks: [task("t1", "OS homework")], needsOpen: [{ id: "n1", done: false }, { id: "n2", done: false }] });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text, 'Today: 1 task, 0 blocks.\nNothing planned yet: say "plan my day" to Claude.\nNeeds you: 2.');
+  assert.deepEqual(brief.buttons, [{ text: "Open /plan", url: plan("needs") }]);
+});
