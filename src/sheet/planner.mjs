@@ -944,6 +944,60 @@ function typing(e) {
   return e.target.closest?.("input, textarea, [contenteditable]") || e.metaKey || e.ctrlKey || e.altKey;
 }
 
+// --- Keys on a focused row (research U19) ----------------------------------------------------
+
+// In the week, with a row focused: Space (on a task's title) or X completes it, D moves it to
+// tomorrow, Z to Someday, E edits it, and J/K step to the next or previous row on screen. J or K
+// with no row focused starts at the focused day's first row. Plan today keeps its own D and Z
+// (plan-dialog.mjs); the document listener ignores keys while a dialog is open.
+const rowFocus = (li) => li?.querySelector(li.classList.contains("sheet-task") ? ".sheet-title" : ".sheet-check");
+const shownRows = () => [...root.querySelectorAll(".sheet-day .sheet-task, .sheet-day .sheet-evtodo, .sheet-list .sheet-task")].filter((r) => r.getClientRects().length);
+
+// After a row moves away, focus stays at its place in its list: the row now there, else the last.
+function refocus(list, index) {
+  const ul = list.dataset.day ? root.querySelector(`.sheet-rows[data-day="${list.dataset.day}"]`) : root.querySelector(`.sheet-rows[data-list="${CSS.escape(list.dataset.list ?? "")}"]`);
+  const rows = [...(ul?.querySelectorAll(".sheet-task, .sheet-evtodo") ?? [])];
+  rowFocus(rows[Math.min(index, rows.length - 1)])?.focus();
+}
+
+function rowKey(e) {
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (e.shiftKey && key !== "j" && key !== "k") return false;
+  const li = document.activeElement?.closest?.(".sheet-task, .sheet-evtodo");
+  if (key === "j" || key === "k") {
+    const rows = shownRows();
+    if (!rows.length) return false;
+    const at = rows.indexOf(li);
+    const next = at < 0 ? (root.querySelector(`.sheet-day[data-day="${state.focus}"] :is(.sheet-task, .sheet-evtodo)`) ?? rows[0])
+      : rows[Math.max(0, Math.min(rows.length - 1, at + (key === "j" ? 1 : -1)))];
+    e.preventDefault();
+    rowFocus(next)?.focus();
+    return true;
+  }
+  if (!li || !root.contains(li)) return false;
+  if (li.classList.contains("sheet-evtodo")) {
+    if (key !== "x") return false;
+    e.preventDefault();
+    toggleEventTodo(li);
+    return true;
+  }
+  const id = li.dataset.id;
+  const kind = { x: "done", " ": "done", d: "tomorrow", z: "someday", e: "edit" }[key];
+  if (!kind || (key === " " && !e.target.matches(".sheet-title"))) return false;
+  e.preventDefault();
+  if (kind === "edit") { startEdit(li); return true; }
+  if (kind === "done") {
+    const done = !state.tasks.get(id).done;
+    completeTask(id, done).catch((err) => failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)))
+      .finally(() => { render(); root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus(); });
+    return true;
+  }
+  const list = li.closest(".sheet-rows");
+  const index = [...list.querySelectorAll(".sheet-task, .sheet-evtodo")].indexOf(li);
+  taskAction(id, kind).then(() => refocus(list, index));
+  return true;
+}
+
 function wire() {
   // Every dialog on /plan closes on a backdrop click, as its Close button does (dismiss.mjs).
   for (const d of root.querySelectorAll("dialog")) lightDismiss(d);
@@ -1041,6 +1095,7 @@ function wire() {
   document.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.target.closest?.("input, textarea")) { e.preventDefault(); undo(); return; }
     if (typing(e) || document.querySelector("dialog[open]")) return;
+    if (rowKey(e)) return;
     if (e.key === "ArrowLeft") showWeek(addDays(state.week, -7));
     else if (e.key === "ArrowRight") showWeek(addDays(state.week, 7));
     else if (e.key === "t" || e.key === "T") showWeek(weekStart(now().day));
@@ -1052,6 +1107,9 @@ function wire() {
     } else for (const hook of keyHooks) if (hook(e)) { e.preventDefault(); return; }
   });
 
+  // Space on a focused title completes it (rowKey) instead of opening the edit box, which a
+  // button does on keyup.
+  document.addEventListener("keyup", (e) => { if (e.key === " " && e.target.matches?.(".sheet-task .sheet-title") && !document.querySelector("dialog[open]")) e.preventDefault(); });
   for (const menu of root.querySelectorAll(".sheet-menu")) menuKeys(menu);
   // Oura: oura-sync runs every 10 minutes, so today's chips refresh as often while /plan shows.
   setInterval(refreshOura, 10 * 60_000);
