@@ -23,7 +23,7 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackText, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
 
@@ -304,9 +304,17 @@ async function webhook(update: unknown, now: Date) {
 // Telegram sends an update again when the webhook fails ("we will repeat the request":
 // core.telegram.org/bots/api#setwebhook): a text already saved is not saved again, so a failed
 // save is retried and a saved one never doubles. A failed answer is only logged.
+// The answer is a reaction on his text (capture.mjs, ackReaction: setMessageReaction), and a
+// reply with ackText only when the words matter (rate limited) or Telegram refuses the reaction.
 async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
   if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
   const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  const reaction = ackReaction(saved);
+  if (reaction) {
+    const reacted = await telegram("setMessageReaction", { chat_id: t.chat_id, message_id: t.message_id, reaction })
+      .then(() => true, (e) => (console.error("telegram reaction:", e.message), false));
+    if (reacted) return;
+  }
   await telegram("sendMessage", {
     chat_id: t.chat_id,
     text: ackText(saved),
@@ -348,6 +356,10 @@ async function receipts(now: Date) {
       await db(`messages?id=eq.${m.id}`, { method: "PATCH", body: JSON.stringify({ tg_receipt_at: null }) });
       throw e;
     }
+    // 👀 or ✍ on his text becomes 👌 (capture.mjs, ANSWERED). Only cosmetic: a refusal (his text
+    // deleted) changes nothing.
+    await telegram("setMessageReaction", { chat_id: settings.telegram_chat_id, message_id: m.tg_message_id, reaction: ANSWERED })
+      .catch((e) => console.error("telegram reaction:", e.message));
     sent.push(m.id);
   }
   return sent;

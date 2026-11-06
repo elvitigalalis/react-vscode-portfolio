@@ -28,6 +28,22 @@ export function ackText(saved) {
   return `Sent to Claude. ${where}`;
 }
 
+// research/plan-phone.md P4: the bot reacts to his text instead of sending an ack message, so a
+// capture costs one bot message (the receipt), not two. setMessageReaction takes "A
+// JSON-serialized list of reaction types"; "as non-premium users, bots can set up to one
+// reaction per message", and a ReactionTypeEmoji is { type: "emoji", emoji } with the emoji from
+// a fixed list, which holds 👀, ✍ and 👌 (core.telegram.org/bots/api#setmessagereaction,
+// #reactiontypeemoji; Bot API 10.3). Setting a new list replaces the old reaction.
+// 👀 Claude is reading it (fired, or riding on a run fired a moment ago); ✍ it is queued for the
+// next plan. null for a rate-limited fire: those words matter, so ackText still goes as a reply.
+const emoji = (e) => [{ type: "emoji", emoji: e }];
+export function ackReaction(saved) {
+  if (saved.fired || saved.why === "batched") return emoji("👀");
+  return saved.why === "rate_limited" ? null : emoji("✍");
+}
+// What the reaction becomes once Claude has answered and the receipt went out.
+export const ANSWERED = emoji("👌");
+
 // --- The receipt -------------------------------------------------------------------------------
 
 // A UUID in Undo's callback data as its 16 bytes in base64url (22 characters), and back, so a

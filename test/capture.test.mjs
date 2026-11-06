@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readText, ackText, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
+import { readText, ackText, ackReaction, ANSWERED, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
 
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42 };
 // A text from Lisul's own chat, as Telegram's webhook sends it (core.telegram.org/bots/api#update).
@@ -37,6 +37,23 @@ test("ackText: the bot says at once where the message stands, in the box's words
   assert.equal(ackText({ fired: false, why: "rate_limited" }), "Sent to Claude. Queued: Claude is busy, so this runs with the next plan.");
   assert.equal(ackText({ fired: false, why: "not connected" }), "Sent to Claude. Queued: this runs with the next plan.");
   assert.equal(ackText({ fired: false, why: "failed" }), "Sent to Claude. Queued: this runs with the next plan.");
+});
+
+// ---------------------------------------------------------------- ackReaction
+
+test("ackReaction: a text Claude is reading gets 👀, one queued for the next plan gets ✍", () => {
+  assert.deepEqual(ackReaction({ fired: true }), [{ type: "emoji", emoji: "👀" }]);
+  assert.deepEqual(ackReaction({ fired: false, why: "batched" }), [{ type: "emoji", emoji: "👀" }]);
+  assert.deepEqual(ackReaction({ fired: false, why: "not connected" }), [{ type: "emoji", emoji: "✍" }]);
+  assert.deepEqual(ackReaction({ fired: false, why: "failed" }), [{ type: "emoji", emoji: "✍" }]);
+});
+
+test("ackReaction: a rate-limited fire gets no reaction, so the text ack says why it waits", () => {
+  assert.equal(ackReaction({ fired: false, why: "rate_limited" }), null);
+});
+
+test("ANSWERED: the receipt turns the reaction to 👌", () => {
+  assert.deepEqual(ANSWERED, [{ type: "emoji", emoji: "👌" }]);
 });
 
 // ---------------------------------------------------------------- receipt
