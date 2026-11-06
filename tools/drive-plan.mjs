@@ -210,9 +210,11 @@ async function layout(c, name) {
       const at = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
       // An open menu covers what's under it on purpose, and the site's sticky header covers rows
       // scrolled under it.
-      if (!at || x === at || x.contains(at) || at.contains(x) || at.closest("[data-toast], :popover-open, body > header, body > .topbar")) continue;
+      if (!at || x === at || x.contains(at) || at.contains(x) || at.closest("[data-toast], :popover-open, body > header, body > .topbar, .sheet-settings-index")) continue;
       if (at.closest("label")?.contains(x)) continue;
       if (getComputedStyle(x).visibility === "hidden" || x.closest(".visually-hidden")) continue;
+      // A closed <details> keeps its contents' boxes but draws none of them.
+      if ((x.matches("summary") ? x.parentElement.parentElement : x)?.closest("details:not([open])")) continue;
       covered.push(`${x.tagName} "${(x.ariaLabel || x.textContent).trim().slice(0, 30)}" under ${at.tagName}.${at.className?.baseVal ?? at.className}`);
     }
     return { wide: document.documentElement.scrollWidth - innerWidth, covered: covered.slice(0, 6) };
@@ -522,6 +524,57 @@ scenarios["stale focus session"] = async (n) => {
   check(`${n} a day-old session doesn't still count`, !/Resume/.test(label), label);
   await c.pg.close();
 };
+
+// Settings you can jump to (research/plan-improvements.md 12).
+for (const [v, opt] of VIEWS) {
+  scenarios[`settings sections ${v}`] = async (n) => {
+    const c = await open(opt);
+    const groups = () => c.pg.evaluate(() => Object.fromEntries([...document.querySelectorAll(".sheet-settings-group")].map((g) => [g.dataset.section, g.open])));
+    const inView = (sel) => c.pg.evaluate((sel) => { const x = document.querySelector(sel); const d = x.closest("dialog").getBoundingClientRect(); const r = x.getBoundingClientRect(); return r.top >= d.top - 1 && r.top < d.top + d.height / 2; }, sel);
+    // Feed failed: the chip on a wide screen, the ⋯ item on a phone.
+    if (opt.w > 500) await press(c, "[data-feed-alert]", `${n} Feed failed`);
+    else { await press(c, '[popovertarget="sheet-more"]', `${n} ⋯`); await press(c, "[data-feed-menu]", `${n} Feed failed item`); }
+    await sleep(500);
+    check(`${n} Feed failed opens Settings`, (await openDialogs(c)).includes("data-settings"));
+    const g = await groups();
+    check(`${n} Status open`, g.status, JSON.stringify(g));
+    check(`${n} the rest ${opt.w > 500 ? "open" : "closed"} on this screen`, opt.w > 500 ? g.accounts && g.day && g.claude : !g.accounts && !g.day && !g.claude, JSON.stringify(g));
+    check(`${n} Status is in view`, await inView('[data-section="status"].sheet-settings-group'));
+    check(`${n} the failed feed is listed`, /Campus events: failed/.test(await text(c, "[data-feeds]")), await text(c, "[data-feeds]"));
+    await shot(c, `settings-status-${v}`);
+    await layout(c, `${n} at Status`);
+    // The index jumps.
+    await press(c, '[data-act="settings-go"][data-section="day"]', `${n} index Day`);
+    await sleep(300);
+    check(`${n} index opens Day`, (await groups()).day);
+    check(`${n} Day is in view`, await inView('[data-section="day"].sheet-settings-group'));
+    check(`${n} the alarm link is in Day`, await c.pg.$eval("[data-alarm]", (a) => a.closest(".sheet-settings-group").dataset.section === "day" && /^shortcuts:/.test(a.getAttribute("href"))));
+    // More opens the full text.
+    await press(c, '[aria-labelledby="sheet-habits-title"] .sheet-settings-more summary', `${n} Habits More`);
+    check(`${n} More shows the full text`, (await text(c, '[aria-labelledby="sheet-habits-title"] .sheet-settings-more p')).includes("Firm ones go in before tasks"));
+    await c.pg.keyboard.press("Escape"); await sleep(200);
+    // Calendars, from ⋯: Settings at Accounts, the IDs box filled and focused, Save says so.
+    await press(c, '[popovertarget="sheet-more"]', `${n} ⋯`);
+    await press(c, '[data-more] [data-act="calendars"]', `${n} Calendars`);
+    await sleep(500);
+    check(`${n} Calendars opens Accounts`, (await groups()).accounts && (await openDialogs(c)).includes("data-settings"));
+    check(`${n} the IDs box is focused`, await c.pg.evaluate(() => document.activeElement?.id === "sheet-cal-ids"));
+    await c.pg.keyboard.type("abc@group.calendar.google.com");
+    await press(c, '[data-act="save-calendars"]', `${n} Save calendars`);
+    await sleep(400);
+    check(`${n} calendars saved`, JSON.stringify(c.db.settings[0].calendars) === '["abc@group.calendar.google.com"]', JSON.stringify(c.db.settings[0].calendars));
+    check(`${n} Saved note`, (await text(c, "[data-cal-ids-note]")) === "Saved.");
+    check(`${n} Settings stays open`, (await openDialogs(c)).includes("data-settings"));
+    check(`${n} no Calendars dialog left`, !(await c.pg.$("[data-calendars]")));
+    // S opens it plain.
+    await c.pg.keyboard.press("Escape"); await sleep(200);
+    await c.pg.keyboard.press("s"); await sleep(400);
+    const plain = await groups();
+    check(`${n} S opens ${opt.w > 500 ? "every group" : "all closed"}`, Object.values(plain).every((x) => x === opt.w > 500), JSON.stringify(plain));
+    clean(c, n);
+    await c.pg.close();
+  };
+}
 
 // --- Run -------------------------------------------------------------------------------------
 for (const [name, fn] of Object.entries(scenarios)) {
