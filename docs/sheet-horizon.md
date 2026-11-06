@@ -117,7 +117,7 @@ day of a task that won't fit).
 A re-flow starts from `previous` and changes only what the change forces:
 
 - **Frozen:** today's locked blocks and, once today is shut down, all of tomorrow. Frozen minutes
-  are kept as they were (cut, latest first, only if they now exceed what is left; a done task's
+  are kept as they were, less any `over_min` (minutes past the cap are worked out again) (cut, latest first, only if they now exceed what is left; a done task's
   go).
 - **Kept:** every other previous minute that still holds stays on its day: within today to the
   task's due day, up to what is left (earliest days kept first), within the chunk rule. Last
