@@ -41,6 +41,8 @@ function when(iso, now, tz) {
 //   planned     whether today has a plan revision yet
 //   replanHold  { hold, weighty, used } or { hold: "fire_failed", until } from the replan tick: why it didn't fire
 //   unsent      pending messages to Claude whose one re-fire failed too ({ id }), oldest first
+//   expiring    tokens and grants with a known end ({ key, label, at, fix }: expiries)
+//   checks      the live check's rows ({ name, status: ok|warn|fail, detail }: sheet_checks())
 // Returns { green, issues: [{ key, words, fix }] }. A key names one incident: the same key while
 // it lasts, so it is told once (nextTold).
 export function health(input, now) {
@@ -82,11 +84,63 @@ export function health(input, now) {
   const unsent = input.unsent ?? [];
   if (unsent.length === 1) add(`message:${unsent[0].id}`, "a message to Claude didn't go through", "send it again");
   if (unsent.length > 1) add(`message:${unsent[0].id}`, `${unsent.length} messages to Claude didn't go through`, "send them again");
-  return { green: !issues.length, issues };
+  // R5: a token or grant ending within EXPIRY_WARN, keyed by its date, so a renewed one (a new
+  // date) is a new incident. The brief repeats it each morning while it is open.
+  for (const x of input.expiring ?? []) {
+    const left = Date.parse(x.at) - now.getTime();
+    if (left > EXPIRY_WARN) continue;
+    add(`expiry:${x.key}:${localNow(new Date(x.at), tz).day}`, `${x.label} ${left > 0 ? "expires" : "expired"} ${dateWords(x.at, tz)}`, x.fix ?? "renew it");
+  }
+  // R10: the live check (sheet_checks(), in the database, so it runs with Lisul's Mac off).
+  for (const c of input.checks ?? []) if (c.status === "fail") add(`check:${c.name}`, `live check failed: ${c.name}${c.detail ? ` (${c.detail})` : ""}`);
+  return { green: !issues.length, issues, ...(input.checks?.length ? { checked: true } : {}) };
 }
 
+// --- Expiries (research/plan-reliability.md R5) -------------------------------------------------
+// The credentials table holds dates only, never a secret: { name, label, expires_at, fix }. A row
+// whose expires_at is null records that the date isn't knowable (the Jira token: Atlassian's API
+// doesn't report it) and raises nothing. GitHub's is filled in by work-sync from the
+// GitHub-Authentication-Token-Expiration header (github.blog/changelog/2021-07-26-expiration-
+// options-for-personal-access-tokens/). The row "google_testing" stands for "the Google OAuth app
+// may still be in Testing", where a refresh token ends 7 days after consent
+// (developers.google.com/identity/protocols/oauth2, "Refresh token expiration"): each Gmail
+// account and the calendar then ends 7 days after its connected_at. Deleting the row (once the
+// app is In production) ends those reminders. Whether the app is in Testing can't be read from
+// here, so the words say "if".
+const EXPIRY_WARN = 14 * 86_400_000;
+const TESTING_DAYS = 7;
+const GOOGLE_FIX = "if the Google app is still in Testing, publish it In production, then reconnect";
+export function expiries({ credentials, mail, calendar }) {
+  const out = [];
+  const plus7 = (iso) => new Date(Date.parse(iso) + TESTING_DAYS * 86_400_000).toISOString();
+  for (const c of credentials ?? []) {
+    if (c.name === "google_testing") {
+      for (const m of mail ?? []) if (m.connected_at) out.push({ key: `google:${m.email}`, label: `Gmail sign-in (${m.label ?? m.email})`, at: plus7(m.connected_at), fix: GOOGLE_FIX });
+      if (calendar?.connected_at) out.push({ key: "google:calendar", label: "Calendar sign-in", at: plus7(calendar.connected_at), fix: GOOGLE_FIX });
+    } else if (c.expires_at) {
+      out.push({ key: c.name, label: c.label ?? c.name, at: c.expires_at, fix: c.fix ?? null });
+    }
+  }
+  return out;
+}
+
+// GitHub-Authentication-Token-Expiration ("2026-12-01 00:00:00 UTC", or with an offset such as
+// "-0800"), sent on API calls made with an expiring personal access token
+// (github.blog/changelog/2021-07-26-expiration-options-for-personal-access-tokens/), as an ISO
+// instant; null with no header (a token with no expiry) or one that doesn't read.
+export function githubExpiry(header) {
+  const m = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) (UTC|[+-]\d{4})$/.exec(String(header ?? "").trim());
+  if (!m) return null;
+  const zone = m[3] === "UTC" ? "Z" : `${m[3].slice(0, 3)}:${m[3].slice(3)}`;
+  const t = Date.parse(`${m[1]}T${m[2]}${zone}`);
+  return Number.isNaN(t) ? null : new Date(t).toISOString();
+}
+
+// "Thu Nov 19", in his zone.
+const dateWords = (iso, tz) => new Date(iso).toLocaleDateString("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).replace(",", "");
+
 // "Sheet: all green." or "Sheet: Gmail sync failing (see Settings); a replan didn't start."
-export const healthLine = (h, issues = h.issues) => (h.green ? "Sheet: all green."
+export const healthLine = (h, issues = h.issues) => (h.green ? (h.checked ? "Sheet: all green (live check passed)." : "Sheet: all green.")
   : `Sheet: ${issues.map((i) => (i.fix ? `${i.words} (${i.fix})` : i.words)).join("; ")}.`);
 
 // What the minute tick does about the bot's webhook, from getWebhookInfo's result

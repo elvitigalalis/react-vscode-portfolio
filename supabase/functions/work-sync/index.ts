@@ -29,6 +29,7 @@
 // SHEET_JIRA_TOKEN, SHEET_JIRA_EMAIL and SHEET_JIRA_SITE ("<name>.atlassian.net"), and
 // SHEET_CRON_SECRET. Tokens are never logged or written to feed_state.
 import { githubTaskChanges, jiraTaskChanges } from "../../../src/sheet/sources.mjs";
+import { githubExpiry } from "../../../src/sheet/health.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
@@ -130,6 +131,20 @@ async function save(c: Changes, whole: boolean) {
 
 // --- GitHub -----------------------------------------------------------------------------------
 
+// research/plan-reliability.md R5: the PAT's end date goes to the credentials register (a date,
+// never the token). Recording it can fail (the table not made yet); the sync goes on.
+let tokenExpires: { at: string | null } | null = null;
+async function saveTokenExpiry() {
+  if (!tokenExpires) return;
+  const { at } = tokenExpires;
+  await db("credentials?on_conflict=name", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({ name: "github_pat", expires_at: at, updated_at: new Date().toISOString(),
+      note: at ? "From GitHub's GitHub-Authentication-Token-Expiration header." : "GitHub sent no expiration header: this token doesn't expire." }),
+  }).catch((e) => console.error("credentials:", e instanceof Error ? e.message : e));
+}
+
 async function githubGet(path: string) {
   const res = await fetch(`https://api.github.com${path}`, {
     headers: {
@@ -139,6 +154,8 @@ async function githubGet(path: string) {
       "User-Agent": "the-sheet-work-sync",
     },
   });
+  // R5: the token's expiry, read once a run from the /user call (health.mjs, githubExpiry).
+  if (path === "/user" && res.ok) tokenExpires = { at: githubExpiry(res.headers.get("github-authentication-token-expiration")) };
   const body = await res.json().catch(() => null);
   // GitHub's own message ("Validation Failed: The listed users cannot be searched…") holds no
   // token or mail text, so it goes into feed_state to say why.
@@ -160,6 +177,7 @@ async function githubSearch(q: string) {
 // cannot be searched" for @me (https://docs.github.com/en/rest/users/users#get-the-authenticated-user).
 async function githubItems() {
   const login = String((await githubGet("/user"))?.login ?? "");
+  await saveTokenExpiry();
   if (!/^[A-Za-z\d-]{1,39}$/.test(login)) throw new Error("github: no login for this token");
   // Each search must name is:issue or is:pull-request, or GitHub answers 422.
   const parts = await Promise.all([

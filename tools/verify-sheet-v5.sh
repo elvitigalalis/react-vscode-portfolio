@@ -257,6 +257,9 @@ from src f left join feed_state s on s.source = f.source
 order by f.i
 "
 
+# --- The live check the telegram tick also runs (schema.sql, sheet_checks()) ----------------------
+db_checks "select name, status, detail from sheet_checks()"
+
 # --- The data v5 keeps ------------------------------------------------------------------------
 # busy-sync stamps busy_as_of every 10 minutes once the calendar is connected. A day holds at
 # most 8 plans: its morning revision plus each replan. A replans row has no result only while

@@ -12,11 +12,28 @@ import { addedLine, itemLines, messageState, messageText, shouldFire } from "./m
 // (settings.telegram_chat_id, the chat the nudges go to), an edit, a message with no text (a
 // photo, a sticker), a command ("/start"), or text that cleans to nothing.
 export function readText(update, settings) {
+  // The thumb keyboard's keys (readKey) are never messages to Claude.
+  if (readKey(update, settings)) return null;
   const m = update?.message;
   if (!m || settings?.telegram_chat_id == null || String(m.chat?.id) !== String(settings.telegram_chat_id)) return null;
   if (typeof m.text !== "string" || m.text.trimStart().startsWith("/")) return null;
   const text = messageText(m.text);
   return text ? { text, chat_id: m.chat.id, message_id: m.message_id } : null;
+}
+
+// research/plan-phone.md P6: a tap on the thumb keyboard (nudges.mjs, KEYBOARD) arrives as a text
+// that is exactly a key's label; the commands /now, /done, /today, and /start or /keys (the keyboard
+// again) do the same, with or without "@botname" (core.telegram.org/bots/features#commands).
+// { key, chat_id, message_id }, or null for any other text, which readText captures.
+const COMMANDS = { now: "now", done: "done", today: "today", start: "keys", keys: "keys" };
+export function readKey(update, settings) {
+  const m = update?.message;
+  if (!m || settings?.telegram_chat_id == null || String(m.chat?.id) !== String(settings.telegram_chat_id) || typeof m.text !== "string") return null;
+  const t = m.text.trim();
+  const label = { Now: "now", Done: "done", "+15 min": "more15", Today: "today" }[t];
+  const [, cmd] = /^\/([a-z_]+)(?:@\w+)?$/.exec(t) ?? [];
+  const key = label ?? (cmd ? COMMANDS[cmd] : undefined);
+  return key ? { key, chat_id: m.chat.id, message_id: m.message_id } : null;
 }
 
 // research/plan-phone.md P8 (the reply only): a voice note, audio, photo, video, video note or
