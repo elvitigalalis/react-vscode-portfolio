@@ -7,7 +7,7 @@ import {
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel, dayWindow, openView, followToday } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow, openView, followToday, settingsOpen } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
@@ -716,12 +716,14 @@ async function syncGoogle() {
   } catch (e) { console.error(e); }
 }
 
+// Settings, Accounts, Calendar: the extra calendar IDs (once a dialog of their own). Settings
+// stays open, so the note beside Save says it worked.
 async function saveCalendars() {
   const ids = [...new Set($("#sheet-cal-ids").value.split(/\s+/).filter(Boolean))];
   try {
     await api.saveSettings({ calendars: ids });
     state.calendars = ids;
-    $("[data-calendars]").close();
+    $("[data-cal-ids-note]").textContent = "Saved.";
     await loadEvents(weekDays(state.week));
     render();
   } catch (e) { failed(e); }
@@ -739,13 +741,37 @@ let settingsModule = () => Promise.resolve([]);
 let settingsReady = null;
 const loadSettings = () => (settingsReady ??= settingsModule().then((setups) => { for (const setup of setups) setup(root); }, (e) => { settingsReady = null; throw e; }));
 
-async function openSettings() {
+// Settings' four groups (research U12): `section` ("accounts", "day", "claude" or "status") is the
+// one it opens at, scrolled to; on a phone the others start closed (glance.mjs, settingsOpen).
+async function openSettings(section = null) {
   try { await loadSettings(); } catch (e) { return failed(e); }
-  if ($("[data-settings]").open) return;
-  $("[data-interests-note]").textContent = "";
-  $("[data-settings]").showModal();
+  const dialog = $("[data-settings]");
+  if (!dialog.open) {
+    const groups = [...dialog.querySelectorAll(".sheet-settings-group")];
+    settingsOpen(groups.map((g) => g.dataset.section), section, matchMedia(NARROW).matches).forEach((open, i) => { groups[i].open = open; });
+    $("[data-interests-note]").textContent = "";
+    $("[data-cal-ids-note]").textContent = "";
+    dialog.showModal();
+  }
+  goToSection(section);
+  if (dialog.dataset.filled) return;
+  dialog.dataset.filled = "1";
+  dialog.addEventListener("close", () => delete dialog.dataset.filled, { once: true });
   await Promise.all(settingsHooks.map(async (fill) => { try { await fill(); } catch (e) { failed(e); } }));
+  // The filled lists move the group down; bring it back to the top.
+  goToSection(section);
 }
+
+// The index's buttons, and openSettings: open the group and bring it to the top of the dialog.
+function goToSection(section) {
+  const group = section && $(`.sheet-settings-group[data-section="${section}"]`);
+  if (!group) return;
+  group.open = true;
+  group.scrollIntoView({ block: "start" });
+  group.querySelector("summary").focus({ preventScroll: true });
+}
+
+settingsHooks.push(() => { $("#sheet-cal-ids").value = state.calendars.join("\n"); });
 
 // Settings, interest profile: what Claude picks campus events against (docs/sheet-claude.md).
 // Blank saves null, so the column stays "not written yet" rather than an empty profile. Settings
@@ -1047,14 +1073,13 @@ function wire() {
       if (act === "evtodo-open" || act === "evtodo-hide") return eventMenuAction(act);
       // The stale-events banner: the server grant (Settings, Calendar) is what keeps /plan's
       // Google token, so Reconnect goes straight to its consent screen.
-      if (act === "connect") return openSettings().then(() => actHooks["cal-connect"]?.());
-      if (act === "calendars") {
-        $("#sheet-cal-ids").value = state.calendars.join("\n");
-        return $("[data-calendars]").showModal();
-      }
-      if (act === "close-calendars") return $("[data-calendars]").close();
+      if (act === "connect") return openSettings("accounts").then(() => actHooks["cal-connect"]?.());
+      // Calendars (the ⋯ menu) is Settings, Accounts, where the extra calendar IDs now live.
+      if (act === "calendars") return openSettings("accounts").then(() => $("#sheet-cal-ids").focus({ preventScroll: true }));
       if (act === "save-calendars") return saveCalendars();
-      if (act === "settings") return openSettings();
+      // The Feed failed chip and menu item say which group (data-section="status").
+      if (act === "settings") return openSettings(e.target.closest("[data-act]").dataset.section ?? null);
+      if (act === "settings-go") return goToSection(e.target.closest("[data-act]").dataset.section);
       if (act === "oura-day") return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, e.target.closest("[data-act]").dataset.day), failed);
       if (act === "close-oura-day") return $("[data-oura-day]").close();
       if (act === "oura-week") { $("[data-settings]").close(); return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, state.today), failed); }
