@@ -87,25 +87,33 @@ import "../../styles/sheet.css";
     </div>
 
     <dialog class="sheet-dialog" data-help aria-labelledby="sheet-help-title">
-      <h2 id="sheet-help-title">Keys</h2>
+      <h2 id="sheet-help-title">Help</h2>
+      <!-- Typed syntax first: it works on every screen. The keys follow, on a mouse or trackpad
+           only (sheet.css hides them on a touch screen). -->
+      <h3 class="sheet-legend-title">Typing a task</h3>
       <dl class="sheet-keys">
-        <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>~45m · @3pm · #tag</dt><dd>Estimate, fixed time, tag</dd>
         <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (⚠) within two days with no block</dd>
         <dt>!p</dt><dd>Private: /now shows a bar, Google says Busy</dd>
-        <dt>P</dt><dd>Plan today</dd>
-        <dt>O</dt><dd>Shut down</dd>
-        <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
-        <dt>↑ ↓</dt><dd>While planning: move the focused block 15 min</dd>
-        <dt>A · Shift+A</dt><dd>While planning: approve the focused block, approve all</dd>
-        <dt>← →</dt><dd>Previous or next week</dd>
-        <dt>T</dt><dd>This week</dd>
-        <dt>.</dt><dd>Menu for the focused task</dd>
-        <dt>⌘Z</dt><dd>Undo</dd>
-        <dt>S</dt><dd>Settings: mail accounts, calendar, interest profile, habits, feeds</dd>
-        <dt>C</dt><dd>Campus events for the focused day (or the campus chip under its calendar)</dd>
-        <dt>M</dt><dd>Needs you: mail waiting on you (or the Needs you chip)</dd>
+        <dt>Enter</dt><dd>Add the task, start the next</dd>
       </dl>
+      <div class="sheet-help-keys">
+        <h3 class="sheet-legend-title">Keys</h3>
+        <dl class="sheet-keys">
+          <dt>P</dt><dd>Plan today</dd>
+          <dt>O</dt><dd>Shut down</dd>
+          <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
+          <dt>↑ ↓</dt><dd>While planning: move the focused block 15 min</dd>
+          <dt>A · Shift+A</dt><dd>While planning: approve the focused block, approve all</dd>
+          <dt>← →</dt><dd>Previous or next week</dd>
+          <dt>T</dt><dd>This week</dd>
+          <dt>.</dt><dd>Menu for the focused task</dd>
+          <dt>⌘Z</dt><dd>Undo</dd>
+          <dt>S</dt><dd>Settings: mail accounts, calendar, interest profile, habits, feeds</dd>
+          <dt>C</dt><dd>Campus events for the focused day (or the campus chip under its calendar)</dd>
+          <dt>M</dt><dd>Needs you: mail waiting on you (or the Needs you chip)</dd>
+        </dl>
+      </div>
       <!-- What each icon means (docs/sheet-glance.md, "The icon set"). One line per icon in use. -->
       <h3 class="sheet-legend-title">Icons</h3>
       <dl class="sheet-keys sheet-legend">
@@ -124,6 +132,8 @@ import "../../styles/sheet.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg><span class="visually-hidden">More</span></dt><dd>Menu for the task, or Calendars, Settings, Help and Sign out</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span class="visually-hidden">Sparkles</span></dt><dd>Proposed by Claude, until you approve it</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-repeat"></use></svg><span class="visually-hidden">Repeat</span></dt><dd>A habit's block, from Settings</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-moon"></use></svg><span class="visually-hidden">Moon</span></dt><dd>Shut down: close out the day</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg><span class="visually-hidden">Dumbbell</span></dt><dd>Gym: today's workout, in the ⋯ menu</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell"></use></svg><span class="visually-hidden">Bell</span></dt><dd>Nudges: Telegram reminds you of blocks (crossed out when off)</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="visually-hidden">Alert</span></dt><dd>A feed failed: open Settings to see which</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="visually-hidden">Mail</span></dt><dd>Needs you: mail waiting on you</dd>

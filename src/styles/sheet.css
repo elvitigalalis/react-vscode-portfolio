@@ -563,6 +563,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-menu .sheet-icon { margin-right: 0.15rem; }
 .sheet-menu [data-feed-menu] { display: none; color: var(--danger); }
 .sheet-menu [data-plan-menu] { display: none; }
+/* Help lists the keys only where there is a keyboard and pointer to use them. */
+@media (pointer: coarse) and (hover: none) { .sheet-help-keys { display: none; } }
 /* Phones: the bar holds ‹ day ›, Plan, Needs you, Nudges and ⋯ on one row. A failed feed folds
    into ⋯ as a dot and the menu's Feed failed item, which opens Settings like the chip. */
 @media (max-width: 30rem) {
