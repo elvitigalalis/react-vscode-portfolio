@@ -6,6 +6,7 @@ import { planHorizon } from "../src/sheet/horizon.mjs";
 import { horizonInput, horizonQueries } from "../src/sheet/horizon-io.mjs";
 import { addedLine, checkAnswers, itemLines } from "../src/sheet/messages.mjs";
 import { receipt, undoChanges } from "../src/sheet/capture.mjs";
+import { projectSummary } from "../src/sheet/project-view.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -129,4 +130,34 @@ test("Undo on a project in Telegram deletes its steps' Google events, then the p
     title: "CSE 416 final project",
     changes: [{ table: "gcal_pending", insert: { gcal_id: "g1", ends_at: null } }, { rpc: "undo_message_item", args: { m: M, item: P } }],
   });
+});
+
+// ---------------------------------------------------------------- /plan
+
+const proj = { id: "p", title: "CSE 416 final project", due: "2026-12-10", est_min: 900 };
+const st = (id, n, done, est_min = 120) => ({ id, project_id: "p", step: n, done, est_min });
+const seven = [st("a", 1, true), st("b", 2, true), st("c", 3, true), st("d", 4, false), st("e", 5, false), st("f", 6, false), st("g", 7, false)];
+
+test("a project's row: steps done, hours left from its steps' horizon, due date and its worst state", () => {
+  const states = new Map([["d", { state: "on_track", remaining_min: 90, short_min: 0 }], ["e", { state: "tight", remaining_min: 90, short_min: 0 }],
+    ["f", { state: "on_track", remaining_min: 90, short_min: 0 }], ["g", { state: "on_track", remaining_min: 90, short_min: 0 }]]);
+  const s = projectSummary(proj, seven, states);
+  assert.equal(s.line, "3 of 7 steps · 6h left · due Dec 10");
+  assert.deepEqual(s.chip, { text: "Tight", level: "risk" });
+  assert.deepEqual(s.steps.map((x) => x.id), ["a", "b", "c", "d", "e", "f", "g"]);
+  assert.equal(s.done, false);
+});
+
+test("won't fit wins, with the steps' hours short added up; a step without a state counts its estimate", () => {
+  const states = new Map([["d", { state: "wont_fit", remaining_min: 120, short_min: 60 }], ["e", { state: "wont_fit", remaining_min: 120, short_min: 30 }]]);
+  const s = projectSummary(proj, seven, states);
+  assert.deepEqual(s.chip, { text: "Won't fit · 1h30 short", level: "overdue" });
+  assert.equal(s.line, "3 of 7 steps · 8h left · due Dec 10");
+});
+
+test("a project with every step done is done, with nothing left", () => {
+  const s = projectSummary(proj, seven.map((x) => ({ ...x, done: true })), new Map());
+  assert.equal(s.done, true);
+  assert.equal(s.chip, null);
+  assert.equal(s.line, "7 of 7 steps · due Dec 10");
 });

@@ -56,6 +56,12 @@ import "../../styles/sheet.css";
     <p class="sheet-notice" role="status" data-mail-notice hidden></p>
     <p class="sheet-notice" data-events-stale hidden>Google Calendar needs reconnecting to show new events. <button type="button" class="sheet-link" data-act="connect">Reconnect Google Calendar in Settings</button></p>
     <div class="sheet-week" data-week aria-label="Week" role="group"></div>
+    <!-- Projects (docs/sheet-projects.md): src/sheet/project-list.mjs draws each open project,
+         which opens to its steps. Hidden while there are none. -->
+    <section class="sheet-projects" data-projects hidden aria-labelledby="sheet-projects-title">
+      <h2 class="sheet-someday-title" id="sheet-projects-title">Projects</h2>
+      <ul class="sheet-project-list" data-project-list></ul>
+    </section>
     <h2 class="sheet-someday-title" data-someday-title hidden>Someday</h2>
     <div class="sheet-someday" data-someday></div>
 
@@ -353,8 +359,9 @@ import "../../styles/sheet.css";
   import { setupBusy } from "../../sheet/busy-sync.mjs";
   import { setupNeedsYou } from "../../sheet/needs-you.mjs";
   import { setupMessages } from "../../sheet/message-box.mjs";
+  import { setupProjects } from "../../sheet/project-list.mjs";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupBedtimeSettings]);
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages], settings);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects], settings);
 </script>
