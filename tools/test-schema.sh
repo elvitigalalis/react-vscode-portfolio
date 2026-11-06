@@ -59,6 +59,13 @@ do $$ begin
     then raise exception 'cron schedules'; end if;
   if (select command from cron.job where jobname = 'sheet-brightspace') like '%campus_events%'
     then raise exception 'sheet-brightspace swallowed the campus section'; end if;
+  -- The second run updated each job in place: no job got a new id.
+  if (select max(jobid) from cron.job) <> (select count(*) from cron.job)
+    then raise exception 'a re-run recreated cron jobs under new ids'; end if;
+  -- Every HTTP job waits longer than pg_net's default before giving up.
+  if exists (select 1 from cron.job where jobname like 'sheet-%' and command like '%net.http_post%'
+             and command !~ 'timeout_milliseconds := (30000|120000)')
+    then raise exception 'a sheet-* job has no 30 s timeout'; end if;
   raise notice '✓ cron jobs';
 
   -- Course tasks: one task per (source, source_uid); hand-made tasks (both null) never clash.

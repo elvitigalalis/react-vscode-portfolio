@@ -258,9 +258,7 @@ test("v3-c schema: the campus_events part is safe to re-run", async () => {
   const sql = read("supabase/schema.sql");
   assert.doesNotMatch(sql, /create table (?!if not exists )campus_events/);
   assert.doesNotMatch(sql, /create (unique )?index (?!if not exists )\w* ?on campus_events/);
-  const unschedule = sql.indexOf("select cron.unschedule(jobid) from cron.job where jobname = 'sheet-campus';");
-  const schedule = sql.indexOf("select cron.schedule('sheet-campus'");
-  assert.ok(unschedule >= 0 && schedule > unschedule, "sheet-campus is unscheduled before it is scheduled");
+  assert.equal(sql.split("select cron.schedule('sheet-campus'").length, 2, "sheet-campus is scheduled once, by name");
 });
 
 test("v3-c schema: sheet-campus runs at :35 hourly through Vault, guarded", async () => {
