@@ -352,6 +352,18 @@ function horizonMessage(day) {
   return [{ kind: "horizon", block_id: null, day: day.today, send_at, text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }], horizon: tasks.map((t) => ({ task_id: t.id, state: hz.get(t.id).state })) }];
 }
 
+// What a message's `horizon` (the states it tells) writes to horizon_state.notified, as groups
+// { ids, notified }: `mark` before it is sent, as the claim, so a failed save sends nothing rather
+// than the same message every minute (its send_at is the minute, so the log's key can't stop it);
+// `restore`, each task's notified as `rows` had it, if Telegram then refuses the message.
+export function horizonMarks(m, rows) {
+  const told = m.horizon ?? [];
+  const before = new Map((rows ?? []).map((h) => [h.task_id, h.notified ?? null]));
+  const groups = (pairs) => [...pairs.reduce((g, [id, v]) => g.set(v, [...(g.get(v) ?? []), id]), new Map())].map(([notified, ids]) => ({ ids, notified }));
+  const mark = ["tight", "wont_fit"].map((st) => ({ ids: told.filter((h) => h.state === st).map((h) => h.task_id), notified: st })).filter((g) => g.ids.length);
+  return { mark, restore: groups(told.map((h) => [h.task_id, before.get(h.task_id) ?? null])) };
+}
+
 // What telegram writes back to horizon_state.notified without a message: back on track forgets
 // what was told, and won't fit eased to tight remembers tight (so won't fit again is news).
 export const horizonResets = (states) => (states ?? []).flatMap((h) =>

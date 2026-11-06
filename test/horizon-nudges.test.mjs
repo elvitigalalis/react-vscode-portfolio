@@ -3,7 +3,7 @@
 // nudge budget. Monday 2026-10-26 in New York (EDT, UTC-4).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { horizonResets, whatToSend, BUDGET } from "../src/sheet/nudges.mjs";
+import { horizonMarks, horizonResets, whatToSend, BUDGET } from "../src/sheet/nudges.mjs";
 
 const day = "2026-10-26";
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42, nudges_on: true };
@@ -62,4 +62,17 @@ test("horizonResets: on track forgets what was told, and won't fit eased to tigh
     hz("c", "tight", { notified: "tight" }),
     hz("d", "on_track"),
   ]), [{ task_id: "a", notified: null }, { task_id: "b", notified: "tight" }]);
+});
+
+// Before this the states were marked told only after Telegram took the message, and a failed save
+// left them untold, so the next minute (a new send_at, past the log's unique key) sent it again.
+// The telegram tick now marks them first, as a claim, and puts them back if the send fails.
+test("horizonMarks: what a message marks told before it goes, and what to put back if it fails", () => {
+  const rows = [hz("os", "wont_fit", { notified: "tight" }), hz("essay", "tight"), hz("lab", "wont_fit")];
+  const m = { kind: "horizon", horizon: [{ task_id: "os", state: "wont_fit" }, { task_id: "lab", state: "wont_fit" }, { task_id: "essay", state: "tight" }] };
+  assert.deepEqual(horizonMarks(m, rows), {
+    mark: [{ ids: ["essay"], notified: "tight" }, { ids: ["os", "lab"], notified: "wont_fit" }],
+    restore: [{ ids: ["os"], notified: "tight" }, { ids: ["lab", "essay"], notified: null }],
+  });
+  assert.deepEqual(horizonMarks({ kind: "start" }, rows), { mark: [], restore: [] });
 });

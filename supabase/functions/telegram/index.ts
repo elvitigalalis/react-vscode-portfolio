@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonMarks, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
@@ -240,6 +240,16 @@ async function send(now: Date, facts: TickFacts = {}) {
     // one skips the message, so it goes out once.
     const c = await claim(m);
     if (!c) continue;
+    // The horizon states it tells are marked told first (nudges.mjs, horizonMarks). A failed
+    // mark holds a horizon message back (claim given back) rather than repeat it every minute; the
+    // brief, keyed to its fixed minute, goes anyway.
+    const marks = horizonMarks(m, snap.horizon);
+    try {
+      for (const g of marks.mark) await setNotified(g.ids, g.notified);
+    } catch (e) {
+      console.error("horizon notified:", e instanceof Error ? e.message : e);
+      if (m.kind === "horizon") { await c.giveBack(); continue; }
+    }
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
       // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
@@ -256,18 +266,14 @@ async function send(now: Date, facts: TickFacts = {}) {
         reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
       });
     } catch (e) {
-      // Give the claim back so the next minute tries again.
+      // Give the claim back, and the horizon marks, so the next minute tries again.
       await c.giveBack();
+      for (const g of marks.restore) await setNotified(g.ids, g.notified).catch((x) => console.error("horizon restore:", x instanceof Error ? x.message : x));
       throw e;
     }
     await c.sent();
     sent.push(m.kind);
     toldNow.push(...(m.health ?? []));
-    // The horizon states this message told him of (the brief's, or the horizon message's).
-    for (const st of ["tight", "wont_fit"]) {
-      const ids = (m.horizon ?? []).filter((h) => h.state === st).map((h) => h.task_id);
-      if (ids.length) await setNotified(ids, st).catch((e) => console.error("horizon notified:", e instanceof Error ? e.message : e));
-    }
   }
   // What's told and still open (health.mjs, nextTold), written only when it changes.
   if (snap.health) {
