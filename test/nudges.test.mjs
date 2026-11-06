@@ -355,7 +355,7 @@ test("check-in: at the shutdown time, it counts what's done and what's left", ()
   assert.deepEqual(whatToSend(snap, at("2026-10-26T20:59:00Z")), []);
   assert.deepEqual(whatToSend(snap, at("2026-10-26T21:00:00Z")), [{ // 5:00 pm, the default
     kind: "checkin", block_id: null, day, send_at: "2026-10-26T21:00:00.000Z",
-    text: "Shutdown time. 4 done, 2 left.", buttons: openPlan,
+    text: "Shutdown time. 4 done, 2 left.", buttons: [{ text: "Open /plan", url: "https://www.lisul-elvi.com/plan/?open=shutdown" }],
   }]);
 });
 

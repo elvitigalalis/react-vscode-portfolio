@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readText, ackText, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
+import { readText, ackText, ackReaction, ANSWERED, readMedia, mediaReply, refireDue, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
 
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42 };
 // A text from Lisul's own chat, as Telegram's webhook sends it (core.telegram.org/bots/api#update).
@@ -37,6 +37,66 @@ test("ackText: the bot says at once where the message stands, in the box's words
   assert.equal(ackText({ fired: false, why: "rate_limited" }), "Sent to Claude. Queued: Claude is busy, so this runs with the next plan.");
   assert.equal(ackText({ fired: false, why: "not connected" }), "Sent to Claude. Queued: this runs with the next plan.");
   assert.equal(ackText({ fired: false, why: "failed" }), "Sent to Claude. Queued: this runs with the next plan.");
+});
+
+// ---------------------------------------------------------------- ackReaction
+
+test("ackReaction: a text Claude is reading gets 👀, one queued for the next plan gets ✍", () => {
+  assert.deepEqual(ackReaction({ fired: true }), [{ type: "emoji", emoji: "👀" }]);
+  assert.deepEqual(ackReaction({ fired: false, why: "batched" }), [{ type: "emoji", emoji: "👀" }]);
+  assert.deepEqual(ackReaction({ fired: false, why: "not connected" }), [{ type: "emoji", emoji: "✍" }]);
+  assert.deepEqual(ackReaction({ fired: false, why: "failed" }), [{ type: "emoji", emoji: "✍" }]);
+});
+
+test("ackReaction: a rate-limited fire gets no reaction, so the text ack says why it waits", () => {
+  assert.equal(ackReaction({ fired: false, why: "rate_limited" }), null);
+});
+
+test("ANSWERED: the receipt turns the reaction to 👌", () => {
+  assert.deepEqual(ANSWERED, [{ type: "emoji", emoji: "👌" }]);
+});
+
+// ---------------------------------------------------------------- voice notes and photos
+
+test("readMedia: a voice note, audio, photo, video or file from Lisul's chat is one; text, stickers and other chats aren't", () => {
+  const msg = (extra) => ({ message: { message_id: 8, chat: { id: 42, type: "private" }, from: { id: 42 }, ...extra } });
+  for (const kind of ["voice", "audio", "photo", "video", "video_note", "document"]) {
+    assert.deepEqual(readMedia(msg({ [kind]: kind === "photo" ? [{}] : {} }), settings), { chat_id: 42, message_id: 8 }, kind);
+  }
+  assert.equal(readMedia(msg({ sticker: {} }), settings), null);
+  assert.equal(readMedia(text("dentist"), settings), null);
+  assert.equal(readMedia({ message: { ...msg({ voice: {} }).message, chat: { id: 99 } } }, settings), null);
+  assert.equal(readMedia({ edited_message: msg({ voice: {} }).message }, settings), null);
+});
+
+test("mediaReply: says the bot reads only text, at most once an hour", () => {
+  const now = new Date("2026-11-04T15:00:00Z");
+  const words = "I can only read text for now. Hold the mic on your keyboard to dictate, or type it.";
+  assert.equal(mediaReply(null, now), words);
+  assert.equal(mediaReply("2026-11-04T14:00:00Z", now), words);
+  assert.equal(mediaReply("2026-11-04T14:00:01Z", now), null);
+});
+
+// ---------------------------------------------------------------- refireDue
+
+test("refireDue: a message whose fire failed is fired once more after 5 minutes, or after a 429's retry_at", () => {
+  const now = new Date("2026-11-04T15:00:00Z");
+  const m = (id, extra) => ({ id, at: "2026-11-04T14:50:00Z", fired_at: null, fire_error: "failed", retry_at: null, refired_at: null, ...extra });
+  assert.deepEqual(refireDue([m("a"), m("b", { at: "2026-11-04T14:57:00Z" })], [], now), ["a"]);
+  assert.deepEqual(refireDue([m("a", { fire_error: "rate_limited", retry_at: "2026-11-04T15:30:00Z" })], [], now), []);
+  assert.deepEqual(refireDue([m("a", { fire_error: "rate_limited", retry_at: "2026-11-04T14:59:00Z" })], [], now), ["a"]);
+});
+
+test("refireDue: never twice, never a message that fired or didn't fail, and not when a run on its way reads it", () => {
+  const now = new Date("2026-11-04T15:00:00Z");
+  const m = (id, extra) => ({ id, at: "2026-11-04T14:50:00Z", fired_at: null, fire_error: "failed", retry_at: null, refired_at: null, ...extra });
+  assert.deepEqual(refireDue([m("a", { refired_at: "2026-11-04T14:55:00Z" })], [], now), []);
+  assert.deepEqual(refireDue([m("a", { fire_error: null })], [], now), []);
+  // Another message fired 2 minutes ago: its run reads every pending message.
+  assert.deepEqual(refireDue([m("a"), m("b", { fire_error: null, fired_at: "2026-11-04T14:58:00Z" })], [], now), []);
+  // A replan started after it: that run reads it too.
+  assert.deepEqual(refireDue([m("a")], [{ at: "2026-11-04T14:52:00Z", result: "started" }], now), []);
+  assert.deepEqual(refireDue([m("a")], [{ at: "2026-11-04T14:40:00Z", result: "started" }], now), ["a"]);
 });
 
 // ---------------------------------------------------------------- receipt

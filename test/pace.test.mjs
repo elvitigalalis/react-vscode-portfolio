@@ -64,9 +64,25 @@ test("paceQueries: every actuals row, and the approved blocks of the 14 days bef
     "blocks?select=task_id,starts_at,ends_at,proposed,task:tasks(done)&proposed=is.false&starts_at=gte.2026-10-21T04:00:00.000Z&starts_at=lt.2026-11-04T05:00:00.000Z&order=starts_at");
 });
 
-test("paceLine: Settings shows a kind's pace and samples, or how many it still needs", async () => {
+test("paceRangeByKind: the 20th and 80th percentile of a kind's newest rows, null below the sample gate", async () => {
+  const { paceRangeByKind } = await import("../src/sheet/pace.mjs");
+  // Twelve course tasks of 60 minutes that took 0.9 to 2.4 times as long. Sorted, the 20th
+  // percentile is the 3rd (ceil(0.2 * 12)) and the 80th the 10th (ceil(0.8 * 12)).
+  const ratios = [1.4, 0.9, 2.4, 1.1, 1.3, 1.8, 1.0, 1.5, 1.2, 1.9, 1.4, 1.6];
+  const actuals = [...ratios.map((r, i) => actual(i, "course", 60, r * 60)), actual(13, "jira", 30, 45)];
+  const range = paceRangeByKind(actuals);
+  assert.deepEqual(range.course, { lo: 1.1, hi: 1.8 });
+  assert.equal(range.jira, null);
+});
+
+test("paceLine: Settings says how long a kind took next to its estimate, its usual range, or how many it still needs", async () => {
   const { paceLine } = await import("../src/sheet/pace.mjs");
-  assert.equal(paceLine("course", { pace: 1.4, n: 12 }), "Course ×1.4 (12)");
-  assert.equal(paceLine("github", { pace: null, n: 3 }), "GitHub: 3 of 5 needed");
+  assert.equal(paceLine("course", { pace: 1.4, n: 12 }, { lo: 1.1, hi: 1.9 }),
+    "Course tasks: took 1.4× your estimate (median of 12) · most ran 1.1–1.9×");
+  assert.equal(paceLine("jira", { pace: 0.85, n: 6 }, { lo: 0.6, hi: 1 }),
+    "Jira tasks: took 0.9× your estimate (median of 6) · most ran 0.6–1.0×");
+  // One value all through: no dash.
+  assert.equal(paceLine("other", { pace: 1, n: 5 }, { lo: 1, hi: 1 }), "Other tasks: took 1.0× your estimate (median of 5) · most ran 1.0×");
+  assert.equal(paceLine("github", { pace: null, n: 3 }, null), "GitHub: 3 of 5 needed");
   assert.equal(paceLine("other", { pace: null, n: 0 }), "Other: 0 of 5 needed");
 });

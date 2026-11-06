@@ -129,16 +129,17 @@ test("brief: no academic entries, no calendar line", async () => {
   assert.equal(briefOf(whatToSend(snapshot(), at8)).text, "Today: 1 task, 1 block.");
 });
 
-test("brief: the calendar line comes before the plan's lines", async () => {
+// Since the brief folds its tail (research/plan-phone.md P7), the calendar line follows the plan's lines.
+test("brief: the calendar line folds under the plan's lines", async () => {
   const { whatToSend } = await nudges();
   const proposed = { ...approved, id: "0b0b0b0b-0000-4000-8000-000000000002", starts_at: "2026-11-04T14:30:00Z", ends_at: "2026-11-04T15:15:00Z", proposed: true };
   const proposal = { day: DAY, rev: 1, status: "pending", created_at: "2026-11-04T11:09:00Z", note: null, picks: [], couldnt_fit: [], suggested: [], run_trigger: "morning", reasons: [], blocks: [] };
   const snap = snapshot({ blocks: [proposed], proposal, academic: ENTRIES.slice(0, 1) });
   assert.equal(briefOf(whatToSend(snap, at8)).text, [
     "Today: 1 task, 0 blocks.",
-    "Calendar: No classes.",
     "Morning plan: 1 block, 9:30–10:15 am.",
     "9:30 am · OS homework (45 min)",
+    "Calendar: No classes.",
   ].join("\n"));
 });
 

@@ -3,7 +3,7 @@
 // has answered, the bot sends the receipt with an Undo for each item. This is the pure side: which
 // updates count, the words, and what an Undo changes. Kept free of the network so node --test
 // covers it; the telegram Edge Function imports it, and messages.mjs keeps the pipeline's rules.
-import { addedLine, itemLines, messageState, messageText } from "./messages.mjs";
+import { addedLine, itemLines, messageState, messageText, shouldFire } from "./messages.mjs";
 
 // A Telegram update (core.telegram.org/bots/api#update: `message` is "New incoming message of any
 // kind"; #message: `text`, `chat`, `message_id`), read as a message to Claude:
@@ -19,6 +19,24 @@ export function readText(update, settings) {
   return text ? { text, chat_id: m.chat.id, message_id: m.message_id } : null;
 }
 
+// research/plan-phone.md P8 (the reply only): a voice note, audio, photo, video, video note or
+// file from his chat ("voice", "audio", "photo", "video", "video_note", "document" on a Message,
+// core.telegram.org/bots/api#message) is { chat_id, message_id }, so the bot can say it reads only
+// text; anything else is null. The Bot API can't transcribe a voice note, and a speech-to-text
+// service is Lisul's call (a new key, his audio sent out), so nothing reads it.
+const MEDIA = ["voice", "audio", "photo", "video", "video_note", "document"];
+export function readMedia(update, settings) {
+  const m = update?.message;
+  if (!m || settings?.telegram_chat_id == null || String(m.chat?.id) !== String(settings.telegram_chat_id)) return null;
+  return MEDIA.some((k) => m[k]) ? { chat_id: m.chat.id, message_id: m.message_id } : null;
+}
+
+// The reply, at most once an hour (lastAt: when it last went, settings.media_reply_at), or null.
+const MEDIA_GAP = 60 * 60_000;
+export const MEDIA_WORDS = "I can only read text for now. Hold the mic on your keyboard to dictate, or type it.";
+export const mediaReply = (lastAt, now) =>
+  (lastAt == null || now.getTime() - Date.parse(lastAt) >= MEDIA_GAP ? MEDIA_WORDS : null);
+
 // What the bot answers straight away, from the save's outcome ({ fired, why }, as the message
 // function answers /plan): the box's own words for Sending done (message-box.mjs).
 export function ackText(saved) {
@@ -26,6 +44,40 @@ export function ackText(saved) {
     : saved.why === "rate_limited" ? "Queued: Claude is busy, so this runs with the next plan."
     : "Queued: this runs with the next plan.";
   return `Sent to Claude. ${where}`;
+}
+
+// research/plan-phone.md P4: the bot reacts to his text instead of sending an ack message, so a
+// capture costs one bot message (the receipt), not two. setMessageReaction takes "A
+// JSON-serialized list of reaction types"; "as non-premium users, bots can set up to one
+// reaction per message", and a ReactionTypeEmoji is { type: "emoji", emoji } with the emoji from
+// a fixed list, which holds 👀, ✍ and 👌 (core.telegram.org/bots/api#setmessagereaction,
+// #reactiontypeemoji; Bot API 10.3). Setting a new list replaces the old reaction.
+// 👀 Claude is reading it (fired, or riding on a run fired a moment ago); ✍ it is queued for the
+// next plan. null for a rate-limited fire: those words matter, so ackText still goes as a reply.
+const emoji = (e) => [{ type: "emoji", emoji: e }];
+export function ackReaction(saved) {
+  if (saved.fired || saved.why === "batched") return emoji("👀");
+  return saved.why === "rate_limited" ? null : emoji("✍");
+}
+// What the reaction becomes once Claude has answered and the receipt went out.
+export const ANSWERED = emoji("👌");
+
+// --- Re-firing a failed fire (research/plan-reliability.md R9) ---------------------------------
+// A message whose fire failed or was rate limited stays pending (../../supabase/functions/
+// _shared/capture.ts marks it: fire_error, and retry_at from a 429), and before this waited for
+// some unrelated fire. The minute tick fires the task once more for it: after retry_at, or 5
+// minutes after the message without one; never twice (refired_at); and not while a run on its
+// way will read it anyway (a message fired under 3 minutes ago: shouldFire; or a replan started
+// after it). Fires carry no idempotency key, so "once" is the claim on refired_at
+// (routine-fire.mjs). `pending` are pending messages { id, at, fired_at, fire_error, retry_at,
+// refired_at }, `replans` today's { at, result }. Returns the ids to fire for.
+const REFIRE_AFTER = 5 * 60_000;
+export function refireDue(pending, replans, now) {
+  if (!shouldFire(pending, now)) return [];
+  const t = now.getTime();
+  return pending.filter((m) => m.fire_error && !m.fired_at && !m.refired_at
+    && t >= (m.retry_at ? Date.parse(m.retry_at) : Date.parse(m.at) + REFIRE_AFTER)
+    && !replans.some((r) => r.result === "started" && Date.parse(r.at) > Date.parse(m.at))).map((m) => m.id);
 }
 
 // --- The receipt -------------------------------------------------------------------------------

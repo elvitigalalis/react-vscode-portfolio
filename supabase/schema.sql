@@ -230,20 +230,29 @@ create or replace view public_now as
 grant select on public_week, public_days, public_now to anon, authenticated;
 
 create extension if not exists pg_cron;
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-rollover';
+-- Every sheet-* job is scheduled by name with no unschedule first: cron.schedule(job_name, ...)
+-- on a name that exists updates that job's schedule and command in place and returns the same
+-- jobid (pg_cron 1.6.4, checked on supabase/postgres 17.11.0.018), so a re-run of this file keeps
+-- the ids and their cron.job_run_details history. To change one live job without this file,
+-- cron.alter_job(job_id, schedule, command, database, username, active) does the same
+-- (github.com/citusdata/pg_cron, "Altering a cron job").
+-- Each job's net.http_post waits 30 s (campus 2 min): pg_net cancels a request after
+-- timeout_milliseconds (supabase.com/docs/guides/database/extensions/pg_net), and the default
+-- (5 s on the live pg_net 0.20.4) cut off telegram, mail and oura runs that were still working, so
+-- their response was never recorded.
 select cron.schedule('sheet-rollover', '5 * * * *', 'select public.nightly_roll()');
 
 -- Every minute, call the telegram Edge Function to send what's due (docs/sheet-nudges.md). Its
 -- URL and the shared secret it checks live in Vault, put there by tools/sheet-setup.sh, so no
 -- secret is in this file; until they exist the job does nothing.
 create extension if not exists pg_net;
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-telegram';
 select cron.schedule('sheet-telegram', '* * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_telegram_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "send"}'::jsonb)
+    body := '{"job": "send"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_telegram_url')
 $job$);
@@ -358,6 +367,9 @@ create table if not exists feed_state (
   error text,
   items int
 );
+-- The last read that worked, set by saveFeedState (src/sheet/feed-state.mjs) and left alone by a
+-- failed one, so a catch-up after an outage starts from it and a stalled feed can be told apart.
+alter table feed_state add column if not exists last_ok_at timestamptz;
 
 alter table feed_seen enable row level security;
 alter table feed_state enable row level security;
@@ -370,13 +382,13 @@ revoke all on feed_seen, feed_state from anon;
 -- At :20 every hour, call the brightspace Edge Function to sync course tasks. Like
 -- sheet-telegram, its URL and the shared secret come from Vault, so until both exist the job
 -- does nothing.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-brightspace';
 select cron.schedule('sheet-brightspace', '20 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_brightspace_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "sync"}'::jsonb)
+    body := '{"job": "sync"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_brightspace_url')
 $job$);
@@ -416,7 +428,6 @@ alter table campus_events add column if not exists rsvp_checked_at timestamptz;
 -- URL and the shared secret come from Vault; until both exist the job does nothing. The function
 -- takes several seconds (an 8 MB download, then batched writes), longer than pg_net's 2 s
 -- default timeout (supabase.com/docs/guides/database/extensions/pg_net), so it gets 2 minutes.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-campus';
 select cron.schedule('sheet-campus', '35 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_campus_url'),
@@ -498,7 +509,7 @@ alter table settings add column if not exists morning_on boolean not null defaul
 -- one Postgres gave the inline check), so a re-run is safe.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
 
 -- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
 -- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
@@ -578,13 +589,13 @@ revoke insert, update, delete on weather_cache from authenticated;
 
 -- At :50 every hour, call the weather Edge Function. Like sheet-brightspace, it does nothing
 -- until its URL and the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-weather';
 select cron.schedule('sheet-weather', '50 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_weather_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "weather"}'::jsonb)
+    body := '{"job": "weather"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_weather_url')
 $job$);
@@ -684,13 +695,13 @@ revoke execute on function busy_sync_save(timestamptz, timestamptz, jsonb, jsonb
 
 -- Every 10 minutes, call busy-sync. Like sheet-brightspace, its URL and the shared secret come
 -- from Vault; until both exist the job does nothing.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-busy';
 select cron.schedule('sheet-busy', '*/10 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_busy_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "busy"}'::jsonb)
+    body := '{"job": "busy"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_busy_url')
 $job$);
@@ -921,7 +932,7 @@ revoke insert, update, delete on actuals from authenticated;
 -- The Finished? check, and the replan message (R1), in the nudges log.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
 
 -- --- v5 H1, habits (docs/sheet-v5.md) ----------------------------------------------------------
 -- Things Lisul does on set weekdays (gym, lunch, a weekly review), edited in /plan's Settings.
@@ -1108,13 +1119,13 @@ revoke execute on function handshake_sync_save(timestamptz, timestamptz, jsonb) 
 
 -- At :25 every hour, call ical-sync (Handshake and the academic calendar). Like
 -- sheet-brightspace, it does nothing until its URL and the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-ical';
 select cron.schedule('sheet-ical', '25 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_ical_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "ical"}'::jsonb)
+    body := '{"job": "ical"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_ical_url')
 $job$);
@@ -1131,13 +1142,13 @@ alter table tasks add constraint tasks_link_check check (link is null or link ~ 
 
 -- At :40 every hour, call work-sync. Like sheet-brightspace, it does nothing until its URL and
 -- the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-work';
 select cron.schedule('sheet-work', '40 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_work_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "work"}'::jsonb)
+    body := '{"job": "work"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_work_url')
 $job$);
@@ -1225,13 +1236,13 @@ alter table triage_rules add constraint triage_rules_sender_check check (match <
 
 -- Every 5 minutes from :02, call mail-sync. Like sheet-brightspace, it does nothing until its URL
 -- and the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-mail';
 select cron.schedule('sheet-mail', '2-59/5 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_mail_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "mail"}'::jsonb)
+    body := '{"job": "mail"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_mail_url')
 $job$);
@@ -1248,13 +1259,13 @@ alter table needs_you add constraint needs_you_source_check check (source in ('m
 
 -- At :42 every hour, call slack-sync. Like sheet-work, it does nothing until its URL and the
 -- shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-slack';
 select cron.schedule('sheet-slack', '42 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_slack_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "slack"}'::jsonb)
+    body := '{"job": "slack"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_slack_url')
 $job$);
@@ -1721,13 +1732,13 @@ alter table changes add constraint changes_kind_check
 
 -- Every 10 minutes, call oura-sync. Like sheet-busy, its URL and the shared secret come from
 -- Vault; until both exist the job does nothing.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-oura';
 select cron.schedule('sheet-oura', '4-59/10 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_oura_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "oura"}'::jsonb)
+    body := '{"job": "oura"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_oura_url')
 $job$);
@@ -2012,3 +2023,24 @@ begin
   return result;
 end $$;
 revoke execute on function answer_message(uuid, jsonb, jsonb, text, jsonb) from public, anon;
+
+-- --- Telegram: quieter, self-checking (docs/sheet-nudges.md, "Health"; 2026-11-06) ------------
+-- When the bot last told him it reads only text, after a voice note or photo (capture.mjs,
+-- mediaReply): at most once an hour.
+alter table settings add column if not exists media_reply_at timestamptz;
+-- The health check (src/sheet/health.mjs): the issue keys already told in Telegram (by the brief
+-- or a health message) and still open. A key that clears is dropped, so it is told again only
+-- if it comes back.
+alter table settings add column if not exists health_told text[] not null default '{}';
+-- A health message in the nudges log (kind 'health', block_id null), at most two a day.
+alter table nudges drop constraint if exists nudges_kind_check;
+alter table nudges add constraint nudges_kind_check
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
+-- A message to Claude whose fire failed (research/plan-reliability.md R9). _shared/capture.ts
+-- sets fire_error ('failed' or 'rate_limited') and, from a 429, retry_at; the telegram tick fires
+-- the task once more after retry_at (or 5 minutes on), claiming it by setting refired_at, and
+-- records the outcome: fired_at on a start, or the new fire_error. A second failure stays pending
+-- and the health check tells Lisul.
+alter table messages add column if not exists fire_error text check (char_length(fire_error) <= 300);
+alter table messages add column if not exists retry_at timestamptz;
+alter table messages add column if not exists refired_at timestamptz;

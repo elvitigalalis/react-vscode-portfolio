@@ -3,11 +3,12 @@
 // textContent only.
 import * as api from "./api.mjs";
 import { el, settingsHooks } from "./planner.mjs";
-import { PACE_KINDS, paceByKind, paceLine } from "./pace.mjs";
+import { PACE_KINDS, paceByKind, paceLine, paceRangeByKind } from "./pace.mjs";
 
 async function draw(root) {
-  const pace = paceByKind(await api.listActuals());
-  root.querySelector("[data-pace]").replaceChildren(...PACE_KINDS.map((k) => el("li", { textContent: paceLine(k, pace[k]) })));
+  const actuals = await api.listActuals();
+  const pace = paceByKind(actuals), range = paceRangeByKind(actuals);
+  root.querySelector("[data-pace]").replaceChildren(...PACE_KINDS.map((k) => el("li", { textContent: paceLine(k, pace[k], range[k]) })));
 }
 
 // Filled each time Settings opens (planner.mjs, settingsHooks).
