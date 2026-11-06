@@ -95,3 +95,10 @@ export function followToday({ week, focus }, loadedDay, today) {
   if (!loadedDay || today === loadedDay || focus !== loadedDay) return null;
   return { week: weekStart(today), focus: today };
 }
+
+// --- settingsOpen (research U12: Settings you can jump to) -----------------------------------
+
+// Which of Settings' groups start open, in `groups` order. On a wide screen all of them, so the
+// index only scrolls; on a phone (`narrow`) only `section`, the one asked for (the Feed failed
+// chip asks for "status"), so the dialog opens on it and not a long scroll.
+export const settingsOpen = (groups, section, narrow) => groups.map((g) => !narrow || g === section);

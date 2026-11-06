@@ -80,3 +80,22 @@ test("followToday: a day he stepped to, or the same day, stays", async () => {
   assert.equal(followToday({ week: "2026-11-09", focus: "2026-11-10" }, "2026-11-03", "2026-11-04"), null);
   assert.equal(followToday({ week: "2026-11-02", focus: "2026-11-03" }, "2026-11-03", "2026-11-03"), null);
 });
+
+// ---------------------------------------------------------------- settingsOpen (research U12)
+
+const GROUPS = ["accounts", "day", "claude", "status"];
+
+test("settingsOpen: on a wide screen every group is open; on a phone only the one asked for", async () => {
+  const { settingsOpen } = await import("../src/sheet/glance.mjs");
+  assert.deepEqual(settingsOpen(GROUPS, "status", false), [true, true, true, true]);
+  assert.deepEqual(settingsOpen(GROUPS, "status", true), [false, false, false, true]);
+  assert.deepEqual(settingsOpen(GROUPS, "accounts", true), [true, false, false, false]);
+});
+
+test("settingsOpen: no section (S, the ⋯ menu) opens all on a wide screen and none on a phone", async () => {
+  const { settingsOpen } = await import("../src/sheet/glance.mjs");
+  assert.deepEqual(settingsOpen(GROUPS, null, false), [true, true, true, true]);
+  assert.deepEqual(settingsOpen(GROUPS, null, true), [false, false, false, false]);
+  // An unknown name is no section.
+  assert.deepEqual(settingsOpen(GROUPS, "feeds", true), [false, false, false, false]);
+});
