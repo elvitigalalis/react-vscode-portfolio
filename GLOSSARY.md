@@ -97,6 +97,10 @@ _Avoid_: Cutoff, end of day
 For one kind of task, the median of actual time over estimate, which shows how far off Lisul's guesses run.
 _Avoid_: Speed, velocity, accuracy
 
+**Focus**:
+A run of work on one block in /plan's full-screen view, from Start to Done; its minutes feed Pace as a Finished answer's do, never both.
+_Avoid_: Session (in prose), Pomodoro, timer mode
+
 **Workload cap**:
 The most planned work a day may hold. On a day with Oura numbers it follows his readiness and how long he slept.
 _Avoid_: Daily limit, capacity, budget
