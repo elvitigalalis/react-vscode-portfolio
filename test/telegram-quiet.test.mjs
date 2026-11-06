@@ -70,3 +70,32 @@ test("links: with mail waiting and no plan to approve, the brief says how many a
   assert.equal(brief.text, 'Today: 1 task, 0 blocks.\nNothing planned yet: say "plan my day" to Claude.\nNeeds you: 2.');
   assert.deepEqual(brief.buttons, [{ text: "Open /plan", url: plan("needs") }]);
 });
+
+// ---------------------------------------------------------------- the folded brief
+
+// An expandable_blockquote entity, "collapsed-by-default block quotation", with offset and length
+// "in UTF-16 code units" (core.telegram.org/bots/api#messageentity).
+const fold = (offset, length) => [{ type: "expandable_blockquote", offset, length }];
+
+test("folded brief: what to do stays in view; awaiting reply folds under it", () => {
+  const snap = snapshot({
+    tasks: [task("t1", "OS homework", { due: "2026-10-27" }), task("t2", "Gym")],
+    awaiting: [{ who: "Prof. Kim", since: "2026-10-20T15:00:00Z" }],
+  });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  const head = 'Today: 2 tasks, 0 blocks.\nAt risk: OS homework (due Tue).\nNothing planned yet: say "plan my day" to Claude.';
+  const tail = "Awaiting reply: 1 (Prof. Kim).";
+  assert.equal(brief.text, `${head}\n${tail}`);
+  assert.deepEqual(brief.entities, fold(head.length + 1, tail.length));
+});
+
+test("folded brief: offsets count UTF-16 code units, so an emoji in a title counts as two", () => {
+  const snap = snapshot({ tasks: [task("t1", "Run 🏃")], awaiting: [{ who: "Ana", since: "2026-10-20T15:00:00Z" }] });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text.slice(brief.entities[0].offset), "Awaiting reply: 1 (Ana).");
+});
+
+test("folded brief: with nothing to fold, there are no entities", () => {
+  const [brief] = whatToSend(snapshot({ tasks: [task("t1", "Gym")] }), at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.entities, undefined);
+});

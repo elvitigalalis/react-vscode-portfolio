@@ -231,30 +231,36 @@ function brief(day) {
   // What the brief told him of, which telegram marks told (horizon_state.notified).
   const told = [...wont, ...tight].filter((t) => hz.has(t.id)).map((t) => ({ task_id: t.id, state: hz.get(t.id).state }));
   const marks = told.length ? { horizon: told } : {};
-  const cap = capLine(day);
-  const score = scoreLine(day);
-  if (score) lines.push(score);
+  // The tail: context he can read later, folded (see folded). Oura's score, a tip and the cap;
+  // v5 W1's weather line, when the cache has a forecast (snapshot.weather, the weather_cache
+  // row); v5 SRC3's academic calendar entries (snapshot.academic, at most 3); v5 M1's Awaiting
+  // reply.
   const [tip] = tipsFor(day, today);
-  if (tip) lines.push(`Tip: ${tip.text}`);
-  if (cap) lines.push(cap);
-  // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
-  if (wx) lines.push(wx);
-  // v5 SRC3: today's academic calendar entries (snapshot.academic, from academicEntries), at most 3.
   const cal = academicLine(day.academic);
-  if (cal) lines.push(cal);
+  const tail = [scoreLine(day), tip && `Tip: ${tip.text}`, capLine(day), wx, cal, awaitingLine(day.awaiting)];
   const send_at = zonedIso(today, day.briefAt, tz);
-  // v5 M1: who he's waiting on, after the plan's lines.
-  const waiting = awaitingLine(day.awaiting);
-  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan, waiting].filter(Boolean).join("\n"), buttons: planButtons(today, day.proposal?.rev), ...marks };
+  const brief = (head, buttons) => ({ kind: "brief", block_id: null, day: today, send_at, ...folded(head, tail), buttons, ...marks });
+  if (plan) return brief([...lines, ...plan], planButtons(today, day.proposal?.rev));
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
   if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
   // With no plan to carry it, the brief counts the open Needs you rows, and its link opens them.
   const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
-  const text = (todays.length || n || risky.length ? [...lines, needs, waiting]
-    : ["Nothing on today.", wx, cal, missed && empty, needs, waiting]).filter(Boolean).join("\n");
-  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }], ...marks };
+  const head = todays.length || n || risky.length ? [...lines, needs] : ["Nothing on today.", missed && empty, needs];
+  return brief(head, [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }]);
+}
+
+// research/plan-phone.md P7: the lines to act on stay in view, and the tail folds into one
+// expandable_blockquote ("collapsed-by-default block quotation"), sent as an entity with no
+// parse_mode, so the text stays plain. An entity's offset and length are "in UTF-16 code units"
+// (core.telegram.org/bots/api#messageentity), which is what a JS string's length counts.
+// Returns { text } or { text, entities }; null lines are dropped.
+function folded(head, tail) {
+  const top = head.filter(Boolean).join("\n");
+  const rest = tail.filter(Boolean).join("\n");
+  if (!rest) return { text: top };
+  return { text: `${top}\n${rest}`, entities: [{ type: "expandable_blockquote", offset: top.length + 1, length: rest.length }] };
 }
 
 // --- Horizon planning (docs/sheet-horizon.md, "Part 2", 7) ------------------------------------

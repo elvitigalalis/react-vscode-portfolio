@@ -174,7 +174,7 @@ const setNotified = (ids: string[], notified: string | null) =>
 
 // --- Sending ------------------------------------------------------------------------------
 
-type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
+type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; entities?: unknown[]; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
 
 async function send(now: Date) {
   const snap = await snapshot(now);
@@ -191,6 +191,10 @@ async function send(now: Date) {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
         ...PLAIN,
+        // The brief's folded tail (nudges.mjs, folded): entities instead of a parse_mode, so the
+        // text is never read as markup (sendMessage's entities, "can be specified instead of
+        // parse_mode": core.telegram.org/bots/api#sendmessage).
+        ...(m.entities ? { entities: m.entities } : {}),
         // Only what asks him to act now makes a sound (nudges.mjs, silent).
         ...(silent(m) ? { disable_notification: true } : {}),
         reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
