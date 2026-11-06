@@ -8,7 +8,7 @@
 // run picks it up. The message text never goes in the fire.
 //
 // Secrets: SHEET_ROUTINE_ID and SHEET_ROUTINE_TOKEN. The token is never logged or returned.
-import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
+import { failedFirePatch, fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { batchedPatch, shouldFire, startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env } from "./server.ts";
 
@@ -31,6 +31,11 @@ export async function saveAndFire(text: string, now: Date, extra: Record<string,
 
   const out = await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "message", counts: {} }, now);
   if (!out.ok) {
+    // The row says why and when to try again, so the telegram tick can re-fire it rather than
+    // it waiting for some other fire. The columns come with the messages retry change; until
+    // they exist the mark is skipped and the message stays pending as before.
+    await db(`messages?id=eq.${row.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(failedFirePatch(out, now)) })
+      .catch(() => {});
     return { ...saved, fired: false, why: out.status === 429 ? "rate_limited" : "failed", ...(out.retry_at ? { retry_at: out.retry_at } : {}) };
   }
   await db(`messages?id=eq.${row.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(startedPatch(out, now)) });

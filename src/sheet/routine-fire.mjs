@@ -103,3 +103,13 @@ export async function fireRoutine(fetchFn, { routineId, token, trigger, counts }
   log(`fire: ${res.status} ${error}`);
   return { ok: false, status: res.status, error };
 }
+
+// What a message row records when its fire didn't start (docs/sheet-messages.md): fire_error, a
+// short reason built from the status and error type only, and retry_at, when the telegram tick
+// may fire it again. A 429 keeps the time the server gave; any other failure waits 5 minutes.
+const RETRY_FAILED_MS = 5 * 60 * 1000;
+export function failedFirePatch(out, now) {
+  if (out.status === 429) return { fire_error: "rate_limited", retry_at: out.retry_at };
+  const fire_error = out.status ? `failed: ${out.status} ${out.error}` : `failed: ${out.error}`;
+  return { fire_error, retry_at: new Date(now.getTime() + RETRY_FAILED_MS).toISOString() };
+}
