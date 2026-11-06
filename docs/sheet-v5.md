@@ -934,6 +934,13 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **Brief.** "Sleep score 82, good." from today's row.
 - **Bedtime window.** `sleep_times.hint` keeps Oura's `recommendation`; the marker and Settings
   add "Oura: 12:15–12:45 am, earlier bedtime".
+- **Wake alarm** ([sheet-alarms.md](sheet-alarms.md)). A web page can't set an iPhone Clock alarm,
+  so Settings → Oura → Sleep has "Set iPhone alarm for 9:40 am": a `shortcuts://run-shortcut`
+  link that runs his "Sheet Alarm" shortcut with the time as text, and its Create Alarm action
+  sets it. The time (`alarmFor`, src/sheet/alarm.mjs) is the next morning's typical wake
+  (weekday or weekend median, rounded down to 5 minutes), else 30 minutes before
+  `SHEET.dayStartAt`. Only that derived time leaves the page (ADR 0005 holds: no Oura figure).
+  No server endpoint and no daily automation yet (see sheet-alarms.md).
 - **Workouts** (scope `workout`; oura-connect now asks for `daily workout`). `ring_workouts {
   oura_id, day, starts_at, ends_at, activity }`, strength-type and generic activities only, never
   calories or intensity. A 401/403 sets `oura_account.workouts_ok = false` and Settings says
