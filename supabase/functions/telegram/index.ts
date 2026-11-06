@@ -24,7 +24,7 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, refusedForGood, undoChanges } from "../../../src/sheet/capture.mjs";
 import { startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
@@ -487,7 +487,7 @@ async function refire(now: Date) {
 // The receipt for each text Claude has answered since yesterday, once: a reply to his text with
 // what was added and an Undo for each item (capture.mjs's receipt), whatever the hour, since he
 // asked. Claimed first by filling in tg_receipt_at, which only one run can do, and given back
-// if Telegram refuses it, so the next minute tries again.
+// if Telegram fails it for now, so the next minute tries again; one refused for good is dropped.
 async function receipts(now: Date) {
   const [settings] = await db("settings?select=time_zone,telegram_chat_id");
   if (!settings?.telegram_chat_id) return [];
@@ -514,6 +514,12 @@ async function receipts(now: Date) {
         reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
       });
     } catch (e) {
+      // Refused for good (a 4xx but 429, capture.mjs, refusedForGood): the claim stays, so it is
+      // given up on rather than retried every minute ahead of every later receipt.
+      if (refusedForGood(e)) {
+        console.error(`receipt ${m.id} given up:`, e instanceof Error ? e.message : e);
+        continue;
+      }
       await db(`messages?id=eq.${m.id}`, { method: "PATCH", body: JSON.stringify({ tg_receipt_at: null }) });
       throw e;
     }
