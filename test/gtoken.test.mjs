@@ -114,7 +114,7 @@ test("the stale-events banner shows only without a token, and reconnects the ser
   const planner = src("src/sheet/planner.mjs");
   assert.match(planner, /if \(await api\.ensureGoogle\(\)\) \{/);
   assert.match(planner, /stale\.hidden = !state\.eventsStale \|\| api\.googleReady\(\);/);
-  assert.match(planner, /act === "connect"\) return openSettings\(\)\.then\(\(\) => actHooks\["cal-connect"\]/);
+  assert.match(planner, /act === "connect"\) return openSettings\("accounts"\)\.then\(\(\) => actHooks\["cal-connect"\]/);
   assert.match(src("src/pages/plan/index.astro"), /data-events-stale hidden>[^<]*<button[^>]*data-act="connect">Reconnect Google Calendar in Settings</);
   assert.match(src("src/sheet/calendar-settings.mjs"), /"needs-scopes" \? "Reconnect to let \/plan read events\."/);
 });
