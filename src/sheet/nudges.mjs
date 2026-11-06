@@ -155,12 +155,12 @@ function dayOf(snapshot, now) {
 // minutes after the actual wake, or 90 after the typical one while the ring hasn't synced. Never
 // before 8:00; without rows, 8:00 as before.
 function wakeTimes(snapshot, now, today, tz) {
-  if (!snapshot.sleep?.length) return { openAt: BRIEF_AT, briefAt: BRIEF_AT };
+  if (!snapshot.sleep?.length) return { openAt: BRIEF_AT, briefAt: BRIEF_AT, wokeAt: null };
   const p = wakeProfile(snapshot.sleep, now, tz);
   const typical = isWeekend(today) ? p.weekend : p.weekday;
   const up = p.woke_at ?? typical ?? BRIEF_AT;
   const brief = p.woke_at != null ? p.woke_at + 15 : typical != null ? typical + 90 : BRIEF_AT;
-  return { openAt: Math.max(BRIEF_AT, up), briefAt: Math.max(BRIEF_AT, brief) };
+  return { openAt: Math.max(BRIEF_AT, up), briefAt: Math.max(BRIEF_AT, brief), wokeAt: p.woke_at };
 }
 
 // Oura: "Readiness 64, slept 5h40: cap 4h45.", when today's numbers (snapshot.sleepDay, a
@@ -211,6 +211,17 @@ const pending = (n) => n.kind === "snooze" && !n.sent_at;
 const logged = (log, m) => log.some((n) => !pending(n) && n.block_id === m.block_id && n.kind === m.kind && n.day === m.day
   && Date.parse(n.send_at) === Date.parse(m.send_at));
 
+// When the ring has seen him up today (wokeAt), the brief opens as a good morning: "Good
+// morning! Up at 8:50 am. First up: OS homework at 7:15 pm." The first block is the next one
+// not yet over. Without a seen wake (typical wake, or no ring) there is no greeting line.
+function greeting(day, blocksToday) {
+  if (day.wokeAt == null) return null;
+  const next = blocksToday.filter((b) => Date.parse(b.ends_at) > day.now).sort((a, b) => a.starts_at.localeCompare(b.starts_at))[0];
+  const title = next && day.tasks.find((t) => t.id === next.task_id)?.title;
+  const first = title ? ` First up: ${title} at ${formatClock(minutesOn(next.starts_at, day.today, day.tz))}.` : "";
+  return `Good morning! Up at ${formatClock(day.wokeAt)}.${first}`;
+}
+
 // The morning brief: what today holds, at 8:00. Private tasks show their real titles: the
 // messages go only to Lisul.
 // "Nudging the first 6" counts only the blocks that can be nudged.
@@ -225,7 +236,7 @@ function brief(day) {
   const risky = tasks.filter((t) => atRisk(t, blocks, today, tz, hz.get(t.id))).sort((a, b) => a.due.localeCompare(b.due));
   const wont = risky.filter((t) => hz.get(t.id)?.state === "wont_fit");
   const n = blocksToday.length;
-  const lines = [`Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
+  const lines = [greeting(day, blocksToday), `Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
   const tight = risky.filter((t) => !wont.includes(t));
   if (tight.length) lines.push(`At risk: ${tight.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
   if (wont.length) lines.push(`Won't fit: ${wont.map((t) => `${t.title}, ${formatMinutes(hz.get(t.id).short_min)} short (${dueLabel(t.due, today)})`).join("; ")}. ${FIXES}`);
@@ -258,7 +269,7 @@ function brief(day) {
   else if (!n) lines.push('Nothing planned yet: say "plan my day" to Claude.');
   // With no plan to carry it, the brief counts the open Needs you rows, and its link opens them.
   const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
-  const head = todays.length || n || risky.length ? [...lines, needs] : ["Nothing on today.", missed && empty, needs];
+  const head = todays.length || n || risky.length ? [...lines, needs] : [lines[0], "Nothing on today.", missed && empty, needs];
   return brief(head, [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }]);
 }
 

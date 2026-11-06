@@ -97,3 +97,14 @@ test("the brief carries one tip from today's lowest contributor", () => {
   assert.match(whatToSend(s, at("09:05"))[0].text, /^Tip: Cooler, darker room, and no caffeine after 2 pm\.$/m);
   assert.doesNotMatch(whatToSend(snap({ sleep: [...past, long("08:50")] }), at("09:05"))[0].text, /Tip:/);
 });
+
+test("once the ring sees him up, the brief opens with good morning, his wake and what's first", () => {
+  const hw = { id: "b3", task_id: "t1", starts_at: at("19:15").toISOString(), ends_at: at("19:45").toISOString(), proposed: false, gcal_id: null };
+  const lines = whatToSend(snap({ blocks: [hw], sleep: [...past, long("08:50")] }), at("09:05"))[0].text.split("\n");
+  assert.equal(lines[0], "Good morning! Up at 8:50 am. First up: OS homework at 7:15 pm.");
+  // Nothing left on today: just the greeting and the wake.
+  assert.equal(whatToSend(snap({ sleep: [...past, long("08:50")] }), at("09:05"))[0].text.split("\n")[0], "Good morning! Up at 8:50 am.");
+  // No wake seen (typical wake, or no ring): no greeting, the brief as before.
+  assert.doesNotMatch(whatToSend(snap({ sleep: past }), at("11:10"))[0].text, /Good morning/);
+  assert.doesNotMatch(whatToSend(snap(), at("08:00"))[0].text, /Good morning/);
+});
