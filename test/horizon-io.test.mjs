@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { horizonInput, horizonKey, horizonQueries, reflowHorizon } from "../src/sheet/horizon-io.mjs";
 import { queryPath } from "../src/sheet/proposal-io.mjs";
+import { planHorizon } from "../src/sheet/horizon.mjs";
 
 const TZ = "America/New_York";
 const TODAY = "2026-11-05"; // a Thursday
@@ -56,8 +57,8 @@ test("horizonInput: each day's free time is the window less busy times with trav
 test("horizonInput: today's locked task blocks count against today, and a More time answer counts as done", () => {
   const tasks = [task(A, "2026-11-06", { est_min: 180 })];
   const blocks = [
-    // Approved this morning, answered More time half an hour in.
-    { id: "b1", task_id: A, habit_id: null, starts_at: at(TODAY, "07:00"), ends_at: at(TODAY, "08:00"), proposed: false, auto: false },
+    // Approved yesterday, answered More time half an hour in.
+    { id: "b1", task_id: A, habit_id: null, starts_at: at("2026-11-04", "07:00"), ends_at: at("2026-11-04", "08:00"), proposed: false, auto: false },
     // Approved for later today and not auto: locked.
     { id: "b2", task_id: A, habit_id: null, starts_at: at(TODAY, "13:00"), ends_at: at(TODAY, "14:00"), proposed: false, auto: false },
     // Auto-approved and not started: the next revision may move it, so not locked.
@@ -65,12 +66,24 @@ test("horizonInput: today's locked task blocks count against today, and a More t
     // Proposed: not planned time.
     { id: "b4", task_id: A, habit_id: null, starts_at: at(TODAY, "16:00"), ends_at: at(TODAY, "16:30"), proposed: true, auto: false },
   ];
-  const feedback = [{ at: at(TODAY, "07:30"), item: "finished", action: "more", ref: { block_id: "b1" } }];
+  const feedback = [{ at: at("2026-11-04", "07:30"), item: "finished", action: "more", ref: { block_id: "b1" } }];
   const input = horizonInput(rows({ tasks, blocks, feedback }), eight);
   assert.deepEqual(input.tasks, [{ id: A, due: "2026-11-06", minutes: 180, done_min: 30, minutes_p80: 180, kind: null }]);
-  assert.deepEqual(input.locked, [{ task_id: A, day: TODAY, minutes: 120 }]);
-  // Cap 600 less 120 locked; the window 8:00–17:00 less the 13:00–14:00 block is 480.
+  assert.deepEqual(input.locked, [{ task_id: A, day: TODAY, minutes: 60 }]);
+  // Cap 600 less 60 locked; the window 8:00–17:00 less the 13:00–14:00 block is 480.
   assert.equal(input.free[TODAY], 480);
+});
+
+test("horizonInput: a block locked today and answered More time counts once, as locked", () => {
+  const tasks = [task(A, "2026-11-12", { est_min: 180 })];
+  const blocks = [{ id: "b1", task_id: A, habit_id: null, starts_at: at(TODAY, "07:00"), ends_at: at(TODAY, "08:00"), proposed: false, auto: false }];
+  const feedback = [{ at: at(TODAY, "08:00"), item: "finished", action: "more", ref: { block_id: "b1" } }];
+  const input = horizonInput(rows({ tasks, blocks, feedback }), eight);
+  assert.equal(input.tasks[0].done_min, 0);
+  assert.deepEqual(input.locked, [{ task_id: A, day: TODAY, minutes: 60 }]);
+  // 180 less the locked 60: 120 new minutes to plan.
+  const r = planHorizon(input);
+  assert.equal(r.allocations.reduce((n, a) => n + a.minutes, 0) - 60, 120);
 });
 
 test("horizonInput: tomorrow is frozen once today is shut down, and the stored plan comes back as previous", () => {

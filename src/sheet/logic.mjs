@@ -108,9 +108,16 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "
 // "Nov 5, 2026", "Thu, Nov 5, 2026, 11:59 PM", "Nov 14 11:59pm", "December 1st": a month name and
 // a day not followed by more digits or a colon, then perhaps a 4-digit year.
 const NAMED_DATE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?![\d:])(?:,?\s+(\d{4})(?!\d))?/gi;
-// "11/20/2026" or "11/20/26" anywhere; a bare "11/14" only after "due" ("3/4 cup" is no date).
+// "11/20/2026" or "11/20/26"; a bare "11/14" only after "due" or "deadline" ("3/4 cup" is no date).
 const NUMERIC_DATE = /\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?![\d/])/g;
-const DUE_NUMERIC = /\bdue:?\s+(\d{1,2})\/(\d{1,2})(?![\d/])/gi;
+const DUE_NUMERIC = /\b(?:due|deadline)\b(?:\s+(?:on|by))?\s*:?\s+(\d{1,2})\/(\d{1,2})(?![\d/])/gi;
+// A date is a deadline only right after "due", "by" or "deadline" (perhaps "due on", a colon or a
+// weekday between: "due Thu, Nov 12", "(deadline: Dec 1)"), or as a feed's timestamp, with a
+// clock time straight after it ("Thu, Nov 5, 2026, 11:59 PM", "Nov 14 11:59pm"). "Start with
+// September 22" or "notes from Oct 28" name a date, not a deadline.
+const CUE_BEFORE = /\b(?:due|by|deadline)\b(?:\s+(?:on|by))?\s*:?\s*(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*\.?,?\s+)?$/i;
+const TIME_AFTER = /^,?\s*(?:at\s+)?\d{1,2}(?::\d{2}\s*(?:[ap]\.?m\b)?|\s*[ap]\.?m\b)/i;
+const isDeadline = (text, m) => CUE_BEFORE.test(text.slice(0, m.index)) || TIME_AFTER.test(text.slice(m.index + m[0].length));
 
 // A real "YYYY-MM-DD" from parts, or null ("2/30" never survives the round trip through Date).
 function realDate(y, m, d) {
@@ -126,20 +133,21 @@ function nearest(m, d, today) {
     .sort((a, b) => Math.abs(dayDiff(a, today)) - Math.abs(dayDiff(b, today)))[0] ?? null;
 }
 
-// The deadline a task's title names, "YYYY-MM-DD", or null: a date written out ("Thu, Nov 5,
-// 2026, 11:59 PM EST", "Nov 14 11:59pm"), with its year ("11/20/2026"), or after "due"
-// ("due 11/14"). Only explicit dates, never a guess: none, an impossible one, or two different
-// ones give null. A task with no due date takes it where tasks are made (parseEntry,
-// checkAnswers, the feed syncs: withTitleDue).
+// The deadline a task's title names, "YYYY-MM-DD", or null: a date written out ("due Nov 14",
+// "Thu, Nov 5, 2026, 11:59 PM EST", "Nov 14 11:59pm") or in numbers ("due 11/14", "by
+// 11/20/2026"), that is a deadline (isDeadline). Only explicit deadlines, never a guess: none, an
+// impossible one, or two different ones give null. A task with no due date takes it where tasks
+// are made (parseEntry, checkAnswers, the feed syncs: withTitleDue).
 export function titleDue(title, today) {
   const found = new Set();
   const text = String(title ?? "");
   for (const m of text.matchAll(NAMED_DATE)) {
+    if (!isDeadline(text, m)) continue;
     const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1;
     const d = m[3] ? realDate(Number(m[3]), month, Number(m[2])) : nearest(month, Number(m[2]), today);
     found.add(d);
   }
-  for (const m of text.matchAll(NUMERIC_DATE)) found.add(realDate(Number(m[3].length === 2 ? `20${m[3]}` : m[3]), Number(m[1]), Number(m[2])));
+  for (const m of text.matchAll(NUMERIC_DATE)) if (isDeadline(text, m)) found.add(realDate(Number(m[3].length === 2 ? `20${m[3]}` : m[3]), Number(m[1]), Number(m[2])));
   for (const m of text.matchAll(DUE_NUMERIC)) found.add(nearest(Number(m[1]), Number(m[2]), today));
   return found.size === 1 ? [...found][0] : null;
 }
