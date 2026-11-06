@@ -404,3 +404,9 @@ export const listEventTodos = (from, to) => rest(`event_todos?select=cal_event_k
 // Checking an event off or hiding it: an upsert by key that writes only the fields given, so
 // Claude's title stays (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
 export const saveEventTodo = (row) => rest("event_todos?on_conflict=cal_event_key", { method: "POST", body: row, prefer: "resolution=merge-duplicates,return=minimal" });
+
+// --- Focus mode (docs/sheet-focus.md) -------------------------------------------------------
+
+// Done's minutes into actuals: true when recorded, false when the task is done or Telegram's
+// Finished? already counted it (supabase/schema.sql, record_focus).
+export const recordFocus = (row) => rest("rpc/record_focus", { method: "POST", body: row });
