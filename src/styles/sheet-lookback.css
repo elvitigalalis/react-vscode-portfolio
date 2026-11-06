@@ -1,0 +1,39 @@
+/* The look-back (docs/sheet-lookback.md): one colour for done whatever the day was, nothing that
+   grades a week. Same tokens as global.css. */
+.sheet-row:has(> .sheet-hint) { flex-wrap: wrap; }
+.sheet-hint { flex-basis: 100%; color: var(--muted); font-size: 0.75rem; line-height: 1.35; }
+.sheet-back-entry { margin: 0 0 0.5rem; }
+.sheet-back { width: min(36rem, calc(100vw - 2rem)); }
+.sheet-back h3, .sheet-shut h3 { font-size: 0.875rem; margin: 0.9rem 0 0.3rem; }
+.sheet-back-line { margin: 0.25rem 0 0.6rem; font-variant-numeric: tabular-nums; }
+.sheet-back-days { list-style: none; padding: 0; margin: 0 0 0.5rem; display: grid; gap: 0.3rem; }
+.sheet-back-day { display: grid; grid-template-columns: 2.25rem 1fr 6.5rem; align-items: center; gap: 0.5rem; font-size: 0.8125rem; }
+.sheet-back-track { position: relative; height: 0.75rem; }
+.sheet-back-planned, .sheet-back-done { position: absolute; left: 0; top: 0; height: 100%; border-radius: 0.2rem; }
+.sheet-back-planned { border: 1px solid var(--muted); box-sizing: border-box; }
+.sheet-back-planned[style*="width: 0%"] { border: 0; }
+.sheet-back-done { background: var(--accent); }
+.sheet-back-cap { position: absolute; top: -0.1rem; bottom: -0.1rem; width: 1px; background: var(--line); }
+.sheet-back-notes, .sheet-shut-list, .sheet-shut-events ul { list-style: none; padding: 0; margin: 0; font-size: 0.875rem; }
+.sheet-back-notes li, .sheet-shut-list li { padding: 0.2rem 0; overflow-wrap: anywhere; }
+.sheet-shut-event {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 0.875rem; color: inherit;
+  background: none; border: 0; border-bottom: 1px solid var(--line); padding: 0.35rem 0.2rem; cursor: pointer;
+}
+.sheet-shut-event::before { content: "○ "; color: var(--muted); }
+.sheet-shut-event.is-done::before { content: "✓ "; color: var(--accent); }
+.sheet-shut-line { margin: 0.5rem 0; }
+.sheet-shut-past { margin-top: 0.5rem; font-size: 0.875rem; }
+.sheet-shut-past summary { cursor: pointer; color: var(--muted); }
+.sheet-movers { list-style: none; padding: 0; margin: 0.5rem 0; display: grid; gap: 0.5rem; }
+.sheet-mover { border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.5rem 0.6rem; font-size: 0.875rem; }
+.sheet-mover p { margin: 0 0 0.4rem; overflow-wrap: anywhere; }
+.sheet-mover-acts, .sheet-mover-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.sheet-mover-form { margin-top: 0.4rem; }
+.sheet-mover-form[hidden] { display: none; }
+.sheet-mover-input { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 0.3rem; padding: 0.25rem 0.4rem; margin-left: 0.25rem; max-width: 100%; }
+@media (pointer: coarse) {
+  .sheet-mover .sheet-link, .sheet-shut-event { min-height: 2.75rem; }
+  .sheet-mover .sheet-btn, .sheet-mover-input { min-height: 2.75rem; }
+  .sheet-back-entry .sheet-link { min-height: 1.5rem; }
+}
