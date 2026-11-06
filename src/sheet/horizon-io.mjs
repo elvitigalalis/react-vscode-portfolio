@@ -22,7 +22,7 @@ const isoWeekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay() || 7;
 export function horizonQueries(today, timeZone) {
   const midnight = (d) => zonedIso(d, 0, timeZone);
   return {
-    tasks: { table: "tasks", select: "id,title,due,est_min,at_time,source,tag,done", filters: [["done", "is", "false"], ["due", "not.is", "null"]] },
+    tasks: { table: "tasks", select: "id,title,due,est_min,at_time,source,tag,done,project_id,step", filters: [["done", "is", "false"], ["due", "not.is", "null"]] },
     actuals: { table: "actuals", select: "at,kind,est_min,minutes", order: "at" },
     habits: { table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence", order: "position" },
     days: { table: "days", select: "day,shutdown,shutdown_at", filters: [["day", "eq", today]] },
@@ -67,7 +67,9 @@ export function horizonInput(rows, now) {
   const p80 = paceP80ByKind(rows.actuals ?? []);
   const done = confirmedDoneMin((rows.blocks ?? []).filter((b) => b.task_id), rows.feedback ?? []);
   const tasks = rows.tasks.filter((t) => !t.done && t.due && !t.at_time)
-    .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0, minutes_p80: horizonMinutes(t, p80), kind: workKind(t) }))
+    .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0, minutes_p80: horizonMinutes(t, p80), kind: workKind(t),
+      // A project's step (docs/sheet-projects.md) is planned after the steps before it.
+      ...(t.project_id ? { project: t.project_id, step: t.step } : {}) }))
     .sort((a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id));
 
   const onToday = (rows.blocks ?? []).filter((b) => localNow(new Date(b.starts_at), tz).day === today && locked(b, now));
