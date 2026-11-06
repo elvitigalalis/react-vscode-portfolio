@@ -492,7 +492,8 @@ function windDownMark() {
 }
 
 function listColumn(name) {
-  const list = tasksIn(name);
+  // A project's steps show under it (project-list.mjs), not in Someday.
+  const list = tasksIn(name).filter((t) => !t.project_id);
   // An empty list always shows its "+ Add a task" hint.
   const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map((t) => taskRow(t, null)), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
