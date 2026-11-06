@@ -147,3 +147,12 @@ test("tomorrow's load against its room, with a next move when it runs over", () 
   assert.equal(tomorrowLine(180, 300), "3h planned, room for 5h.");
   assert.equal(tomorrowLine(360, 300), "6h planned, room for 5h. Move something to another day, or raise the cap in Settings.");
 });
+
+test("nothing says missed, failed, streak, score or productive", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const f of ["lookback.mjs", "lookback-view.mjs", "lookback-shutdown.mjs", "shutdown.mjs"]) {
+    const code = readFileSync(new URL(`../src/sheet/${f}`, import.meta.url), "utf8");
+    const strings = code.match(/"[^"\n]*"|`[^`\n]*`/g) ?? [];
+    for (const s of strings) assert.doesNotMatch(s, /\b(missed|failed to|fail(ure)?s?|streak|score|productiv|overdue|behind)\b/i, `${f}: ${s}`);
+  }
+});

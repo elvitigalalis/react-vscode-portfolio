@@ -1,5 +1,7 @@
-// Shutdown (docs/sheet.md): Done and Missed for today, one reflection box, then Finish. Nothing
-// is saved before Finish; then missed tasks roll to tomorrow and the day is stamped.
+// Shutdown (docs/sheet.md): Done and Tomorrow for today, one reflection box, a look ahead at
+// tomorrow, then Finish. Nothing is saved before Finish; then the rest rolls to tomorrow and the
+// day is stamped. The look back and ahead is lazy (lookback-shutdown.mjs); without it the dialog
+// finishes from its first step.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { localNow, byPosition } from "./logic.mjs";
@@ -10,6 +12,8 @@ let dialog;
 let today;
 let done;          // id → done, as edited in the dialog
 let reflection = "";
+let extras = null; // lookback-shutdown.mjs, loaded on open
+let step = "today";
 
 const todays = () => [...state.tasks.values()].filter((t) => t.day === today).sort(byPosition);
 
@@ -20,7 +24,7 @@ function column(title, isDone) {
     el("ul", {}, ...items.map((t) => {
       const b = el("button", { type: "button", className: "sheet-shut-item", textContent: t.title });
       b.dataset.id = t.id;
-      b.setAttribute("aria-label", `${t.title}: move to ${isDone ? "Missed" : "Done"}`);
+      b.setAttribute("aria-label", `${t.title}: move to ${isDone ? "Tomorrow" : "Done"}`);
       return el("li", {}, b);
     })));
 }
@@ -29,24 +33,41 @@ function draw(finished = false) {
   if (finished) {
     dialog.replaceChildren(
       el("h2", { id: "sheet-shut-title", textContent: "Shutdown complete" }),
-      el("p", { textContent: "Missed tasks are on tomorrow. See you then." }),
+      el("p", { textContent: "The rest is on tomorrow. See you then." }),
       el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })));
+    return;
+  }
+  if (step === "tomorrow") {
+    dialog.replaceChildren(...[
+      el("h2", { id: "sheet-shut-title", textContent: "Tomorrow" }),
+      ...extras.tomorrowPart(done, todays(), draw),
+      el("div", { className: "sheet-dialog-end" },
+        el("button", { type: "button", className: "sheet-btn", textContent: "Back", onclick: () => { step = "today"; draw(); } }),
+        el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })),
+    ].filter(Boolean));
     return;
   }
   const box = el("textarea", { className: "sheet-reflect", rows: 3, value: reflection, ariaLabel: "What went well, what got in the way?", placeholder: "What went well, what got in the way?" });
   box.addEventListener("input", () => { reflection = box.value; });
-  dialog.replaceChildren(
+  dialog.replaceChildren(...[
     el("h2", { id: "sheet-shut-title", textContent: "Shut down" }),
-    el("p", { className: "small", textContent: "Click a task to move it between Done and Missed. Missed tasks go to tomorrow." }),
-    el("div", { className: "sheet-shut-cols" }, column("Done", true), column("Missed", false)),
+    el("p", { className: "small", textContent: "Click a task to move it between Done and Tomorrow." }),
+    el("div", { className: "sheet-shut-cols" }, column("Done", true), column("Tomorrow", false)),
+    ...(extras ? extras.todayPart(done, todays(), draw) : []),
     box,
+    extras?.pastPart(),
     el("div", { className: "sheet-dialog-end" },
       el("button", { type: "button", className: "sheet-btn", textContent: "Cancel", onclick: () => dialog.close() }),
-      el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })));
+      extras
+        ? el("button", { type: "button", className: "sheet-btn primary", textContent: "Next: tomorrow", onclick: () => { step = "tomorrow"; draw(); dialog.scrollTop = 0; } })
+        : el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })),
+  ].filter(Boolean));
 }
 
-function open() {
+async function open() {
   today = localNow(new Date(), SHEET.timeZone).day;
+  step = "today";
+  extras = await import("./lookback-shutdown.mjs").then(async (m) => { await m.prepare(today); return m; }).catch((e) => { console.error(e); return null; });
   done = new Map(todays().map((t) => [t.id, t.done]));
   reflection = state.days[today]?.reflection ?? "";
   draw();
@@ -58,6 +79,7 @@ async function finish() {
     for (const t of todays()) if (done.get(t.id) !== t.done) await completeTask(t.id, done.get(t.id));
     await api.shutDown(today, reflection.trim() || null);
     await load();
+    step = "today";
     draw(true);
   } catch (e) { failed(e); }
 }
