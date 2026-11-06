@@ -54,7 +54,9 @@ with `trigger: message`, and that run does the reading. Terms are as in
   "HH:MM" | null, est_min 15–480 | null, why? ≤ 140 }], events: [{ title ≤ 120, start
   "YYYY-MM-DDTHH:MM", minutes 15–720, why? ≤ 140 }], reply ≤ 500 }] }`, at most 10 answers, 20
   tasks and 10 events each. Tasks have no due time, so a deadline at a time goes in the title
-  ("Project 2 (due 11:59 pm)"). It logs "Saving" on the messages it answers.
+  ("Project 2 (due 11:59 pm)"). It logs "Saving" on the messages it answers. An answer may also
+  carry `projects` (at most 3), each a due date, a total estimate and 3–10 ordered steps, written
+  through `answer_message`'s five-argument form ([sheet-projects.md](sheet-projects.md)).
   `checkAnswers` checks it: one-line text with no link, real dates, local times in
   `settings.time_zone` (a start the clocks skip is refused; an event keeps its real length across
   a daylight-saving change), past dates allowed, an `at_time` only with a day, and each id a

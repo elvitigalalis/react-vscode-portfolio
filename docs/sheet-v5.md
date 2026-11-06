@@ -1043,7 +1043,8 @@ and wires into the contracts above: `planSnapshot` tasks gain `horizon` (`today_
 `checkProposal` holds such a task's blocks to `today_min` instead of `paced_min` and keeps it out
 of `next_day`; `atRisk` reads its state (tight or won't fit); the brief gains a "Won't fit" line
 and Telegram a budgeted `horizon` message. The re-flow runs in the telegram tick and in
-read_planner.
+read_planner. [sheet-projects.md](sheet-projects.md) adds projects: a due date and an estimate
+split into ordered steps, each a task the horizon plans in order.
 
 ## Day rules and first steps
 

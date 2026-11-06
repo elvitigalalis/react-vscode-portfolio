@@ -108,7 +108,7 @@ test("horizonKey: the same inputs give the same key; previous and field order do
 
 test("horizonQueries: what the re-flow reads", () => {
   const q = horizonQueries(TODAY, TZ);
-  assert.equal(queryPath(q.tasks), "tasks?select=id,title,due,est_min,at_time,source,tag,done&done=is.false&due=not.is.null");
+  assert.equal(queryPath(q.tasks), "tasks?select=id,title,due,est_min,at_time,source,tag,done,project_id,step&done=is.false&due=not.is.null");
   assert.equal(queryPath(q.previous), `horizon_alloc?select=task_id,day,minutes,over_min&day=gte.${TODAY}&order=day`);
   assert.equal(queryPath(q.days), `days?select=day,shutdown,shutdown_at&day=eq.${TODAY}`);
   assert.equal(queryPath(q.busy("2026-11-09")), "busy?select=starts_at,ends_at&starts_at=lt.2026-11-10T05:00:00.000Z&ends_at=gt.2026-11-05T05:00:00.000Z&order=starts_at");
