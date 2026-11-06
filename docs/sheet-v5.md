@@ -755,7 +755,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 
 - **Settings** gains rows for: the calendar (Connect or Reconnect, and "Busy times saved 4 min
   ago" from `busy_as_of`), replans on or off, the workload cap (in hours, 1–16, step 0.5), pace
-  per kind ("Course ×1.4 (12)", or "Course: 3 of 5 needed"), habits, triage rules, the
+  per kind ("Course tasks: took 1.4× your estimate (median of 12) · most ran 1.1–1.9×", or "Course: 3 of 5 needed"), habits, triage rules, the
   enrollment time, and a status row for each source in `feed_state`.
 - **Needs you** gains Not needed (with undo) beside Done, Slack rows with their icon, a link
   only when it starts with `https://` and holds `.slack.com/` for Slack rows, an "Awaiting reply"

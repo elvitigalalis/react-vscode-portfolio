@@ -67,7 +67,28 @@ export function plannedVsDone(blocks, tasks, day, timeZone) {
   return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
 }
 
-// Settings (docs/sheet-v5.md, "/plan"): "Course ×1.4 (12)", or "Course: 3 of 5 needed".
+// The usual spread of a kind's pace: { lo, hi }, the 20th and 80th percentile (nearest rank) of
+// minutes / est_min over the same newest PACE_WINDOW rows paceByKind uses, held between
+// PACE_LIMITS; null below PACE_SAMPLES rows. hi is the P80 that horizon.mjs judges due dates at
+// (paceP80ByKind), so Settings explains why a task reads Tight.
+export function paceRangeByKind(actuals) {
+  const newest = [...actuals].filter((a) => a.est_min > 0).sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const at = (xs, p) => Math.round(clamp(xs[Math.ceil(p * xs.length) - 1], PACE_LIMITS) * 100) / 100;
+  return Object.fromEntries(PACE_KINDS.map((kind) => {
+    const xs = newest.filter((a) => a.kind === kind).slice(0, PACE_WINDOW).map((a) => a.minutes / a.est_min).sort((a, b) => a - b);
+    return [kind, xs.length < PACE_SAMPLES ? null : { lo: at(xs, 0.2), hi: at(xs, 0.8) }];
+  }));
+}
+
+// Settings (docs/sheet-v5.md, "/plan"): "Course tasks: took 1.4× your estimate (median of 12) ·
+// most ran 1.1–1.9×", or "Course: 3 of 5 needed" below the sample gate. A bare "×1.4" didn't say
+// which way it ran.
 const KIND_NAMES = { course: "Course", campus: "Campus", github: "GitHub", jira: "Jira", other: "Other" };
-export const paceLine = (kind, { pace, n }) =>
-  pace == null ? `${KIND_NAMES[kind]}: ${Math.min(n, PACE_SAMPLES)} of ${PACE_SAMPLES} needed` : `${KIND_NAMES[kind]} ×${pace} (${n})`;
+const times = (x) => (Math.round(x * 10) / 10).toFixed(1);
+export function paceLine(kind, { pace, n }, range) {
+  if (pace == null) return `${KIND_NAMES[kind]}: ${Math.min(n, PACE_SAMPLES)} of ${PACE_SAMPLES} needed`;
+  const line = `${KIND_NAMES[kind]} tasks: took ${times(pace)}× your estimate (median of ${n})`;
+  if (!range) return line;
+  const lo = times(range.lo), hi = times(range.hi);
+  return `${line} · most ran ${lo === hi ? lo : `${lo}–${hi}`}×`;
+}
