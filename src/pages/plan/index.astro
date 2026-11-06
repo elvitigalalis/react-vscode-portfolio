@@ -22,18 +22,23 @@ import "../../styles/sheet.css";
           <button type="button" class="sheet-btn sheet-icon-btn" data-act="next" aria-label="Next week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
         </span>
         <button type="button" class="sheet-btn primary" data-act="plan">Plan<span class="sheet-chip-text"> today</span> <kbd>P</kbd></button>
-        <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
+        <button type="button" class="sheet-btn" data-act="shutdown" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-moon"></use></svg><span class="sheet-chip-text">Shut down</span> <kbd>O</kbd></button>
         <!-- Status chips: Needs you first, then Feed failed. -->
         <span class="sheet-chips" data-chips>
           <button type="button" class="sheet-chip" data-act="needs" data-needs-chip aria-haspopup="dialog" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="sheet-chip-text">Needs you · </span><span data-needs-n></span></button>
           <button type="button" class="sheet-chip is-alert" data-act="settings" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
         </span>
         <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
-        <a class="sheet-btn sheet-icon-btn" href="/plan/gym/" aria-label="Gym: today's workout" title="Gym"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg></a>
-        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
+        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: gym, calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
       </div>
     </div>
+    <!-- On phones the bar holds ‹ day ›, Plan, Needs you, Nudges and ⋯ (sheet.css), so Gym lives
+         here, a failed feed shows as a dot on ⋯ and the Feed failed item below, and in the shutdown
+         window Plan today moves here to make room for Shut down. -->
     <div class="sheet-menu" id="sheet-more" data-more popover>
+      <button type="button" class="is-alert" data-act="settings" data-feed-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg> Feed failed</button>
+      <button type="button" data-act="plan" data-plan-menu>Plan today</button>
+      <a href="/plan/gym/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg> Gym</a>
       <button type="button" data-act="calendars">Calendars</button>
       <button type="button" data-act="settings">Settings <kbd>S</kbd></button>
       <button type="button" data-act="help">Help <kbd>?</kbd></button>
