@@ -48,7 +48,39 @@ export function stripSegments(events, blocks, day, timeZone, from = 7 * 60, to =
   }).sort((x, y) => x.from - y.from);
 }
 
+// A day's window for the strip and Plan today's timeline, in minutes past midnight on whole
+// hours: from `open` (when his day starts, after his wake) to an hour past `shutdown`, grown to
+// hold every span already on the day ({ start, end }, a block or a timed event), so nothing on
+// the day is ever out of sight. Kept within 0 and 2 am the next day.
+export function dayWindow(open, shutdown, spans = []) {
+  const from = Math.min(open, ...spans.map((s) => s.start));
+  const to = Math.max(shutdown + 60, ...spans.map((s) => s.end));
+  return { from: Math.max(0, Math.floor(from / 60) * 60), to: Math.min(26 * 60, Math.ceil(to / 60) * 60) };
+}
+
 // --- feedAlert (G4: the top bar's Feed failed chip) ------------------------------------------
 
-// The sources whose last read failed, in row order. ok null means not read yet, not failed.
-export const feedAlert = (feedRows) => feedRows.filter((f) => f.ok === false).map((f) => f.source);
+// How often each feed's cron job reads it, in minutes (supabase/schema.sql: sheet-mail every 5,
+// sheet-busy and sheet-oura every 10, the rest hourly).
+const FEED_EVERY = { gmail: 5, freebusy: 10, oura: 10 };
+const STALE_AFTER = 3; // missed reads before a feed counts as stuck (research R6)
+
+// The sources whose last read failed, in row order. ok null means not read yet (or not
+// connected), not failed. Given `now` (ms), a feed whose last read worked but is over 3× its
+// interval old counts too: a sync that stops running stays "ok" forever otherwise.
+export const feedAlert = (feedRows, now = null) => feedRows.filter((f) => f.ok === false
+  || (now != null && f.ok === true && f.fetched_at
+    && now - new Date(f.fetched_at).getTime() > STALE_AFTER * (FEED_EVERY[f.source] ?? 60) * 60_000)).map((f) => f.source);
+
+// --- openView (research U16: Telegram buttons open the right view) --------------------------
+
+// The view a link asks /plan to open (?open=plan|shutdown|needs, from Telegram's buttons), and
+// the query without it, so a reload doesn't open it again. Any other value opens nothing.
+const VIEWS = new Set(["plan", "shutdown", "needs"]);
+export function openView(search) {
+  const q = new URLSearchParams(search);
+  const v = q.get("open");
+  q.delete("open");
+  const rest = q.toString();
+  return { view: VIEWS.has(v) ? v : null, search: rest ? `?${rest}` : "" };
+}

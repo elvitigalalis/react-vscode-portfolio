@@ -3,10 +3,10 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, dialogDay, snap, formatMinutes, formatClock, formatSpan, proposedOn, DEFAULT_EST, blockMinutes, weekdayName, plural } from "./logic.mjs";
-import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets, failed, dayCapacity, sourceIcon, sourceWords } from "./planner.mjs";
+import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets, failed, dayCapacity, dayStart, windowOn, rowsOn, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare } from "./glance.mjs";
 import { approveAllCall, planNotes } from "./morning.mjs";
-import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock } from "./plan-today.mjs";
+import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock, setWindow } from "./plan-today.mjs";
 
 let dialog;
 let day;          // the day being planned
@@ -16,10 +16,12 @@ let rev = null;   // its revision number (v5)
 let proposal = null; // the day's newest revision, for Approve all
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 
+// "Done ≈" counts from when his day starts (planner.mjs dayStart: after his wake), on today
+// never before now; it counted from a fixed 9 am before.
 function meter(d) {
   const m = load(tasksOn(d), dayCapacity(d).capacity);
   const local = localNow(new Date(), SHEET.timeZone);
-  const from = d === local.day ? Math.max(local.minutes, 9 * 60) : 9 * 60;
+  const from = d === local.day ? Math.max(local.minutes, dayStart(d)) : dayStart(d);
   return { ...m, finish: finishAt(from, m.total) };
 }
 
@@ -37,6 +39,7 @@ function planBar(m) {
 // --- The dialog --------------------------------------------------------------------------
 
 export function draw() {
+  setWindow(windowOn(day, events));
   const { date } = dayLabel(day);
   const m = meter(day);
   const shut = shutdownAt(day);
@@ -97,8 +100,10 @@ export function draw() {
   const preview = el("div", { className: "sheet-preview", hidden: true });
   timeline.append(preview);
 
-  const list = el("ul", { className: "sheet-rows" }, ...tasksOn(day).filter((t) => !t.done).map((t) => {
-    const row = taskRow(t);
+  // The day's open tasks in the week's order, by time (event-todos.mjs dayRows), not by position.
+  const list = el("ul", { className: "sheet-rows" }, ...rowsOn(day).filter((r) => r.kind === "task" && !r.task.done).map((r) => {
+    const t = r.task;
+    const row = taskRow(t, r.start == null ? null : r);
     if (t.id === picked) row.classList.add("is-picked");
     return row;
   }));
