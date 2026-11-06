@@ -72,3 +72,14 @@
 .sheet-details-presets { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .sheet-taskinfo .sheet-btn { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
 .sheet-details-note { margin: 0; font-size: 0.875rem; color: var(--danger); }
+
+/* To-dos first (research U13): on phones the Tell Claude box and Recent drop under the days, and the
+   box is one line until it's in use. The DOM keeps them first for the Mac's keyboard. */
+@media (max-width: 48rem) {
+  .sheet-planner { display: flex; flex-direction: column; }
+  .sheet-planner > * { min-width: 0; }
+  .sheet-planner > .sheet-week ~ * { order: 2; }
+  .sheet-planner > :is(.sheet-message, .sheet-message-recent) { order: 1; }
+  .sheet-planner > .sheet-message { margin-top: 1rem; }
+  .sheet-message:not(:focus-within) .sheet-message-hint:not(:has([data-message-count]:not(:empty))) { display: none; }
+}
