@@ -2056,3 +2056,11 @@ create unique index if not exists messages_tg_message_id on messages (tg_message
 -- The pinned Now message: when a tick claimed making it (nudges.mjs, pinStep and PIN_CLAIM), so
 -- two overlapping ticks, or one whose save of now_message_id failed, never make a second.
 alter table settings add column if not exists now_claimed_at timestamptz;
+
+-- --- Telegram: dead buttons and the thumb keyboard (research/plan-phone.md P5, P6; 2026-11-06) --
+-- Each sent message's Telegram id on its log row, so a block's newer message (or a tap) can take
+-- the buttons off its older ones (nudges.mjs, deadButtons; editMessageReplyMarkup).
+alter table nudges add column if not exists tg_message_id bigint;
+-- When the tick sent the persistent reply keyboard (Now · Done · +15 min · Today), once; null
+-- until then. /start or /keys sends it again.
+alter table settings add column if not exists keys_sent_at timestamptz;

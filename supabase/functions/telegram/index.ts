@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent, deadButtons, keyStep, keysDue, KEYBOARD } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
@@ -24,7 +24,7 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, refusedForGood, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, mediaReply, readKey, readMedia, readText, readUndo, receipt, refireDue, refusedForGood, undoChanges } from "../../../src/sheet/capture.mjs";
 import { startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
@@ -228,7 +228,8 @@ const setNotified = (ids: string[], notified: string | null) =>
 
 // --- Sending ------------------------------------------------------------------------------
 
-type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; entities?: unknown[]; health?: string[]; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
+type Button = { text: string; url?: string; callback_data?: string };
+type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; entities?: unknown[]; health?: string[]; buttons: Button[]; keyboard?: Button[][]; also?: Omit<Message, "text" | "buttons">[]; horizon?: { task_id: string; state: string }[] };
 
 async function send(now: Date, facts: TickFacts = {}) {
   const snap = await snapshot(now, facts);
@@ -240,6 +241,10 @@ async function send(now: Date, facts: TickFacts = {}) {
     // one skips the message, so it goes out once.
     const c = await claim(m);
     if (!c) continue;
+    // A Finished? carrying the next block's start (nudges.mjs, atBoundary) logs the start's own
+    // row too. A start another run logged already just rides along.
+    const extra = [];
+    for (const a of m.also ?? []) { const x = await claim({ ...a, text: "", buttons: [] }); if (x) extra.push(x); }
     // The horizon states it tells are marked told first (nudges.mjs, horizonMarks). A failed
     // mark holds a horizon message back (claim given back) rather than repeat it every minute; the
     // brief, keyed to its fixed minute, goes anyway.
@@ -250,10 +255,11 @@ async function send(now: Date, facts: TickFacts = {}) {
       console.error("horizon notified:", e instanceof Error ? e.message : e);
       if (m.kind === "horizon") { await c.giveBack(); continue; }
     }
+    let msg;
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
       // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
-      await telegram("sendMessage", {
+      msg = await telegram("sendMessage", {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
         ...PLAIN,
@@ -263,15 +269,21 @@ async function send(now: Date, facts: TickFacts = {}) {
         ...(m.entities ? { entities: m.entities } : {}),
         // Only what asks him to act now makes a sound (nudges.mjs, silent).
         ...(silent(m) ? { disable_notification: true } : {}),
-        reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
+        reply_markup: m.keyboard ? { inline_keyboard: m.keyboard } : m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
       });
     } catch (e) {
       // Give the claim back, and the horizon marks, so the next minute tries again.
       await c.giveBack();
+      for (const x of extra) await x.giveBack();
       for (const g of marks.restore) await setNotified(g.ids, g.notified).catch((x) => console.error("horizon restore:", x instanceof Error ? x.message : x));
       throw e;
     }
     await c.sent();
+    for (const x of extra) await x.sent();
+    // P5: the message's id on its log rows, then the block's older messages lose their buttons.
+    // Apart from sent_at, so a database without the column yet still sends.
+    await keepMessageId([c, ...extra], msg?.message_id);
+    await clearButtons(snap.settings.telegram_chat_id, [m, ...(m.also ?? [])].flatMap((x) => deadButtons(x, snap.log)));
     sent.push(m.kind);
     toldNow.push(...(m.health ?? []));
   }
@@ -283,7 +295,64 @@ async function send(now: Date, facts: TickFacts = {}) {
   }
   // The pinned Now message must not stop the messages, nor they it.
   const pin = await pinTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  return { sent, pin };
+  const keys = await keysTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+  return { sent, pin, keys };
+}
+
+// --- Dead buttons (research/plan-phone.md P5) -----------------------------------------------
+// nudges.tg_message_id keeps each message's Telegram id. editMessageReplyMarkup with an empty
+// inline keyboard takes the buttons off and leaves the text; it notifies no one
+// (core.telegram.org/bots/api#editmessagereplymarkup). A message over 48 hours old, deleted or
+// already bare is refused, which changes nothing, so refusals are ignored.
+async function keepMessageId(claims: { id?: string }[], message_id: number | undefined) {
+  if (message_id == null) return;
+  for (const c of claims) {
+    if (c.id) await db(`nudges?id=eq.${c.id}`, { method: "PATCH", body: JSON.stringify({ tg_message_id: message_id }) })
+      .catch((e) => console.error("tg_message_id:", e instanceof Error ? e.message : e));
+  }
+}
+async function clearButtons(chat_id: number, ids: number[]) {
+  for (const message_id of [...new Set(ids)]) {
+    await telegram("editMessageReplyMarkup", { chat_id, message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+  }
+}
+
+// --- The thumb keyboard (research/plan-phone.md P6; nudges.mjs, KEYBOARD) --------------------
+// Sent once, silently, while he's up, claimed by filling in settings.keys_sent_at (only one run
+// can); a refused send gives the claim back. /start or /keys sends it again (keyAnswer).
+async function keysTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
+  if (!keysDue(snap, now)) return null;
+  const [mine] = await db("settings?id=eq.true&keys_sent_at=is.null", {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ keys_sent_at: now.toISOString() }),
+  });
+  if (!mine) return "claimed";
+  try {
+    await telegram("sendMessage", { chat_id: snap.settings.telegram_chat_id, text: keyStep("keys", snap, now).text, ...PLAIN, disable_notification: true, reply_markup: KEYBOARD });
+  } catch (e) {
+    await saveNow({ keys_sent_at: null }).catch(() => {});
+    throw e;
+  }
+  return "sent";
+}
+
+// A key from the keyboard (capture.mjs, readKey): the answer, as a reply to the key's text,
+// silent (he is looking at the chat). Its changes go as a tap's do.
+async function keyAnswer(k: { key: string; chat_id: number; message_id: number }, now: Date) {
+  const snap = await snapshot(now);
+  const r = keyStep(k.key, snap, now) as { changes: Change[]; text: string; keyboard?: Button[][]; reply?: unknown; block_id?: string };
+  for (const c of r.changes) await apply(c);
+  await telegram("sendMessage", {
+    chat_id: k.chat_id,
+    text: r.text,
+    ...PLAIN,
+    disable_notification: true,
+    reply_parameters: { message_id: k.message_id, allow_sending_without_reply: true },
+    reply_markup: r.reply ?? (r.keyboard?.length ? { inline_keyboard: r.keyboard } : undefined),
+  });
+  // Done takes the buttons off the block's nudges; Now's answer carries live ones of its own.
+  if (k.key === "done" && r.block_id) await clearButtons(k.chat_id, deadButtons({ block_id: r.block_id }, snap.log));
 }
 
 // --- The pinned Now message (docs/sheet-nudges.md, "The pinned Now message") ---------------
@@ -354,14 +423,14 @@ async function claim(m: Message) {
       headers: { Prefer: "return=representation" },
       body: JSON.stringify({ sent_at: new Date().toISOString() }),
     });
-    return row && { giveBack: () => setSentAt(row.id, null), sent: async () => {} };
+    return row && { id: row.id as string, giveBack: () => setSentAt(row.id, null), sent: async () => {} };
   }
   const [row] = await db("nudges?on_conflict=block_id,kind,day,send_at", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
     body: JSON.stringify({ block_id: m.block_id, kind: m.kind, day: m.day, send_at: m.send_at }),
   });
-  return row && { giveBack: () => db(`nudges?id=eq.${row.id}`, { method: "DELETE" }), sent: () => setSentAt(row.id, new Date().toISOString()) };
+  return row && { id: row.id as string, giveBack: () => db(`nudges?id=eq.${row.id}`, { method: "DELETE" }), sent: () => setSentAt(row.id, new Date().toISOString()) };
 }
 
 // Every message is plain text: no parse_mode, so nothing in a title or a mail line is read as
@@ -376,6 +445,9 @@ const PLAIN = { link_preview_options: { is_disabled: true } };
 // before. Every other update, and any other chat, is ignored without a word.
 async function webhook(update: unknown, now: Date) {
   const [settings] = await db("settings?select=*");
+  // The thumb keyboard's keys first, so a label is never captured as a message (capture.mjs).
+  const k = readKey(update, settings);
+  if (k) return keyAnswer(k, now);
   const t = readText(update, settings);
   if (t) return capture(t, now);
   const u = readUndo(update, settings);
@@ -608,21 +680,30 @@ async function tap(update: unknown, now: Date) {
         logged = null;
         break;
       }
-    } else if (c.insert && !UPSERT[c.table!]) {
-      // A plain insert (v5: actuals, from Finished).
-      await db(`${c.table}`, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(c.insert) });
-    } else if (c.insert) {
-      await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table]}` }, body: JSON.stringify(c.insert) });
-    } else if (c.update) {
-      await db(`${c.table}?${KEY[c.table!] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
-    } else if (c.delete) {
-      await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
-    }
+    } else await apply(c);
   }
   if (logged) await db("feedback", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(logged) });
   await telegram("answerCallbackQuery", { callback_query_id: t.query_id });
   // A repeated tap leaves the text as it was, and Telegram refuses an edit that changes nothing.
   await telegram("editMessageText", { chat_id: t.chat_id, message_id: t.message_id, text, ...PLAIN, ...(buttons?.length ? { reply_markup: { inline_keyboard: [buttons] } } : {}) }).catch(() => {});
+  // P5: a block answered for (anything but Snooze) leaves no live buttons on its other messages.
+  if (!planTap(t) && t.block_id && t.action !== "snooze" && changes.length) await clearButtons(t.chat_id, deadButtons({ block_id: t.block_id }, snap.log, t.message_id));
+}
+
+// One change from handleTap or keyStep, made through PostgREST.
+async function apply(c: Change) {
+  if (c.rpc) {
+    await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });
+  } else if (c.insert && !UPSERT[c.table!]) {
+    // A plain insert (v5: actuals, from Finished).
+    await db(`${c.table}`, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(c.insert) });
+  } else if (c.insert) {
+    await db(`${c.table}?${UPSERT[c.table!]}`, { method: "POST", headers: { Prefer: `resolution=${RESOLVE[c.table!]}` }, body: JSON.stringify(c.insert) });
+  } else if (c.update) {
+    await db(`${c.table}?${KEY[c.table!] ?? "id"}=eq.${c.id}`, { method: "PATCH", body: JSON.stringify(c.update) });
+  } else if (c.delete) {
+    await db(`${c.table}?id=eq.${c.id}`, { method: "DELETE" });
+  }
 }
 
 // The webhook must ask for texts as well as taps, or Telegram never delivers a text to the bot
