@@ -755,7 +755,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 
 - **Settings** gains rows for: the calendar (Connect or Reconnect, and "Busy times saved 4 min
   ago" from `busy_as_of`), replans on or off, the workload cap (in hours, 1–16, step 0.5), pace
-  per kind ("Course ×1.4 (12)", or "Course: 3 of 5 needed"), habits, triage rules, the
+  per kind ("Course tasks: took 1.4× your estimate (median of 12) · most ran 1.1–1.9×", or "Course: 3 of 5 needed"), habits, triage rules, the
   enrollment time, and a status row for each source in `feed_state`.
 - **Needs you** gains Not needed (with undo) beside Done, Slack rows with their icon, a link
   only when it starts with `https://` and holds `.slack.com/` for Slack rows, an "Awaiting reply"
@@ -934,6 +934,13 @@ cloud.ouraring.com/docs/authentication). Terms are [Wake time and Typical wake](
 - **Brief.** "Sleep score 82, good." from today's row.
 - **Bedtime window.** `sleep_times.hint` keeps Oura's `recommendation`; the marker and Settings
   add "Oura: 12:15–12:45 am, earlier bedtime".
+- **Wake alarm** ([sheet-alarms.md](sheet-alarms.md)). A web page can't set an iPhone Clock alarm,
+  so Settings → Oura → Sleep has "Set iPhone alarm for 9:40 am": a `shortcuts://run-shortcut`
+  link that runs his "Sheet Alarm" shortcut with the time as text, and its Create Alarm action
+  sets it. The time (`alarmFor`, src/sheet/alarm.mjs) is the next morning's typical wake
+  (weekday or weekend median, rounded down to 5 minutes), else 30 minutes before
+  `SHEET.dayStartAt`. Only that derived time leaves the page (ADR 0005 holds: no Oura figure).
+  No server endpoint and no daily automation yet (see sheet-alarms.md).
 - **Workouts** (scope `workout`; oura-connect now asks for `daily workout`). `ring_workouts {
   oura_id, day, starts_at, ends_at, activity }`, strength-type and generic activities only, never
   calories or intensity. A 401/403 sets `oura_account.workouts_ok = false` and Settings says
@@ -1036,7 +1043,8 @@ and wires into the contracts above: `planSnapshot` tasks gain `horizon` (`today_
 `checkProposal` holds such a task's blocks to `today_min` instead of `paced_min` and keeps it out
 of `next_day`; `atRisk` reads its state (tight or won't fit); the brief gains a "Won't fit" line
 and Telegram a budgeted `horizon` message. The re-flow runs in the telegram tick and in
-read_planner.
+read_planner. [sheet-projects.md](sheet-projects.md) adds projects: a due date and an estimate
+split into ordered steps, each a task the horizon plans in order.
 
 ## Day rules and first steps
 
@@ -1089,7 +1097,8 @@ Each rule is skipped when `day_rules` lacks its numbers, and each error names th
 
 - A start nudge (and a snooze) of a block with `first_step` reads `Now: OS homework — first:
   open HW4, do Q1 (2:00 pm, 45 min)`; without one, as before.
-- **Didn't start** offers the next free quarter hour today, at least 5 minutes on, that holds the
+- **Didn't start** offers the next free quarter hour today, at least 5 minutes on and not before
+  he's up (quiet hours' morning end, 8:00 at the earliest), that holds the
   block's length by the shutdown line and quiet hours, clear of busy times (with 10 minutes of
   travel) and other approved blocks: `Next free slot: 4:15 pm (45 min) · OS homework` with
   **Move to 4:15 pm** (`move:<block id>:<start in epoch minutes>`) and **Tomorrow**. With no slot:

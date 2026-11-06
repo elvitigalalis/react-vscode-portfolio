@@ -404,3 +404,15 @@ export const listEventTodos = (from, to) => rest(`event_todos?select=cal_event_k
 // Checking an event off or hiding it: an upsert by key that writes only the fields given, so
 // Claude's title stays (https://docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
 export const saveEventTodo = (row) => rest("event_todos?on_conflict=cal_event_key", { method: "POST", body: row, prefer: "resolution=merge-duplicates,return=minimal" });
+
+// --- Focus mode (docs/sheet-focus.md) -------------------------------------------------------
+
+// Done's minutes into actuals: true when recorded, false when the task is done or Telegram's
+// Finished? already counted it (supabase/schema.sql, record_focus).
+export const recordFocus = (row) => rest("rpc/record_focus", { method: "POST", body: row });
+
+// --- Projects (docs/sheet-projects.md) -------------------------------------------------------
+// Open projects, soonest due first, and the steps (tasks) of the given projects in order. A
+// missing table (the schema not run yet) reads as none.
+export const listProjects = () => rest("projects?select=id,title,due,est_min,done&done=is.false&order=due,created_at").catch(() => []);
+export const listSteps = (ids) => (ids.length ? rest(`tasks?project_id=in.(${ids.join(",")})&order=step`).catch(() => []) : Promise.resolve([]));

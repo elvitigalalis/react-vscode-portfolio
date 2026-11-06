@@ -4,14 +4,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { fireRequest, fireText, retryAfterMs, fireRoutine } from "../src/sheet/routine-fire.mjs";
+import { fireRequest, fireText, retryAfterMs, fireRoutine, failedFirePatch } from "../src/sheet/routine-fire.mjs";
 
 const ID = "trig_011M52jmViV3VFUuYG7o2kg2";
 const TOKEN = "sk-ant-oat01-test";
 
 // ---------------------------------------------------------------- fireRequest
 
-test("fireRequest: a POST to the routine's /fire URL with the bearer token, version and JSON text", () => {
+test("fireRequest: a POST to the routine's /fire URL with the bearer token, version, beta and JSON text", () => {
   assert.deepEqual(fireRequest(ID, TOKEN, "trigger: manual"), {
     url: "https://api.anthropic.com/v1/claude_code/routines/trig_011M52jmViV3VFUuYG7o2kg2/fire",
     init: {
@@ -19,6 +19,7 @@ test("fireRequest: a POST to the routine's /fire URL with the bearer token, vers
       headers: {
         Authorization: "Bearer sk-ant-oat01-test",
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "experimental-cc-routine-2026-04-01",
         "Content-Type": "application/json",
       },
       body: '{"text":"trigger: manual"}',
@@ -154,4 +155,16 @@ test("the routine token is only ever an Edge Function secret: never in the schem
       assert.doesNotMatch(line, /\bdb\(|net\.http_post|vault/i, `${dir}: ${line}`);
     }
   }
+});
+
+// ---------------------------------------------------------------- failedFirePatch
+
+test("failedFirePatch: a 429 keeps the server's retry time; any other failure retries in 5 minutes", () => {
+  const now = new Date("2026-11-06T12:00:00Z");
+  assert.deepEqual(failedFirePatch({ ok: false, status: 429, error: "rate_limit_error", retry_at: "2026-11-06T12:30:00.000Z" }, now),
+    { fire_error: "rate_limited", retry_at: "2026-11-06T12:30:00.000Z" });
+  assert.deepEqual(failedFirePatch({ ok: false, status: 401, error: "authentication_error" }, now),
+    { fire_error: "failed: 401 authentication_error", retry_at: "2026-11-06T12:05:00.000Z" });
+  assert.deepEqual(failedFirePatch({ ok: false, status: 0, error: "network" }, now),
+    { fire_error: "failed: network", retry_at: "2026-11-06T12:05:00.000Z" });
 });

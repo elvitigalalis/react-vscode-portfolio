@@ -15,6 +15,11 @@
 const FIRE_BASE = "https://api.anthropic.com/v1/claude_code/routines";
 // "The endpoint accepts every version from 2023-06-01 on and behaves the same in each."
 const API_VERSION = "2023-06-01";
+// The /fire endpoint "ships under the experimental-cc-routine-2026-04-01 beta header ... Breaking
+// changes ship behind new dated beta header versions, and the two most recent previous header
+// versions continue to work" (code.claude.com/docs/en/routines, "Trigger a scheduled task"), so
+// pinning it keeps a later change from breaking replans and messages without warning.
+const BETA = "experimental-cc-routine-2026-04-01";
 
 // The request for one fire: { url, init } for fetch. A routine id is prefixed trig_ ("Despite
 // the parameter name, the value is prefixed trig_"); anything else is refused before it reaches
@@ -26,7 +31,7 @@ export function fireRequest(routineId, token, text) {
     url: `${FIRE_BASE}/${routineId}/fire`,
     init: {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "anthropic-version": API_VERSION, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${token}`, "anthropic-version": API_VERSION, "anthropic-beta": BETA, "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     },
   };
@@ -97,4 +102,14 @@ export async function fireRoutine(fetchFn, { routineId, token, trigger, counts }
   }
   log(`fire: ${res.status} ${error}`);
   return { ok: false, status: res.status, error };
+}
+
+// What a message row records when its fire didn't start (docs/sheet-messages.md): fire_error, a
+// short reason built from the status and error type only, and retry_at, when the telegram tick
+// may fire it again. A 429 keeps the time the server gave; any other failure waits 5 minutes.
+const RETRY_FAILED_MS = 5 * 60 * 1000;
+export function failedFirePatch(out, now) {
+  if (out.status === 429) return { fire_error: "rate_limited", retry_at: out.retry_at };
+  const fire_error = out.status ? `failed: ${out.status} ${out.error}` : `failed: ${out.error}`;
+  return { fire_error, retry_at: new Date(now.getTime() + RETRY_FAILED_MS).toISOString() };
 }

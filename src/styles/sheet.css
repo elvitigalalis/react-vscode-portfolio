@@ -600,3 +600,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
   .sheet-block-x { position: relative; min-width: 2.75rem; }
   .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
 }
+
+/* Projects (docs/sheet-projects.md, src/sheet/project-list.mjs): one quiet row per project,
+   opening to its steps as task rows. */
+.sheet-projects[hidden] { display: none; }
+.sheet-project-list { list-style: none; display: grid; gap: 0.25rem; max-width: 40rem; }
+.sheet-project summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; padding: 0.25rem 0; }
+.sheet-project-title { font-weight: 600; }
+.sheet-project-steps { margin: 0 0 0.5rem 1rem; }

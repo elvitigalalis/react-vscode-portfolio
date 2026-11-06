@@ -230,20 +230,29 @@ create or replace view public_now as
 grant select on public_week, public_days, public_now to anon, authenticated;
 
 create extension if not exists pg_cron;
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-rollover';
+-- Every sheet-* job is scheduled by name with no unschedule first: cron.schedule(job_name, ...)
+-- on a name that exists updates that job's schedule and command in place and returns the same
+-- jobid (pg_cron 1.6.4, checked on supabase/postgres 17.11.0.018), so a re-run of this file keeps
+-- the ids and their cron.job_run_details history. To change one live job without this file,
+-- cron.alter_job(job_id, schedule, command, database, username, active) does the same
+-- (github.com/citusdata/pg_cron, "Altering a cron job").
+-- Each job's net.http_post waits 30 s (campus 2 min): pg_net cancels a request after
+-- timeout_milliseconds (supabase.com/docs/guides/database/extensions/pg_net), and the default
+-- (5 s on the live pg_net 0.20.4) cut off telegram, mail and oura runs that were still working, so
+-- their response was never recorded.
 select cron.schedule('sheet-rollover', '5 * * * *', 'select public.nightly_roll()');
 
 -- Every minute, call the telegram Edge Function to send what's due (docs/sheet-nudges.md). Its
 -- URL and the shared secret it checks live in Vault, put there by tools/sheet-setup.sh, so no
 -- secret is in this file; until they exist the job does nothing.
 create extension if not exists pg_net;
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-telegram';
 select cron.schedule('sheet-telegram', '* * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_telegram_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "send"}'::jsonb)
+    body := '{"job": "send"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_telegram_url')
 $job$);
@@ -358,6 +367,9 @@ create table if not exists feed_state (
   error text,
   items int
 );
+-- The last read that worked, set by saveFeedState (src/sheet/feed-state.mjs) and left alone by a
+-- failed one, so a catch-up after an outage starts from it and a stalled feed can be told apart.
+alter table feed_state add column if not exists last_ok_at timestamptz;
 
 alter table feed_seen enable row level security;
 alter table feed_state enable row level security;
@@ -370,13 +382,13 @@ revoke all on feed_seen, feed_state from anon;
 -- At :20 every hour, call the brightspace Edge Function to sync course tasks. Like
 -- sheet-telegram, its URL and the shared secret come from Vault, so until both exist the job
 -- does nothing.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-brightspace';
 select cron.schedule('sheet-brightspace', '20 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_brightspace_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "sync"}'::jsonb)
+    body := '{"job": "sync"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_brightspace_url')
 $job$);
@@ -416,7 +428,6 @@ alter table campus_events add column if not exists rsvp_checked_at timestamptz;
 -- URL and the shared secret come from Vault; until both exist the job does nothing. The function
 -- takes several seconds (an 8 MB download, then batched writes), longer than pg_net's 2 s
 -- default timeout (supabase.com/docs/guides/database/extensions/pg_net), so it gets 2 minutes.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-campus';
 select cron.schedule('sheet-campus', '35 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_campus_url'),
@@ -578,13 +589,13 @@ revoke insert, update, delete on weather_cache from authenticated;
 
 -- At :50 every hour, call the weather Edge Function. Like sheet-brightspace, it does nothing
 -- until its URL and the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-weather';
 select cron.schedule('sheet-weather', '50 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_weather_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "weather"}'::jsonb)
+    body := '{"job": "weather"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_weather_url')
 $job$);
@@ -684,13 +695,13 @@ revoke execute on function busy_sync_save(timestamptz, timestamptz, jsonb, jsonb
 
 -- Every 10 minutes, call busy-sync. Like sheet-brightspace, its URL and the shared secret come
 -- from Vault; until both exist the job does nothing.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-busy';
 select cron.schedule('sheet-busy', '*/10 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_busy_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "busy"}'::jsonb)
+    body := '{"job": "busy"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_busy_url')
 $job$);
@@ -1108,13 +1119,13 @@ revoke execute on function handshake_sync_save(timestamptz, timestamptz, jsonb) 
 
 -- At :25 every hour, call ical-sync (Handshake and the academic calendar). Like
 -- sheet-brightspace, it does nothing until its URL and the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-ical';
 select cron.schedule('sheet-ical', '25 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_ical_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "ical"}'::jsonb)
+    body := '{"job": "ical"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_ical_url')
 $job$);
@@ -1131,13 +1142,13 @@ alter table tasks add constraint tasks_link_check check (link is null or link ~ 
 
 -- At :40 every hour, call work-sync. Like sheet-brightspace, it does nothing until its URL and
 -- the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-work';
 select cron.schedule('sheet-work', '40 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_work_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "work"}'::jsonb)
+    body := '{"job": "work"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_work_url')
 $job$);
@@ -1225,13 +1236,13 @@ alter table triage_rules add constraint triage_rules_sender_check check (match <
 
 -- Every 5 minutes from :02, call mail-sync. Like sheet-brightspace, it does nothing until its URL
 -- and the shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-mail';
 select cron.schedule('sheet-mail', '2-59/5 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_mail_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "mail"}'::jsonb)
+    body := '{"job": "mail"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_mail_url')
 $job$);
@@ -1248,13 +1259,13 @@ alter table needs_you add constraint needs_you_source_check check (source in ('m
 
 -- At :42 every hour, call slack-sync. Like sheet-work, it does nothing until its URL and the
 -- shared secret are in Vault.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-slack';
 select cron.schedule('sheet-slack', '42 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_slack_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "slack"}'::jsonb)
+    body := '{"job": "slack"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_slack_url')
 $job$);
@@ -1355,7 +1366,8 @@ language sql security invoker set search_path = public as $$
 $$;
 revoke execute on function message_event_created(uuid, uuid, text) from public, anon;
 
--- Undo item `item` (a task's or an event's id) of message m: a task is deleted, an event comes
+-- Undo item `item` (a task's, a project's or an event's id) of message m: a task is deleted (a
+-- project with its steps), an event comes
 -- off the message and out of busy (another message's event at the same times keeps the time
 -- busy). Either way it leaves the message's list. Returns the item with its kind ('task' or
 -- 'event'; an event keeps its gcal_id, for /plan to delete from Google), or null when there is
@@ -1373,10 +1385,12 @@ begin
   select x into found_item from jsonb_array_elements(msg.tasks) as x where x ->> 'id' = item::text;
   if found_item is not null then
     delete from tasks where id = item and source = 'message';
+    -- A project (docs/sheet-projects.md) goes with its steps.
+    delete from projects where id = item;
     update messages set tasks = (select coalesce(jsonb_agg(x), '[]') from jsonb_array_elements(msg.tasks) as x where x ->> 'id' <> item::text),
       tasks_added = greatest(tasks_added - 1, 0)
     where id = m;
-    return found_item || '{"kind": "task"}';
+    return found_item || jsonb_build_object('kind', coalesce(found_item ->> 'kind', 'task'));
   end if;
   select x into found_item from jsonb_array_elements(msg.events) as x where x ->> 'id' = item::text;
   if found_item is null then return null; end if;
@@ -1718,13 +1732,13 @@ alter table changes add constraint changes_kind_check
 
 -- Every 10 minutes, call oura-sync. Like sheet-busy, its URL and the shared secret come from
 -- Vault; until both exist the job does nothing.
-select cron.unschedule(jobid) from cron.job where jobname = 'sheet-oura';
 select cron.schedule('sheet-oura', '4-59/10 * * * *', $job$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_oura_url'),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
       (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
-    body := '{"job": "oura"}'::jsonb)
+    body := '{"job": "oura"}'::jsonb,
+    timeout_milliseconds := 30000)
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_oura_url')
 $job$);
@@ -1915,3 +1929,97 @@ begin
 end $$;
 revoke execute on function replace_horizon(date, text, jsonb, jsonb) from public, anon;
 grant execute on function replace_horizon(date, text, jsonb, jsonb) to authenticated, service_role;
+
+-- --- Focus mode (docs/sheet-focus.md) ---------------------------------------------------------
+-- Done in /plan's focus view records the minutes since Start into actuals, which only the server
+-- may write (v5 P1), so it goes through this owner-only function. It writes nothing, and returns
+-- false, when the task is gone or done, or already has an actuals row from `since` (Start) on: a
+-- Finished? answer in Telegram, or this call retried. So focus time and Telegram never both count.
+create or replace function record_focus(task uuid, block uuid, d date, kind text, est int, minutes int, since timestamptz)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if not is_owner() then raise exception 'not the owner'; end if;
+  perform 1 from tasks t where t.id = task and not t.done for update;
+  if not found then return false; end if;
+  if exists (select 1 from actuals a where a.task_id = task and a.at >= since) then return false; end if;
+  insert into actuals (day, task_id, block_id, kind, est_min, minutes) values (d, task, block, kind, est, minutes);
+  return true;
+end $$;
+revoke execute on function record_focus(uuid, uuid, date, text, int, int, timestamptz) from public, anon;
+grant execute on function record_focus(uuid, uuid, date, text, int, int, timestamptz) to authenticated;
+
+-- --- Projects (docs/sheet-projects.md) ------------------------------------------------------
+-- A project is a due date and a total estimate made of ordered steps, each an ordinary task with
+-- project_id and its position (step), sharing the project's due date. The horizon engine plans
+-- the steps in order. done follows the steps: the trigger below sets it when the last step is
+-- done, and clears it when one is reopened. Owner-only, in no public view: the public views list
+-- tasks' columns by name and leave project_id and step out.
+create table if not exists projects (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 1 and 120),
+  due date not null,
+  est_min int not null check (est_min between 15 and 6000),
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table projects enable row level security;
+drop policy if exists owner_all on projects;
+create policy owner_all on projects for all using (is_owner()) with check (is_owner());
+revoke all on projects from anon;
+alter table tasks add column if not exists project_id uuid references projects on delete cascade;
+alter table tasks add column if not exists step int check (step > 0);
+alter table tasks drop constraint if exists tasks_project_step_check;
+alter table tasks add constraint tasks_project_step_check check ((project_id is null) = (step is null));
+create index if not exists tasks_project on tasks (project_id) where project_id is not null;
+
+-- A step done, reopened or deleted: its project is done exactly when no step is left undone.
+create or replace function project_follows_steps() returns trigger
+language plpgsql security invoker set search_path = public as $$
+declare p uuid := case when tg_op = 'DELETE' then old.project_id else new.project_id end;
+begin
+  if p is not null then
+    update projects set done = not exists (select 1 from tasks t where t.project_id = p and not t.done)
+    where id = p and done is distinct from not exists (select 1 from tasks t where t.project_id = p and not t.done);
+  end if;
+  return null;
+end $$;
+drop trigger if exists tasks_project_done on tasks;
+create trigger tasks_project_done after update of done or delete on tasks
+  for each row execute function project_follows_steps();
+
+-- answer_message with projects: new_projects is [{ title, due, est_min, steps: [{ title, est_min
+-- }], why? }], checked by checkAnswers (src/sheet/messages.mjs). The tasks and events go through
+-- answer_message above; each project is added with its steps as Inbox tasks in order, with source
+-- 'message' and the project's due date, and listed on the message as one item ({ id, kind:
+-- 'project', title, due, list, steps }) that Undo takes off whole. A message that added only
+-- projects is done.
+create or replace function answer_message(m uuid, new_tasks jsonb, new_events jsonb, answer text, new_projects jsonb) returns text
+language plpgsql security invoker set search_path = public as $$
+declare
+  p record;
+  pid uuid;
+  base double precision;
+  added jsonb := '[]';
+  result text;
+begin
+  result := answer_message(m, new_tasks, new_events, answer);
+  for p in select * from jsonb_to_recordset(coalesce(new_projects, '[]')) as x(title text, due date, est_min int, steps jsonb, why text)
+  loop
+    insert into projects (title, due, est_min) values (p.title, p.due, p.est_min) returning id into pid;
+    select coalesce(max(position), 0) into base from tasks where day is null and list = 'Inbox';
+    insert into tasks (title, list, due, est_min, source, position, project_id, step)
+    select s.v ->> 'title', 'Inbox', p.due, (s.v ->> 'est_min')::int, 'message', base + s.n, pid, s.n
+    from jsonb_array_elements(p.steps) with ordinality as s(v, n);
+    added := added || jsonb_build_array(jsonb_build_object('id', pid, 'kind', 'project', 'title', p.title, 'day', null,
+      'list', 'Inbox', 'due', p.due, 'at_time', null, 'steps', jsonb_array_length(p.steps))
+      || case when p.why is null then '{}' else jsonb_build_object('why', p.why) end);
+  end loop;
+  if jsonb_array_length(added) > 0 then
+    update messages set status = 'done', tasks = tasks || added, tasks_added = tasks_added + jsonb_array_length(added)
+    where id = m;
+    result := 'done';
+  end if;
+  return result;
+end $$;
+revoke execute on function answer_message(uuid, jsonb, jsonb, text, jsonb) from public, anon;

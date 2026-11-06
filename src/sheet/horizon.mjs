@@ -8,7 +8,7 @@ import { paceKind, PACE_KINDS, PACE_SAMPLES, PACE_WINDOW, PACE_LIMITS } from "./
 // less is never split. Minutes move in 15-minute steps.
 // The engine's rules version, folded into horizonKey (horizon-io.mjs): bump it whenever planHorizon's
 // rules change, so the next tick after a deploy re-flows instead of skipping on an unchanged key.
-export const HORIZON_RULES = 2;
+export const HORIZON_RULES = 4;
 export const CHUNK_MIN = 30;
 export const CHUNK_MAX = 90;
 export const WHOLE_UP_TO = 60;
@@ -117,9 +117,10 @@ export function targetDay(due, today, working, buffer_min = 0, room = () => 0) {
 
 // The plan. Input (all minutes are whole numbers):
 //   today         "YYYY-MM-DD"
-//   tasks         [{ id, due, minutes, done_min, minutes_p80?, kind? }]: undone tasks with a due
-//                 date; minutes is horizonMinutes, done_min confirmedDoneMin's (0 without),
-//                 minutes_p80 horizonMinutes at paceP80ByKind (minutes without), kind workKind's
+//   tasks         [{ id, due, minutes, done_min, minutes_p80?, kind?, project?, step? }]: undone
+//                 tasks with a due date; minutes is horizonMinutes, done_min confirmedDoneMin's (0
+//                 without), minutes_p80 horizonMinutes at paceP80ByKind (minutes without), kind
+//                 workKind's; project and step a project step's project id and position
 //   free          { day: minutes }: dayFree for every day from today to the last due date
 //   locked        [{ task_id, day, minutes }]: today's locked task blocks, kept exactly
 //   frozen_days   [day]: days whose previous allocation is kept and that take nothing new
@@ -145,7 +146,15 @@ function place({ today, tasks, free = {}, locked = [], frozen_days = [], previou
   const frozen = new Set(frozen_days);
   const due = (t) => (t.due < today ? today : t.due);
   const need0 = new Map(tasks.map((t) => [t.id, up(Math.max(0, t.minutes - (t.done_min ?? 0)))]));
-  const order = [...tasks].sort((a, b) => due(a).localeCompare(due(b)) || need0.get(a.id) - need0.get(b.id) || String(a.id).localeCompare(String(b.id)));
+  // Projects (docs/sheet-projects.md): a project's steps go together, in step order, and size
+  // their buffer by the whole project's minutes. A task outside a project is a group of one.
+  const group = (t) => (t.project == null ? `t:${t.id}` : `p:${t.project}`);
+  const groups = new Map();
+  for (const t of tasks) groups.set(group(t), [...(groups.get(group(t)) ?? []), t]);
+  const groupNeed = (t) => sum(groups.get(group(t)).map((u) => need0.get(u.id)));
+  const groupMin = (t) => sum(groups.get(group(t)).map((u) => u.minutes));
+  const order = [...tasks].sort((a, b) => due(a).localeCompare(due(b)) || groupNeed(a) - groupNeed(b)
+    || group(a).localeCompare(group(b)) || (a.step ?? 0) - (b.step ?? 0) || need0.get(a.id) - need0.get(b.id) || String(a.id).localeCompare(String(b.id)));
   const rank = new Map(order.map((t, i) => [t.id, i]));
   const known = new Set(tasks.map((t) => t.id));
   // The most minutes a task may hold on a day: 90, or 120 for programming and writing (only
@@ -164,7 +173,8 @@ function place({ today, tasks, free = {}, locked = [], frozen_days = [], previou
   for (const b of locked) if (known.has(b.task_id) && b.minutes > 0) add(fixed, b.task_id, b.day, b.minutes);
   for (const p of previous) {
     if (!known.has(p.task_id) || p.day < today || p.minutes <= 0) continue;
-    if (frozen.has(p.day)) add(fixed, p.task_id, p.day, p.minutes);
+    // Only the minutes that fit freeze; those past the cap are worked out again (over).
+    if (frozen.has(p.day)) add(fixed, p.task_id, p.day, p.minutes - (p.over_min ?? 0));
   }
   const lockedMin = (id, d) => sum(locked.filter((b) => b.task_id === id && b.day === d).map((b) => b.minutes));
   // Frozen minutes never go past what is left to do; the latest go first, locked ones never.
@@ -215,7 +225,15 @@ function place({ today, tasks, free = {}, locked = [], frozen_days = [], previou
   const free_ = (d) => room0(d) - used(d);
 
   const working = (d) => room0(d) > 0 || frozen.has(d) || locked.some((b) => b.day === d);
-  const target = new Map(order.map((t) => [t.id, targetDay(t.due, today, working, BUFFER_SHARE * t.minutes, room0)]));
+  const target = new Map(order.map((t) => [t.id, targetDay(t.due, today, working, BUFFER_SHARE * groupMin(t), room0)]));
+  // The step before t in its project, when it is planned before t, or null.
+  const before = (t) => {
+    if (t.project == null) return null;
+    const p = order.slice(0, rank.get(t.id)).filter((u) => u.project === t.project && u.step < t.step).at(-1);
+    return p ?? null;
+  };
+  // A task's last day with minutes so far, or null.
+  const lastDay = (id) => [...(fixed.get(id)?.keys() ?? []), ...(kept.get(id)?.keys() ?? []), ...(over.get(id)?.keys() ?? [])].sort().at(-1) ?? null;
 
   // The largest piece of `left` minutes task t may add on day d, or 0.
   const piece = (t, d, left, lim = CHUNK_MAX) => {
@@ -297,12 +315,20 @@ function place({ today, tasks, free = {}, locked = [], frozen_days = [], previou
 
   for (const t of order) {
     const tg = target.get(t.id), dd = due(t);
+    // A step starts no earlier than the day its predecessor finishes; its kept minutes before that
+    // day are planned again.
+    const prev = before(t);
+    const start = (prev && lastDay(prev.id)) > today ? lastDay(prev.id) : today;
+    if (start > today) {
+      const early = [...(kept.get(t.id)?.entries() ?? [])].filter(([d]) => d < start);
+      for (const [d, m] of early) { kept.get(t.id).delete(d); need.set(t.id, need.get(t.id) + m); }
+    }
     // Kept minutes past the target come forward when there is room, so the task need not eat its
     // buffer.
     if (tg < dd) {
       const late = [...(kept.get(t.id)?.entries() ?? [])].filter(([d]) => d > tg);
       const back = sum(late.map(([, m]) => m));
-      if (back > 0 && sum(Array.from({ length: diff(tg, today) + 1 }, (_, i) => Math.max(0, free_(addDays(today, i))))) > 0) {
+      if (back > 0 && tg >= start && sum(Array.from({ length: diff(tg, start) + 1 }, (_, i) => Math.max(0, free_(addDays(start, i))))) > 0) {
         for (const [d] of late) kept.get(t.id).delete(d);
         need.set(t.id, need.get(t.id) + back);
       }
@@ -312,14 +338,15 @@ function place({ today, tasks, free = {}, locked = [], frozen_days = [], previou
     if (t.kind === "exam" && need0.get(t.id) > WHOLE_UP_TO) {
       const m = need0.get(t.id);
       const share = up(m / (m >= EXAM_DAYS * CHUNK_MIN ? Math.max(EXAM_DAYS, Math.ceil(m / CHUNK_MAX)) : 2));
-      fill(t, today, tg, share, true);
-      fill(t, today, tg, share);
+      fill(t, start, tg, share, true);
+      fill(t, start, tg, share);
     }
-    fill(t, today, tg);
-    evict(t, today, tg);
-    if (tg < dd) { fill(t, addDays(tg, 1), dd); evict(t, addDays(tg, 1), dd); }
+    fill(t, start, tg);
+    evict(t, start, tg);
+    const after = tg < start ? start : addDays(tg, 1);
+    if (after <= dd) { fill(t, after, dd); evict(t, after, dd); }
     // Last resort for programming and writing: up to 120 a day from today to the due day.
-    if (need.get(t.id) > 0 && maxFor(t) > CHUNK_MAX) { fill(t, today, dd, STRETCH_MAX); evict(t, today, dd, STRETCH_MAX); }
+    if (need.get(t.id) > 0 && maxFor(t) > CHUNK_MAX) { fill(t, start, dd, STRETCH_MAX); evict(t, start, dd, STRETCH_MAX); }
     // Won't fit: what is left goes on the due day past the cap, never dropped.
     const left = need.get(t.id);
     if (left > 0) { add(over, t.id, dd, left); need.set(t.id, 0); }

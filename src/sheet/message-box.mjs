@@ -168,14 +168,16 @@ function decided(m) {
     p ? stepList(p.steps) : null);
 }
 
-// Each to-do and event the message added, with an Undo.
+const KINDS = { task: ["To-do", "to-do"], event: ["Event", "event"], project: ["Project", "project"] };
+
+// Each to-do, project and event the message added, with an Undo.
 function items(m) {
   const lines = m.status === "done" ? itemLines(m, SHEET.timeZone) : [];
   if (!lines.length) return null;
   return el("ul", { className: "sheet-message-added", ariaLabel: "Added" }, ...lines.map((line) => {
-    const undo = line.id && el("button", { type: "button", className: "sheet-link", textContent: "Undo", ariaLabel: `Undo ${line.kind === "task" ? "to-do" : "event"}: ${line.title}` });
+    const undo = line.id && el("button", { type: "button", className: "sheet-link", textContent: "Undo", ariaLabel: `Undo ${KINDS[line.kind][1]}: ${line.title}` });
     const li = el("li", {},
-      el("span", { className: "sheet-message-kind", textContent: line.kind === "task" ? "To-do" : "Event" }), " ",
+      el("span", { className: "sheet-message-kind", textContent: KINDS[line.kind][0] }), " ",
       el("span", { className: "sheet-message-title", textContent: line.title }), " ",
       el("span", { className: "sheet-message-when", textContent: line.when }), " ",
       undo);
@@ -184,12 +186,14 @@ function items(m) {
   }));
 }
 
-// Undo one item: a to-do is deleted (its calendar blocks first); an event comes out of Google
+// Undo one item: a to-do is deleted (its calendar blocks first), a project with its steps (theirs
+// first); an event comes out of Google
 // Calendar when /plan made it there, then off the message and out of busy (undo_message_item).
 async function undoItem(m, line, li, button) {
   button.disabled = true;
   try {
     if (line.kind === "task") await dropBlocks(line.id);
+    else if (line.kind === "project") for (const s of await api.listSteps([line.id])) await dropBlocks(s.id);
     else {
       const ev = m.events.find((e) => e.id === line.id);
       if (ev?.gcal_id) {

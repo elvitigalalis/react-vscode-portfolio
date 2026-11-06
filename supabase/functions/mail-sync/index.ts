@@ -38,7 +38,7 @@ import {
   accountPatch, gmailError, gmailJson, historyChanges, mailChanges, metadataQuery, newestPerThread, parseAddresses,
   replyDiff, replyState, senderHash, senderHashes, syncMessage, syncThread, threadsToRead, unsentOwn,
 } from "../../../src/sheet/mail.mjs";
-import { localNow } from "../../../src/sheet/logic.mjs";
+import { mailSweepDue } from "../../../src/sheet/feed-state.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 import { googleToken, refusedWhy } from "../_shared/google.ts";
 
@@ -70,10 +70,10 @@ Deno.serve(async (req) => {
     }
     const [settings] = await db("settings?select=time_zone");
     const tz = settings.time_zone;
-    // The sweep runs on the first good run of each local day, and again after a failed run.
-    const [prev] = await db(`feed_state?select=fetched_at,ok&source=eq.${SOURCE}`);
-    const sweep = !prev || prev.ok !== true || !prev.fetched_at
-      || localNow(new Date(prev.fetched_at), tz).day !== localNow(now, tz).day;
+    // The sweep runs on the first good run of each local day (keyed on last_ok_at), and again
+    // after a failed run (mailSweepDue).
+    const [prev] = await db(`feed_state?select=fetched_at,ok,last_ok_at&source=eq.${SOURCE}`);
+    const sweep = mailSweepDue(prev, now, tz);
     const out = [];
     const failed: string[] = [];
     for (const a of accounts) {
