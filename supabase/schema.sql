@@ -2056,3 +2056,49 @@ create unique index if not exists messages_tg_message_id on messages (tg_message
 -- The pinned Now message: when a tick claimed making it (nudges.mjs, pinStep and PIN_CLAIM), so
 -- two overlapping ticks, or one whose save of now_message_id failed, never make a second.
 alter table settings add column if not exists now_claimed_at timestamptz;
+
+-- --- The look-back (docs/sheet-lookback.md) ----------------------------------------------------
+-- When a task was finished. updated_at changes on any edit, so it can't say. Set when done flips
+-- to true, cleared when it flips back; tasks finished before this column stay null (no known
+-- finish day), and the look-back leaves them out.
+alter table tasks add column if not exists done_at timestamptz;
+create or replace function tasks_done_at() returns trigger language plpgsql as $$
+begin
+  if not new.done then new.done_at := null;
+  elsif tg_op = 'INSERT' or not old.done then new.done_at := now();
+  else new.done_at := old.done_at;
+  end if;
+  return new;
+end $$;
+drop trigger if exists tasks_done_at on tasks;
+create trigger tasks_done_at before insert or update of done on tasks for each row execute function tasks_done_at();
+
+-- What the horizon said about a task about a week before its due date: the first state a re-flow
+-- gave it 5 to 7 days out (5, since a re-flow can skip a day). horizon_state can't answer this: it
+-- holds only the current state and drops a task's row once it is done. One row per task and due
+-- date, written by the trigger below, so a moved due date gets its own call. replace_horizon is
+-- unchanged. Owner-only, like the states.
+create table if not exists horizon_calls (
+  task_id uuid not null references tasks on delete cascade,
+  due date not null,
+  state text not null check (state in ('on_track', 'tight', 'wont_fit')),
+  called_on date not null,
+  primary key (task_id, due)
+);
+alter table horizon_calls enable row level security;
+drop policy if exists owner_all on horizon_calls;
+create policy owner_all on horizon_calls for all using (is_owner()) with check (is_owner());
+revoke all on horizon_calls from anon;
+create or replace function horizon_call() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into horizon_calls (task_id, due, state, called_on)
+  select t.id, t.due, new.state, l.day
+  from tasks t, (select (now() at time zone time_zone)::date as day from settings where id) l
+  where t.id = new.task_id and t.due between l.day + 5 and l.day + 7
+  on conflict (task_id, due) do nothing;
+  return new;
+end $$;
+revoke execute on function horizon_call() from public, anon, authenticated;
+drop trigger if exists horizon_call on horizon_state;
+create trigger horizon_call after insert or update on horizon_state for each row execute function horizon_call();

@@ -1968,4 +1968,48 @@ do $$ begin
   raise notice '✓ messages: one row per Telegram message; pinned message claim column';
 end $$;
 SQL
+# The look-back (docs/sheet-lookback.md): done_at follows done, and a re-flow records the state a
+# task had about a week before its due date, once, even as the state changes and after it's done.
+psql_as postgres >/dev/null <<'SQL'
+do $$
+declare t uuid; soon uuid; far uuid; today date := (now() at time zone (select time_zone from settings where id))::date;
+begin
+  insert into tasks (title, list) values ('look-back', 'Inbox') returning id into t;
+  if (select done_at from tasks where id = t) is not null then raise exception 'done_at set on an open task'; end if;
+  update tasks set done = true where id = t;
+  if (select done_at from tasks where id = t) is null then raise exception 'done_at not set on done'; end if;
+  update tasks set title = 'edited', done = true where id = t;
+  update tasks set done = false where id = t;
+  if (select done_at from tasks where id = t) is not null then raise exception 'done_at kept after undone'; end if;
+  -- A task finished before the column existed keeps no finish day when it is written again.
+  alter table tasks disable trigger tasks_done_at;
+  update tasks set done = true where id = t;
+  alter table tasks enable trigger tasks_done_at;
+  update tasks set done = true where id = t;
+  if (select done_at from tasks where id = t) is not null then raise exception 'done_at guessed for an old finish'; end if;
+  delete from tasks where id = t;
+
+  insert into tasks (title, list, due) values ('week out', 'Inbox', today + 7) returning id into soon;
+  insert into tasks (title, list, due) values ('far out', 'Inbox', today + 8) returning id into far;
+  perform replace_horizon(today, 'k1', '[]', jsonb_build_array(
+    jsonb_build_object('task_id', soon, 'state', 'on_track', 'slack_min', 0, 'remaining_min', 30, 'target_day', today),
+    jsonb_build_object('task_id', far, 'state', 'on_track', 'slack_min', 0, 'remaining_min', 30, 'target_day', today)));
+  perform replace_horizon(today, 'k2', '[]', jsonb_build_array(
+    jsonb_build_object('task_id', soon, 'state', 'tight', 'slack_min', 0, 'remaining_min', 30, 'target_day', today)));
+  if (select state from horizon_calls where task_id = soon) <> 'on_track' then raise exception 'the call changed with the state'; end if;
+  if exists (select 1 from horizon_calls where task_id = far) then raise exception 'called 8 days out'; end if;
+  -- The state row goes when the task is done; the call stays.
+  update tasks set done = true where id = soon;
+  perform replace_horizon(today, 'k3', '[]', '[]');
+  if exists (select 1 from horizon_state where task_id = soon) or not exists (select 1 from horizon_calls where task_id = soon)
+    then raise exception 'the call went with the state'; end if;
+  -- A moved due date is a new call.
+  update tasks set due = today + 6, done = false where id = soon;
+  perform replace_horizon(today, 'k4', '[]', jsonb_build_array(
+    jsonb_build_object('task_id', soon, 'state', 'tight', 'slack_min', 0, 'remaining_min', 30, 'target_day', today)));
+  if (select count(*) from horizon_calls where task_id = soon) <> 2 then raise exception 'a moved due date got no new call'; end if;
+  delete from tasks where id in (soon, far);
+  raise notice '✓ look-back: done_at follows done; one horizon call per task and due date';
+end $$;
+SQL
 echo "✓ all schema checks passed"
