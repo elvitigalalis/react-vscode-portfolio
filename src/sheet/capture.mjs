@@ -3,7 +3,7 @@
 // has answered, the bot sends the receipt with an Undo for each item. This is the pure side: which
 // updates count, the words, and what an Undo changes. Kept free of the network so node --test
 // covers it; the telegram Edge Function imports it, and messages.mjs keeps the pipeline's rules.
-import { addedLine, itemLines, messageState, messageText } from "./messages.mjs";
+import { addedLine, itemLines, messageState, messageText, shouldFire } from "./messages.mjs";
 
 // A Telegram update (core.telegram.org/bots/api#update: `message` is "New incoming message of any
 // kind"; #message: `text`, `chat`, `message_id`), read as a message to Claude:
@@ -61,6 +61,24 @@ export function ackReaction(saved) {
 }
 // What the reaction becomes once Claude has answered and the receipt went out.
 export const ANSWERED = emoji("👌");
+
+// --- Re-firing a failed fire (research/plan-reliability.md R9) ---------------------------------
+// A message whose fire failed or was rate limited stays pending (../../supabase/functions/
+// _shared/capture.ts marks it: fire_error, and retry_at from a 429), and before this waited for
+// some unrelated fire. The minute tick fires the task once more for it: after retry_at, or 5
+// minutes after the message without one; never twice (refired_at); and not while a run on its
+// way will read it anyway (a message fired under 3 minutes ago: shouldFire; or a replan started
+// after it). Fires carry no idempotency key, so "once" is the claim on refired_at
+// (routine-fire.mjs). `pending` are pending messages { id, at, fired_at, fire_error, retry_at,
+// refired_at }, `replans` today's { at, result }. Returns the ids to fire for.
+const REFIRE_AFTER = 5 * 60_000;
+export function refireDue(pending, replans, now) {
+  if (!shouldFire(pending, now)) return [];
+  const t = now.getTime();
+  return pending.filter((m) => m.fire_error && !m.fired_at && !m.refired_at
+    && t >= (m.retry_at ? Date.parse(m.retry_at) : Date.parse(m.at) + REFIRE_AFTER)
+    && !replans.some((r) => r.result === "started" && Date.parse(r.at) > Date.parse(m.at))).map((m) => m.id);
+}
 
 // --- The receipt -------------------------------------------------------------------------------
 

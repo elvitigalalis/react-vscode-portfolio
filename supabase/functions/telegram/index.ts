@@ -24,7 +24,8 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, undoChanges } from "../../../src/sheet/capture.mjs";
+import { startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
 
@@ -44,11 +45,13 @@ Deno.serve(async (req) => {
     const replan = await replanTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // Nor must a receipt for a text to the bot.
     const receipted = await receipts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // Nor must firing a failed message to Claude once more.
+    const refired = await refire(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const hook = await ensureWebhook().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // Horizon planning: re-flow before the messages, so they see fresh states. Failing (or the
     // horizon schema not run yet) stops nothing else.
     const horizon = await horizonTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now, { replanHold: replan, hook })), replan, receipts: receipted, hook, horizon });
+    return Response.json({ ...(await send(now, { replanHold: replan, hook })), replan, receipts: receipted, refired, hook, horizon });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -118,17 +121,19 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
 // The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the three connected
 // accounts' last errors, and today's replans, with the tick's own facts.
 async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) {
-  const [feeds, mail, [calendar = null], [oura = null], replans, revisions] = await Promise.all([
+  const [feeds, mail, [calendar = null], [oura = null], replans, revisions, unsent] = await Promise.all([
     db("feed_state?select=*"),
     db("mail_accounts?select=email,label,last_error").catch(() => []),
     db("calendar_account?select=last_error").catch(() => []),
     db("oura_account?select=last_error").catch(() => []),
     db(`replans?select=at,result,reasons&day=eq.${today}`),
     db(`proposals?select=rev&day=eq.${today}&limit=1`),
+    // Messages whose one re-fire failed too (refire), until Claude answers them.
+    db(`messages?select=id&status=eq.pending&refired_at=not.is.null&fired_at=is.null&at=gte.${new Date(now.getTime() - 86_400_000).toISOString()}&order=at`).catch(() => []),
   ]);
   const hook = facts.hook && typeof facts.hook === "object" && "url" in facts.hook ? facts.hook : undefined;
   const replanHold = facts.replanHold && typeof facts.replanHold === "object" && "hold" in facts.replanHold ? facts.replanHold : undefined;
-  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, hook, replanHold }, now);
+  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, unsent, hook, replanHold }, now);
 }
 
 // Monday's Last week line (nudges.mjs, lastWeekLine): last Mon-Sun's approved task blocks (a day
@@ -394,6 +399,12 @@ async function mediaAnswer(media: { chat_id: number; message_id: number }, setti
 async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
   if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
   const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  // A failed fire is marked for the tick's one re-fire (refire). The message function's own
+  // marking lives in ../_shared/capture.ts; this covers a text to the bot either way.
+  if (saved.why === "failed" || saved.why === "rate_limited") {
+    await db(`messages?id=eq.${saved.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ fire_error: saved.why, retry_at: saved.retry_at ?? null }) })
+      .catch((e) => console.error("telegram fire_error:", e.message));
+  }
   const reaction = ackReaction(saved);
   if (reaction) {
     const reacted = await telegram("setMessageReaction", { chat_id: t.chat_id, message_id: t.message_id, reaction })
@@ -406,6 +417,39 @@ async function capture(t: { text: string; chat_id: number; message_id: number },
     ...PLAIN,
     reply_parameters: { message_id: t.message_id, allow_sending_without_reply: true },
   }).catch((e) => console.error("telegram capture:", e.message));
+}
+
+// --- Re-firing a failed message (research/plan-reliability.md R9) -------------------------------
+// A pending message whose fire failed gets one more (capture.mjs, refireDue), for all such
+// messages at once, since one run reads every pending message. Claimed first by filling in
+// refired_at, which only one run can do; the outcome then fills in the run's start or the new
+// error. A second failure is left pending and goes to the health check (unsent), which tells him.
+async function refire(now: Date) {
+  if (!ROUTINE_ID || !ROUTINE_TOKEN) return "not connected";
+  const since = new Date(now.getTime() - 86_400_000).toISOString();
+  const [settings] = await db("settings?select=time_zone");
+  const { day: today } = localNow(now, settings.time_zone);
+  const [pending, replans] = await Promise.all([
+    db(`messages?select=id,at,fired_at,fire_error,retry_at,refired_at&status=eq.pending&at=gte.${since}`),
+    db(`replans?select=at,result&day=eq.${today}`),
+  ]);
+  const ids = refireDue(pending, replans, now);
+  if (!ids.length) return [];
+  const claimed = (await db(`messages?id=in.(${ids.join(",")})&refired_at=is.null`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ refired_at: now.toISOString() }),
+  })).map((m: { id: string }) => m.id);
+  if (!claimed.length) return [];
+  let out;
+  try {
+    out = await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "message", counts: {} }, now);
+  } catch {
+    out = { ok: false, status: 0 };
+  }
+  const patch = out.ok ? { ...startedPatch(out, now), fire_error: null } : { fire_error: out.status === 429 ? "rate_limited" : "failed" };
+  await db(`messages?id=in.(${claimed.join(",")})`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
+  return { ids: claimed, ok: out.ok };
 }
 
 // The receipt for each text Claude has answered since yesterday, once: a reply to his text with

@@ -1928,3 +1928,11 @@ alter table settings add column if not exists health_told text[] not null defaul
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
   check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
+-- A message to Claude whose fire failed (research/plan-reliability.md R9). _shared/capture.ts
+-- sets fire_error ('failed' or 'rate_limited') and, from a 429, retry_at; the telegram tick fires
+-- the task once more after retry_at (or 5 minutes on), claiming it by setting refired_at, and
+-- records the outcome: fired_at on a start, or the new fire_error. A second failure stays pending
+-- and the health check tells Lisul.
+alter table messages add column if not exists fire_error text check (char_length(fire_error) <= 40);
+alter table messages add column if not exists retry_at timestamptz;
+alter table messages add column if not exists refired_at timestamptz;

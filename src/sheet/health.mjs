@@ -40,7 +40,7 @@ function when(iso, now, tz) {
 //   replans     today's replans rows { at, result, reasons }
 //   planned     whether today has a plan revision yet
 //   replanHold  { hold, weighty, used } from the replan tick: why it didn't fire
-//   unsent      messages to Claude whose one re-fire failed too ({ id })
+//   unsent      pending messages to Claude whose one re-fire failed too ({ id }), oldest first
 // Returns { green, issues: [{ key, words, fix }] }. A key names one incident: the same key while
 // it lasts, so it is told once (nextTold).
 export function health(input, now) {
@@ -74,7 +74,10 @@ export function health(input, now) {
   if (newest?.result === "rate_limited") add("replan", "Claude is rate limited");
   const hold = input.replanHold;
   if (hold?.hold === "daily_cap" && hold.weighty) add(`paused:${localNow(now, tz).day}`, `replans paused for today (${hold.used} used)`, "adjust in /plan");
-  for (const m of input.unsent ?? []) add(`message:${m.id}`, "a message to Claude didn't go through", "send it again");
+  // One incident for the lot, named by the first.
+  const unsent = input.unsent ?? [];
+  if (unsent.length === 1) add(`message:${unsent[0].id}`, "a message to Claude didn't go through", "send it again");
+  if (unsent.length > 1) add(`message:${unsent[0].id}`, `${unsent.length} messages to Claude didn't go through`, "send them again");
   return { green: !issues.length, issues };
 }
 

@@ -84,6 +84,8 @@ test("health: replans paused at the daily cap with a weighty change waiting says
 test("health: a message to Claude whose retry failed too is an issue", () => {
   const h = health({ tz, unsent: [{ id: "m1" }] }, now);
   assert.deepEqual(h.issues, [{ key: "message:m1", words: "a message to Claude didn't go through", fix: "send it again" }]);
+  assert.deepEqual(health({ tz, unsent: [{ id: "m1" }, { id: "m2" }] }, now).issues,
+    [{ key: "message:m1", words: "2 messages to Claude didn't go through", fix: "send them again" }]);
 });
 
 // ---------------------------------------------------------------- hookAction
