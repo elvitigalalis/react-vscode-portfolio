@@ -47,3 +47,19 @@ test("dayWindow: grows to hold anything already on the day", async () => {
   // All-day spans (0 to 1440) are not passed in; a span starting before midnight is clipped at 0.
   assert.deepEqual(dayWindow(13 * 60, 17 * 60, [{ start: -30, end: 30 }]), { from: 0, to: 18 * 60 });
 });
+
+// ---------------------------------------------------------------- openView
+
+test("openView: ?open= names a view, and the rest of the query is kept", async () => {
+  const { openView } = await import("../src/sheet/glance.mjs");
+  assert.deepEqual(openView("?open=shutdown"), { view: "shutdown", search: "" });
+  assert.deepEqual(openView("?mail=ok&open=needs"), { view: "needs", search: "?mail=ok" });
+  assert.deepEqual(openView("?open=plan&x=1"), { view: "plan", search: "?x=1" });
+});
+
+test("openView: an unknown or missing view opens nothing; an unknown one is still stripped", async () => {
+  const { openView } = await import("../src/sheet/glance.mjs");
+  assert.deepEqual(openView(""), { view: null, search: "" });
+  assert.deepEqual(openView("?calendar=ok"), { view: null, search: "?calendar=ok" });
+  assert.deepEqual(openView("?open=settings"), { view: null, search: "" });
+});

@@ -7,7 +7,7 @@ import {
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel, dayWindow } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow, openView } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
@@ -1099,5 +1099,16 @@ export async function start(node, plugins = [], settings = settingsModule) {
     setStatus(null);
     await syncGoogle();
     await load();
+    openFromLink();
   } catch (e) { failed(e); }
+}
+
+// A Telegram button's link opens its view (?open=plan|shutdown|needs, glance.mjs openView), once:
+// the parameter comes off the address first, so a reload or Back doesn't open it again.
+// https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState
+function openFromLink() {
+  const { view, search } = openView(location.search);
+  if (search === location.search) return;
+  history.replaceState(history.state, "", `${location.pathname}${search}${location.hash}`);
+  if (view) actHooks[view]?.();
 }

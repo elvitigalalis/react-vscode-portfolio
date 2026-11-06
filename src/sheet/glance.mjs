@@ -71,3 +71,16 @@ const STALE_AFTER = 3; // missed reads before a feed counts as stuck (research R
 export const feedAlert = (feedRows, now = null) => feedRows.filter((f) => f.ok === false
   || (now != null && f.ok === true && f.fetched_at
     && now - new Date(f.fetched_at).getTime() > STALE_AFTER * (FEED_EVERY[f.source] ?? 60) * 60_000)).map((f) => f.source);
+
+// --- openView (research U16: Telegram buttons open the right view) --------------------------
+
+// The view a link asks /plan to open (?open=plan|shutdown|needs, from Telegram's buttons), and
+// the query without it, so a reload doesn't open it again. Any other value opens nothing.
+const VIEWS = new Set(["plan", "shutdown", "needs"]);
+export function openView(search) {
+  const q = new URLSearchParams(search);
+  const v = q.get("open");
+  q.delete("open");
+  const rest = q.toString();
+  return { view: VIEWS.has(v) ? v : null, search: rest ? `?${rest}` : "" };
+}
