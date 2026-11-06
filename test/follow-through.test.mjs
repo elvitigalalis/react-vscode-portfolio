@@ -80,6 +80,16 @@ test("Didn't start: with no free slot left before shutdown, it offers Tomorrow",
   assert.deepEqual(r, { changes: [], text: "No free slot left today · OS homework", buttons: [{ text: "Tomorrow", callback_data: `tomorrow:${B(1)}` }] });
 });
 
+test("Didn't start: a tap in the night or before he's up offers no slot before 8:00", () => {
+  for (const when of ["2026-11-05T06:30:00Z", "2026-11-05T12:00:00Z"]) { // 1:30 am and 7:00 am
+    const r = handleTap({ action: "nostart", block_id: B(1) }, snapshot({ log: [] }), at(when));
+    assert.equal(r.text, "Next free slot: 8:00 am (45 min) · OS homework", when);
+  }
+  // Nor does the slot's button move it there.
+  const early = Date.parse("2026-11-05T06:45:00Z");
+  assert.equal(handleTap({ action: "move", block_id: B(1), at: early }, snapshot({ log: [] }), at("2026-11-05T06:30:00Z")).text, "That slot isn't free any more · OS homework");
+});
+
 test("move: readTap reads the slot; the tap moves the block, locks it and redoes its event", () => {
   const minute = Date.parse("2026-11-04T21:15:00Z") / 60_000;
   const update = { callback_query: { id: "q", data: `move:${B(1)}:${minute}`, message: { chat: { id: 42 }, message_id: 7 } } };
