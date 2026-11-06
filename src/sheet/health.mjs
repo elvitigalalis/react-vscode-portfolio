@@ -77,6 +77,19 @@ export function health(input, now) {
 export const healthLine = (h, issues = h.issues) => (h.green ? "Sheet: all green."
   : `Sheet: ${issues.map((i) => (i.fix ? `${i.words} (${i.fix})` : i.words)).join("; ")}.`);
 
+// What the minute tick does about the bot's webhook, from getWebhookInfo's result
+// (core.telegram.org/bots/api#getwebhookinfo: url "may be empty if webhook is not set up";
+// allowed_updates left out means the default, which includes message): "set" it again at `url`
+// (the telegram function's own address) when it is gone, "widen" it to taps and texts when it
+// asks for less, or null. research/plan-reliability.md R8: before this, a missing webhook was
+// only reported, and taps and texts stopped with no sign.
+export const HOOK_UPDATES = ["callback_query", "message"];
+export function hookAction(info, url) {
+  if (!info.url) return url ? "set" : null;
+  const allowed = info.allowed_updates;
+  return allowed && !HOOK_UPDATES.every((u) => allowed.includes(u)) ? "widen" : null;
+}
+
 // settings.health_told after a tick: the keys told before or just now (sentKeys) that are still
 // open. A key that cleared is forgotten, so if it comes back it is a new incident, told again.
 export function nextTold(told, issues, sentKeys) {

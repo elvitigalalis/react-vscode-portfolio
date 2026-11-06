@@ -3,7 +3,7 @@
 // sends (nudges.mjs). Monday 2026-10-26 in New York (EDT, UTC-4).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { health, healthLine, nextTold } from "../src/sheet/health.mjs";
+import { health, healthLine, hookAction, nextTold } from "../src/sheet/health.mjs";
 import { whatToSend } from "../src/sheet/nudges.mjs";
 
 const tz = "America/New_York";
@@ -78,6 +78,17 @@ test("health: replans paused at the daily cap with a weighty change waiting says
 test("health: a message to Claude whose retry failed too is an issue", () => {
   const h = health({ tz, unsent: [{ id: "m1" }] }, now);
   assert.deepEqual(h.issues, [{ key: "message:m1", words: "a message to Claude didn't go through", fix: "send it again" }]);
+});
+
+// ---------------------------------------------------------------- hookAction
+
+test("hookAction: a missing webhook is set again; one without texts is widened; a good one is left", () => {
+  const url = "https://ref.supabase.co/functions/v1/telegram";
+  assert.equal(hookAction({ url: "" }, url), "set");
+  assert.equal(hookAction({ url, allowed_updates: ["callback_query"] }, url), "widen");
+  assert.equal(hookAction({ url }, url), null);                                        // the default includes message
+  assert.equal(hookAction({ url, allowed_updates: ["callback_query", "message"] }, url), null);
+  assert.equal(hookAction({ url: "" }, null), null);                                    // nowhere to point it
 });
 
 // ---------------------------------------------------------------- nextTold

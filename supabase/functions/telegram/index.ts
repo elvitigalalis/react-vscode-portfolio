@@ -18,7 +18,7 @@
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
-import { health, nextTold } from "../../../src/sheet/health.mjs";
+import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
@@ -531,23 +531,28 @@ async function tap(update: unknown, now: Date) {
 }
 
 // The webhook must ask for texts as well as taps, or Telegram never delivers a text to the bot
-// (docs/sheet-messages.md, "From Telegram"). A webhook set before texts were handled asked for
-// callback_query only, so the minute tick checks it and widens it in place, keeping its URL and
-// secret. getWebhookInfo leaves allowed_updates out when it is the default, which includes
-// message. https://core.telegram.org/bots/api#getwebhookinfo, #setwebhook
-const UPDATES = ["callback_query", "message"];
-let hookChecked = false;
+// (docs/sheet-messages.md, "From Telegram"), and it must exist at all. The tick reads
+// getWebhookInfo at most every HOOK_EVERY (per isolate), and hookAction (health.mjs) says what to
+// fix: a webhook that is gone is set again at this function's own address (the URL
+// tools/sheet-setup.sh registers, SUPABASE_URL + /functions/v1/telegram) with the same secret;
+// one set before texts were handled is widened in place. The info goes to the health check
+// (url, pending_update_count, last_error_date). https://core.telegram.org/bots/api#getwebhookinfo,
+// #setwebhook
+const HOOK_URL = env("SUPABASE_URL") ? `${env("SUPABASE_URL")}/functions/v1/telegram` : null;
+const HOOK_EVERY = 10 * 60_000;
+let hookSeen: { at: number; info: Record<string, unknown> } | null = null;
 async function ensureWebhook() {
-  if (hookChecked || !WEBHOOK_SECRET) return "checked";
-  const info = await telegram("getWebhookInfo", {});
-  const allowed: string[] | undefined = info.allowed_updates;
-  if (!info.url || !allowed || UPDATES.every((u) => allowed.includes(u))) {
-    hookChecked = true;
-    return info.url ? "ok" : "no webhook";
+  if (!WEBHOOK_SECRET) return "no secret";
+  if (hookSeen && Date.now() - hookSeen.at < HOOK_EVERY) return hookSeen.info;
+  let info = await telegram("getWebhookInfo", {});
+  const action = hookAction(info, HOOK_URL);
+  if (action) {
+    await telegram("setWebhook", { url: action === "set" ? HOOK_URL : info.url, secret_token: WEBHOOK_SECRET, allowed_updates: HOOK_UPDATES });
+    info = { ...(await telegram("getWebhookInfo", {})), fixed: action };
   }
-  await telegram("setWebhook", { url: info.url, secret_token: WEBHOOK_SECRET, allowed_updates: UPDATES });
-  hookChecked = true;
-  return "widened";
+  const kept = { url: info.url, pending_update_count: info.pending_update_count, last_error_date: info.last_error_date, ...(info.fixed ? { fixed: info.fixed } : {}) };
+  hookSeen = { at: Date.now(), info: kept };
+  return kept;
 }
 
 async function telegram(method: string, body: unknown) {
