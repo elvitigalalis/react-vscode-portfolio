@@ -5,12 +5,12 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
+  eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
-import { wakeProfile, windowStart } from "./sleep.mjs";
-import { bedtimeFor, bedtimeMarker, ouraWindow, tonight } from "./bedtime.mjs";
+import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
+import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
 import { chipsLabel, dayChips, lateNap } from "./oura-day.mjs";
 import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
@@ -94,12 +94,30 @@ export const dayStart = (day) => (state.sleep.length
   ? windowStart(day, new Date(), SHEET.timeZone, wakeProfile(state.sleep, new Date(), SHEET.timeZone), clock(SHEET.dayStartAt))
   : clock(SHEET.dayStartAt));
 
+// The day's shutdown line in minutes: his, else when wind-down starts (bedtime.mjs, shutdownFor).
+// Here rather than in plan-today.mjs, which re-exports it, so capacity can end at it.
+export const shutdownAt = (d) => clock(shutdownFor(d, { line: state.days[d]?.shutdown_at, settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz: SHEET.timeZone }));
+
 // Time for tasks on a day: the workload cap, or less when his events leave less free time
-// between the day's start (9:30 am, or after his wake) and 10 pm (on today, from now).
+// between the day's start (9:30 am, or after his wake) and its shutdown line (on today, from
+// now). It ended at a fixed 10 pm (SHEET.dayEndAt) before; his evenings run to 11 pm.
 export function dayCapacity(day) {
   const from = Math.max(dayStart(day), day === state.today ? now().minutes : 0);
-  const free = freeMinutes(eventsOn(day), from, clock(SHEET.dayEndAt));
+  const free = freeMinutes(eventsOn(day), from, shutdownAt(day));
   return { free, capacity: Math.min(workloadCap(), free) };
+}
+
+// The window the day strip and Plan today's timeline draw (glance.mjs, dayWindow): from when
+// the day opens (sleep.mjs planStart, the wake-based start not held to now, so this morning
+// stays in view) to an hour past shutdown, grown to hold the day's blocks and timed events.
+// `events` defaults to the week's; Plan today passes the ones it read for the day.
+export function windowOn(day, events = eventsOn(day)) {
+  const tz = SHEET.timeZone;
+  const open = state.sleep.length ? planStart(day, new Date(), tz, wakeProfile(state.sleep, new Date(), tz), clock(SHEET.dayStartAt)) : clock(SHEET.dayStartAt);
+  const span = (x) => ({ start: minutesOn(x.starts_at, day, tz), end: minutesOn(x.ends_at, day, tz) });
+  const spans = [...events.filter((e) => !e.allDay && e.busy !== false).map(span), ...state.blocks.map(span).filter((s) => s.start >= 0 && s.start < 1440)]
+    .filter((s) => s.end > 0 && s.start < 1440 && !(s.start <= 0 && s.end >= 1440));
+  return dayWindow(open, shutdownAt(day), spans);
 }
 const lastPosition = (siblings) => (siblings.length ? siblings[siblings.length - 1].position : null);
 

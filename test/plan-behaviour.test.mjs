@@ -28,3 +28,22 @@ test("feedAlert: a not-connected feed (ok null) is never stale; a failed one is 
 test("feedAlert: without a now, only failed reads count (the old contract)", () => {
   assert.deepEqual(feedAlert([row("gmail", "2020-01-01T00:00:00Z")]), []);
 });
+
+// ---------------------------------------------------------------- dayWindow
+
+test("dayWindow: from the day's open to shutdown + 1 h, on whole hours", async () => {
+  const { dayWindow } = await import("../src/sheet/glance.mjs");
+  // Opens 12:45 pm, shutdown 11 pm: 12 pm to midnight, so an 11:30 pm block shows.
+  assert.deepEqual(dayWindow(12 * 60 + 45, 23 * 60), { from: 12 * 60, to: 24 * 60 });
+  // Shutdown 10:20 pm ends the window at 11:20, rounded up to 12 am.
+  assert.deepEqual(dayWindow(9 * 60 + 30, 22 * 60 + 20), { from: 9 * 60, to: 24 * 60 });
+});
+
+test("dayWindow: grows to hold anything already on the day", async () => {
+  const { dayWindow } = await import("../src/sheet/glance.mjs");
+  // A 10 am class before a 1 pm open, and an 11:30 pm–12:15 am block after a 5 pm shutdown.
+  assert.deepEqual(dayWindow(13 * 60, 17 * 60, [{ start: 10 * 60, end: 11 * 60 }, { start: 23 * 60 + 30, end: 24 * 60 + 15 }]),
+    { from: 10 * 60, to: 25 * 60 });
+  // All-day spans (0 to 1440) are not passed in; a span starting before midnight is clipped at 0.
+  assert.deepEqual(dayWindow(13 * 60, 17 * 60, [{ start: -30, end: 30 }]), { from: 0, to: 18 * 60 });
+});
