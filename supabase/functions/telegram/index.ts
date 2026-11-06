@@ -183,9 +183,10 @@ async function replanTick(now: Date) {
   if (shouldRetryMorning({ settings, day, proposals, replans }, now)) return { retry: await fireOnce(today, [MORNING_RETRY], {}, [], "morning", now) };
   const state = replanState({ settings, day, today, proposals, replans, sleep, sleepTimes });
   const r = shouldReplan(changes, state, now) as
-    { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
+    { fire: boolean; hold?: string; until?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
   // At the cap, the health check hears how many ran and whether a weighty change waits.
-  if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : { hold: r.hold };
+  // Backing off a failed fire (replan.mjs, failedUntil), the health line says until when.
+  if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : r.hold === "fire_failed" ? { hold: r.hold, until: r.until } : { hold: r.hold };
   return { fired: await fireOnce(today, r.reasons, r.counts, r.ids, "replan", now) };
 }
 

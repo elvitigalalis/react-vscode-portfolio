@@ -65,6 +65,7 @@ test("replanState: plans today, the last plan and the shutdown line from today's
     seen_until: "2026-11-04T15:05:00.000Z",
     closed: false,
     last_edit_at: "2026-11-04T14:00:00Z",
+    failed_at: [],
   });
   const none = replanState({ settings: { ...settings, plan_edited_at: null }, day: null, proposals: [], replans: [] });
   assert.equal(none.shutdown, "17:00");
@@ -242,4 +243,25 @@ test("replanState: the retry's own row doesn't count as a second plan beside the
   const s = replanState({ settings, day: null, proposals, replans });
   assert.equal(s.plans_today, 1);
   assert.equal(s.last_plan_at, "2026-11-04T11:50:00.000Z");
+});
+
+// A failed (non-429) fire unties its changes, and a failed row counts for neither the cap nor
+// the last plan, so before the back-off the next minute fired the same changes again.
+test("shouldReplan: a failed fire backs off 15 minutes, and two failures hold the rest of the hour", async () => {
+  const { shouldReplan, replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const proposals = [{ rev: 1, status: "approved", run_trigger: "morning", created_at: "2026-11-04T10:00:00Z" }];
+  const changes = [{ id: "c1", at: "2026-11-04T15:00:00Z", kind: "busy", reason: "busy_overlap", weight: 10 }];
+  const state = (replans) => replanState({ settings, day: null, today: "2026-11-04", proposals, replans });
+  const failedAt = (at) => ({ at, result: "failed", reasons: ["busy_overlap"] });
+  // One failure at 11:01 am: held until 11:16, then free to try again.
+  const one = state([failedAt("2026-11-04T16:01:00Z")]);
+  assert.deepEqual(shouldReplan(changes, one, new Date("2026-11-04T16:02:00Z")), { fire: false, hold: "fire_failed", until: "2026-11-04T16:16:00.000Z" });
+  assert.equal(shouldReplan(changes, one, new Date("2026-11-04T16:16:00Z")).fire, true);
+  // Two within the hour: no third try until an hour after the first.
+  const two = state([failedAt("2026-11-04T16:01:00Z"), failedAt("2026-11-04T16:16:00Z")]);
+  assert.deepEqual(shouldReplan(changes, two, new Date("2026-11-04T16:40:00Z")), { fire: false, hold: "fire_failed", until: "2026-11-04T17:01:00.000Z" });
+  assert.equal(shouldReplan(changes, two, new Date("2026-11-04T17:01:00Z")).fire, true);
+  // A 429 is held by its own retry_after (rateLimited), not this.
+  assert.equal(shouldReplan(changes, state([{ at: "2026-11-04T16:01:00Z", result: "rate_limited" }]), new Date("2026-11-04T16:02:00Z")).fire, true);
 });
