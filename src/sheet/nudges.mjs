@@ -54,7 +54,8 @@ const planUrl = (view) => `${PLAN_URL}?open=${view}`;
 // replan and horizon messages (and, in the telegram function, receipts). They still show in the
 // chat and badge the app.
 const SILENT_KINDS = new Set(["finished", "checkin", "replan", "horizon"]);
-export const silent = (m) => SILENT_KINDS.has(m.kind);
+// A Finished? carrying the next block's start (P3, `also`) asks him to start something: it rings.
+export const silent = (m) => SILENT_KINDS.has(m.kind) && !m.also?.length;
 
 // A snapshot of the day, as the Edge Function reads it:
 //   settings  the settings row (time_zone, telegram_chat_id, nudges_on, morning_on)
@@ -87,14 +88,51 @@ export function whatToSend(snapshot, now) {
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
   let { kept, used, held } = budget(day);
   let checks = day.log.filter((n) => n.kind === "finished").length;
-  return [...due.filter((m) => {
+  return [...atBoundary(due.filter((m) => {
     if (m.kind === "finished") return checks++ < FINISHED_BUDGET;
     if (!BUDGETED.includes(m.kind) || m.kind === "snooze") return true;
     if (m.kind === "start" && kept.has(m.block_id)) held--;
     if (used + held >= BUDGET) return false;
     used++;
     return true;
-  }), ...night];
+  })), ...night];
+}
+
+// --- One message at a block boundary (research/plan-phone.md P3) ------------------------------
+// A Finished? check and the next block's start nudge due within BOUNDARY of each other go as one
+// message: the Finished? line, then "Next: " and the nudge, with the four answers in one row and
+// Done/Snooze for the next block in a second (inline_keyboard is an Array of Array of
+// InlineKeyboardButton: core.telegram.org/bots/api#inlinekeyboardmarkup). The start rides in
+// `also`, so the telegram function still claims and logs its own row: the budget, the repeat ten
+// minutes on and the Finished? at its end all work as before. Both have passed the budget here.
+export const BOUNDARY = 5 * 60_000;
+function atBoundary(list) {
+  const out = [...list];
+  for (const f of list.filter((m) => m.kind === "finished")) {
+    const s = out.find((m) => m.kind === "start" && Math.abs(Date.parse(m.send_at) - Date.parse(f.send_at)) <= BOUNDARY);
+    if (!s) continue;
+    out.splice(out.indexOf(s), 1);
+    out[out.indexOf(f)] = {
+      ...f,
+      text: `${f.text}\nNext: ${s.text}`,
+      keyboard: [f.buttons, s.buttons],
+      also: [{ kind: s.kind, block_id: s.block_id, day: s.day, send_at: s.send_at }],
+    };
+  }
+  return out;
+}
+
+// --- Dead buttons (research/plan-phone.md P5) -------------------------------------------------
+// The Telegram message ids (nudges.tg_message_id) whose buttons go once message m is out for the
+// same block: every earlier start, repeat, snooze and Finished? for it, so only the newest
+// message for a block has live buttons. For a tap, m is { block_id } and `keep` the tapped
+// message, which its own edit answers. A row sent before tg_message_id was stored has none.
+const BUTTON_KINDS = ["start", "repeat", "snooze", "finished"];
+export function deadButtons(m, log, keep = null) {
+  if (!m.block_id) return [];
+  const same = (n) => n.kind === m.kind && Date.parse(n.send_at) === Date.parse(m.send_at);
+  return (log ?? []).filter((n) => n.block_id === m.block_id && BUTTON_KINDS.includes(n.kind) && n.sent_at && n.tg_message_id != null
+    && n.tg_message_id !== keep && !same(n)).map((n) => n.tg_message_id);
 }
 
 // --- Wind-down (docs/sheet-v5.md, "Wind-down") -----------------------------------------------
@@ -651,6 +689,9 @@ export function readTap(update, settings) {
   // Didn't start's slot button: "move:<block id>:<the slot's start, in minutes since the epoch>".
   const [, moved, minute] = /^move:([^:]+):(\d{1,9})$/.exec(q.data ?? "") ?? [];
   if (moved) return UUID.test(moved) ? { action: "move", block_id: moved, at: Number(minute) * 60_000, ...from } : null;
+  // P6: Today's Done on a task: "td:<task id>".
+  const [, taskDone] = /^td:(.+)$/.exec(q.data ?? "") ?? [];
+  if (taskDone) return UUID.test(taskDone) ? { action: "taskdone", task_id: taskDone, ...from } : null;
   const [, action, block_id] = /^(done|snooze|finished|more|nostart|tomorrow):(.+)$/.exec(q.data ?? "") ?? [];
   if (!action || !UUID.test(block_id)) return null;
   return { action, block_id, ...from };
@@ -661,7 +702,7 @@ export const planTap = (tap) => tap.action === "pa" || tap.action === "ps";
 
 // A nudge from an earlier day can name a block outside today's snapshot. The webhook then adds
 // that block, its task's other blocks and its task before handleTap runs.
-export const needsTappedBlock = (snapshot, tap) => !planTap(tap) && !snapshot.blocks.some((b) => b.id === tap.block_id);
+export const needsTappedBlock = (snapshot, tap) => !planTap(tap) && tap.action !== "taskdone" && !snapshot.blocks.some((b) => b.id === tap.block_id);
 
 const DONE = "✓ Done";
 const GONE = "That block is no longer on the plan.";
@@ -678,6 +719,11 @@ const GONE = "That block is no longer on the plan.";
 // snapshot's `proposal` is for a plan tap (see planDecision).
 export function handleTap(tap, snapshot, now) {
   if (planTap(tap)) return planDecision(tap, snapshot);
+  if (tap.action === "taskdone") {
+    const t = snapshot.tasks.find((x) => x.id === tap.task_id);
+    if (!t) return { changes: [], text: "That task is no longer on the plan." };
+    return t.done ? { changes: [], text: DONE } : { changes: done(t, snapshot, now).changes, text: `${DONE} · ${t.title}` };
+  }
   const b = snapshot.blocks.find((x) => x.id === tap.block_id);
   const task = b && snapshot.tasks.find((t) => t.id === b.task_id);
   // A block deleted or moved off the plan since its nudge went out: nothing left to act on.
@@ -777,16 +823,18 @@ const FINISHED_ANSWERS = {
   },
   // Thirty minutes more, when nothing approved or busy takes them and they end by quiet hours.
   // Proposed blocks don't count as taken. The next Finished? follows at the new end.
-  more(b, task, snapshot) {
+  // P6's +15 min key passes tap.minutes.
+  more(b, task, snapshot, now, tap) {
     const tz = snapshot.settings.time_zone;
     const from = Date.parse(b.ends_at);
-    const to = from + MORE_TIME;
+    const extra = tap?.minutes ? tap.minutes * 60_000 : MORE_TIME;
+    const to = from + extra;
     const ends_at = new Date(to).toISOString();
     const on = localNow(new Date(b.starts_at), tz).day;
     if (minutesOn(ends_at, on, tz) > QUIET_FROM) return { changes: [], text: `Too close to quiet hours · ${task.title}` };
     const taken = [...(snapshot.busy ?? []), ...snapshot.blocks.filter((x) => x.id !== b.id && !x.proposed)]
       .some((x) => Date.parse(x.starts_at) < to && Date.parse(x.ends_at) > from);
-    if (taken) return { changes: [], text: `The next 30 min aren't free · ${task.title}` };
+    if (taken) return { changes: [], text: `The next ${extra / 60_000} min aren't free · ${task.title}` };
     const pending = b.gcal_id ? [{ table: "gcal_pending", insert: { gcal_id: b.gcal_id, ends_at } }] : [];
     return { changes: [{ table: "blocks", id: b.id, update: { ends_at } }, ...pending], text: `More time: until ${formatClock(minutesOn(ends_at, on, tz))} · ${task.title}` };
   },
@@ -837,3 +885,66 @@ const FINISHED_ANSWERS = {
     return { changes, text: `Moved to tomorrow · ${task.title}` };
   },
 };
+
+// --- The thumb keyboard (research/plan-phone.md P6) -------------------------------------------
+// A persistent reply keyboard under the chat: ReplyKeyboardMarkup with is_persistent ("always
+// show the keyboard when the regular keyboard is hidden") and resize_keyboard (fit two rows, not
+// the letter keyboard's height): core.telegram.org/bots/api#replykeyboardmarkup. A key sends its
+// label as a text, which capture.mjs's readKey takes before readText, so a label never reaches
+// Claude. The telegram function sends it once (settings.keys_sent_at) and on /start or /keys.
+export const KEY_LABELS = { Now: "now", Done: "done", "+15 min": "more15", Today: "today" };
+export const KEYBOARD = { keyboard: [Object.keys(KEY_LABELS).map((text) => ({ text }))], is_persistent: true, resize_keyboard: true };
+const TODAY_MAX = 8;
+
+// What a key does, against the same snapshot as a tap: { changes, text, keyboard?, block_id? },
+// keyboard being inline rows for the answer and block_id the block it acted on (its older
+// messages lose their buttons: deadButtons).
+//   now     the pinned Now line, with the running block's Done and Snooze
+//   done    the running block's task done, as the Done tap
+//   more15  15 more minutes on the running block, or one that ended under FINISHED_LATE ago
+//   today   today's open tasks, a Done button each (td:<task id>)
+//   keys    the keyboard again
+export function keyStep(key, snapshot, now) {
+  const t = now.getTime();
+  const open = (b) => !b.proposed && snapshot.tasks.some((x) => x.id === b.task_id && !x.done);
+  const blocks = [...snapshot.blocks].filter(open).sort((x, y) => Date.parse(x.starts_at) - Date.parse(y.starts_at));
+  const on = blocks.find((b) => Date.parse(b.starts_at) <= t && t < Date.parse(b.ends_at));
+  if (key === "keys") return { changes: [], text: "Shortcuts are on: Now · Done · +15 min · Today.", reply: KEYBOARD };
+  if (key === "now") return { changes: [], ...(on ? { block_id: on.id } : {}), text: nowText(snapshot, now), keyboard: on ? [tapButtons(on.id)] : [] };
+  if (key === "done") {
+    if (!on) return { changes: [], text: "Nothing is on right now." };
+    const r = handleTap({ action: "done", block_id: on.id }, snapshot, now);
+    const title = snapshot.tasks.find((x) => x.id === on.task_id).title;
+    return { changes: r.changes, block_id: on.id, text: `${DONE} · ${title}` };
+  }
+  if (key === "more15") {
+    const b = on ?? blocks.filter((x) => Date.parse(x.ends_at) <= t && t < Date.parse(x.ends_at) + FINISHED_LATE).at(-1);
+    if (!b) return { changes: [], text: "Nothing is on right now." };
+    const r = handleTap({ action: "more", block_id: b.id, minutes: 15 }, snapshot, now);
+    return { changes: r.changes, block_id: b.id, text: r.text };
+  }
+  if (key === "today") {
+    const tz = snapshot.settings.time_zone;
+    const { day: today } = localNow(now, tz);
+    const first = (task) => blocks.find((b) => b.task_id === task.id && localNow(new Date(b.starts_at), tz).day === today);
+    const left = snapshot.tasks.filter((x) => x.day === today && !x.done)
+      .map((x) => ({ x, b: first(x) }))
+      .sort((p, q) => (p.b ? Date.parse(p.b.starts_at) : Infinity) - (q.b ? Date.parse(q.b.starts_at) : Infinity));
+    if (!left.length) return { changes: [], text: "Nothing left today." };
+    const lines = left.map(({ x, b }) => (b ? `${formatClock(localNow(new Date(b.starts_at), tz).minutes)} · ${x.title}` : x.title));
+    return {
+      changes: [],
+      text: [`Today: ${left.length} left.`, ...lines.slice(0, TODAY_MAX)].join("\n"),
+      keyboard: left.slice(0, TODAY_MAX).map(({ x }) => [{ text: `Done: ${String(x.title).slice(0, 30).trim()}`, callback_data: `td:${x.id}` }]),
+    };
+  }
+  return { changes: [], text: "" };
+}
+
+// Whether the tick sends the keyboard now: once ever (settings.keys_sent_at, null until sent;
+// absent before its column exists, and then never), while he's up, as the pinned message.
+export function keysDue(snapshot, now) {
+  if (!telegramOn(snapshot.settings) || !("keys_sent_at" in snapshot.settings) || snapshot.settings.keys_sent_at) return false;
+  const day = dayOf(snapshot, now);
+  return day.minutes >= day.openAt && day.minutes < QUIET_FROM;
+}
