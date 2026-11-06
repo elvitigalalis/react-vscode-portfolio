@@ -2181,6 +2181,13 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function sheet_checks() from public, anon, authenticated;
 grant execute on function sheet_checks() to service_role;
+-- tools/verify-sheet-v5.sh reads it through `supabase db query --read-only`, as this role: names and
+-- counts only. The role exists on Supabase, not in local Docker.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') then
+    grant execute on function sheet_checks() to supabase_read_only_user;
+  end if;
+end $$;
 
 -- --- The look-back (docs/sheet-lookback.md) ----------------------------------------------------
 -- When a task was finished. updated_at changes on any edit, so it can't say. Set when done flips
