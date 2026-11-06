@@ -4,6 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { planHorizon } from "../src/sheet/horizon.mjs";
 import { horizonInput, horizonQueries } from "../src/sheet/horizon-io.mjs";
+import { checkAnswers } from "../src/sheet/messages.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -67,4 +68,36 @@ test("horizonInput: a step carries its project and position; other tasks don't",
   assert.deepEqual(by, { s1: ["p", 1], s2: ["p", 2], x: [undefined, undefined] });
   assert.ok(!("project" in input.tasks.find((t) => t.id === "x")));
   assert.match(horizonQueries("2026-11-05", "America/New_York").tasks.select, /\bproject_id\b.*\bstep\b/);
+});
+
+// ---------------------------------------------------------------- answer_messages
+
+const M = "0c6a7f52-1111-4c3e-9a55-000000000001";
+const TZ = "America/New_York";
+const steps = (...mins) => mins.map((est_min, i) => ({ title: `Step ${i + 1}`, est_min }));
+const project = (over = {}) => ({ title: "CSE 416 final project", due: "2026-12-10", est_min: 900, steps: steps(120, 240, 240, 180, 120), ...over });
+const check = (projects, extra = {}) => checkAnswers({ answers: [{ id: M, tasks: [], events: [], reply: "Added it.", projects, ...extra }] }, [{ id: M }], TZ, new Date("2026-11-05T13:00:00Z"));
+
+test("checkAnswers: a project with 3 to 10 ordered steps is added as given", () => {
+  const out = check([project({ why: "15h, as given" })]);
+  assert.deepEqual(out.errors, []);
+  assert.deepEqual(out.answers[0].projects, [{ title: "CSE 416 final project", due: "2026-12-10", est_min: 900, steps: steps(120, 240, 240, 180, 120), why: "15h, as given" }]);
+  assert.deepEqual(out.answers[0].tasks, []);
+});
+
+test("checkAnswers: an answer without projects has no projects field", () => {
+  assert.ok(!("projects" in check(undefined).answers[0]));
+});
+
+test("checkAnswers: a project's steps are 3 to 10, each 30 to 240 minutes, summing near its estimate", () => {
+  const errs = (p) => check([project(p)]).errors.join("\n");
+  assert.match(errs({ steps: steps(450, 450) }), /projects\[0\]\.steps: 3 to 10 steps/);
+  assert.match(errs({ steps: steps(...Array(11).fill(90)) }), /projects\[0\]\.steps: 3 to 10 steps/);
+  assert.match(errs({ steps: steps(300, 300, 300) }), /steps\[0\]\.est_min: must be 30 to 240/);
+  assert.match(errs({ steps: steps(60, 60, 60) }), /add up to 180 minutes, too far from est_min 900/);
+  assert.match(errs({ due: null }), /projects\[0\]\.due: must be a date/);
+  assert.match(errs({ steps: [{ title: "", est_min: 60 }, ...steps(240, 240, 240)] }), /steps\[0\]\.title/);
+  assert.match(check(Array(4).fill(project())).errors.join(), /projects: at most 3/);
+  // 20% either way is near enough.
+  assert.deepEqual(check([project({ steps: steps(240, 240, 240) })]).errors, []);
 });

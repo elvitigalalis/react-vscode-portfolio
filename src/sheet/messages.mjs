@@ -129,6 +129,37 @@ function eventRow(e, name, timeZone, errors) {
   return { title, starts_at: starts, ends_at: new Date(Date.parse(starts) + minutes * 60_000).toISOString(), ...why };
 }
 
+// Projects (docs/sheet-projects.md): a due date and a total estimate made of 3 to 10 ordered
+// steps, each 30 to 240 minutes, that add up to within 20% of the estimate.
+export const MAX_PROJECTS = 3;
+export const PROJECT_STEPS = [3, 10];
+export const STEP_MIN = [30, 240];
+export const PROJECT_MIN = [60, 6000];
+const NEAR = 0.2;
+
+// One project: { title, due, est_min, steps: [{ title, est_min }], why? }, or null with errors pushed.
+function projectRow(p, name, errors) {
+  const before = errors.length;
+  const title = text(p?.title, `${name}.title`, 120, errors);
+  const due = p?.due ?? null, est = p?.est_min ?? null;
+  if (!isDate(due)) errors.push(`${name}.due: must be a date "YYYY-MM-DD"`);
+  if (!Number.isInteger(est) || est < PROJECT_MIN[0] || est > PROJECT_MIN[1]) errors.push(`${name}.est_min: must be ${PROJECT_MIN[0]} to ${PROJECT_MIN[1]} minutes, the whole project`);
+  const items = Array.isArray(p?.steps) ? p.steps : [];
+  if (items.length < PROJECT_STEPS[0] || items.length > PROJECT_STEPS[1]) errors.push(`${name}.steps: ${PROJECT_STEPS[0]} to ${PROJECT_STEPS[1]} steps, in order, got ${items.length}`);
+  const steps = items.map((x, i) => {
+    const t = text(x?.title, `${name}.steps[${i}].title`, 120, errors);
+    if (!Number.isInteger(x?.est_min) || x.est_min < STEP_MIN[0] || x.est_min > STEP_MIN[1]) errors.push(`${name}.steps[${i}].est_min: must be ${STEP_MIN[0]} to ${STEP_MIN[1]} minutes`);
+    return { title: t, est_min: x?.est_min };
+  });
+  const total = steps.reduce((n, x) => n + (Number.isInteger(x.est_min) ? x.est_min : 0), 0);
+  if (Number.isInteger(est) && steps.length && Math.abs(total - est) > NEAR * est) {
+    errors.push(`${name}.steps: add up to ${total} minutes, too far from est_min ${est} (keep within 20%)`);
+  }
+  const why = whyOf(p, name, errors);
+  if (errors.length > before) return null;
+  return { title, due, est_min: est, steps, ...why };
+}
+
 // A list field of at most `max` items, or [] with an error pushed.
 function many(value, name, max, errors) {
   const items = list(value);
@@ -137,7 +168,7 @@ function many(value, name, max, errors) {
   return items;
 }
 
-// The checks answer_messages runs on `input` ({ answers: [{ id, tasks, events, reply }] })
+// The checks answer_messages runs on `input` ({ answers: [{ id, tasks, events, projects?, reply }] })
 // against the pending messages ({ id }), with local times in `timeZone`. Each problem is its own
 // error, naming its field, and makes only its own answer fail: `answers` holds the others,
 // shaped for answer_message (supabase/schema.sql), with events as { title, starts_at, ends_at }.
@@ -158,8 +189,9 @@ export function checkAnswers(input, pending, timeZone, now = new Date()) {
     seen.add(a?.id);
     const tasks = many(a?.tasks, `${name}.tasks`, MAX_TASKS, errors).map((t, j) => taskRow(t, `${name}.tasks[${j}]`, errors, today));
     const events = many(a?.events, `${name}.events`, MAX_EVENTS, errors).map((e, j) => eventRow(e, `${name}.events[${j}]`, timeZone, errors));
+    const projects = many(a?.projects, `${name}.projects`, MAX_PROJECTS, errors).map((p, j) => projectRow(p, `${name}.projects[${j}]`, errors));
     const reply = text(a?.reply, `${name}.reply`, MAX_REPLY, errors);
-    if (errors.length === before) answers.push({ id: a.id, tasks, events, reply });
+    if (errors.length === before) answers.push({ id: a.id, tasks, events, reply, ...(projects.length ? { projects } : {}) });
   });
   return { errors, answers };
 }
