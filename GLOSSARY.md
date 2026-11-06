@@ -57,6 +57,10 @@ _Avoid_: Version, draft, new plan
 A revision made during the day because something changed. It plans only from now until shutdown.
 _Avoid_: Re-run, refresh, update
 
+**Catch-up**:
+A replan with only new items behind it (mail, Slack, campus, course and the like), five hours after the last plan at the soonest. Until then those items wait for a replan that fires for another reason.
+_Avoid_: Refresh, sweep
+
 **Locked block**:
 An approved block, other than an auto block not yet started. A replan never moves it or removes it.
 _Avoid_: Pinned block, fixed block, confirmed block

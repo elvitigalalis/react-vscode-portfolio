@@ -227,20 +227,30 @@ weather_cache id boolean pk default true check (id), point text not null,
     order, once each, leaving out `settings.gcal_calendar_id` ("Time blocks").
 - `freeBusyRows(response, now, blocksCalendar)` returns `{ rows, failed }`.
   - `rows` are `[{ starts_at, ends_at }]` from every calendar's `busy` list except
-    `blocksCalendar`. They are `toISOString()` UTC, clipped to nothing: kept whole when they
-    overlap `now` to `now` + 7 days, dropped otherwise, once per pair, sorted by start then end.
-    Spans are not merged, as `busyRows` doesn't merge them.
+    `blocksCalendar`. They are `toISOString()` UTC, as Google gives them, dropped when they
+    don't overlap `now` to `now` + 7 days, once per pair, sorted by start then end. Google cuts
+    each span to the query's range, so a row can start at `now` or end at `now` + 7 days. Spans
+    are not merged, as `busyRows` doesn't merge them.
   - `failed` lists the calendar ids whose entry has `errors`, in response order. A failed
     calendar adds no rows.
   - **Decided:** all-day events count as busy here, since free/busy can't tell them apart. Events
     marked free never appear in free/busy.
-- `busyChange(before, after, blocks, now, timeZone)` returns one `changes` row
-  `{ kind: 'busy', reason, weight, ref: null }`, or null when `after` equals `before` as sets:
-  - `busy_overlap`, weight 10: a span in `after` and not in `before` overlaps a block (approved
-    or proposed) today that ends after `now`;
-  - `time_freed`, weight 4: otherwise, when busy minutes from `now` to midnight today fell by 60
-    or more;
-  - `busy_change`, weight 2: otherwise.
+- `busyChange(before, after, blocks, now, timeZone, shutdown)` returns one `changes` row
+  `{ kind: 'busy', reason, weight, ref: null }`, or null when nothing changed that could change
+  the rest of today's plan. `shutdown` is today's line, `"HH:MM"` (`shutdownFor`), or midnight
+  without one.
+  - **Fix:** it compares the time covered from `now` to `shutdown`, not the spans as sets. The
+    spans differ at every sync without his calendar changing: Google cuts an event in progress to
+    start at `now` and one crossing the 7-day edge to end there, and that edge takes in next
+    week's events as it moves. A weekly class wrote `busy_change` every 10 minutes for as long as
+    it lasted, and each one replanned (2026-11-05: 19:00-22:00 UTC, next Thursday's 19:00-20:20
+    and 20:30-22:00).
+  - `busy_overlap`, weight 10: a span in `after` has time on a block (approved or proposed) today
+    that ends after `now`, from `now` on, that `before` didn't cover;
+  - `time_freed`, weight 4: otherwise, when busy minutes from `now` to `shutdown` fell by 60 or
+    more;
+  - `busy_change`, weight 2: otherwise, when the time covered from `now` to `shutdown` differs. A
+    change wholly outside that window makes no row; the next plan reads `busy` as it stands.
 
 #### `replan.mjs`, new (R1)
 
@@ -285,9 +295,27 @@ weather_cache id boolean pk default true check (id), point text not null,
     `lapsed`, which apply_proposal would refuse anyway), `after_shutdown` (at or after the shutdown line), `daily_cap`
     (`plans_today` ≥ 8), `too_soon` (under 60 minutes since `last_plan_at`), `editing` (under 10
     minutes since `last_edit_at`).
-  - Then the rules, over the changes left: fire when one has weight ≥ 8; or the weights add to
-    ≥ 4 and the oldest is ≥ 15 minutes old; or any is ≥ 45 minutes old. With no changes, `hold`
-    is `nothing`; with changes and no rule met, `waiting`.
+  - Then the rules, over the changes left. A fire is a full Claude run, so it needs a reason that
+    can change today's plan:
+    - fire when one has weight ≥ 8 (`busy_overlap`, `woke_late`, `course_due_soon`, `mail_owed`,
+      `github_due_soon`, `jira_due_soon`);
+    - or one that isn't quiet (`time_freed`, `busy_change`) is ≥ 15 minutes old, so a burst of
+      calendar edits lands in one run;
+    - or, for the quiet reasons (`mail_new`, `slack_new`, `campus_change`, `course_change`,
+      `github_change`, `jira_change`, `handshake_change`): the last plan is ≥ 5 hours ago (with no
+      plan today, the oldest change is) and the oldest change is ≥ 15 minutes old. Otherwise they
+      wait and ride along on the next fire, whose `ids` take every change left.
+
+    Why 5 hours: Needs you only gets new mail triaged by a run, and midday and late afternoon are
+    fresh enough. From a morning plan near 6 am that is two catch-ups before a 5-11 pm shutdown,
+    where 4 hours is three and 6 leaves mail untriaged until after lunch. Slack mentions reach
+    Needs you without a run (slack-sync). `mail_owed` stays at once: a known sender is waiting,
+    and the run drafts the reply.
+
+    With no changes, `hold` is `nothing`; with changes and no rule met, `waiting`.
+  - A message Lisul sends starts its own run (docs/sheet-messages.md) and never passes through
+    here. A revision it makes is `run_trigger` `replan` with empty `reasons`, as no change started
+    it, and marks the changes it read consumed.
   - On fire: `reasons` are the distinct reasons, highest weight first, then by name; `counts` is
     `{ kind: n }` for the kinds present; `ids` are the changes' ids.
 - The fire text is routine-fire.mjs's `fireText("replan", counts)` (R0, landed), built from
@@ -688,7 +716,7 @@ weather_cache id boolean pk default true check (id), point text not null,
   requires `calendar.freebusy`, and freebusy.query works the same with the wider grant.
 - **busy-sync** refreshes the token, posts `freeBusyRequest`, then in one call replaces the
   `calendar` busy rows from now to 7 days ahead with `freeBusyRows`, stamps `busy_as_of`, and
-  writes `busyChange`'s row. A refused refresh sets `calendar_account.last_error` and a failed
+  writes `busyChange`'s row, given today's shutdown line. A refused refresh sets `calendar_account.last_error` and a failed
   `freebusy` feed, which raises the feed alert. The browser save stays, and replaces only
   `source = 'calendar'` rows.
 - **mail-sync** calls `users.history.list` from `history_id` (a 404 resets it from

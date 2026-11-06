@@ -2,7 +2,8 @@
 // from Google's free/busy data every 10 minutes (supabase/schema.sql, "sheet-busy"), whether or
 // not /plan is open. It refreshes the calendar grant's token, posts freeBusyRequest to
 // freebusy.query, and in one call (busy_sync_save) replaces the calendar busy rows from now to
-// 7 days ahead with freeBusyRows, stamps busy_as_of and writes busyChange's row. Start and end
+// 7 days ahead with freeBusyRows, stamps busy_as_of and writes busyChange's row, if the time busy
+// between now and today's shutdown line changed. Start and end
 // only: free/busy carries no titles. src/sheet/freebusy.mjs, which the tests cover, decides all
 // of it; this file does the calls and records the run in feed_state as 'freebusy'.
 //
@@ -17,7 +18,9 @@
 //
 // Secrets: SHEET_CRON_SECRET, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET. The refresh token comes
 // from Vault (calendar_refresh_token) and is never logged or written anywhere.
+import { shutdownFor } from "../../../src/sheet/bedtime.mjs";
 import { busyChange, freeBusyRequest, freeBusyRows } from "../../../src/sheet/freebusy.mjs";
+import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 import { googleToken, refusedWhy } from "../_shared/google.ts";
 
@@ -62,7 +65,7 @@ async function sync(refresh: string, now: Date) {
   const { ok, status, grant } = await googleToken({ refresh_token: refresh, grant_type: "refresh_token" });
   if (!ok) throw new Refused(refusedWhy(status, grant));
 
-  const [settings] = await db("settings?select=owner_email,time_zone,gcal_calendar_id,calendars");
+  const [settings] = await db("settings?select=*");
   const body = freeBusyRequest(settings, now);
   const res = await fetch(FREEBUSY_URL, {
     method: "POST",
@@ -79,7 +82,17 @@ async function sync(refresh: string, now: Date) {
     `&starts_at=lt.${encodeURIComponent(new Date(+now + 2 * 86_400_000).toISOString())}`);
   // PostgREST hands timestamps back in its own format; freeBusyRows' are toISOString().
   const iso = (r: { starts_at: string; ends_at: string }) => ({ starts_at: new Date(r.starts_at).toISOString(), ends_at: new Date(r.ends_at).toISOString() });
-  const change = busyChange(before.map(iso), rows, blocks, now, settings.time_zone);
+  // The shutdown line ends the plan's window, as in the replan tick (bedtime.mjs, shutdownFor);
+  // none of Oura's rows until its schema ran.
+  const tz = settings.time_zone;
+  const { day: today } = localNow(now, tz);
+  const [[day = null], sleep, sleepTimes] = await Promise.all([
+    db(`days?select=shutdown_at&day=eq.${today}`),
+    db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []),
+    db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []),
+  ]);
+  const shutdown = shutdownFor(today, { line: day?.shutdown_at, settings, sleep, sleepTimes, tz });
+  const change = busyChange(before.map(iso), rows, blocks, now, tz, shutdown);
 
   await db("rpc/busy_sync_save", {
     method: "POST",
