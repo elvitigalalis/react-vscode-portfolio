@@ -840,7 +840,7 @@ async function menuAction(kind) {
 }
 
 // One of the task menu's actions on a task (the menu, and the week's keys), then a redraw.
-async function taskAction(id, kind) {
+export async function taskAction(id, kind) {
   const run = () => runAction(id, kind);
   try { await run(); } catch (e) { failed(e, ACTION_WORDS[kind]?.replace("%s", named(state.tasks.get(id))) ?? null, run); }
   render();

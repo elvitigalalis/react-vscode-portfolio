@@ -83,3 +83,29 @@
   .sheet-planner > .sheet-message { margin-top: 1rem; }
   .sheet-message:not(:focus-within) .sheet-message-hint:not(:has([data-message-count]:not(:empty))) { display: none; }
 }
+
+/* Swipes (swipe-ui.mjs, docs/sheet.md, "On the phone"). pan-y hands sideways moves to the page and
+   keeps vertical scrolling and pinch zoom with the browser. A row's contents slide; ::before fills
+   the space they leave with what letting go will do. */
+.sheet-help-touch { display: none; }
+@media (pointer: coarse) { .sheet-help-touch { display: block; } }
+@media (max-width: 48rem) {
+  .sheet-planner :is(.sheet-day, .sheet-list) { touch-action: pan-y pinch-zoom; }
+  .sheet-evtodo { position: relative; }
+  .is-swiping { overflow: hidden; }
+  .is-swiping > * { translate: var(--swipe) 0; }
+  .is-swiping::before {
+    content: attr(data-swipe); position: absolute; top: 0; bottom: 0; left: 0; width: var(--swipe-w); overflow: hidden; display: flex; align-items: center;
+    padding-inline: 0; white-space: nowrap; text-indent: 0.75rem; font-size: 0.875rem; font-weight: 600; background: var(--chip); color: var(--fg);
+  }
+  .is-swipe-left::before { left: auto; right: 0; justify-content: flex-end; text-indent: 0; padding-inline-end: 0; }
+  .is-swipe-left::before { direction: rtl; text-indent: 0.75rem; }
+  .is-armed::before { background: var(--accent); color: var(--bg); }
+  .is-leaving { opacity: 0.5; }
+  .is-day-swiping { translate: var(--swipe) 0; }
+  .sheet-week:has(.is-day-swiping) { overflow-x: clip; }
+}
+@media (max-width: 48rem) and (prefers-reduced-motion: no-preference) {
+  :is(.sheet-task, .sheet-evtodo) > *, .sheet-day { transition: translate 0.15s ease-out; }
+  .is-swiping > *, .is-day-swiping { transition: none; }
+}
