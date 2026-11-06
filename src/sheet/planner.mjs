@@ -127,10 +127,26 @@ function setStatus(text) {
   s.textContent = text ?? "";
 }
 
-export function failed(err) {
+// A write that failed (research U9, Retry only): the status line names it when the caller says
+// what it was ("Couldn't save "Laundry" as done."), and offers Retry when it can be run again.
+// A retry that works clears the line and redraws; one that fails says so again. Called with
+// only the error (a promise's catch), it says what it always did.
+export function failed(err, what = null, retry = null) {
   console.error(err);
-  setStatus("Something did not save. Reload to see what's stored.");
+  if (!what) return setStatus("Something did not save. Reload to see what's stored.");
+  const s = $("[data-status]");
+  s.hidden = false;
+  s.replaceChildren(`Couldn't ${what}.`);
+  if (!retry) return void s.append(" Reload to see what's stored.");
+  const again = el("button", { type: "button", className: "sheet-link", textContent: "Retry" });
+  again.addEventListener("click", async () => {
+    setStatus("Trying again…");
+    try { await retry(); setStatus(null); } catch (e) { failed(e, what, retry); }
+    render();
+  });
+  s.append(" ", again);
 }
+const named = (t) => `"${t?.title ?? "the task"}"`;
 
 // --- Undo --------------------------------------------------------------------------------
 
@@ -149,7 +165,7 @@ async function undo() {
   const fn = undoFn;
   undoFn = null;
   $("[data-toast]").hidden = true;
-  if (fn) { try { await fn(); } catch (e) { failed(e); } render(); }
+  if (fn) { try { await fn(); } catch (e) { failed(e, "undo that", fn); } render(); }
 }
 
 // --- Changes -----------------------------------------------------------------------------
@@ -401,7 +417,7 @@ async function toggleEventTodo(target) {
   try {
     await saveEventTodo(key, day, { done: !row.done });
     if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
-  } catch (e) { failed(e); }
+  } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
   render();
   root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
 }
@@ -431,7 +447,7 @@ async function eventMenuAction(act) {
   try {
     await saveEventTodo(key, day, { hidden: true });
     offerUndo(`Hidden: ${row.title}`, () => saveEventTodo(key, day, { hidden: false }));
-  } catch (e) { failed(e); }
+  } catch (e) { failed(e, `hide "${row.title}"`, () => saveEventTodo(key, day, { hidden: true })); }
   render();
 }
 
@@ -764,7 +780,8 @@ function startEdit(li) {
   const finish = async (save) => {
     if (done) return;
     done = true;
-    try { if (save && input.value.trim() !== t.title) await editTask(t.id, input.value); } catch (e) { failed(e); }
+    const text = input.value;
+    try { if (save && text.trim() !== t.title) await editTask(t.id, text); } catch (e) { failed(e, `save your edit to ${named(t)}`, () => editTask(t.id, text)); }
     render();
   };
   input.addEventListener("keydown", (e) => {
@@ -791,26 +808,38 @@ function openMenu(id, anchor) {
   menu.querySelector("button").focus();
 }
 
+// What each task action is, for the status line when it fails.
+const ACTION_WORDS = { today: "move %s to today", tomorrow: "move %s to tomorrow", "next-week": "move %s to next week", "day-before": "move %s a day earlier",
+  "day-after": "move %s a day later", someday: "move %s to Someday", visibility: "change who sees %s", "clear-due": "clear the due date of %s", delete: "delete %s" };
+
 async function menuAction(kind) {
   const id = menuFor;
   $("[data-menu]").hidePopover();
   if (!id) return;
-  const today = now().day;
-  try {
-    if (kind === "today") await moveTask(id, { day: today });
-    if (kind === "tomorrow") await moveTask(id, { day: addDays(today, 1) });
-    if (kind === "next-week") await moveTask(id, { day: addDays(weekStart(today), 7) });
-    // One day either way from where it is now; a Someday task counts from today.
-    if (kind === "day-before" || kind === "day-after") {
-      await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
-    }
-    if (kind === "someday") await moveTask(id, { list: "Inbox" });
-    if (kind === "visibility") await toggleVisibility(id);
-    if (kind === "clear-due") await clearDue(id);
-    if (kind === "delete") await removeTask(id);
-  } catch (e) { failed(e); }
-  render();
+  await taskAction(id, kind);
   root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus();
+}
+
+// One of the task menu's actions on a task (the menu, and the week's keys), then a redraw.
+async function taskAction(id, kind) {
+  const run = () => runAction(id, kind);
+  try { await run(); } catch (e) { failed(e, ACTION_WORDS[kind]?.replace("%s", named(state.tasks.get(id))) ?? null, run); }
+  render();
+}
+
+async function runAction(id, kind) {
+  const today = now().day;
+  if (kind === "today") await moveTask(id, { day: today });
+  if (kind === "tomorrow") await moveTask(id, { day: addDays(today, 1) });
+  if (kind === "next-week") await moveTask(id, { day: addDays(weekStart(today), 7) });
+  // One day either way from where it is now; a Someday task counts from today.
+  if (kind === "day-before" || kind === "day-after") {
+    await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
+  }
+  if (kind === "someday") await moveTask(id, { list: "Inbox" });
+  if (kind === "visibility") await toggleVisibility(id);
+  if (kind === "clear-due") await clearDue(id);
+  if (kind === "delete") await removeTask(id);
 }
 
 // --- Drag and drop -----------------------------------------------------------------------
@@ -957,7 +986,8 @@ function wire() {
     }
     const id = li.dataset.id;
     if (e.target.closest(".sheet-check")) {
-      try { await completeTask(id, !state.tasks.get(id).done); } catch (err) { failed(err); }
+      const done = !state.tasks.get(id).done;
+      try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
     } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
@@ -990,7 +1020,10 @@ function wire() {
     }
     input.value = "";
     fitBox(input);
-    try { await addTask(text, input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list }); } catch (err) { failed(err); input.value = text; }
+    const where = input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list };
+    // On failure the text goes back in the box; Retry adds it and empties the box again.
+    const add = async () => { await addTask(text, where); input.value = ""; };
+    try { await add(); } catch (err) { failed(err, `add "${parseEntry(text, state.today).title}"`, add); input.value = text; }
     render();
   });
 

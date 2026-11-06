@@ -114,7 +114,9 @@ export function setupPlanToday(root) {
     }
   });
   actHooks.approve = async (e) => {
-    try { await saveBlock(state.blocks.find((b) => b.id === e.target.closest("[data-block]").dataset.block)); } catch (err) { failed(err); }
+    const b = state.blocks.find((x) => x.id === e.target.closest("[data-block]").dataset.block);
+    const save = () => saveBlock(b);
+    try { await save(); } catch (err) { failed(err, `approve the block for "${state.tasks.get(b.task_id)?.title ?? "the task"}"`, save); }
     render();
   };
   // Each day's header shows its planned load, coloured near and over capacity.
