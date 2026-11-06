@@ -354,7 +354,9 @@ async function receipts(now: Date) {
 // changes nothing.
 async function undo(u: { message: string; item: string; query_id: string; chat_id: number; message_id: number }, settings: { time_zone: string }) {
   const [m = null] = await db(`messages?select=*&id=eq.${u.message}`);
-  const blocks = await db(`blocks?select=id,task_id,gcal_id&task_id=eq.${u.item}`);
+  // A project's (docs/sheet-projects.md) blocks are its steps'.
+  const steps = await db(`tasks?select=id&project_id=eq.${u.item}`).catch(() => []) as { id: string }[];
+  const blocks = await db(`blocks?select=id,task_id,gcal_id&task_id=in.(${[u.item, ...steps.map((x) => x.id)].join(",")})`);
   const r = undoChanges(m, u.item, blocks) as { title: string; changes: Change[] } | null;
   for (const c of r?.changes ?? []) {
     if (c.rpc) await db(`rpc/${c.rpc}`, { method: "POST", body: JSON.stringify(c.args) });

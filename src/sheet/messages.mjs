@@ -255,12 +255,15 @@ export const proposalTrigger = (trigger) => (trigger === "message" ? "replan" : 
 
 // --- /plan -------------------------------------------------------------------------------------
 
-// "Added: 2 tasks, 1 event" under an answered message's reply; "Nothing added" for a failed one,
-// and "All undone" for one whose items were all undone.
+// "Added: 1 project, 2 tasks, 1 event" under an answered message's reply; "Nothing added" for a
+// failed one, and "All undone" for one whose items were all undone. A project counts in
+// tasks_added as one item.
 export function addedLine(m) {
   if (m.status === "failed") return "Nothing added";
   if (m.status !== "done") return "";
-  const parts = [m.tasks_added && plural(m.tasks_added, "task"), list(m.events).length && plural(m.events.length, "event")].filter(Boolean);
+  const projects = list(m.tasks).filter((t) => t.kind === "project").length;
+  const tasks = (m.tasks_added ?? 0) - projects;
+  const parts = [projects && plural(projects, "project"), tasks > 0 && plural(tasks, "task"), list(m.events).length && plural(m.events.length, "event")].filter(Boolean);
   return parts.length ? `Added: ${parts.join(", ")}` : "All undone";
 }
 
@@ -281,7 +284,10 @@ const shortDay = (day) => `${weekdayName(day)} ${dayLabel(day).date}`;
 // a to-do's day (or Inbox), fixed time and due date, and an event's day and times. id is what
 // undo_message_item takes; an event from before events had ids has none.
 export function itemLines(m, timeZone) {
-  const tasks = list(m.tasks).map((t) => ({
+  const tasks = list(m.tasks).map((t) => (t.kind === "project" ? {
+    // A project (docs/sheet-projects.md): "7 steps · due Thu Dec 10".
+    id: t.id, kind: "project", title: t.title, why: t.why ?? null, when: `${plural(t.steps, "step")} · due ${shortDay(t.due)}`,
+  } : {
     id: t.id, kind: "task", title: t.title, why: t.why ?? null,
     when: [
       t.day ? `${shortDay(t.day)}${t.at_time ? `, ${formatClock(Number(t.at_time.slice(0, 2)) * 60 + Number(t.at_time.slice(3, 5)))}` : ""}` : (t.list ?? "Inbox"),

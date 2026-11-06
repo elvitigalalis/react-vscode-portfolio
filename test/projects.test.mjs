@@ -4,7 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { planHorizon } from "../src/sheet/horizon.mjs";
 import { horizonInput, horizonQueries } from "../src/sheet/horizon-io.mjs";
-import { checkAnswers } from "../src/sheet/messages.mjs";
+import { addedLine, checkAnswers, itemLines } from "../src/sheet/messages.mjs";
+import { receipt, undoChanges } from "../src/sheet/capture.mjs";
 
 const TODAY = "2026-11-05"; // a Thursday
 const days = (n, minutes = 240, from = TODAY) => Object.fromEntries(Array.from({ length: n }, (_, i) => {
@@ -100,4 +101,32 @@ test("checkAnswers: a project's steps are 3 to 10, each 30 to 240 minutes, summi
   assert.match(check(Array(4).fill(project())).errors.join(), /projects: at most 3/);
   // 20% either way is near enough.
   assert.deepEqual(check([project({ steps: steps(240, 240, 240) })]).errors, []);
+});
+
+// ---------------------------------------------------------------- the receipt and Undo
+
+const P = "0c6a7f52-2222-4c3e-9a55-000000000002";
+const T = "0c6a7f52-3333-4c3e-9a55-000000000003";
+const answered = {
+  id: M, status: "done", reply: "Added the project in 7 steps and the lab report.", tasks_added: 2, events: [],
+  tasks: [
+    { id: T, title: "Lab report", day: null, list: "Inbox", due: "2026-11-06", at_time: null },
+    { id: P, kind: "project", title: "CSE 416 final project", day: null, list: "Inbox", due: "2026-12-10", at_time: null, steps: 7, why: "15h, as given" },
+  ],
+};
+
+test("a message's receipt counts and lists a project with its steps and due date", () => {
+  assert.equal(addedLine(answered), "Added: 1 project, 1 task");
+  assert.deepEqual(itemLines(answered, TZ)[1], { id: P, kind: "project", title: "CSE 416 final project", why: "15h, as given", when: "7 steps · due Thu Dec 10" });
+  const { text, buttons } = receipt(answered, TZ);
+  assert.match(text, /^Project: CSE 416 final project · 7 steps · due Thu Dec 10$/m);
+  assert.equal(buttons[1][0].text, "Undo project: CSE 416 final project");
+});
+
+test("Undo on a project in Telegram deletes its steps' Google events, then the project", () => {
+  const blocks = [{ id: "b1", task_id: "s1", gcal_id: "g1" }, { id: "b2", task_id: "s2", gcal_id: null }];
+  assert.deepEqual(undoChanges(answered, P, blocks), {
+    title: "CSE 416 final project",
+    changes: [{ table: "gcal_pending", insert: { gcal_id: "g1", ends_at: null } }, { rpc: "undo_message_item", args: { m: M, item: P } }],
+  });
 });
