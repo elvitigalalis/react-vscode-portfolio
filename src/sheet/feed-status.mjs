@@ -42,7 +42,7 @@ async function draw(root) {
 // The top bar's Feed failed chip (docs/sheet-glance.md, change 6) shows while any feed's last
 // read failed, and opens Settings (data-act="settings").
 function chip(root, rows) {
-  const failed = feedAlert(rows);
+  const failed = feedAlert(rows, Date.now());
   const button = root.querySelector("[data-feed-alert]");
   button.hidden = !failed.length;
   button.title = `${failed.map((s) => NAMES[s] ?? s).join(" and ")} failed. Open Settings to see why`;

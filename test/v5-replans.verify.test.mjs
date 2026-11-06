@@ -335,7 +335,7 @@ const snapshot = (extra = {}) => ({
 });
 const planButtons = [
   { text: "Approve all", callback_data: "pa:2026-11-04:2" },
-  { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" },
+  { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/?open=plan" },
   { text: "Skip", callback_data: "ps:2026-11-04:2" },
 ];
 const at1006 = new Date("2026-11-04T15:06:00Z");

@@ -271,6 +271,7 @@ const revision = (rev, extra = {}) => ({
 });
 const snapshot = (extra = {}) => ({ settings, day: null, tasks, blocks: planBlocks, log: [], proposal: revision(1), needsOpen: [], campus: [], ...extra });
 const openPlan = { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" };
+const openThePlan = { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/?open=plan" };
 const briefSent = { block_id: null, kind: "brief", day, send_at: "2026-11-04T13:00:00.000Z", sent_at: "2026-11-04T13:00:01Z" };
 
 test("brief: Approve all and Skip carry the day and the revision", async () => {
@@ -279,7 +280,7 @@ test("brief: Approve all and Skip carry the day and the revision", async () => {
   assert.equal(brief.kind, "brief");
   assert.deepEqual(brief.buttons, [
     { text: "Approve all", callback_data: "pa:2026-11-04:1" },
-    openPlan,
+    openThePlan,
     { text: "Skip", callback_data: "ps:2026-11-04:1" },
   ]);
 });
@@ -291,7 +292,7 @@ test("proposal message: a morning revision 2 made after the brief carries revisi
   assert.deepEqual(out.map((m) => [m.kind, m.send_at]), [["proposal", "2026-11-04T15:42:00.000Z"]]);
   assert.deepEqual(out[0].buttons, [
     { text: "Approve all", callback_data: "pa:2026-11-04:2" },
-    openPlan,
+    openThePlan,
     { text: "Skip", callback_data: "ps:2026-11-04:2" },
   ]);
 });

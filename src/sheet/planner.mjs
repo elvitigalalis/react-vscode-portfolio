@@ -5,12 +5,12 @@ import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
-  eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes,
+  eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow, openView } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
-import { wakeProfile, windowStart } from "./sleep.mjs";
-import { bedtimeFor, bedtimeMarker, ouraWindow, tonight } from "./bedtime.mjs";
+import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
+import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
 import { chipsLabel, dayChips, lateNap } from "./oura-day.mjs";
 import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
@@ -78,6 +78,8 @@ const $ = (sel) => root.querySelector(sel);
 const now = () => localNow(new Date(), SHEET.timeZone);
 // Phones show one day at a time (sheet.css, max-width 48rem).
 export const NARROW = "(max-width: 48rem)";
+// A touch screen (research U6): words that name keys ("Press P", ⌘Z) give way to buttons.
+const COARSE = "(pointer: coarse)";
 
 const tasksOn = (day) => [...state.tasks.values()].filter((t) => t.day === day).sort(byPosition);
 const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null && t.list === list).sort(byPosition);
@@ -94,12 +96,30 @@ export const dayStart = (day) => (state.sleep.length
   ? windowStart(day, new Date(), SHEET.timeZone, wakeProfile(state.sleep, new Date(), SHEET.timeZone), clock(SHEET.dayStartAt))
   : clock(SHEET.dayStartAt));
 
+// The day's shutdown line in minutes: his, else when wind-down starts (bedtime.mjs, shutdownFor).
+// Here rather than in plan-today.mjs, which re-exports it, so capacity can end at it.
+export const shutdownAt = (d) => clock(shutdownFor(d, { line: state.days[d]?.shutdown_at, settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz: SHEET.timeZone }));
+
 // Time for tasks on a day: the workload cap, or less when his events leave less free time
-// between the day's start (9:30 am, or after his wake) and 10 pm (on today, from now).
+// between the day's start (9:30 am, or after his wake) and its shutdown line (on today, from
+// now). It ended at a fixed 10 pm (SHEET.dayEndAt) before; his evenings run to 11 pm.
 export function dayCapacity(day) {
   const from = Math.max(dayStart(day), day === state.today ? now().minutes : 0);
-  const free = freeMinutes(eventsOn(day), from, clock(SHEET.dayEndAt));
+  const free = freeMinutes(eventsOn(day), from, shutdownAt(day));
   return { free, capacity: Math.min(workloadCap(), free) };
+}
+
+// The window the day strip and Plan today's timeline draw (glance.mjs, dayWindow): from when
+// the day opens (sleep.mjs planStart, the wake-based start not held to now, so this morning
+// stays in view) to an hour past shutdown, grown to hold the day's blocks and timed events.
+// `events` defaults to the week's; Plan today passes the ones it read for the day.
+export function windowOn(day, events = eventsOn(day)) {
+  const tz = SHEET.timeZone;
+  const open = state.sleep.length ? planStart(day, new Date(), tz, wakeProfile(state.sleep, new Date(), tz), clock(SHEET.dayStartAt)) : clock(SHEET.dayStartAt);
+  const span = (x) => ({ start: minutesOn(x.starts_at, day, tz), end: minutesOn(x.ends_at, day, tz) });
+  const spans = [...events.filter((e) => !e.allDay && e.busy !== false).map(span), ...state.blocks.map(span).filter((s) => s.start >= 0 && s.start < 1440)]
+    .filter((s) => s.end > 0 && s.start < 1440 && !(s.start <= 0 && s.end >= 1440));
+  return dayWindow(open, shutdownAt(day), spans);
 }
 const lastPosition = (siblings) => (siblings.length ? siblings[siblings.length - 1].position : null);
 
@@ -109,10 +129,26 @@ function setStatus(text) {
   s.textContent = text ?? "";
 }
 
-export function failed(err) {
+// A write that failed (research U9, Retry only): the status line names it when the caller says
+// what it was ("Couldn't save "Laundry" as done."), and offers Retry when it can be run again.
+// A retry that works clears the line and redraws; one that fails says so again. Called with
+// only the error (a promise's catch), it says what it always did.
+export function failed(err, what = null, retry = null) {
   console.error(err);
-  setStatus("Something did not save. Reload to see what's stored.");
+  if (!what) return setStatus("Something did not save. Reload to see what's stored.");
+  const s = $("[data-status]");
+  s.hidden = false;
+  s.replaceChildren(`Couldn't ${what}.`);
+  if (!retry) return void s.append(" Reload to see what's stored.");
+  const again = el("button", { type: "button", className: "sheet-link", textContent: "Retry" });
+  again.addEventListener("click", async () => {
+    setStatus("Trying again…");
+    try { await retry(); setStatus(null); } catch (e) { failed(e, what, retry); }
+    render();
+  });
+  s.append(" ", again);
 }
+const named = (t) => `"${t?.title ?? "the task"}"`;
 
 // --- Undo --------------------------------------------------------------------------------
 
@@ -124,14 +160,15 @@ export function offerUndo(text, fn) {
   $("[data-toast-text]").textContent = text;
   $("[data-toast]").hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $("[data-toast]").hidden = true; undoFn = null; }, 6000);
+  // On touch there is no ⌘Z, so Undo stays up longer: 12 s, not 6.
+  toastTimer = setTimeout(() => { $("[data-toast]").hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
 }
 
 async function undo() {
   const fn = undoFn;
   undoFn = null;
   $("[data-toast]").hidden = true;
-  if (fn) { try { await fn(); } catch (e) { failed(e); } render(); }
+  if (fn) { try { await fn(); } catch (e) { failed(e, "undo that", fn); } render(); }
 }
 
 // --- Changes -----------------------------------------------------------------------------
@@ -344,7 +381,7 @@ function addRow(where, label, placeholder = "+ Add a task") {
 
 // A day's list: its calendar events as to-dos merged with its tasks, in time order
 // (event-todos.mjs). The calendar itself shows on Plan today's timeline.
-const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
+export const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
 
 // An event row looks like a timed task row: its time first, the title, and the calendar icon on
 // the details line under it, where a task shows its source.
@@ -383,7 +420,7 @@ async function toggleEventTodo(target) {
   try {
     await saveEventTodo(key, day, { done: !row.done });
     if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
-  } catch (e) { failed(e); }
+  } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
   render();
   root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
 }
@@ -413,8 +450,16 @@ async function eventMenuAction(act) {
   try {
     await saveEventTodo(key, day, { hidden: true });
     offerUndo(`Hidden: ${row.title}`, () => saveEventTodo(key, day, { hidden: false }));
-  } catch (e) { failed(e); }
+  } catch (e) { failed(e, `hide "${row.title}"`, () => saveEventTodo(key, day, { hidden: true })); }
   render();
+}
+
+// An empty today: "Press P" on a keyboard, a Plan button on touch (research U6).
+function blankRow() {
+  if (!matchMedia(COARSE).matches) return el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" });
+  const plan = el("button", { type: "button", className: "sheet-link", textContent: "Plan today" });
+  plan.dataset.act = "plan";
+  return el("li", { className: "sheet-row sheet-blank" }, "Nothing planned yet. ", plan);
 }
 
 function dayColumn(day, rows, items) {
@@ -425,7 +470,7 @@ function dayColumn(day, rows, items) {
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
   const blank = day === state.today && !items.length;
   const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : eventTodoRow(r))),
-    blank ? el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" }) : null,
+    blank ? blankRow() : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`));
   ul.dataset.day = day;
   for (let i = items.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
@@ -534,7 +579,8 @@ export const renderHooks = [];
 
 // --- Loading -----------------------------------------------------------------------------
 
-export async function load() {
+// `scroll: false` keeps the week where it is (a reload on coming back, refreshStale).
+export async function load({ scroll = true } = {}) {
   const days = weekDays(state.week);
   const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states] = await Promise.all([
     api.listTasks(days[0], days[6]),
@@ -562,8 +608,32 @@ export async function load() {
   state.blocks = blocks;
   state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
   state.parked = parked.length;
+  loadedAt = Date.now();
   render();
-  scrollToToday($("[data-week]"));
+  if (scroll) scrollToToday($("[data-week]"));
+}
+
+// --- Coming back (research U8/P1) ----------------------------------------------------------
+
+// Telegram taps (Done, Move, Tomorrow), replans and Claude's answers change tasks, blocks and
+// Needs you while /plan sits in a background tab, and iOS Safari keeps the tab alive, so coming
+// back shows an old plan. When the page is shown again (visibilitychange to visible; pageshow
+// from the back/forward cache, https://developer.mozilla.org/en-US/docs/Web/API/Window/pageshow_event)
+// or the network returns (online), the week reloads if the last load is over a minute old.
+// Not mid-edit, mid-drag, while typing a task or with a dialog open: render() would drop what
+// he is doing, and the next return catches up. Modules with their own data (Needs you) push a
+// reload into reloadHooks.
+const STALE_MS = 60_000;
+let loadedAt = 0;
+export const reloadHooks = [];
+
+async function refreshStale() {
+  if (document.visibilityState !== "visible" || !state.week || Date.now() - loadedAt < STALE_MS) return;
+  const a = document.activeElement;
+  if (drag || document.querySelector("dialog[open]") || a?.matches?.(".sheet-edit") || (a?.matches?.(".sheet-add") && a.value)) return;
+  loadedAt = Date.now();
+  try { await load({ scroll: false }); } catch (e) { console.error(e); }
+  for (const hook of reloadHooks) Promise.resolve().then(hook).catch(console.error);
 }
 
 // Oura: the week's day numbers and sleep again, redrawn only when something changed.
@@ -722,7 +792,8 @@ function startEdit(li) {
   const finish = async (save) => {
     if (done) return;
     done = true;
-    try { if (save && input.value.trim() !== t.title) await editTask(t.id, input.value); } catch (e) { failed(e); }
+    const text = input.value;
+    try { if (save && text.trim() !== t.title) await editTask(t.id, text); } catch (e) { failed(e, `save your edit to ${named(t)}`, () => editTask(t.id, text)); }
     render();
   };
   input.addEventListener("keydown", (e) => {
@@ -749,26 +820,38 @@ function openMenu(id, anchor) {
   menu.querySelector("button").focus();
 }
 
+// What each task action is, for the status line when it fails.
+const ACTION_WORDS = { today: "move %s to today", tomorrow: "move %s to tomorrow", "next-week": "move %s to next week", "day-before": "move %s a day earlier",
+  "day-after": "move %s a day later", someday: "move %s to Someday", visibility: "change who sees %s", "clear-due": "clear the due date of %s", delete: "delete %s" };
+
 async function menuAction(kind) {
   const id = menuFor;
   $("[data-menu]").hidePopover();
   if (!id) return;
-  const today = now().day;
-  try {
-    if (kind === "today") await moveTask(id, { day: today });
-    if (kind === "tomorrow") await moveTask(id, { day: addDays(today, 1) });
-    if (kind === "next-week") await moveTask(id, { day: addDays(weekStart(today), 7) });
-    // One day either way from where it is now; a Someday task counts from today.
-    if (kind === "day-before" || kind === "day-after") {
-      await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
-    }
-    if (kind === "someday") await moveTask(id, { list: "Inbox" });
-    if (kind === "visibility") await toggleVisibility(id);
-    if (kind === "clear-due") await clearDue(id);
-    if (kind === "delete") await removeTask(id);
-  } catch (e) { failed(e); }
-  render();
+  await taskAction(id, kind);
   root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus();
+}
+
+// One of the task menu's actions on a task (the menu, and the week's keys), then a redraw.
+async function taskAction(id, kind) {
+  const run = () => runAction(id, kind);
+  try { await run(); } catch (e) { failed(e, ACTION_WORDS[kind]?.replace("%s", named(state.tasks.get(id))) ?? null, run); }
+  render();
+}
+
+async function runAction(id, kind) {
+  const today = now().day;
+  if (kind === "today") await moveTask(id, { day: today });
+  if (kind === "tomorrow") await moveTask(id, { day: addDays(today, 1) });
+  if (kind === "next-week") await moveTask(id, { day: addDays(weekStart(today), 7) });
+  // One day either way from where it is now; a Someday task counts from today.
+  if (kind === "day-before" || kind === "day-after") {
+    await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
+  }
+  if (kind === "someday") await moveTask(id, { list: "Inbox" });
+  if (kind === "visibility") await toggleVisibility(id);
+  if (kind === "clear-due") await clearDue(id);
+  if (kind === "delete") await removeTask(id);
 }
 
 // --- Drag and drop -----------------------------------------------------------------------
@@ -862,6 +945,60 @@ function typing(e) {
   return e.target.closest?.("input, textarea, [contenteditable]") || e.metaKey || e.ctrlKey || e.altKey;
 }
 
+// --- Keys on a focused row (research U19) ----------------------------------------------------
+
+// In the week, with a row focused: Space (on a task's title) or X completes it, D moves it to
+// tomorrow, Z to Someday, E edits it, and J/K step to the next or previous row on screen. J or K
+// with no row focused starts at the focused day's first row. Plan today keeps its own D and Z
+// (plan-dialog.mjs); the document listener ignores keys while a dialog is open.
+const rowFocus = (li) => li?.querySelector(li.classList.contains("sheet-task") ? ".sheet-title" : ".sheet-check");
+const shownRows = () => [...root.querySelectorAll(".sheet-day .sheet-task, .sheet-day .sheet-evtodo, .sheet-list .sheet-task")].filter((r) => r.getClientRects().length);
+
+// After a row moves away, focus stays at its place in its list: the row now there, else the last.
+function refocus(list, index) {
+  const ul = list.dataset.day ? root.querySelector(`.sheet-rows[data-day="${list.dataset.day}"]`) : root.querySelector(`.sheet-rows[data-list="${CSS.escape(list.dataset.list ?? "")}"]`);
+  const rows = [...(ul?.querySelectorAll(".sheet-task, .sheet-evtodo") ?? [])];
+  rowFocus(rows[Math.min(index, rows.length - 1)])?.focus();
+}
+
+function rowKey(e) {
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (e.shiftKey && key !== "j" && key !== "k") return false;
+  const li = document.activeElement?.closest?.(".sheet-task, .sheet-evtodo");
+  if (key === "j" || key === "k") {
+    const rows = shownRows();
+    if (!rows.length) return false;
+    const at = rows.indexOf(li);
+    const next = at < 0 ? (root.querySelector(`.sheet-day[data-day="${state.focus}"] :is(.sheet-task, .sheet-evtodo)`) ?? rows[0])
+      : rows[Math.max(0, Math.min(rows.length - 1, at + (key === "j" ? 1 : -1)))];
+    e.preventDefault();
+    rowFocus(next)?.focus();
+    return true;
+  }
+  if (!li || !root.contains(li)) return false;
+  if (li.classList.contains("sheet-evtodo")) {
+    if (key !== "x") return false;
+    e.preventDefault();
+    toggleEventTodo(li);
+    return true;
+  }
+  const id = li.dataset.id;
+  const kind = { x: "done", " ": "done", d: "tomorrow", z: "someday", e: "edit" }[key];
+  if (!kind || (key === " " && !e.target.matches(".sheet-title"))) return false;
+  e.preventDefault();
+  if (kind === "edit") { startEdit(li); return true; }
+  if (kind === "done") {
+    const done = !state.tasks.get(id).done;
+    completeTask(id, done).catch((err) => failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)))
+      .finally(() => { render(); root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus(); });
+    return true;
+  }
+  const list = li.closest(".sheet-rows");
+  const index = [...list.querySelectorAll(".sheet-task, .sheet-evtodo")].indexOf(li);
+  taskAction(id, kind).then(() => refocus(list, index));
+  return true;
+}
+
 function wire() {
   // Every dialog on /plan closes on a backdrop click, as its Close button does (dismiss.mjs).
   for (const d of root.querySelectorAll("dialog")) lightDismiss(d);
@@ -915,7 +1052,8 @@ function wire() {
     }
     const id = li.dataset.id;
     if (e.target.closest(".sheet-check")) {
-      try { await completeTask(id, !state.tasks.get(id).done); } catch (err) { failed(err); }
+      const done = !state.tasks.get(id).done;
+      try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
     } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
@@ -948,13 +1086,17 @@ function wire() {
     }
     input.value = "";
     fitBox(input);
-    try { await addTask(text, input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list }); } catch (err) { failed(err); input.value = text; }
+    const where = input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list };
+    // On failure the text goes back in the box; Retry adds it and empties the box again.
+    const add = async () => { await addTask(text, where); input.value = ""; };
+    try { await add(); } catch (err) { failed(err, `add "${parseEntry(text, state.today).title}"`, add); input.value = text; }
     render();
   });
 
   document.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.target.closest?.("input, textarea")) { e.preventDefault(); undo(); return; }
     if (typing(e) || document.querySelector("dialog[open]")) return;
+    if (rowKey(e)) return;
     if (e.key === "ArrowLeft") showWeek(addDays(state.week, -7));
     else if (e.key === "ArrowRight") showWeek(addDays(state.week, 7));
     else if (e.key === "t" || e.key === "T") showWeek(weekStart(now().day));
@@ -966,10 +1108,16 @@ function wire() {
     } else for (const hook of keyHooks) if (hook(e)) { e.preventDefault(); return; }
   });
 
+  // Space on a focused title completes it (rowKey) instead of opening the edit box, which a
+  // button does on keyup.
+  document.addEventListener("keyup", (e) => { if (e.key === " " && e.target.matches?.(".sheet-task .sheet-title") && !document.querySelector("dialog[open]")) e.preventDefault(); });
   for (const menu of root.querySelectorAll(".sheet-menu")) menuKeys(menu);
   // Oura: oura-sync runs every 10 minutes, so today's chips refresh as often while /plan shows.
   setInterval(refreshOura, 10 * 60_000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshOura(); });
+  document.addEventListener("visibilitychange", refreshStale);
+  window.addEventListener("pageshow", (e) => { if (e.persisted) refreshStale(); });
+  window.addEventListener("online", refreshStale);
   root.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
   document.addEventListener("pointerup", (e) => { if (drag?.on) wasDrag.at = Date.now(); onPointerUp(e); });
@@ -1010,5 +1158,16 @@ export async function start(node, plugins = [], settings = settingsModule) {
     setStatus(null);
     await syncGoogle();
     await load();
+    openFromLink();
   } catch (e) { failed(e); }
+}
+
+// A Telegram button's link opens its view (?open=plan|shutdown|needs, glance.mjs openView), once:
+// the parameter comes off the address first, so a reload or Back doesn't open it again.
+// https://developer.mozilla.org/en-US/docs/Web/API/History/replaceState
+function openFromLink() {
+  const { view, search } = openView(location.search);
+  if (search === location.search) return;
+  history.replaceState(history.state, "", `${location.pathname}${search}${location.hash}`);
+  if (view) actHooks[view]?.();
 }

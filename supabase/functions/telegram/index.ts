@@ -16,14 +16,16 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
+import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
-import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
+import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackText, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, refusedForGood, undoChanges } from "../../../src/sheet/capture.mjs";
+import { startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
 
@@ -43,11 +45,13 @@ Deno.serve(async (req) => {
     const replan = await replanTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // Nor must a receipt for a text to the bot.
     const receipted = await receipts(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // Nor must firing a failed message to Claude once more.
+    const refired = await refire(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const hook = await ensureWebhook().catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // Horizon planning: re-flow before the messages, so they see fresh states. Failing (or the
     // horizon schema not run yet) stops nothing else.
     const horizon = await horizonTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now)), replan, receipts: receipted, hook, horizon });
+    return Response.json({ ...(await send(now, { replanHold: replan, hook })), replan, receipts: receipted, refired, hook, horizon });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -60,7 +64,11 @@ Deno.serve(async (req) => {
 // with a due date (which covers the check-in's "due tomorrow"), the blocks of those tasks and of
 // today, and today's log. Then the morning plan's part: today's proposal, the needs_you rows not
 // done, and the campus events the proposal picks.
-async function snapshot(now: Date) {
+// What the tick learned before sending, for the health check: the replan tick's outcome and the
+// webhook's info.
+type TickFacts = { replanHold?: unknown; hook?: unknown };
+
+async function snapshot(now: Date, facts: TickFacts = {}) {
   const [settings] = await db("settings?select=*");
   const { day: today } = localNow(now, settings.time_zone);
   const tasks = await db(`tasks?select=*&or=(day.eq.${today},and(due.not.is.null,done.is.false))`);
@@ -103,7 +111,42 @@ async function snapshot(now: Date) {
   const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
   // Horizon planning: each task's state and the last one he was told of. None until its schema has run.
   const horizon = await db("horizon_state?select=task_id,state,short_min,slack_min,finish_day,notified").catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+  const lastWeek = await lastWeekRows(today).catch(() => null);
+  // The Sheet's health (health.mjs). A failed read leaves it out: the brief then has no Sheet
+  // line, and nothing is alerted, rather than the messages stopping.
+  const sheetHealth = await healthOf(today, now, settings.time_zone, facts).catch((e) => (console.error("health:", e instanceof Error ? e.message : e), undefined));
+  return { health: sheetHealth, lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+}
+
+// The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the three connected
+// accounts' last errors, and today's replans, with the tick's own facts.
+async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) {
+  const [feeds, mail, [calendar = null], [oura = null], replans, revisions, unsent] = await Promise.all([
+    db("feed_state?select=*"),
+    db("mail_accounts?select=email,label,last_error").catch(() => []),
+    db("calendar_account?select=last_error").catch(() => []),
+    db("oura_account?select=last_error").catch(() => []),
+    db(`replans?select=at,result,reasons&day=eq.${today}`),
+    db(`proposals?select=rev&day=eq.${today}&limit=1`),
+    // Messages whose one re-fire failed too (refire), until Claude answers them.
+    db(`messages?select=id&status=eq.pending&refired_at=not.is.null&fired_at=is.null&at=gte.${new Date(now.getTime() - 86_400_000).toISOString()}&order=at`).catch(() => []),
+  ]);
+  const hook = facts.hook && typeof facts.hook === "object" && "url" in facts.hook ? facts.hook : undefined;
+  const replanHold = facts.replanHold && typeof facts.replanHold === "object" && "hold" in facts.replanHold ? facts.replanHold : undefined;
+  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, unsent, hook, replanHold }, now);
+}
+
+// Monday's Last week line (nudges.mjs, lastWeekLine): last Mon-Sun's approved task blocks (a day
+// either side in UTC; the module narrows them to his days), which of their tasks are done, and
+// last week's actuals. Null on other days, so the other six days cost no reads.
+async function lastWeekRows(today: string) {
+  if (new Date(`${today}T12:00:00Z`).getUTCDay() !== 1) return null;
+  const from = addDays(today, -8), to = addDays(today, 1);
+  const blocks = await db(`blocks?select=task_id,starts_at,ends_at&proposed=is.false&task_id=not.is.null&starts_at=gte.${from}T00:00:00Z&starts_at=lt.${to}T00:00:00Z`);
+  const ids = [...new Set(blocks.map((b: { task_id: string }) => b.task_id))];
+  const done = ids.length ? (await db(`tasks?select=id&done=is.true&id=in.(${ids.join(",")})`)).map((t: { id: string }) => t.id) : [];
+  const actuals = await db(`actuals?select=kind,est_min,minutes&day=gte.${addDays(today, -7)}&day=lt.${today}`);
+  return { blocks, done, actuals };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
@@ -129,30 +172,41 @@ async function replanTick(now: Date) {
   // Oura's rows only set the shutdown line (bedtime.mjs, shutdownFor); none until its schema ran.
   const [[day = null], proposals, replans, changes, sleep, sleepTimes] = await Promise.all([
     db(`days?select=*&day=eq.${today}`),
-    db(`proposals?select=rev,status,run_trigger,created_at,read_at&day=eq.${today}`),
-    db(`replans?select=at,result,retry_after&day=eq.${today}`),
+    // blocks: a replan that changed nothing doesn't count toward the cap (replan.mjs, noops).
+    db(`proposals?select=rev,status,run_trigger,created_at,read_at,blocks&day=eq.${today}`),
+    db(`replans?select=at,result,retry_after,reasons&day=eq.${today}`),
     db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
     db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []),
     db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []),
   ]);
   if (rateLimited(replans, now)) return { hold: "rate_limited" };
-  const r = shouldReplan(changes, replanState({ settings, day, today, proposals, replans, sleep, sleepTimes }), now) as
-    { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
-  if (!r.fire) return { hold: r.hold };
+  if (shouldRetryMorning({ settings, day, proposals, replans }, now)) return { retry: await fireOnce(today, [MORNING_RETRY], {}, [], "morning", now) };
+  const state = replanState({ settings, day, today, proposals, replans, sleep, sleepTimes });
+  const r = shouldReplan(changes, state, now) as
+    { fire: boolean; hold?: string; until?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
+  // At the cap, the health check hears how many ran and whether a weighty change waits.
+  // Backing off a failed fire (replan.mjs, failedUntil), the health line says until when.
+  if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : r.hold === "fire_failed" ? { hold: r.hold, until: r.until } : { hold: r.hold };
+  return { fired: await fireOnce(today, r.reasons, r.counts, r.ids, "replan", now) };
+}
+
+// Claim a replans row, fire the routine once and record how it went (the replan, or the morning
+// plan's one retry, whose row's reasons are ["morning_retry"] and which ties no changes).
+async function fireOnce(today: string, reasons: string[], counts: Record<string, number>, ids: string[], trigger: "replan" | "morning", now: Date) {
   const id = await db("rpc/claim_replan", {
     method: "POST",
-    body: JSON.stringify({ d: today, reasons: r.reasons, counts: r.counts, ids: r.ids }),
+    body: JSON.stringify({ d: today, reasons, counts, ids }),
   });
-  if (!id) return { hold: "claimed" };
+  if (!id) return "claimed";
   let outcome;
   try {
-    outcome = fireOutcome(await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "replan", counts: r.counts }, now));
+    outcome = fireOutcome(await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger, counts }, now));
   } catch (e) {
     outcome = fireOutcome(null, e);
   }
   await db(`replans?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(outcome.patch) });
-  if (outcome.untie) await db(`changes?replan_id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ replan_id: null }) });
-  return { fired: outcome.patch.result };
+  if (outcome.untie && ids.length) await db(`changes?replan_id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ replan_id: null }) });
+  return outcome.patch.result;
 }
 
 // --- Horizon planning (docs/sheet-horizon.md, "Part 2") ----------------------------------
@@ -174,16 +228,28 @@ const setNotified = (ids: string[], notified: string | null) =>
 
 // --- Sending ------------------------------------------------------------------------------
 
-type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
+type Message = { kind: string; block_id: string | null; day: string; send_at: string; text: string; entities?: unknown[]; health?: string[]; buttons: { text: string; url?: string; callback_data?: string }[]; horizon?: { task_id: string; state: string }[] };
 
-async function send(now: Date) {
-  const snap = await snapshot(now);
+async function send(now: Date, facts: TickFacts = {}) {
+  const snap = await snapshot(now, facts);
   const sent = [];
+  // The health keys the brief or a health message told him of (nudges.mjs).
+  const toldNow: string[] = [];
   for (const m of whatToSend(snap, now) as Message[]) {
     // Claim the log row first: if another run got there, the claim returns nothing and this
     // one skips the message, so it goes out once.
     const c = await claim(m);
     if (!c) continue;
+    // The horizon states it tells are marked told first (nudges.mjs, horizonMarks). A failed
+    // mark holds a horizon message back (claim given back) rather than repeat it every minute; the
+    // brief, keyed to its fixed minute, goes anyway.
+    const marks = horizonMarks(m, snap.horizon);
+    try {
+      for (const g of marks.mark) await setNotified(g.ids, g.notified);
+    } catch (e) {
+      console.error("horizon notified:", e instanceof Error ? e.message : e);
+      if (m.kind === "horizon") { await c.giveBack(); continue; }
+    }
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
       // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
@@ -191,20 +257,29 @@ async function send(now: Date) {
         chat_id: snap.settings.telegram_chat_id,
         text: m.text,
         ...PLAIN,
+        // The brief's folded tail (nudges.mjs, folded): entities instead of a parse_mode, so the
+        // text is never read as markup (sendMessage's entities, "can be specified instead of
+        // parse_mode": core.telegram.org/bots/api#sendmessage).
+        ...(m.entities ? { entities: m.entities } : {}),
+        // Only what asks him to act now makes a sound (nudges.mjs, silent).
+        ...(silent(m) ? { disable_notification: true } : {}),
         reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
       });
     } catch (e) {
-      // Give the claim back so the next minute tries again.
+      // Give the claim back, and the horizon marks, so the next minute tries again.
       await c.giveBack();
+      for (const g of marks.restore) await setNotified(g.ids, g.notified).catch((x) => console.error("horizon restore:", x instanceof Error ? x.message : x));
       throw e;
     }
     await c.sent();
     sent.push(m.kind);
-    // The horizon states this message told him of (the brief's, or the horizon message's).
-    for (const st of ["tight", "wont_fit"]) {
-      const ids = (m.horizon ?? []).filter((h) => h.state === st).map((h) => h.task_id);
-      if (ids.length) await setNotified(ids, st).catch((e) => console.error("horizon notified:", e instanceof Error ? e.message : e));
-    }
+    toldNow.push(...(m.health ?? []));
+  }
+  // What's told and still open (health.mjs, nextTold), written only when it changes.
+  if (snap.health) {
+    const before: string[] = snap.settings.health_told ?? [];
+    const after = nextTold(before, snap.health.issues, toldNow);
+    if (after.join("\n") !== before.join("\n")) await saveNow({ health_told: after }).catch((e) => console.error("health told:", e instanceof Error ? e.message : e));
   }
   // The pinned Now message must not stop the messages, nor they it.
   const pin = await pinTick(snap, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
@@ -235,7 +310,7 @@ async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
     } catch (e) {
       const why = e instanceof Error ? e.message : "";
       if (/message to edit not found|message can't be edited/i.test(why)) {
-        await saveNow({ now_message_id: null, now_text: null });
+        await saveNow({ now_message_id: null, now_text: null, now_claimed_at: null });
         return "gone";
       }
       if (!/message is not modified/i.test(why)) throw e;
@@ -243,7 +318,23 @@ async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
     await saveNow({ now_text: step.text });
     return "edited";
   }
-  const msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  // Claimed first (settings.now_claimed_at), which only one tick can do, so two overlapping ticks
+  // never both make one; a claim left by a tick whose save failed lapses after PIN_CLAIM
+  // (nudges.mjs, pinStep). A refused send gives it back.
+  const stale = new Date(now.getTime() - PIN_CLAIM).toISOString();
+  const [mine] = await db(`settings?id=eq.true&now_message_id=is.null&or=(now_claimed_at.is.null,now_claimed_at.lt.${stale})`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ now_claimed_at: now.toISOString() }),
+  });
+  if (!mine) return "claimed";
+  let msg;
+  try {
+    msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  } catch (e) {
+    await saveNow({ now_claimed_at: null }).catch(() => {});
+    throw e;
+  }
   // Kept before the pin, so a refused pin never makes a second message.
   await saveNow({ now_message_id: msg.message_id, now_text: step.text });
   await telegram("pinChatMessage", { chat_id, message_id: msg.message_id, disable_notification: true });
@@ -289,7 +380,31 @@ async function webhook(update: unknown, now: Date) {
   if (t) return capture(t, now);
   const u = readUndo(update, settings);
   if (u) return undo(u, settings);
+  const media = readMedia(update, settings);
+  if (media) return mediaAnswer(media, settings, now);
   return tap(update, now);
+}
+
+// A voice note or photo (capture.mjs, readMedia): the bot says once an hour that it reads only
+// text. Claimed by moving settings.media_reply_at forward, which only one run can do while the
+// last reply is under an hour old; Telegram resends a failed update, and the claim keeps that from
+// answering twice.
+async function mediaAnswer(media: { chat_id: number; message_id: number }, settings: { media_reply_at?: string | null }, now: Date) {
+  const text = mediaReply(settings.media_reply_at ?? null, now);
+  if (!text) return;
+  const before = new Date(now.getTime() - 60 * 60_000).toISOString();
+  const [claimed] = await db(`settings?id=eq.true&or=(media_reply_at.is.null,media_reply_at.lte.${before})`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ media_reply_at: now.toISOString() }),
+  });
+  if (!claimed) return;
+  await telegram("sendMessage", {
+    chat_id: media.chat_id,
+    text,
+    ...PLAIN,
+    reply_parameters: { message_id: media.message_id, allow_sending_without_reply: true },
+  }).catch((e) => console.error("telegram media:", e.message));
 }
 
 // --- Texting the bot (docs/sheet-messages.md, "From Telegram") -----------------------------
@@ -302,9 +417,32 @@ async function webhook(update: unknown, now: Date) {
 // Telegram sends an update again when the webhook fails ("we will repeat the request":
 // core.telegram.org/bots/api#setwebhook): a text already saved is not saved again, so a failed
 // save is retried and a saved one never doubles. A failed answer is only logged.
+// The answer is a reaction on his text (capture.mjs, ackReaction: setMessageReaction), and a
+// reply with ackText only when the words matter (rate limited) or Telegram refuses the reaction.
 async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
   if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
-  const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  // Two deliveries at once both pass the select; the unique index (schema.sql,
+  // messages_tg_message_id) turns the second insert away with 23505 (PostgREST: 409), before any
+  // fire, and that one is saved already.
+  let saved;
+  try {
+    saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  } catch (e) {
+    if (e instanceof Error && /^messages: 409 23505/.test(e.message)) return;
+    throw e;
+  }
+  // A failed fire is marked for the tick's one re-fire (refire). The message function's own
+  // marking lives in ../_shared/capture.ts; this covers a text to the bot either way.
+  if (saved.why === "failed" || saved.why === "rate_limited") {
+    await db(`messages?id=eq.${saved.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ fire_error: saved.why, retry_at: saved.retry_at ?? null }) })
+      .catch((e) => console.error("telegram fire_error:", e.message));
+  }
+  const reaction = ackReaction(saved);
+  if (reaction) {
+    const reacted = await telegram("setMessageReaction", { chat_id: t.chat_id, message_id: t.message_id, reaction })
+      .then(() => true, (e) => (console.error("telegram reaction:", e.message), false));
+    if (reacted) return;
+  }
   await telegram("sendMessage", {
     chat_id: t.chat_id,
     text: ackText(saved),
@@ -313,10 +451,43 @@ async function capture(t: { text: string; chat_id: number; message_id: number },
   }).catch((e) => console.error("telegram capture:", e.message));
 }
 
+// --- Re-firing a failed message (research/plan-reliability.md R9) -------------------------------
+// A pending message whose fire failed gets one more (capture.mjs, refireDue), for all such
+// messages at once, since one run reads every pending message. Claimed first by filling in
+// refired_at, which only one run can do; the outcome then fills in the run's start or the new
+// error. A second failure is left pending and goes to the health check (unsent), which tells him.
+async function refire(now: Date) {
+  if (!ROUTINE_ID || !ROUTINE_TOKEN) return "not connected";
+  const since = new Date(now.getTime() - 86_400_000).toISOString();
+  const [settings] = await db("settings?select=time_zone");
+  const { day: today } = localNow(now, settings.time_zone);
+  const [pending, replans] = await Promise.all([
+    db(`messages?select=id,at,fired_at,fire_error,retry_at,refired_at&status=eq.pending&at=gte.${since}`),
+    db(`replans?select=at,result&day=eq.${today}`),
+  ]);
+  const ids = refireDue(pending, replans, now);
+  if (!ids.length) return [];
+  const claimed = (await db(`messages?id=in.(${ids.join(",")})&refired_at=is.null`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ refired_at: now.toISOString() }),
+  })).map((m: { id: string }) => m.id);
+  if (!claimed.length) return [];
+  let out;
+  try {
+    out = await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "message", counts: {} }, now);
+  } catch {
+    out = { ok: false, status: 0 };
+  }
+  const patch = out.ok ? { ...startedPatch(out, now), fire_error: null } : { fire_error: out.status === 429 ? "rate_limited" : "failed" };
+  await db(`messages?id=in.(${claimed.join(",")})`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(patch) });
+  return { ids: claimed, ok: out.ok };
+}
+
 // The receipt for each text Claude has answered since yesterday, once: a reply to his text with
 // what was added and an Undo for each item (capture.mjs's receipt), whatever the hour, since he
 // asked. Claimed first by filling in tg_receipt_at, which only one run can do, and given back
-// if Telegram refuses it, so the next minute tries again.
+// if Telegram fails it for now, so the next minute tries again; one refused for good is dropped.
 async function receipts(now: Date) {
   const [settings] = await db("settings?select=time_zone,telegram_chat_id");
   if (!settings?.telegram_chat_id) return [];
@@ -336,13 +507,26 @@ async function receipts(now: Date) {
         chat_id: settings.telegram_chat_id,
         text,
         ...PLAIN,
+        // He asked and is waiting on it, but it needs no action: silent (disable_notification,
+        // core.telegram.org/bots/api#sendmessage).
+        disable_notification: true,
         reply_parameters: { message_id: m.tg_message_id, allow_sending_without_reply: true },
         reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
       });
     } catch (e) {
+      // Refused for good (a 4xx but 429, capture.mjs, refusedForGood): the claim stays, so it is
+      // given up on rather than retried every minute ahead of every later receipt.
+      if (refusedForGood(e)) {
+        console.error(`receipt ${m.id} given up:`, e instanceof Error ? e.message : e);
+        continue;
+      }
       await db(`messages?id=eq.${m.id}`, { method: "PATCH", body: JSON.stringify({ tg_receipt_at: null }) });
       throw e;
     }
+    // 👀 or ✍ on his text becomes 👌 (capture.mjs, ANSWERED). Only cosmetic: a refusal (his text
+    // deleted) changes nothing.
+    await telegram("setMessageReaction", { chat_id: settings.telegram_chat_id, message_id: m.tg_message_id, reaction: ANSWERED })
+      .catch((e) => console.error("telegram reaction:", e.message));
     sent.push(m.id);
   }
   return sent;
@@ -442,23 +626,28 @@ async function tap(update: unknown, now: Date) {
 }
 
 // The webhook must ask for texts as well as taps, or Telegram never delivers a text to the bot
-// (docs/sheet-messages.md, "From Telegram"). A webhook set before texts were handled asked for
-// callback_query only, so the minute tick checks it and widens it in place, keeping its URL and
-// secret. getWebhookInfo leaves allowed_updates out when it is the default, which includes
-// message. https://core.telegram.org/bots/api#getwebhookinfo, #setwebhook
-const UPDATES = ["callback_query", "message"];
-let hookChecked = false;
+// (docs/sheet-messages.md, "From Telegram"), and it must exist at all. The tick reads
+// getWebhookInfo at most every HOOK_EVERY (per isolate), and hookAction (health.mjs) says what to
+// fix: a webhook that is gone is set again at this function's own address (the URL
+// tools/sheet-setup.sh registers, SUPABASE_URL + /functions/v1/telegram) with the same secret;
+// one set before texts were handled is widened in place. The info goes to the health check
+// (url, pending_update_count, last_error_date). https://core.telegram.org/bots/api#getwebhookinfo,
+// #setwebhook
+const HOOK_URL = env("SUPABASE_URL") ? `${env("SUPABASE_URL")}/functions/v1/telegram` : null;
+const HOOK_EVERY = 10 * 60_000;
+let hookSeen: { at: number; info: Record<string, unknown> } | null = null;
 async function ensureWebhook() {
-  if (hookChecked || !WEBHOOK_SECRET) return "checked";
-  const info = await telegram("getWebhookInfo", {});
-  const allowed: string[] | undefined = info.allowed_updates;
-  if (!info.url || !allowed || UPDATES.every((u) => allowed.includes(u))) {
-    hookChecked = true;
-    return info.url ? "ok" : "no webhook";
+  if (!WEBHOOK_SECRET) return "no secret";
+  if (hookSeen && Date.now() - hookSeen.at < HOOK_EVERY) return hookSeen.info;
+  let info = await telegram("getWebhookInfo", {});
+  const action = hookAction(info, HOOK_URL);
+  if (action) {
+    await telegram("setWebhook", { url: action === "set" ? HOOK_URL : info.url, secret_token: WEBHOOK_SECRET, allowed_updates: HOOK_UPDATES });
+    info = { ...(await telegram("getWebhookInfo", {})), fixed: action };
   }
-  await telegram("setWebhook", { url: info.url, secret_token: WEBHOOK_SECRET, allowed_updates: UPDATES });
-  hookChecked = true;
-  return "widened";
+  const kept = { url: info.url, pending_update_count: info.pending_update_count, last_error_date: info.last_error_date, ...(info.fixed ? { fixed: info.fixed } : {}) };
+  hookSeen = { at: Date.now(), info: kept };
+  return kept;
 }
 
 async function telegram(method: string, body: unknown) {

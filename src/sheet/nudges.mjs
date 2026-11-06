@@ -16,6 +16,7 @@ import { bedtimeFor, nightAt, shutdownFor, tonight } from "./bedtime.mjs";
 import { lateNap } from "./oura-day.mjs";
 import { pickTips, tipContext } from "./tips.mjs";
 import { GYM_HABIT } from "./ring.mjs";
+import { healthLine } from "./health.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -41,6 +42,19 @@ export const REPLANS_SENT_MAX = 4;
 const REPLAN_LINES = 6;
 
 const PLAN_URL = `${ORIGIN}/plan/`;
+// research/plan-improvements.md U16: a link can open one of /plan's views on load (plan,
+// shutdown or needs), which /plan reads and strips from the address.
+const planUrl = (view) => `${PLAN_URL}?open=${view}`;
+
+// Which messages arrive without a sound (research/plan-phone.md P2). sendMessage's
+// disable_notification "Sends the message silently. Users will receive a notification with no
+// sound." (core.telegram.org/bots/api#sendmessage, Bot API 10.3). What asks him to act now rings:
+// the brief, the plan, a block's start, its repeat and snooze, wind-down, bedtime and a health
+// alert. What only reports, or can wait for his next look, is silent: Finished?, the check-in,
+// replan and horizon messages (and, in the telegram function, receipts). They still show in the
+// chat and badge the app.
+const SILENT_KINDS = new Set(["finished", "checkin", "replan", "horizon"]);
+export const silent = (m) => SILENT_KINDS.has(m.kind);
 
 // A snapshot of the day, as the Edge Function reads it:
 //   settings  the settings row (time_zone, telegram_chat_id, nudges_on, morning_on)
@@ -67,7 +81,7 @@ export function whatToSend(snapshot, now) {
   // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
   // wake syncs, so it goes once a day, whenever it went.
   const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
-  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day)]
+  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day), ...(briefOut ? healthMessage(day) : [])]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -218,28 +232,97 @@ function brief(day) {
   // What the brief told him of, which telegram marks told (horizon_state.notified).
   const told = [...wont, ...tight].filter((t) => hz.has(t.id)).map((t) => ({ task_id: t.id, state: hz.get(t.id).state }));
   const marks = told.length ? { horizon: told } : {};
-  const cap = capLine(day);
-  const score = scoreLine(day);
-  if (score) lines.push(score);
+  const week = lastWeekLine(day, hz);
+  if (week) lines.push(week);
+  // The tail: context he can read later, folded (see folded). Oura's score, a tip and the cap;
+  // v5 W1's weather line, when the cache has a forecast (snapshot.weather, the weather_cache
+  // row); v5 SRC3's academic calendar entries (snapshot.academic, at most 3); v5 M1's Awaiting
+  // reply.
   const [tip] = tipsFor(day, today);
-  if (tip) lines.push(`Tip: ${tip.text}`);
-  if (cap) lines.push(cap);
-  // v5 W1: the weather line, when the cache has a forecast (snapshot.weather, the weather_cache row).
   const wx = day.weather?.periods?.length ? weatherLine(day.weather.periods, day.weather.alerts ?? [], today, tz) : null;
-  if (wx) lines.push(wx);
-  // v5 SRC3: today's academic calendar entries (snapshot.academic, from academicEntries), at most 3.
   const cal = academicLine(day.academic);
-  if (cal) lines.push(cal);
+  // The Sheet's health (health.mjs), when the snapshot has it: folded when all green, in view
+  // with its issues, which then count as told (`health`, the keys; no alert repeats them).
+  const h = day.health;
+  const sick = h && !h.green ? healthLine(h) : null;
+  const tail = [scoreLine(day), tip && `Tip: ${tip.text}`, capLine(day), wx, cal, awaitingLine(day.awaiting), h?.green ? healthLine(h) : null];
   const send_at = zonedIso(today, day.briefAt, tz);
-  // v5 M1: who he's waiting on, after the plan's lines.
-  const waiting = awaitingLine(day.awaiting);
-  if (plan) return { kind: "brief", block_id: null, day: today, send_at, text: [...lines, ...plan, waiting].filter(Boolean).join("\n"), buttons: planButtons(today, day.proposal?.rev), ...marks };
+  const sickKeys = sick ? { health: h.issues.map((i) => i.key) } : {};
+  const brief = (head, buttons) => ({ kind: "brief", block_id: null, day: today, send_at, ...folded([...head, sick], tail), buttons, ...marks, ...sickKeys });
+  if (plan) return brief([...lines, ...plan], planButtons(today, day.proposal?.rev));
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
-  if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
-  const text = (todays.length || n || risky.length ? [...lines, waiting]
-    : ["Nothing on today.", wx, cal, missed && empty, waiting]).filter(Boolean).join("\n");
-  return { kind: "brief", block_id: null, day: today, send_at, text, buttons: [{ text: "Open /plan", url: PLAN_URL }], ...marks };
+  // A missed morning plan is said even with blocks on today (carried over, or approved last
+  // night): they don't mean today was planned (research/plan-reliability.md R2).
+  if (missed) lines.push(empty);
+  else if (!n) lines.push('Nothing planned yet: say "plan my day" to Claude.');
+  // With no plan to carry it, the brief counts the open Needs you rows, and its link opens them.
+  const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
+  const head = todays.length || n || risky.length ? [...lines, needs] : ["Nothing on today.", missed && empty, needs];
+  return brief(head, [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }]);
+}
+
+// --- Health alerts (docs/sheet-nudges.md, "Health") ------------------------------------------
+// One message when something breaks that he hasn't been told of (settings.health_told, the keys
+// told and still open): sent after the brief (which lists what is broken by then), only while
+// messages go out at all (from his wake, never before 8 am, until 11 pm), at most HEALTH_BUDGET
+// a day. Beside the nudge budget, like the brief: it takes none of its six slots, and has a cap
+// of its own. A key stays told while the issue lasts, so each incident is told once.
+export const HEALTH_BUDGET = 2;
+function healthMessage(day) {
+  const h = day.health;
+  if (!h || h.green) return [];
+  const told = new Set(day.settings.health_told ?? []);
+  const fresh = h.issues.filter((i) => !told.has(i.key));
+  if (!fresh.length || day.log.filter((n) => n.kind === "health").length >= HEALTH_BUDGET) return [];
+  const send_at = new Date(Math.floor(day.now / 60_000) * 60_000).toISOString();
+  return [{ kind: "health", block_id: null, day: day.today, send_at, text: healthLine(h, fresh), buttons: [{ text: "Open /plan", url: PLAN_URL }], health: fresh.map((i) => i.key) }];
+}
+
+// --- Monday's Last week line (research/plan-insights.md I9) -------------------------------------
+// "Last week: 18h30 done of 24h planned. Course tasks ran 1.4× estimate. Due this week: Essay
+// (tight), OS project (on track)." On Mondays only, from snapshot.lastWeek, which the telegram
+// function reads on Mondays: { blocks: last Mon-Sun's approved task blocks { task_id, starts_at,
+// ends_at }, done: the ids of their tasks now done, actuals: last week's actuals { kind, est_min,
+// minutes } }. Planned is every block's minutes and done the minutes of blocks whose task is done.
+// The pace part names the kind whose median actual/estimate is furthest from 1, with 3 or more
+// samples and at least 20% off; due this week lists up to 3 open tasks due today to Sunday with
+// their horizon state. No sleep numbers (docs/adr/0005). Null with fewer than 3 planned days.
+const PACE_WORDS = { course: "Course tasks", campus: "Campus events", github: "GitHub items", jira: "Jira tickets", other: "Other tasks" };
+const median = (xs) => { const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+function lastWeekLine({ lastWeek, today, tz, tasks }, hz) {
+  if (!lastWeek || new Date(`${today}T12:00:00Z`).getUTCDay() !== 1) return null;
+  const from = addDays(today, -7);
+  const mins = (b) => Math.max(0, Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000));
+  const blocks = (lastWeek.blocks ?? []).filter((b) => { const d = localNow(new Date(b.starts_at), tz).day; return d >= from && d < today; });
+  if (new Set(blocks.map((b) => localNow(new Date(b.starts_at), tz).day)).size < 3) return null;
+  const done = new Set(lastWeek.done ?? []);
+  const planned = blocks.reduce((n, b) => n + mins(b), 0);
+  const did = blocks.filter((b) => done.has(b.task_id)).reduce((n, b) => n + mins(b), 0);
+  const parts = [`Last week: ${formatMinutes(did)} done of ${formatMinutes(planned)} planned.`];
+  const ratios = {};
+  for (const a of lastWeek.actuals ?? []) if (a.est_min > 0 && PACE_WORDS[a.kind]) (ratios[a.kind] ??= []).push(a.minutes / a.est_min);
+  const [kind, pace] = Object.entries(ratios).filter(([, r]) => r.length >= 3).map(([k, r]) => [k, median(r)])
+    .filter(([, m]) => m >= 1.2 || m <= 0.8).sort((a, b) => Math.abs(Math.log(b[1])) - Math.abs(Math.log(a[1])))[0] ?? [];
+  if (kind) parts.push(`${PACE_WORDS[kind]} ran ${pace.toFixed(1)}× estimate.`);
+  const words = { on_track: "on track", tight: "tight", wont_fit: "won't fit" };
+  const due = tasks.filter((t) => !t.done && t.due && t.due >= today && t.due <= addDays(today, 6))
+    .sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3)
+    .map((t) => { const st = words[hz.get(t.id)?.state]; const name = String(t.title).slice(0, 30).trim(); return st ? `${name} (${st})` : name; });
+  if (due.length) parts.push(`Due this week: ${due.join(", ")}.`);
+  return parts.join(" ");
+}
+
+// research/plan-phone.md P7: the lines to act on stay in view, and the tail folds into one
+// expandable_blockquote ("collapsed-by-default block quotation"), sent as an entity with no
+// parse_mode, so the text stays plain. An entity's offset and length are "in UTF-16 code units"
+// (core.telegram.org/bots/api#messageentity), which is what a JS string's length counts.
+// Returns { text } or { text, entities }; null lines are dropped.
+function folded(head, tail) {
+  const top = head.filter(Boolean).join("\n");
+  const rest = tail.filter(Boolean).join("\n");
+  if (!rest) return { text: top };
+  return { text: `${top}\n${rest}`, entities: [{ type: "expandable_blockquote", offset: top.length + 1, length: rest.length }] };
 }
 
 // --- Horizon planning (docs/sheet-horizon.md, "Part 2", 7) ------------------------------------
@@ -267,6 +350,18 @@ function horizonMessage(day) {
   });
   const send_at = new Date(Math.floor(day.now / 60_000) * 60_000).toISOString();
   return [{ kind: "horizon", block_id: null, day: day.today, send_at, text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }], horizon: tasks.map((t) => ({ task_id: t.id, state: hz.get(t.id).state })) }];
+}
+
+// What a message's `horizon` (the states it tells) writes to horizon_state.notified, as groups
+// { ids, notified }: `mark` before it is sent, as the claim, so a failed save sends nothing rather
+// than the same message every minute (its send_at is the minute, so the log's key can't stop it);
+// `restore`, each task's notified as `rows` had it, if Telegram then refuses the message.
+export function horizonMarks(m, rows) {
+  const told = m.horizon ?? [];
+  const before = new Map((rows ?? []).map((h) => [h.task_id, h.notified ?? null]));
+  const groups = (pairs) => [...pairs.reduce((g, [id, v]) => g.set(v, [...(g.get(v) ?? []), id]), new Map())].map(([notified, ids]) => ({ ids, notified }));
+  const mark = ["tight", "wont_fit"].map((st) => ({ ids: told.filter((h) => h.state === st).map((h) => h.task_id), notified: st })).filter((g) => g.ids.length);
+  return { mark, restore: groups(told.map((h) => [h.task_id, before.get(h.task_id) ?? null])) };
 }
 
 // What telegram writes back to horizon_state.notified without a message: back on track forgets
@@ -299,7 +394,7 @@ function awaitingLine(rows) {
 // docs/sheet-v5.md), so a tap acts on the plan it showed; the webhook reads them back on a tap.
 const planButtons = (d, rev) => {
   const r = rev == null ? "" : `:${rev}`;
-  return [{ text: "Approve all", callback_data: `pa:${d}${r}` }, { text: "Open /plan", url: PLAN_URL }, { text: "Skip", callback_data: `ps:${d}${r}` }];
+  return [{ text: "Approve all", callback_data: `pa:${d}${r}` }, { text: "Open /plan", url: planUrl("plan") }, { text: "Skip", callback_data: `ps:${d}${r}` }];
 };
 
 // The plan on its own, when today's proposal is pending and the brief went out before it was
@@ -471,7 +566,7 @@ function checkin({ tasks, day: row, today, tz, needsOpen, settings, sleep, sleep
   const tomorrow = tasks.filter((t) => !t.done && t.due === addDays(today, 1));
   if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
   if (needsOpen.length) lines.push(`Needs you: ${needsOpen.length}.`);
-  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }] }];
+  return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: planUrl("shutdown") }] }];
 }
 
 // --- The pinned Now message (docs/sheet-nudges.md, "The pinned Now message") ---------------
@@ -504,12 +599,18 @@ export function nowText(snapshot, now) {
 // and now_text): { action: "create", text } to send and pin it, made only while he's up (not in
 // quiet hours or before his wake, as the brief); { action: "edit", message_id, text } once the
 // words change, at any hour, since an edit makes no notification; or null. Nothing while
-// Telegram is off.
+// Telegram is off, or while another tick's claim to make it holds (PIN_CLAIM).
+// How long a claim to make the pinned message holds: a tick that sent it but failed to save its
+// id leaves the claim, and only after this can another one be made.
+export const PIN_CLAIM = 15 * 60_000;
 export function pinStep(snapshot, now) {
   if (!telegramOn(snapshot.settings)) return null;
   const text = nowText(snapshot, now);
   const { now_message_id: id, now_text } = snapshot.settings;
   if (id != null) return text === now_text ? null : { action: "edit", message_id: id, text };
+  // Another tick claimed making it (settings.now_claimed_at) and hasn't saved its id yet.
+  const claimed = snapshot.settings.now_claimed_at;
+  if (claimed && now.getTime() - Date.parse(claimed) < PIN_CLAIM) return null;
   const day = dayOf(snapshot, now);
   return day.minutes >= day.openAt && day.minutes < QUIET_FROM ? { action: "create", text } : null;
 }
