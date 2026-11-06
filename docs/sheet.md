@@ -85,6 +85,35 @@ tasks jumping days across time zones.
 - The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
   fades and is off under `prefers-reduced-motion`.
 
+## On the phone
+
+Under 48 rem, one day shows at a time (above). On top of that:
+
+- **To-dos first.** Today's list sits right under the top bar. The Tell Claude box and Recent
+  messages come after the day, before Someday, as one line until the box is in use; the
+  "characters left" count shows only within 500 of the limit. A laptop keeps the box on top.
+- **Now/Next** (every width): one quiet line under today's header, "Now: OS homework until 3:30
+  pm ✓ · Next: Gym 5:30 pm", from the rows already loaded (timed tasks and event to-dos, not done).
+  In an overlap the row that started last is Now. ✓ completes it, with Undo. Redrawn each minute.
+- **Details…** in a task's ⋯ menu: an estimate (presets 15m to 2h, or minutes), a native time
+  and date picker, and a tag, each with Clear. It is the only way to clear an estimate or a
+  fixed time (typed syntax only adds details). A Someday task has no fixed time field. One Undo
+  puts every field back. Every width.
+- **Swipes** (touch screens only; the module loads only there):
+  - On an open row: right is Done (a task or an event to-do), left is Tomorrow (a task on a
+    later day: Next day; an event: nothing). A row commits past 35 % of its width (at most
+    96 px) and says what will happen before you let go; shorter swipes spring back. Undo is the
+    usual toast.
+  - Anywhere else in the day (the heading, Now/Next, an add row, a done row): left is the next
+    day, right the previous, past 60 px and at least twice as sideways as down, like the arrows.
+  - Who wins: **by axis**, CSS `touch-action: pan-y` on the lists leaves every vertical pan to
+    the browser, and a move counts as sideways only at 1.5× its vertical part after 10 px; **by
+    hold**, holding still 300 ms picks a task up to drag (as before), and a finger that moved
+    first drops the hold; **by where it starts**, an open row takes its own swipe, so a day swipe
+    starts outside one. Not from the left 24 px (Safari's back swipe), with two fingers or zoomed
+    in. A tap just after a swipe is ignored.
+  - The arrows, ✓ and ⋯ stay: swipes only speed up what the visible buttons already do (NN/g).
+
 ## Adding and editing (Tweek, Ellie, TeuxDeux)
 
 - **Click an empty row, type, press Enter.** The task goes to the bottom of that day and the next

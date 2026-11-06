@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 const OUT = process.argv[2];
 const BASE = process.env.BASE ?? "http://localhost:4321";
 // Week of Mon 2026-11-02; today Tue 11-03.
-const T = (id, title, day, extra = {}) => ({ id, title, day, list: day ? null : "Inbox", position: id, est_min: null, at_time: null, tag: null, public: true, done: false, rolls: 0, due: null, source: null, created_at: "2026-11-01T00:00:00Z", ...extra });
+const T = (id, title, day, extra = {}) => ({ id: String(id), title, day, list: day ? null : "Inbox", position: id, est_min: null, at_time: null, tag: null, public: true, done: false, rolls: 0, due: null, source: null, created_at: "2026-11-01T00:00:00Z", ...extra });
 const tasks = [
   T(1, "OS homework 4", "2026-11-03", { est_min: 90, due: "2026-11-04", public: false, source: "brightspace" }),
   T(2, "Gym", "2026-11-03", { est_min: 60, at_time: "17:30:00" }),
@@ -23,11 +23,11 @@ const tasks = [
   T(13, "Lab 5", null, { list: "Brightspace", due: "2026-11-12", public: false, source: "brightspace" }),
 ];
 const blocks = [
-  { id: 1, task_id: 3, starts_at: "2026-11-03T15:00:00Z", ends_at: "2026-11-03T15:45:00Z", gcal_id: "g1", proposed: false },
-  { id: 2, task_id: 1, starts_at: "2026-11-03T19:00:00Z", ends_at: "2026-11-03T20:30:00Z", gcal_id: null, proposed: true },
-  { id: 3, task_id: 4, starts_at: "2026-11-03T16:00:00Z", ends_at: "2026-11-03T16:15:00Z", gcal_id: null, proposed: true },
+  { id: 1, task_id: "3", starts_at: "2026-11-03T15:00:00Z", ends_at: "2026-11-03T15:45:00Z", gcal_id: "g1", proposed: false },
+  { id: 2, task_id: "1", starts_at: "2026-11-03T19:00:00Z", ends_at: "2026-11-03T20:30:00Z", gcal_id: null, proposed: true },
+  { id: 3, task_id: "4", starts_at: "2026-11-03T16:00:00Z", ends_at: "2026-11-03T16:15:00Z", gcal_id: null, proposed: true },
   // Approved from Telegram, so no Google event yet: /plan makes one on opening.
-  { id: 4, task_id: 2, starts_at: "2026-11-03T22:30:00Z", ends_at: "2026-11-03T23:30:00Z", gcal_id: null, proposed: false },
+  { id: 4, task_id: "2", starts_at: "2026-11-03T22:30:00Z", ends_at: "2026-11-03T23:30:00Z", gcal_id: null, proposed: false },
 ];
 const days = [{ day: "2026-11-02", planned: true, shutdown: true }, { day: "2026-11-03", planned: false, shutdown: false }];
 // Messages to Claude (docs/sheet-messages.md): a pasted announcement answered, one being read.
@@ -67,7 +67,7 @@ const needs = [
   N(5, "reply", "Done row", "Already handled", "Hidden.", { done: true }),
 ];
 // What the page wrote, for the checks below.
-const writes = { busy: [], events: 0 };
+const writes = { busy: [], events: 0, tasks: [] };
 const pubWeek = tasks.filter((t) => t.day).map((t) => ({ day: t.day, position: t.position, public: t.public, title: t.public ? t.title : null, bar: t.title.length, done: t.done, tag: t.tag }));
 const gEvents = { items: [
   { iCalUID: "e1", summary: "CSE 320 Lecture", start: { dateTime: "2026-11-03T14:00:00Z" }, end: { dateTime: "2026-11-03T15:20:00Z" } },
@@ -87,6 +87,14 @@ function route(r) {
   const p = new URL(u).pathname.replace("/rest/v1/", "");
   const q = new URL(u).search;
   if (p === "busy" && r.method() === "POST") writes.busy.push(JSON.parse(r.postData()));
+  // A saved task comes back with its change; writes.tasks keeps them for the phone checks.
+  if (p === "tasks" && r.method() === "PATCH") {
+    const id = Number(new URLSearchParams(q).get("id")?.replace("eq.", ""));
+    const change = JSON.parse(r.postData());
+    writes.tasks.push({ id, ...change });
+    const row = { ...tasks.find((t) => t.id === String(id)), ...change };
+    return json(r, [row]);
+  }
   // Approved blocks without an event, with their task (api.eventlessBlocks).
   if (p === "blocks" && q.includes("gcal_id=is.null") && r.method() === "GET") {
     return json(r, blocks.filter((x) => !x.proposed && !x.gcal_id).map((x) => ({ ...x, tasks: { title: tasks.find((t) => t.id === x.task_id).title, public: true } })));
@@ -100,6 +108,7 @@ function route(r) {
 const b = await puppeteer.launch({ headless: true });
 // `touch` emulates a phone: a touch screen, so (pointer: coarse) and (hover: none) match.
 async function shot(path, name, w, h, dark, after, at = "2026-11-03T15:20:00Z", touch = false) {
+  if (process.env.ONLY && !name.startsWith(process.env.ONLY)) return;
   const pg = await b.newPage();
   await pg.setViewport({ width: w, height: h, deviceScaleFactor: 1, hasTouch: touch, isMobile: touch });
   await pg.emulateMediaFeatures([{ name: "prefers-color-scheme", value: dark ? "dark" : "light" }]);
@@ -281,6 +290,105 @@ for (const dark of [false, true]) {
   const name = `/plan 1366px ${dark ? "dark" : "light"}`;
   await shot("/plan/", `plan-week-1366-${dark ? "dark" : "light"}`, 1366, 800, dark, async (pg) => { await checkTopBar(pg, name); await checkAddRows(pg, name); await checkAxe(pg, name); });
 }
+// --- The phone experience (research U10, U11, U13, U18; P12; docs/sheet.md, "On the phone") ---
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+// A real touch drag: touch events reach the page as pointer events with pointerType "touch".
+async function swipe(pg, x, y, dx, dy, { hold = 0, keep = false } = {}) {
+  await pg.touchscreen.touchStart(x, y);
+  if (hold) await pause(hold);
+  for (let i = 1; i <= 6; i++) { await pg.touchscreen.touchMove(x + (dx * i) / 6, y + (dy * i) / 6); await pause(16); }
+  if (keep) return;
+  await pg.touchscreen.touchEnd();
+  await pause(400);
+}
+const centre = (pg, sel) => pg.$eval(sel, (x) => { x.scrollIntoView({ block: "center" }); const r = x.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+const row = (id) => `.sheet-day.is-focus [data-id="${id}"]`;
+const focusDay = (pg) => pg.$eval(".sheet-day.is-focus", (x) => x.dataset.day);
+const lastTask = (id) => writes.tasks.filter((t) => t.id === id).at(-1);
+for (const dark of [false, true]) {
+  const mode = dark ? "dark" : "light";
+  // To-dos first: today's first row is on screen and above the message box; Now/Next is above it.
+  await shot("/plan/", `phone-first-${mode}`, 390, 844, dark, async (pg) => {
+    const r = await pg.evaluate(() => {
+      const top = (s) => document.querySelector(s)?.getBoundingClientRect().top;
+      return { row: top(".sheet-day.is-focus .sheet-rows .sheet-row"), box: top(".sheet-message"), line: top(".sheet-nownext"), text: document.querySelector(".sheet-nownext")?.innerText.replace(/\s+/g, " ").trim(), hint: document.querySelector(".sheet-message-hint").getClientRects().length };
+    });
+    if (!(r.row < 420)) failures.push(`${mode}: today's first row starts at ${r.row}, not near the top`);
+    if (!(r.box > r.row)) failures.push(`${mode}: the message box (${r.box}) is above the first row (${r.row})`);
+    if (!(r.line < r.row)) failures.push(`${mode}: Now/Next (${r.line}) isn't above the first row (${r.row})`);
+    if (!/^Now: .* until .*Next: /.test(r.text ?? "")) failures.push(`${mode}: Now/Next reads "${r.text}"`);
+    if (r.hint) failures.push(`${mode}: the message hint shows before the box is in use`);
+    // axe runs on this view in the touch checks above.
+  }, undefined, true);
+  // Mid-swipe, so the reveal can be looked at, armed and in both directions.
+  await shot("/plan/", `phone-swipe-done-${mode}`, 390, 844, dark, async (pg) => { const [x, y] = await centre(pg, row(3)); await swipe(pg, x - 80, y, 130, 0, { keep: true }); await pause(50); }, undefined, true);
+  await shot("/plan/", `phone-swipe-tomorrow-${mode}`, 390, 844, dark, async (pg) => { const [x, y] = await centre(pg, row(3)); await swipe(pg, x + 80, y, -130, 0, { keep: true }); await pause(50); }, undefined, true);
+  await shot("/plan/", `phone-details-${mode}`, 390, 844, dark, async (pg) => {
+    await pg.$eval(`${row(2)} .sheet-more`, (x) => x.click());
+    await pg.click('[data-move="details"]');
+    await pause(500);
+    await checkTargets(pg, `details ${mode}`, "[data-details] :is(button:not([hidden]), input)");
+    await checkAxe(pg, `details ${mode}`);
+  }, undefined, true);
+}
+await shot("/plan/", "phone-gestures", 390, 844, false, async (pg) => {
+  // Right: done, with the undo toast. Undo brings it back.
+  let [x, y] = await centre(pg, row(3));
+  await swipe(pg, x - 80, y, 140, 0);
+  if (lastTask(3)?.done !== true) failures.push(`swipe right: ${JSON.stringify(lastTask(3))}`);
+  if (await pg.$eval("[data-toast]", (t) => t.hidden)) failures.push("swipe right: no undo toast");
+  await pg.$eval('[data-act="undo"]', (b) => b.click());
+  await pause(300);
+  if (lastTask(3)?.done !== false) failures.push(`undo: ${JSON.stringify(lastTask(3))}`);
+  // Left: tomorrow.
+  [x, y] = await centre(pg, row(4));
+  await swipe(pg, x + 80, y, -140, 0);
+  if (lastTask(4)?.day !== "2026-11-04") failures.push(`swipe left: ${JSON.stringify(lastTask(4))}`);
+  // Too short a swipe does nothing, and no tap follows it.
+  const n = writes.tasks.length;
+  [x, y] = await centre(pg, row(1));
+  await swipe(pg, x, y, 40, 0);
+  if (writes.tasks.length !== n) failures.push("a short swipe saved something");
+  if (await pg.$(".sheet-edit")) failures.push("a short swipe opened the edit box");
+  // Up and down: no save, and the day stays. (Headless can't always pan; the page must not act.)
+  [x, y] = await centre(pg, row(1));
+  await swipe(pg, x, y, 8, -120);
+  if (writes.tasks.length !== n || (await focusDay(pg)) !== "2026-11-03") failures.push("a vertical drag acted on the row or the day");
+  // Hold first: a drag, not a swipe.
+  [x, y] = await centre(pg, `${row(1)} .sheet-title`);
+  await swipe(pg, x, y, 90, 0, { hold: 380, keep: true });
+  if (!(await pg.$(".is-ghost"))) failures.push("hold, then move: not picked up");
+  if (await pg.$(".is-swiping")) failures.push("hold, then move: the row swiped as well");
+  await pg.touchscreen.touchEnd();
+  await pause(400);
+  // The heading steps the day: left is next, right is previous; the row's swipe never does.
+  [x, y] = await centre(pg, ".sheet-day.is-focus .sheet-head");
+  await swipe(pg, x + 60, y, -120, 0);
+  if ((await focusDay(pg)) !== "2026-11-04") failures.push(`heading swipe left: on ${await focusDay(pg)}`);
+  [x, y] = await centre(pg, ".sheet-day.is-focus .sheet-head");
+  await swipe(pg, x - 60, y, 120, 0);
+  if ((await focusDay(pg)) !== "2026-11-03") failures.push(`heading swipe right: on ${await focusDay(pg)}`);
+  // From the screen's left edge: Safari's back swipe, not ours.
+  [x, y] = await centre(pg, ".sheet-day.is-focus .sheet-head");
+  await swipe(pg, 10, y, 120, 0);
+  if ((await focusDay(pg)) !== "2026-11-03") failures.push("a swipe from the screen edge stepped the day");
+}, undefined, true);
+// Details: clear an estimate and a fixed time, the thing typed syntax can't do; Undo restores them.
+await shot("/plan/", "phone-details-clear", 390, 844, false, async (pg) => {
+  await pg.$eval(`${row(2)} .sheet-more`, (x) => x.click());
+  await pg.click('[data-move="details"]');
+  await pause(500);
+  await pg.click('[aria-label="Clear estimate"]');
+  await pg.click('[aria-label="Clear fixed time"]');
+  await pg.click('[data-details] [type="submit"]');
+  await pause(400);
+  const s = lastTask(2);
+  if (!s || s.est_min !== null || s.at_time !== null) failures.push(`details clear: ${JSON.stringify(s)}`);
+  await pg.$eval('[data-act="undo"]', (b) => b.click());
+  await pause(300);
+  const u = lastTask(2);
+  if (u?.est_min !== 60 || u?.at_time !== "17:30:00") failures.push(`details undo: ${JSON.stringify(u)}`);
+}, undefined, true);
 // Add to Home Screen opens /plan/ on its own (Web App Manifest, https://www.w3.org/TR/appmanifest/),
 // and standalone hides the site's nav and footer.
 {

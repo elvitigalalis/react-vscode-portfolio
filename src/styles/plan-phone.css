@@ -44,3 +44,68 @@
   .sheet-block-x { position: relative; min-width: 2.75rem; }
   .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
 }
+
+/* The Now/Next line above today (research U18). In the week's narrow column each part keeps one
+   line and shows the rest as hover text; on a phone it wraps. */
+.sheet-nownext { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.35rem; margin: 0.2rem 0 0; font-size: 0.8125rem; line-height: 1.5rem; color: var(--muted); }
+.sheet-nownext b { font-weight: 600; color: var(--fg); }
+.sheet-nownext-part { min-width: 0; }
+.sheet-nownext-done { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 0.3rem; cursor: pointer; }
+@media (min-width: 48.01rem) {
+  .sheet-nownext-part { flex: 1 1 calc(100% - 2rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (pointer: coarse) {
+  .sheet-nownext-done::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2.75rem; height: 2.75rem; translate: -50% -50%; }
+}
+
+/* The task details dialog (research U11). */
+.sheet-taskinfo { width: min(26rem, calc(100vw - 2rem)); }
+.sheet-taskinfo h2 { overflow-wrap: anywhere; }
+.sheet-details-field { display: grid; gap: 0.3rem; margin: 0 0 0.9rem; font-size: 0.9375rem; }
+.sheet-details-field > label { font-weight: 600; }
+.sheet-details-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
+.sheet-details-row input {
+  flex: 1 1 8rem; min-width: 0; min-height: 2.75rem; font: inherit; font-size: 1rem; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.3rem 0.5rem;
+}
+.sheet-details-row .sheet-link { min-height: 2.75rem; min-width: 2.75rem; }
+.sheet-details-presets { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sheet-taskinfo .sheet-btn { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
+.sheet-details-note { margin: 0; font-size: 0.875rem; color: var(--danger); }
+
+/* To-dos first (research U13): on phones the Tell Claude box and Recent drop under the days, and the
+   box is one line until it's in use. The DOM keeps them first for the Mac's keyboard. */
+@media (max-width: 48rem) {
+  .sheet-planner { display: flex; flex-direction: column; }
+  .sheet-planner > * { min-width: 0; }
+  .sheet-planner > .sheet-week ~ * { order: 2; }
+  .sheet-planner > :is(.sheet-message, .sheet-message-recent) { order: 1; }
+  .sheet-planner > .sheet-message { margin-top: 1rem; }
+  .sheet-message:not(:focus-within) .sheet-message-hint:not(:has([data-message-count]:not(:empty))) { display: none; }
+}
+
+/* Swipes (swipe-ui.mjs, docs/sheet.md, "On the phone"). pan-y hands sideways moves to the page and
+   keeps vertical scrolling and pinch zoom with the browser. A row's contents slide; ::before fills
+   the space they leave with what letting go will do. */
+.sheet-help-touch { display: none; }
+@media (pointer: coarse) { .sheet-help-touch { display: block; } }
+@media (max-width: 48rem) {
+  .sheet-planner :is(.sheet-day, .sheet-list) { touch-action: pan-y pinch-zoom; }
+  .sheet-evtodo { position: relative; }
+  .is-swiping { overflow: hidden; }
+  .is-swiping > * { translate: var(--swipe) 0; }
+  .is-swiping::before {
+    content: attr(data-swipe); position: absolute; top: 0; bottom: 0; left: 0; width: var(--swipe-w); overflow: hidden; display: flex; align-items: center;
+    padding-inline: 0; white-space: nowrap; text-indent: 0.75rem; font-size: 0.875rem; font-weight: 600; background: var(--chip); color: var(--fg);
+  }
+  .is-swipe-left::before { left: auto; right: 0; justify-content: flex-end; text-indent: 0; padding-inline-end: 0; }
+  .is-swipe-left::before { direction: rtl; text-indent: 0.75rem; }
+  .is-armed::before { background: var(--accent); color: var(--bg); }
+  .is-leaving { opacity: 0.5; }
+  .is-day-swiping { translate: var(--swipe) 0; }
+  .sheet-week:has(.is-day-swiping) { overflow-x: clip; }
+}
+@media (max-width: 48rem) and (prefers-reduced-motion: no-preference) {
+  :is(.sheet-task, .sheet-evtodo) > *, .sheet-day { transition: translate 0.15s ease-out; }
+  .is-swiping > *, .is-day-swiping { transition: none; }
+}

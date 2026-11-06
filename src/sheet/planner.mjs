@@ -237,6 +237,12 @@ export async function completeTask(id, done = true) {
   if (done) offerUndo(`Done: ${t.title}`, () => patch(id, { done: false }));
 }
 
+// ✓ on a row (and a swipe or the Now/Next line): flip it, and say so if it didn't save.
+export async function toggleDone(id) {
+  const done = !state.tasks.get(id).done;
+  try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
+}
+
 async function removeTask(id) {
   const t = state.tasks.get(id);
   await dropBlocks(id);
@@ -414,7 +420,7 @@ async function saveEventTodo(key, day, change) {
   else state.todos.push({ cal_event_key: key, title_ai: null, done: false, hidden: false, ...change });
 }
 
-async function toggleEventTodo(target) {
+export async function toggleEventTodo(target) {
   const { key, day, row } = eventRowOf(target);
   if (!row) return;
   try {
@@ -814,7 +820,7 @@ function openMenu(id, anchor) {
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
   menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
   const r = anchor.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 330)}px`;
+  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 365)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
   menu.querySelector("button").focus();
@@ -828,12 +834,13 @@ async function menuAction(kind) {
   const id = menuFor;
   $("[data-menu]").hidePopover();
   if (!id) return;
+  if (kind === "details") return import("./task-details-dialog.mjs").then((m) => m.openDetails(root, id), failed);
   await taskAction(id, kind);
   root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus();
 }
 
 // One of the task menu's actions on a task (the menu, and the week's keys), then a redraw.
-async function taskAction(id, kind) {
+export async function taskAction(id, kind) {
   const run = () => runAction(id, kind);
   try { await run(); } catch (e) { failed(e, ACTION_WORDS[kind]?.replace("%s", named(state.tasks.get(id))) ?? null, run); }
   render();
@@ -1052,8 +1059,7 @@ function wire() {
     }
     const id = li.dataset.id;
     if (e.target.closest(".sheet-check")) {
-      const done = !state.tasks.get(id).done;
-      try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
+      await toggleDone(id);
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
     } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
