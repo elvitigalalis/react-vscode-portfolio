@@ -1951,4 +1951,21 @@ do $$ begin
   raise notice '✓ projects: anon sees none';
 end $$;
 SQL
+
+# A text to the bot is saved once: Telegram resends an update when the webhook is slow, and two
+# deliveries could both pass the telegram function's select. /plan's own messages (tg_message_id
+# null) are any number. The pinned Now message's claim column exists.
+psql_as postgres >/dev/null <<'SQL'
+do $$ begin
+  insert into messages (text, tg_message_id) values ('from telegram', 4242);
+  begin
+    insert into messages (text, tg_message_id) values ('from telegram again', 4242);
+    raise exception 'a Telegram message saved twice';
+  exception when unique_violation then null; end;
+  insert into messages (text) values ('from plan 1'), ('from plan 2');
+  delete from messages where text in ('from telegram', 'from plan 1', 'from plan 2');
+  perform now_claimed_at from settings;
+  raise notice '✓ messages: one row per Telegram message; pinned message claim column';
+end $$;
+SQL
 echo "✓ all schema checks passed"
