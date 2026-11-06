@@ -190,3 +190,56 @@ test("woke_late: a sleep change heavy enough to start a replan, whose kind the f
   // Replans off: held, as any change.
   assert.equal(shouldReplan([{ id: "c1", at: "2026-11-04T15:29:00Z", ...row }], { ...state, settings: { ...state.settings, replans_on: false } }, now).hold, "replans_off");
 });
+
+// --- No-op replans and the paused cap (research/plan-reliability.md R7) ----------------------
+
+test("replanState: a replan revision whose blocks match the one before it doesn't count toward the cap", async () => {
+  const { replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const b = (task_id, s, e) => ({ task_id, habit_id: null, starts_at: s, ends_at: e });
+  const gym = b("t1", "2026-11-04T20:00:00Z", "2026-11-04T21:00:00Z");
+  const hw = b("t2", "2026-11-04T18:00:00Z", "2026-11-04T19:00:00Z");
+  const proposals = [
+    { rev: 1, run_trigger: "morning", created_at: "2026-11-04T11:09:00Z", blocks: [gym, hw] },
+    { rev: 2, run_trigger: "replan", created_at: "2026-11-04T15:05:00Z", blocks: [hw, gym] },             // the same blocks
+    { rev: 3, run_trigger: "replan", created_at: "2026-11-04T17:05:00Z", blocks: [hw] },                  // changed
+  ];
+  const replans = [{ at: "2026-11-04T15:00:00Z", result: "started" }, { at: "2026-11-04T17:00:00Z", result: "started" }];
+  assert.equal(replanState({ settings, day: null, proposals, replans }).plans_today, 2);
+});
+
+test("capHold: at the daily cap, says how many plans ran and whether a weighty change is waiting", async () => {
+  const { capHold } = await import("../src/sheet/replan.mjs");
+  const now = new Date("2026-11-04T22:00:00Z");
+  const state = { plans_today: 8, seen_until: "2026-11-04T21:00:00Z" };
+  const c = (weight, at) => ({ id: "c", at, weight, reason: "x", kind: "busy" });
+  assert.deepEqual(capHold([c(10, "2026-11-04T21:30:00Z")], state, now), { hold: "daily_cap", used: 8, weighty: true });
+  assert.deepEqual(capHold([c(2, "2026-11-04T21:30:00Z"), c(10, "2026-11-04T20:30:00Z")], state, now), { hold: "daily_cap", used: 8, weighty: false });
+});
+
+// --- The morning plan's one retry (research/plan-reliability.md R2) ---------------------------
+
+test("shouldRetryMorning: once a day after 6:40 am, when no plan came in today", async () => {
+  const { shouldRetryMorning } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", morning_on: true };
+  const base = { settings, day: null, today: "2026-11-04", proposals: [], replans: [] };
+  const at = (iso) => new Date(iso);
+  assert.equal(shouldRetryMorning(base, at("2026-11-04T11:39:00Z")), false);   // 6:39 am
+  assert.equal(shouldRetryMorning(base, at("2026-11-04T11:40:00Z")), true);    // 6:40 am
+  assert.equal(shouldRetryMorning(base, at("2026-11-04T19:00:00Z")), true);    // 2 pm, still none
+  assert.equal(shouldRetryMorning(base, at("2026-11-05T04:00:00Z")), false);   // 11 pm
+  assert.equal(shouldRetryMorning({ ...base, proposals: [{ rev: 1, run_trigger: "replan" }] }, at("2026-11-04T12:00:00Z")), false);
+  assert.equal(shouldRetryMorning({ ...base, replans: [{ reasons: ["morning_retry"], result: "failed" }] }, at("2026-11-04T12:00:00Z")), false);
+  assert.equal(shouldRetryMorning({ ...base, settings: { ...settings, morning_on: false } }, at("2026-11-04T12:00:00Z")), false);
+  assert.equal(shouldRetryMorning({ ...base, day: { shutdown: true } }, at("2026-11-04T20:00:00Z")), false);
+});
+
+test("replanState: the retry's own row doesn't count as a second plan beside the morning revision it made", async () => {
+  const { replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const proposals = [{ rev: 1, run_trigger: "morning", created_at: "2026-11-04T11:50:00Z" }];
+  const replans = [{ at: "2026-11-04T11:40:00Z", result: "started", reasons: ["morning_retry"] }];
+  const s = replanState({ settings, day: null, proposals, replans });
+  assert.equal(s.plans_today, 1);
+  assert.equal(s.last_plan_at, "2026-11-04T11:50:00.000Z");
+});

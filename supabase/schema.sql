@@ -509,7 +509,7 @@ alter table settings add column if not exists morning_on boolean not null defaul
 -- one Postgres gave the inline check), so a re-run is safe.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
 
 -- Write day d's proposal in one transaction: its proposed blocks replaced by `blocks`
 -- ([{ task_id, starts_at, ends_at }]), the proposals row pending with a new created_at, and the
@@ -932,7 +932,7 @@ revoke insert, update, delete on actuals from authenticated;
 -- The Finished? check, and the replan message (R1), in the nudges log.
 alter table nudges drop constraint if exists nudges_kind_check;
 alter table nudges add constraint nudges_kind_check
-  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon'));
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
 
 -- --- v5 H1, habits (docs/sheet-v5.md) ----------------------------------------------------------
 -- Things Lisul does on set weekdays (gym, lunch, a weekly review), edited in /plan's Settings.
@@ -2023,3 +2023,24 @@ begin
   return result;
 end $$;
 revoke execute on function answer_message(uuid, jsonb, jsonb, text, jsonb) from public, anon;
+
+-- --- Telegram: quieter, self-checking (docs/sheet-nudges.md, "Health"; 2026-11-06) ------------
+-- When the bot last told him it reads only text, after a voice note or photo (capture.mjs,
+-- mediaReply): at most once an hour.
+alter table settings add column if not exists media_reply_at timestamptz;
+-- The health check (src/sheet/health.mjs): the issue keys already told in Telegram (by the brief
+-- or a health message) and still open. A key that clears is dropped, so it is told again only
+-- if it comes back.
+alter table settings add column if not exists health_told text[] not null default '{}';
+-- A health message in the nudges log (kind 'health', block_id null), at most two a day.
+alter table nudges drop constraint if exists nudges_kind_check;
+alter table nudges add constraint nudges_kind_check
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health'));
+-- A message to Claude whose fire failed (research/plan-reliability.md R9). _shared/capture.ts
+-- sets fire_error ('failed' or 'rate_limited') and, from a 429, retry_at; the telegram tick fires
+-- the task once more after retry_at (or 5 minutes on), claiming it by setting refired_at, and
+-- records the outcome: fired_at on a start, or the new fire_error. A second failure stays pending
+-- and the health check tells Lisul.
+alter table messages add column if not exists fire_error text check (char_length(fire_error) <= 300);
+alter table messages add column if not exists retry_at timestamptz;
+alter table messages add column if not exists refired_at timestamptz;

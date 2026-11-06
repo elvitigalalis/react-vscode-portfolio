@@ -112,6 +112,8 @@ export function shouldReplan(changes, state, now) {
 export function replanState({ settings, day, today = day?.day, proposals, replans, sleep = [], sleepTimes = [] }) {
   // A replan that failed or was rate limited never ran, so it counts for neither.
   const fired = replans.filter((r) => r.result == null || r.result === "started");
+  // The morning retry's row stands for the morning revision it makes, which counts already.
+  const retried = fired.filter((r) => (r.reasons ?? []).includes(MORNING_RETRY)).length;
   const times = [...proposals.map((p) => p.created_at), ...fired.map((r) => r.at)].filter(Boolean);
   const last = times.length ? Math.max(...times.map((x) => Date.parse(x))) : null;
   // The newest revision's cut-off: when its run read the day, or its created_at without one.
@@ -121,13 +123,50 @@ export function replanState({ settings, day, today = day?.day, proposals, replan
     settings: { time_zone: settings.time_zone, replans_on: !!settings.replans_on, morning_on: !!settings.morning_on },
     day: day ?? null,
     shutdown: shutdownFor(today, { line: day?.shutdown_at, settings, sleep, sleepTimes, tz: settings.time_zone }),
-    plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length,
+    plans_today: Math.max(0, (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length - retried - noops(proposals)),
     last_plan_at: last == null ? null : new Date(last).toISOString(),
     seen_until: cut == null ? null : new Date(cut).toISOString(),
     // He skipped the day's plan, or it lapsed: no replan reopens it.
     closed: newest?.status === "skipped" || newest?.status === "lapsed",
     last_edit_at: settings.plan_edited_at ?? null,
   };
+}
+
+// research/plan-reliability.md R7: a replan whose revision proposes the same blocks as the
+// revision before it changed nothing, so it gives its slot under the daily cap back. Counted from
+// proposals rows with `blocks` ([{ task_id, habit_id, starts_at, ends_at }]); rows without them
+// count as changed.
+const blockKey = (b) => `${b.task_id ?? ""}|${b.habit_id ?? ""}|${Date.parse(b.starts_at)}|${Date.parse(b.ends_at)}`;
+const sameBlocks = (a, b) => { const x = a.map(blockKey).sort(), y = b.map(blockKey).sort(); return x.length === y.length && x.every((k, i) => k === y[i]); };
+function noops(proposals) {
+  const revs = [...proposals].sort((a, b) => (a.rev ?? 1) - (b.rev ?? 1));
+  return revs.filter((p, i) => i > 0 && p.run_trigger === "replan" && Array.isArray(p.blocks) && Array.isArray(revs[i - 1].blocks)
+    && sameBlocks(p.blocks, revs[i - 1].blocks)).length;
+}
+
+// When shouldReplan holds at the daily cap: { hold: "daily_cap", used, weighty }, where weighty
+// says a change of fire weight is waiting that the last plan didn't see. The health check says
+// the pause only then (health.mjs), since nothing else that day needs a replan to reach him.
+// Null under the cap.
+export function capHold(changes, state, now) {
+  if (state.plans_today < DAILY_CAP) return null;
+  const seen = ms(state.seen_until ?? state.last_plan_at);
+  const weighty = changes.some((c) => c.weight >= FIRE_WEIGHT && Date.parse(c.at) <= now.getTime() && (seen == null || Date.parse(c.at) > seen));
+  return { hold: "daily_cap", used: state.plans_today, weighty };
+}
+
+// --- The morning plan's one retry (research/plan-reliability.md R2) ----------------------------
+// Nothing else retries a 6:07 morning run that failed or never submitted (a usage limit, a
+// connector needing re-auth), and with Auto-approve on a missed plan means no nudges all day.
+// So once a day, from 6:40 am until quiet hours, with the morning task on, no revision for today
+// and the day not shut down, the tick fires the morning task once more. Its replans row carries
+// the reason "morning_retry" (claim_replan), which is how "once" is kept.
+export const MORNING_RETRY = "morning_retry";
+const RETRY_FROM = 6 * 60 + 40;
+export function shouldRetryMorning({ settings, day, proposals, replans }, now) {
+  const { minutes } = localNow(now, settings.time_zone);
+  return !!settings.morning_on && minutes >= RETRY_FROM && minutes < QUIET_FROM && !day?.shutdown
+    && !proposals.length && !replans.some((r) => (r.reasons ?? []).includes(MORNING_RETRY));
 }
 
 // What the tick writes after a fire: the replans row's patch, and whether to untie its changes

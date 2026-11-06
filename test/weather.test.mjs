@@ -40,13 +40,14 @@ const eight = new Date("2026-11-04T13:00:00Z");
 const briefText = (snap) => whatToSend(snap, eight).find((m) => m.kind === "brief").text;
 const LINE = "Weather: Rain 2–5 pm (70%), Rain 8–9 pm (40%), 41–54°F.";
 
-test("brief: the weather line follows the at-risk line", () => {
+// Since the brief folds its tail (research/plan-phone.md P7), the weather line comes after the lines to act on.
+test("brief: the weather line folds under the at-risk and plan lines", () => {
   const tasks = [
     { id: "t1", title: "OS homework", day: DAY, done: false, due: null, public: true },
     { id: "t2", title: "Essay", day: null, done: false, due: "2026-11-05", public: true },
   ];
   assert.equal(briefText(snapshot({ tasks, weather: cache })),
-    `Today: 1 task, 0 blocks.\nAt risk: Essay (due Thu).\n${LINE}\nNothing planned yet: say "plan my day" to Claude.`);
+    `Today: 1 task, 0 blocks.\nAt risk: Essay (due Thu).\nNothing planned yet: say "plan my day" to Claude.\n${LINE}`);
 });
 
 test("brief: an empty day still gets the weather", () => {

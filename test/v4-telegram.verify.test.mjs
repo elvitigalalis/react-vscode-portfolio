@@ -52,7 +52,7 @@ const block = (id, task_id, starts_at, ends_at, extra = {}) => ({ id, task_id, s
 const snapshot = (extra = {}) => ({ settings, day: null, tasks: [], blocks: [], log: [], proposal: null, needsOpen: [], campus: [], ...extra });
 const at = (iso) => new Date(iso);
 const openPlan = { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" };
-const planButtons = (d) => [{ text: "Approve all", callback_data: `pa:${d}` }, openPlan, { text: "Skip", callback_data: `ps:${d}` }];
+const planButtons = (d) => [{ text: "Approve all", callback_data: `pa:${d}` }, { ...openPlan, url: `${openPlan.url}?open=plan` }, { text: "Skip", callback_data: `ps:${d}` }];
 
 // Today: OS homework (due Thu, so at risk), Gym, Office hours; HW3 is a course task due Monday.
 const tasks = [
@@ -115,7 +115,7 @@ test("brief: with today's proposal pending, it keeps its first and at-risk lines
     ].join("\n"),
     buttons: [
       { text: "Approve all", callback_data: "pa:2026-11-04" },
-      { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" },
+      { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/?open=plan" },
       { text: "Skip", callback_data: "ps:2026-11-04" },
     ],
   }]);
@@ -180,7 +180,7 @@ test("proposal message: a plan landing after the brief is sent on its own, with 
     text: PLAN_LINES.join("\n"),
     buttons: [
       { text: "Approve all", callback_data: "pa:2026-11-04" },
-      { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/" },
+      { text: "Open /plan", url: "https://www.lisul-elvi.com/plan/?open=plan" },
       { text: "Skip", callback_data: "ps:2026-11-04" },
     ],
   }]);
