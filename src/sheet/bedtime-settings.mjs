@@ -4,7 +4,9 @@
 // The toggles keep one label and say their state with aria-pressed, as Replans does.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
+import { alarmFor, alarmUrl } from "./alarm.mjs";
 import { bedtimeFor, bedtimeStatus, ouraWindow, ouraWindowLine, tonight } from "./bedtime.mjs";
+import { formatClock } from "./logic.mjs";
 import { actHooks, failed, render, settingsHooks, state } from "./planner.mjs";
 
 let root;
@@ -22,6 +24,12 @@ function draw() {
   // Oura's own window and hint, when it has one ("Oura: 12:15–12:45 am, earlier bedtime").
   const w = ouraWindowLine(ouraWindow(n, state.sleepTimes));
   $("[data-bedtime-note]").textContent = [bedtimeStatus(b, s), w].filter(Boolean).join(" · ");
+  // The wake alarm (docs/sheet-alarms.md): opens his Sheet Alarm shortcut with the time.
+  const a = alarmFor(new Date(), state.sleep, tz);
+  const [h, m] = a.time.split(":").map(Number);
+  $("[data-alarm]").href = alarmUrl(a.time);
+  $("[data-alarm]").textContent = `Set iPhone alarm for ${formatClock(h * 60 + m)}`;
+  $("[data-alarm-note]").textContent = a.source === "typical" ? "(your usual wake)" : "(no usual wake yet)";
 }
 
 async function save(patch) {
