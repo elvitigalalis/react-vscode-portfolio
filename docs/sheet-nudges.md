@@ -210,3 +210,42 @@ it, after re-running the schema):
    Sheet" Claude Project with the instructions from `sheet-claude.md`.
 
 Claude never handles the token.
+
+## Quieter messages and health (2026-11-06)
+
+- **Silent messages:** Finished?, the check-in, replan and horizon messages and receipts go out
+  with `disable_notification` (no sound, still in the chat). The brief, the plan, start nudges,
+  repeats, snoozes, wind-down, bedtime and health alerts ring (`silent` in `nudges.mjs`).
+- **Links:** Open /plan carries `?open=plan` under a plan, `?open=shutdown` under the check-in and
+  `?open=needs` under a brief that counts open Needs you rows ("Needs you: 2.").
+- **The folded brief:** what to act on stays in view (counts, at risk, won't fit, Monday's Last
+  week line, the plan, a missed plan, Needs you, any health issue). Sleep score, tip, cap,
+  weather, calendar, Awaiting reply and "Sheet: all green." fold into one `expandable_blockquote`
+  entity (UTF-16 offsets, no `parse_mode`).
+- **Mondays:** "Last week: 18h30 done of 24h planned. Course tasks ran 1.4× estimate. Due this
+  week: Essay (tight)." Skipped with fewer than 3 planned days last week. No sleep numbers.
+- **Texts to the bot:** the bot reacts 👀 (Claude is reading) or ✍ (queued), and 👌 once the
+  receipt goes out; it sends the old text ack only when rate limited or if the reaction is
+  refused. A voice note, photo or file gets "I can only read text for now…" at most once an hour
+  (`settings.media_reply_at`).
+
+### Health
+
+`src/sheet/health.mjs` works out what is broken from rows the minute tick reads: a feed failing
+or stale (3 of its intervals, 30 min at least), a mail, calendar or Oura account needing
+reconnecting, Telegram's webhook missing or not delivering, today's newest replan failing or
+rate limited, the morning plan's retry failing, replans paused at the daily cap with a weighty
+change waiting, and messages to Claude whose one re-fire failed.
+
+- **The brief** ends with "Sheet: all green." (folded), or the issues in view: "Sheet: Gmail sync
+  failing (see Settings)."
+- **Alerts:** one `health` message per incident, only after the brief, only while messages go
+  out (from his wake, never before 8:00, until 23:00), at most **2 a day**. They sit **beside
+  the nudge budget**, like the brief: they use none of its six slots and have their own cap.
+  `settings.health_told` holds the keys told and still open; a key that clears is dropped, so it
+  is told again only if it comes back. Issues the brief listed count as told.
+- **Self-repair:** a missing webhook is set again at the function's own URL; a morning plan
+  missing at 6:40 am is fired once more (a `replans` row with reason `morning_retry`); a message
+  whose fire failed is fired once more after 5 minutes or its 429's retry time (`messages.
+  fire_error`, `retry_at`, `refired_at`). A replan revision with the same blocks as the one
+  before doesn't count toward the daily cap of 8.
