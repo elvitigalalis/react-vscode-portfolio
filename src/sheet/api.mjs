@@ -90,7 +90,7 @@ export const googleStatus = () => tokens.status();
 
 export class SheetError extends Error {}
 
-async function rest(path, { method = "GET", body, prefer, anon = false } = {}) {
+export async function rest(path, { method = "GET", body, prefer, anon = false } = {}) {
   const s = anon ? null : await session();
   const res = await fetch(`${SHEET.supabaseUrl}/rest/v1/${path}`, {
     method,

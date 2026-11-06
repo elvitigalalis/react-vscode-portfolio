@@ -7,6 +7,8 @@ import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets
 import { sourceOf, loadShare } from "./glance.mjs";
 import { approveAllCall, planNotes } from "./morning.mjs";
 import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock, setWindow } from "./plan-today.mjs";
+import { estimateHint, keepsMoving } from "./lookback.mjs";
+import { history as readHistory, lookbackEntry, moverPrompts } from "./lookback-view.mjs";
 
 let dialog;
 let day;          // the day being planned
@@ -15,6 +17,7 @@ let notes = [];   // the day's proposal: "Didn't fit: …", "Couldn't fit: …",
 let rev = null;   // its revision number (v5)
 let proposal = null; // the day's newest revision, for Approve all
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
+let history = null; // the look-back (docs/sheet-lookback.md), null until read
 
 // "Done ≈" counts from when his day starts (planner.mjs dayStart: after his wake), on today
 // never before now; it counted from a fixed 9 am before.
@@ -105,6 +108,8 @@ export function draw() {
     const t = r.task;
     const row = taskRow(t, r.start == null ? null : r);
     if (t.id === picked) row.classList.add("is-picked");
+    const hint = estimateHint(t, history?.paces);
+    if (hint) row.append(el("span", { className: "sheet-hint", textContent: hint }));
     return row;
   }));
   list.dataset.day = day;
@@ -130,6 +135,8 @@ export function draw() {
       rev ? el("span", { className: "sheet-rev", textContent: `Revision ${rev}` }) : null,
       approveButton("Approve all proposed blocks", "sheet-approve-all", "Approve all")) : null,
     notes.length ? el("ul", { className: "sheet-plan-notes" }, ...notes.map((n) => el("li", { textContent: n }))) : null,
+    lookbackEntry(history, draw),
+    history ? moverPrompts(tasksOn(day).filter((t) => keepsMoving(t, history.feedback, history.day, SHEET.timeZone)), day, draw) : null,
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
@@ -162,7 +169,7 @@ async function fetchNotes() {
 export async function open() {
   const here = localNow(new Date(), SHEET.timeZone);
   day = dialogDay(here, shutdownAt(here.day), Boolean(state.days[here.day]?.shutdown));
-  await Promise.all([fetchEvents(), fetchNotes()]);
+  await Promise.all([fetchEvents(), fetchNotes(), readHistory().then((h) => { history = h; })]);
   draw();
   dialog.showModal();
   dialog.querySelector(".sheet-timeline-wrap").scrollTop = Math.max(0, y(Math.min(meter(day).finish, shutdownAt(day))) - 300);
