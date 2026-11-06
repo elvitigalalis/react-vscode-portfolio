@@ -69,7 +69,7 @@ tasks jumping days across time zones.
   Read-only; a click opens the event in Google. Events that have ended today fade. Past four,
   the rest fold into "+N more" (ended ones fold first). On wide screens the columns share grid
   rows, so the busiest calendar sets where every day's tasks start and task lines stay level.
-  Events come from his main calendar plus any extra calendar IDs he pastes into **Calendars**.
+  Events come from his main calendar plus any extra calendar IDs he pastes into **Calendars** (Settings, Accounts).
   They are read in his browser and never saved to the database, so `/now` never sees them.
 - **Day load chip:** the day's undone estimates. Its budget is 5 h 30, or less when his events
   leave less free time between 9:30 am and 10 pm (today: from now). Then it reads `2h45 / 3h10`.

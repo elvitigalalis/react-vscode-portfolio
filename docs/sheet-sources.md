@@ -212,6 +212,12 @@ Each is deployed with `--use-api --no-verify-jwt`, like `telegram`.
   - **Feeds status** shows each feed's last fetch, whether it worked, and its item count.
   - Each section's module pushes a fill function onto `settingsHooks` (planner.mjs); opening
     Settings runs them together, so no section depends on load order.
+  - Since research U12 (settings-sections.mjs) the sections sit in four groups with an index at
+    the top: **Accounts** (mail, calendar with the extra calendar IDs that were the separate
+    Calendars dialog, Oura), **Day** (cap, sleep and the wake alarm, habits, enrollment),
+    **Claude** (interests, replans, auto-approve, triage) and **Status** (feeds, pace). Feed
+    failed opens Settings at Status and ⋯ → Calendars at Accounts; on a phone the other groups
+    start closed. Long explanations are one line with the rest behind "More".
 
 ### Claude (`docs/sheet-claude.md`)
 
