@@ -191,6 +191,8 @@ import "../../styles/sheet.css";
         <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn" data-act="bedtime-ease" aria-pressed="true">Ease in</button> <button type="button" class="sheet-btn" data-act="wind-down" aria-pressed="true">Wind-down</button> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
         <p class="small" role="status" data-bedtime-note></p>
         <p><button type="button" class="sheet-link" data-act="oura-week">Sleep this week</button></p>
+        <!-- Wake alarm (docs/sheet-alarms.md): src/sheet/bedtime-settings.mjs fills the link. -->
+        <p class="small"><a data-alarm href="#">Set iPhone alarm</a> <span data-alarm-note></span></p>
       </section>
 
       <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
