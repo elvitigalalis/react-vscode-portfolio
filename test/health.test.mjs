@@ -156,3 +156,9 @@ test("alert: at most two a day, beside the nudge budget", () => {
   }), now);
   assert.deepEqual(out.map((m) => m.kind), ["start", "health"]);
 });
+
+test("health: a failed replan backing off says when the next try is, under the same key", () => {
+  const failed = { at: "2026-10-26T13:50:00Z", result: "failed" };
+  const h = health({ tz, replans: [failed], replanHold: { hold: "fire_failed", until: "2026-10-26T14:05:00.000Z" } }, now);
+  assert.deepEqual(h.issues, [{ key: "replan", words: "a replan didn't start, next try after 10:05 am", fix: null }]);
+});

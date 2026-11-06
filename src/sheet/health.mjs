@@ -39,7 +39,7 @@ function when(iso, now, tz) {
 //   hook        getWebhookInfo's result { url, pending_update_count, last_error_date? }
 //   replans     today's replans rows { at, result, reasons }
 //   planned     whether today has a plan revision yet
-//   replanHold  { hold, weighty, used } from the replan tick: why it didn't fire
+//   replanHold  { hold, weighty, used } or { hold: "fire_failed", until } from the replan tick: why it didn't fire
 //   unsent      pending messages to Claude whose one re-fire failed too ({ id }), oldest first
 // Returns { green, issues: [{ key, words, fix }] }. A key names one incident: the same key while
 // it lasts, so it is told once (nextTold).
@@ -70,7 +70,11 @@ export function health(input, now) {
   // for today comes in some other way (planned: today has a revision).
   const retry = (newest?.reasons ?? []).includes("morning_retry");
   if (newest?.result === "failed" && retry) { if (!input.planned) add("replan", "no morning plan, and the retry didn't start", 'say "plan my day" to Claude'); }
-  else if (newest?.result === "failed") add("replan", "a replan didn't start");
+  else if (newest?.result === "failed") {
+    // Backing off (replan.mjs, failedUntil): when the tick tries again. Same key, so told once.
+    const until = input.replanHold?.hold === "fire_failed" && input.replanHold.until;
+    add("replan", `a replan didn't start${until ? `, next try after ${when(until, now, tz)}` : ""}`);
+  }
   if (newest?.result === "rate_limited") add("replan", "Claude is rate limited");
   const hold = input.replanHold;
   if (hold?.hold === "daily_cap" && hold.weighty) add(`paused:${localNow(now, tz).day}`, `replans paused for today (${hold.used} used)`, "adjust in /plan");

@@ -2044,3 +2044,15 @@ alter table nudges add constraint nudges_kind_check
 alter table messages add column if not exists fire_error text check (char_length(fire_error) <= 300);
 alter table messages add column if not exists retry_at timestamptz;
 alter table messages add column if not exists refired_at timestamptz;
+
+-- --- Telegram: once only (2026-11-06) ---------------------------------------------------------
+-- A text to the bot is saved once. Telegram resends an update when the webhook is slow or fails
+-- (core.telegram.org/bots/api#setwebhook), and two deliveries could both pass the telegram
+-- function's select before either inserted; the second insert now fails with 23505, which the
+-- function takes as "saved already". Partial, so /plan's messages (tg_message_id null) are any
+-- number (postgresql.org/docs/current/indexes-partial.html). Checked live 2026-11-06: no
+-- duplicates, so it builds.
+create unique index if not exists messages_tg_message_id on messages (tg_message_id) where tg_message_id is not null;
+-- The pinned Now message: when a tick claimed making it (nudges.mjs, pinStep and PIN_CLAIM), so
+-- two overlapping ticks, or one whose save of now_message_id failed, never make a second.
+alter table settings add column if not exists now_claimed_at timestamptz;

@@ -113,7 +113,27 @@ export function receipt(m, timeZone, note = null) {
     ...lines.map((l) => `${KIND[l.kind]}: ${l.title} · ${l.when}`),
   ].filter(Boolean).join("\n");
   const buttons = lines.filter((l) => l.id).map((l) => [{ text: `Undo ${KIND[l.kind].toLowerCase()}: ${l.title}`, callback_data: undoData(m.id, l.id) }]);
-  return { text, buttons };
+  return { text: cut(text), buttons };
+}
+
+// sendMessage's text is "1-4096 characters after entities parsing" (core.telegram.org/bots/
+// api#sendmessage); a longer one is refused with 400 for good. Cut to 4096 UTF-16 units (at least
+// as many as characters), never inside a surrogate pair, ending in "…".
+const TG_MAX = 4096;
+function cut(text) {
+  if (text.length <= TG_MAX) return text;
+  let head = text.slice(0, TG_MAX - 1);
+  if (/[\uD800-\uDBFF]$/.test(head)) head = head.slice(0, -1);
+  return `${head}…`;
+}
+
+// Whether Telegram refused a call for good (the telegram function's error, "telegram <method>:
+// <error_code> <description>"): a 4xx other than 429 ("Too Many Requests", retry later) won't
+// pass on a retry (core.telegram.org/bots/api#making-requests: error_code, and #responseparameters
+// retry_after for 429). Network errors and 5xx may.
+export function refusedForGood(e) {
+  const code = Number(/^telegram \w+: (\d{3}) /.exec(e instanceof Error ? e.message : String(e))?.[1]);
+  return code >= 400 && code < 500 && code !== 429;
 }
 
 // An Undo tap on a receipt: { message, item, query_id, chat_id, message_id }, or null for any

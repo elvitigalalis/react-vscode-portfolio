@@ -352,6 +352,18 @@ function horizonMessage(day) {
   return [{ kind: "horizon", block_id: null, day: day.today, send_at, text: lines.join("\n"), buttons: [{ text: "Open /plan", url: PLAN_URL }], horizon: tasks.map((t) => ({ task_id: t.id, state: hz.get(t.id).state })) }];
 }
 
+// What a message's `horizon` (the states it tells) writes to horizon_state.notified, as groups
+// { ids, notified }: `mark` before it is sent, as the claim, so a failed save sends nothing rather
+// than the same message every minute (its send_at is the minute, so the log's key can't stop it);
+// `restore`, each task's notified as `rows` had it, if Telegram then refuses the message.
+export function horizonMarks(m, rows) {
+  const told = m.horizon ?? [];
+  const before = new Map((rows ?? []).map((h) => [h.task_id, h.notified ?? null]));
+  const groups = (pairs) => [...pairs.reduce((g, [id, v]) => g.set(v, [...(g.get(v) ?? []), id]), new Map())].map(([notified, ids]) => ({ ids, notified }));
+  const mark = ["tight", "wont_fit"].map((st) => ({ ids: told.filter((h) => h.state === st).map((h) => h.task_id), notified: st })).filter((g) => g.ids.length);
+  return { mark, restore: groups(told.map((h) => [h.task_id, before.get(h.task_id) ?? null])) };
+}
+
 // What telegram writes back to horizon_state.notified without a message: back on track forgets
 // what was told, and won't fit eased to tight remembers tight (so won't fit again is news).
 export const horizonResets = (states) => (states ?? []).flatMap((h) =>
@@ -587,12 +599,18 @@ export function nowText(snapshot, now) {
 // and now_text): { action: "create", text } to send and pin it, made only while he's up (not in
 // quiet hours or before his wake, as the brief); { action: "edit", message_id, text } once the
 // words change, at any hour, since an edit makes no notification; or null. Nothing while
-// Telegram is off.
+// Telegram is off, or while another tick's claim to make it holds (PIN_CLAIM).
+// How long a claim to make the pinned message holds: a tick that sent it but failed to save its
+// id leaves the claim, and only after this can another one be made.
+export const PIN_CLAIM = 15 * 60_000;
 export function pinStep(snapshot, now) {
   if (!telegramOn(snapshot.settings)) return null;
   const text = nowText(snapshot, now);
   const { now_message_id: id, now_text } = snapshot.settings;
   if (id != null) return text === now_text ? null : { action: "edit", message_id: id, text };
+  // Another tick claimed making it (settings.now_claimed_at) and hasn't saved its id yet.
+  const claimed = snapshot.settings.now_claimed_at;
+  if (claimed && now.getTime() - Date.parse(claimed) < PIN_CLAIM) return null;
   const day = dayOf(snapshot, now);
   return day.minutes >= day.openAt && day.minutes < QUIET_FROM ? { action: "create", text } : null;
 }

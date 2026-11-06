@@ -53,6 +53,20 @@ const CATCH_UP_GAP = 5 * 60 * 60_000;
 const DAILY_CAP = 8;
 const PLAN_GAP = 60 * 60_000;
 const EDIT_GAP = 10 * 60_000;
+// A failed (non-429) fire unties its changes and counts for neither the cap nor the last plan, so
+// without a back-off the next minute fires the same changes again, each try a Claude routine run.
+// After a failure the next try waits FAILED_GAP, and after FAILED_MAX failures within the hour,
+// until an hour after the first of them (state.failed_at, from replanState).
+const FAILED_GAP = 15 * 60_000;
+const FAILED_MAX = 2;
+const HOUR = 60 * 60_000;
+// When the failures in `failedAt` (ms) let the next fire go, or null if they don't hold it.
+function failedUntil(failedAt, t) {
+  const recent = failedAt.filter((x) => x <= t && t - x < HOUR).sort((a, b) => a - b);
+  if (!recent.length) return null;
+  const until = Math.max(recent[recent.length - 1] + FAILED_GAP, recent.length >= FAILED_MAX ? recent[recent.length - FAILED_MAX] + HOUR : 0);
+  return until > t ? until : null;
+}
 // Quiet hours, as nudges.mjs has them (not imported: nudges.mjs imports this module).
 const OPEN_FROM = 8 * 60;
 const QUIET_FROM = 23 * 60;
@@ -83,6 +97,8 @@ export function shouldReplan(changes, state, now) {
     : lastEdit != null && t - lastEdit < EDIT_GAP ? "editing"
     : null;
   if (hold) return { fire: false, hold };
+  const until = failedUntil((state.failed_at ?? []).map(ms), t);
+  if (until != null) return { fire: false, hold: "fire_failed", until: new Date(until).toISOString() };
   // The plan already saw anything at or before it (the run's own proposal included).
   const left = changes.filter((c) => { const at = Date.parse(c.at); return at <= t && (seen == null || at > seen); });
   if (!left.length) return { fire: false, hold: "nothing" };
@@ -129,6 +145,8 @@ export function replanState({ settings, day, today = day?.day, proposals, replan
     // He skipped the day's plan, or it lapsed: no replan reopens it.
     closed: newest?.status === "skipped" || newest?.status === "lapsed",
     last_edit_at: settings.plan_edited_at ?? null,
+    // Failed fires, for the back-off (shouldReplan, failedUntil).
+    failed_at: replans.filter((r) => r.result === "failed").map((r) => r.at),
   };
 }
 

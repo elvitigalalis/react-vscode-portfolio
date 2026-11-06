@@ -5,7 +5,7 @@
 // Wednesday 2026-11-04 in New York, EST (UTC-5).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readText, ackText, ackReaction, ANSWERED, readMedia, mediaReply, refireDue, receipt, readUndo, undoChanges } from "../src/sheet/capture.mjs";
+import { readText, ackText, ackReaction, ANSWERED, readMedia, mediaReply, refireDue, receipt, readUndo, undoChanges, refusedForGood } from "../src/sheet/capture.mjs";
 
 const settings = { time_zone: "America/New_York", telegram_chat_id: 42 };
 // A text from Lisul's own chat, as Telegram's webhook sends it (core.telegram.org/bots/api#update).
@@ -179,4 +179,23 @@ test("undoChanges: an event's Google event goes when /plan made one, then the it
   ]);
   assert.equal(undoChanges(answered({ events: [] }), E1, []), null);
   assert.equal(undoChanges(null, E1, []), null);
+});
+
+// Before this a receipt Telegram refused outright (text over 4096, say) was given back and thrown
+// every minute, and the throw stopped every later receipt behind it.
+test("receipt: the text is cut to Telegram's 4096 characters, never mid-emoji", () => {
+  const long = receipt(answered({ reply: "x".repeat(5000) }), TZ).text;
+  assert.equal(long.length, 4096);
+  assert.ok(long.endsWith("…"));
+  const emoji = receipt(answered({ reply: `${"x".repeat(4060)}${"😀".repeat(100)}` }), TZ).text;
+  assert.ok(emoji.length <= 4096);
+  assert.doesNotMatch(emoji, /[\uD800-\uDBFF]…$/);
+});
+
+test("refusedForGood: a 4xx other than 429 is given up on; 429, 5xx and network errors are retried", () => {
+  assert.equal(refusedForGood(new Error("telegram sendMessage: 400 Bad Request: message is too long")), true);
+  assert.equal(refusedForGood(new Error("telegram sendMessage: 403 Forbidden: bot was blocked by the user")), true);
+  assert.equal(refusedForGood(new Error("telegram sendMessage: 429 Too Many Requests: retry after 5")), false);
+  assert.equal(refusedForGood(new Error("telegram sendMessage: 502 Bad Gateway")), false);
+  assert.equal(refusedForGood(new TypeError("fetch failed")), false);
 });

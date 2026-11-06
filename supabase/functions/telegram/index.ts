@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
@@ -24,7 +24,7 @@ import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
-import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, undoChanges } from "../../../src/sheet/capture.mjs";
+import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, refireDue, refusedForGood, undoChanges } from "../../../src/sheet/capture.mjs";
 import { startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
@@ -183,9 +183,10 @@ async function replanTick(now: Date) {
   if (shouldRetryMorning({ settings, day, proposals, replans }, now)) return { retry: await fireOnce(today, [MORNING_RETRY], {}, [], "morning", now) };
   const state = replanState({ settings, day, today, proposals, replans, sleep, sleepTimes });
   const r = shouldReplan(changes, state, now) as
-    { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
+    { fire: boolean; hold?: string; until?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
   // At the cap, the health check hears how many ran and whether a weighty change waits.
-  if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : { hold: r.hold };
+  // Backing off a failed fire (replan.mjs, failedUntil), the health line says until when.
+  if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : r.hold === "fire_failed" ? { hold: r.hold, until: r.until } : { hold: r.hold };
   return { fired: await fireOnce(today, r.reasons, r.counts, r.ids, "replan", now) };
 }
 
@@ -239,6 +240,16 @@ async function send(now: Date, facts: TickFacts = {}) {
     // one skips the message, so it goes out once.
     const c = await claim(m);
     if (!c) continue;
+    // The horizon states it tells are marked told first (nudges.mjs, horizonMarks). A failed
+    // mark holds a horizon message back (claim given back) rather than repeat it every minute; the
+    // brief, keyed to its fixed minute, goes anyway.
+    const marks = horizonMarks(m, snap.horizon);
+    try {
+      for (const g of marks.mark) await setNotified(g.ids, g.notified);
+    } catch (e) {
+      console.error("horizon notified:", e instanceof Error ? e.message : e);
+      if (m.kind === "horizon") { await c.giveBack(); continue; }
+    }
     try {
       // The buttons sit in one row: Done and Snooze 10 min under a nudge, Approve all, Open /plan
       // and Skip under a plan, the four answers under Finished?, Open /plan otherwise.
@@ -255,18 +266,14 @@ async function send(now: Date, facts: TickFacts = {}) {
         reply_markup: m.buttons.length ? { inline_keyboard: [m.buttons] } : undefined,
       });
     } catch (e) {
-      // Give the claim back so the next minute tries again.
+      // Give the claim back, and the horizon marks, so the next minute tries again.
       await c.giveBack();
+      for (const g of marks.restore) await setNotified(g.ids, g.notified).catch((x) => console.error("horizon restore:", x instanceof Error ? x.message : x));
       throw e;
     }
     await c.sent();
     sent.push(m.kind);
     toldNow.push(...(m.health ?? []));
-    // The horizon states this message told him of (the brief's, or the horizon message's).
-    for (const st of ["tight", "wont_fit"]) {
-      const ids = (m.horizon ?? []).filter((h) => h.state === st).map((h) => h.task_id);
-      if (ids.length) await setNotified(ids, st).catch((e) => console.error("horizon notified:", e instanceof Error ? e.message : e));
-    }
   }
   // What's told and still open (health.mjs, nextTold), written only when it changes.
   if (snap.health) {
@@ -303,7 +310,7 @@ async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
     } catch (e) {
       const why = e instanceof Error ? e.message : "";
       if (/message to edit not found|message can't be edited/i.test(why)) {
-        await saveNow({ now_message_id: null, now_text: null });
+        await saveNow({ now_message_id: null, now_text: null, now_claimed_at: null });
         return "gone";
       }
       if (!/message is not modified/i.test(why)) throw e;
@@ -311,7 +318,23 @@ async function pinTick(snap: Awaited<ReturnType<typeof snapshot>>, now: Date) {
     await saveNow({ now_text: step.text });
     return "edited";
   }
-  const msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  // Claimed first (settings.now_claimed_at), which only one tick can do, so two overlapping ticks
+  // never both make one; a claim left by a tick whose save failed lapses after PIN_CLAIM
+  // (nudges.mjs, pinStep). A refused send gives it back.
+  const stale = new Date(now.getTime() - PIN_CLAIM).toISOString();
+  const [mine] = await db(`settings?id=eq.true&now_message_id=is.null&or=(now_claimed_at.is.null,now_claimed_at.lt.${stale})`, {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ now_claimed_at: now.toISOString() }),
+  });
+  if (!mine) return "claimed";
+  let msg;
+  try {
+    msg = await telegram("sendMessage", { chat_id, text: step.text, ...PLAIN, disable_notification: true });
+  } catch (e) {
+    await saveNow({ now_claimed_at: null }).catch(() => {});
+    throw e;
+  }
   // Kept before the pin, so a refused pin never makes a second message.
   await saveNow({ now_message_id: msg.message_id, now_text: step.text });
   await telegram("pinChatMessage", { chat_id, message_id: msg.message_id, disable_notification: true });
@@ -398,7 +421,16 @@ async function mediaAnswer(media: { chat_id: number; message_id: number }, setti
 // reply with ackText only when the words matter (rate limited) or Telegram refuses the reaction.
 async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
   if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
-  const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  // Two deliveries at once both pass the select; the unique index (schema.sql,
+  // messages_tg_message_id) turns the second insert away with 23505 (PostgREST: 409), before any
+  // fire, and that one is saved already.
+  let saved;
+  try {
+    saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  } catch (e) {
+    if (e instanceof Error && /^messages: 409 23505/.test(e.message)) return;
+    throw e;
+  }
   // A failed fire is marked for the tick's one re-fire (refire). The message function's own
   // marking lives in ../_shared/capture.ts; this covers a text to the bot either way.
   if (saved.why === "failed" || saved.why === "rate_limited") {
@@ -455,7 +487,7 @@ async function refire(now: Date) {
 // The receipt for each text Claude has answered since yesterday, once: a reply to his text with
 // what was added and an Undo for each item (capture.mjs's receipt), whatever the hour, since he
 // asked. Claimed first by filling in tg_receipt_at, which only one run can do, and given back
-// if Telegram refuses it, so the next minute tries again.
+// if Telegram fails it for now, so the next minute tries again; one refused for good is dropped.
 async function receipts(now: Date) {
   const [settings] = await db("settings?select=time_zone,telegram_chat_id");
   if (!settings?.telegram_chat_id) return [];
@@ -482,6 +514,12 @@ async function receipts(now: Date) {
         reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined,
       });
     } catch (e) {
+      // Refused for good (a 4xx but 429, capture.mjs, refusedForGood): the claim stays, so it is
+      // given up on rather than retried every minute ahead of every later receipt.
+      if (refusedForGood(e)) {
+        console.error(`receipt ${m.id} given up:`, e instanceof Error ? e.message : e);
+        continue;
+      }
       await db(`messages?id=eq.${m.id}`, { method: "PATCH", body: JSON.stringify({ tg_receipt_at: null }) });
       throw e;
     }
