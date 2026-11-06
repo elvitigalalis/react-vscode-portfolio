@@ -421,7 +421,16 @@ async function mediaAnswer(media: { chat_id: number; message_id: number }, setti
 // reply with ackText only when the words matter (rate limited) or Telegram refuses the reaction.
 async function capture(t: { text: string; chat_id: number; message_id: number }, now: Date) {
   if ((await db(`messages?select=id&tg_message_id=eq.${t.message_id}`)).length) return;
-  const saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  // Two deliveries at once both pass the select; the unique index (schema.sql,
+  // messages_tg_message_id) turns the second insert away with 23505 (PostgREST: 409), before any
+  // fire, and that one is saved already.
+  let saved;
+  try {
+    saved = await saveAndFire(t.text, now, { tg_message_id: t.message_id });
+  } catch (e) {
+    if (e instanceof Error && /^messages: 409 23505/.test(e.message)) return;
+    throw e;
+  }
   // A failed fire is marked for the tick's one re-fire (refire). The message function's own
   // marking lives in ../_shared/capture.ts; this covers a text to the bot either way.
   if (saved.why === "failed" || saved.why === "rate_limited") {
