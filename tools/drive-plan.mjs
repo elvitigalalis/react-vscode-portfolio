@@ -398,6 +398,8 @@ for (const [v, opt] of VIEWS) {
     check(`${n} Settings opens`, (await openDialogs(c)).includes("data-settings"));
     await shot(c, `settings-${v}`);
     await layout(c, `${n} Settings`);
+    // On a phone the groups start closed; the alarm and Sleep this week are under Day.
+    await press(c, '[data-act="settings-go"][data-section="day"]', `${n} index Day`);
     check(`${n} alarm link`, /^shortcuts:/.test(await c.pg.$eval("[data-alarm]", (a) => a.getAttribute("href"))), await c.pg.$eval("[data-alarm]", (a) => a.getAttribute("href")));
     check(`${n} alarm text`, /Set iPhone alarm for/.test(await text(c, "[data-alarm]")), await text(c, "[data-alarm]"));
     await press(c, '[data-act="oura-week"]', `${n} Sleep this week`);
