@@ -37,7 +37,8 @@ function when(iso, now, tz) {
 //   calendar    the calendar_account row { last_error }, or null
 //   oura        the oura_account row { last_error }, or null
 //   hook        getWebhookInfo's result { url, pending_update_count, last_error_date? }
-//   replans     today's replans rows { at, result }
+//   replans     today's replans rows { at, result, reasons }
+//   planned     whether today has a plan revision yet
 //   replanHold  { hold, weighty, used } from the replan tick: why it didn't fire
 //   unsent      messages to Claude whose one re-fire failed too ({ id })
 // Returns { green, issues: [{ key, words, fix }] }. A key names one incident: the same key while
@@ -65,7 +66,11 @@ export function health(input, now) {
     add("webhook", "Telegram taps aren't reaching The Sheet");
   }
   const newest = [...(input.replans ?? [])].filter((r) => r.result).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
-  if (newest?.result === "failed") add("replan", "a replan didn't start");
+  // The morning plan's one retry (replan.mjs, shouldRetryMorning) failing matters until a plan
+  // for today comes in some other way (planned: today has a revision).
+  const retry = (newest?.reasons ?? []).includes("morning_retry");
+  if (newest?.result === "failed" && retry) { if (!input.planned) add("replan", "no morning plan, and the retry didn't start", 'say "plan my day" to Claude'); }
+  else if (newest?.result === "failed") add("replan", "a replan didn't start");
   if (newest?.result === "rate_limited") add("replan", "Claude is rate limited");
   const hold = input.replanHold;
   if (hold?.hold === "daily_cap" && hold.weighty) add(`paused:${localNow(now, tz).day}`, `replans paused for today (${hold.used} used)`, "adjust in /plan");

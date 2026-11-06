@@ -69,6 +69,12 @@ test("health: today's newest replan failing or rate limited is an issue; one tha
   assert.equal(health({ tz, replans: [failed, { at: "2026-10-26T13:30:00Z", result: "started" }] }, now).green, true);
 });
 
+test("health: the morning plan's retry failing says so", () => {
+  const h = health({ tz, replans: [{ at: "2026-10-26T10:40:00Z", result: "failed", reasons: ["morning_retry"] }] }, now);
+  assert.deepEqual(h.issues, [{ key: "replan", words: "no morning plan, and the retry didn't start", fix: 'say "plan my day" to Claude' }]);
+  assert.equal(health({ tz, planned: true, replans: [{ at: "2026-10-26T10:40:00Z", result: "failed", reasons: ["morning_retry"] }] }, now).green, true);
+});
+
 test("health: replans paused at the daily cap with a weighty change waiting says so", () => {
   const h = health({ tz, replanHold: { hold: "daily_cap", weighty: true, used: 8 } }, now);
   assert.deepEqual(h.issues, [{ key: "paused:2026-10-26", words: "replans paused for today (8 used)", fix: "adjust in /plan" }]);

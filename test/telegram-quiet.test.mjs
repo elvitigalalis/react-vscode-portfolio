@@ -145,3 +145,15 @@ test("Monday brief: paces within 20% of the estimate, or with under 3 samples, a
   const [brief] = whatToSend(snapshot({ tasks: [task("t1", "Gym")], lastWeek: even }), at("2026-10-26T12:00:00Z"));
   assert.equal(brief.text.split("\n")[1], "Last week: 6h done of 8h planned.");
 });
+
+// ---------------------------------------------------------------- a missed morning plan
+
+test("brief: a missed morning plan is said even when today already has blocks", () => {
+  const snap = snapshot({
+    settings: { ...settings, morning_on: true },
+    tasks: [task("t1", "OS homework")],
+    blocks: [block("b1", "t1", "2026-10-26T18:00:00Z", "2026-10-26T18:45:00Z")],
+  });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text, 'Today: 1 task, 1 block.\nNo morning plan came in today: say "plan my day" to Claude.');
+});

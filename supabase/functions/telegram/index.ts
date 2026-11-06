@@ -21,7 +21,7 @@ import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
-import { capHold, fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
+import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
 import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
@@ -118,16 +118,17 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
 // The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the three connected
 // accounts' last errors, and today's replans, with the tick's own facts.
 async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) {
-  const [feeds, mail, [calendar = null], [oura = null], replans] = await Promise.all([
+  const [feeds, mail, [calendar = null], [oura = null], replans, revisions] = await Promise.all([
     db("feed_state?select=*"),
     db("mail_accounts?select=email,label,last_error").catch(() => []),
     db("calendar_account?select=last_error").catch(() => []),
     db("oura_account?select=last_error").catch(() => []),
-    db(`replans?select=at,result&day=eq.${today}`),
+    db(`replans?select=at,result,reasons&day=eq.${today}`),
+    db(`proposals?select=rev&day=eq.${today}&limit=1`),
   ]);
   const hook = facts.hook && typeof facts.hook === "object" && "url" in facts.hook ? facts.hook : undefined;
   const replanHold = facts.replanHold && typeof facts.replanHold === "object" && "hold" in facts.replanHold ? facts.replanHold : undefined;
-  return health({ tz, feeds, mail, calendar, oura, replans, hook, replanHold }, now);
+  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, hook, replanHold }, now);
 }
 
 // Monday's Last week line (nudges.mjs, lastWeekLine): last Mon-Sun's approved task blocks (a day
@@ -168,31 +169,38 @@ async function replanTick(now: Date) {
     db(`days?select=*&day=eq.${today}`),
     // blocks: a replan that changed nothing doesn't count toward the cap (replan.mjs, noops).
     db(`proposals?select=rev,status,run_trigger,created_at,read_at,blocks&day=eq.${today}`),
-    db(`replans?select=at,result,retry_after&day=eq.${today}`),
+    db(`replans?select=at,result,retry_after,reasons&day=eq.${today}`),
     db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
     db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []),
     db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []),
   ]);
   if (rateLimited(replans, now)) return { hold: "rate_limited" };
+  if (shouldRetryMorning({ settings, day, proposals, replans }, now)) return { retry: await fireOnce(today, [MORNING_RETRY], {}, [], "morning", now) };
   const state = replanState({ settings, day, today, proposals, replans, sleep, sleepTimes });
   const r = shouldReplan(changes, state, now) as
     { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
   // At the cap, the health check hears how many ran and whether a weighty change waits.
   if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : { hold: r.hold };
+  return { fired: await fireOnce(today, r.reasons, r.counts, r.ids, "replan", now) };
+}
+
+// Claim a replans row, fire the routine once and record how it went (the replan, or the morning
+// plan's one retry, whose row's reasons are ["morning_retry"] and which ties no changes).
+async function fireOnce(today: string, reasons: string[], counts: Record<string, number>, ids: string[], trigger: "replan" | "morning", now: Date) {
   const id = await db("rpc/claim_replan", {
     method: "POST",
-    body: JSON.stringify({ d: today, reasons: r.reasons, counts: r.counts, ids: r.ids }),
+    body: JSON.stringify({ d: today, reasons, counts, ids }),
   });
-  if (!id) return { hold: "claimed" };
+  if (!id) return "claimed";
   let outcome;
   try {
-    outcome = fireOutcome(await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger: "replan", counts: r.counts }, now));
+    outcome = fireOutcome(await fireRoutine(fetch, { routineId: ROUTINE_ID, token: ROUTINE_TOKEN, trigger, counts }, now));
   } catch (e) {
     outcome = fireOutcome(null, e);
   }
   await db(`replans?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(outcome.patch) });
-  if (outcome.untie) await db(`changes?replan_id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ replan_id: null }) });
-  return { fired: outcome.patch.result };
+  if (outcome.untie && ids.length) await db(`changes?replan_id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ replan_id: null }) });
+  return outcome.patch.result;
 }
 
 // --- Horizon planning (docs/sheet-horizon.md, "Part 2") ----------------------------------

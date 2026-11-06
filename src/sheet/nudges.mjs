@@ -252,7 +252,10 @@ function brief(day) {
   if (plan) return brief([...lines, ...plan], planButtons(today, day.proposal?.rev));
   const missed = day.settings.morning_on && day.proposal?.day !== today;
   const empty = 'No morning plan came in today: say "plan my day" to Claude.';
-  if (!n) lines.push(missed ? empty : 'Nothing planned yet: say "plan my day" to Claude.');
+  // A missed morning plan is said even with blocks on today (carried over, or approved last
+  // night): they don't mean today was planned (research/plan-reliability.md R2).
+  if (missed) lines.push(empty);
+  else if (!n) lines.push('Nothing planned yet: say "plan my day" to Claude.');
   // With no plan to carry it, the brief counts the open Needs you rows, and its link opens them.
   const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
   const head = todays.length || n || risky.length ? [...lines, needs] : ["Nothing on today.", missed && empty, needs];

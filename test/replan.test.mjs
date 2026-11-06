@@ -216,3 +216,30 @@ test("capHold: at the daily cap, says how many plans ran and whether a weighty c
   assert.deepEqual(capHold([c(10, "2026-11-04T21:30:00Z")], state, now), { hold: "daily_cap", used: 8, weighty: true });
   assert.deepEqual(capHold([c(2, "2026-11-04T21:30:00Z"), c(10, "2026-11-04T20:30:00Z")], state, now), { hold: "daily_cap", used: 8, weighty: false });
 });
+
+// --- The morning plan's one retry (research/plan-reliability.md R2) ---------------------------
+
+test("shouldRetryMorning: once a day after 6:40 am, when no plan came in today", async () => {
+  const { shouldRetryMorning } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", morning_on: true };
+  const base = { settings, day: null, today: "2026-11-04", proposals: [], replans: [] };
+  const at = (iso) => new Date(iso);
+  assert.equal(shouldRetryMorning(base, at("2026-11-04T11:39:00Z")), false);   // 6:39 am
+  assert.equal(shouldRetryMorning(base, at("2026-11-04T11:40:00Z")), true);    // 6:40 am
+  assert.equal(shouldRetryMorning(base, at("2026-11-04T19:00:00Z")), true);    // 2 pm, still none
+  assert.equal(shouldRetryMorning(base, at("2026-11-05T04:00:00Z")), false);   // 11 pm
+  assert.equal(shouldRetryMorning({ ...base, proposals: [{ rev: 1, run_trigger: "replan" }] }, at("2026-11-04T12:00:00Z")), false);
+  assert.equal(shouldRetryMorning({ ...base, replans: [{ reasons: ["morning_retry"], result: "failed" }] }, at("2026-11-04T12:00:00Z")), false);
+  assert.equal(shouldRetryMorning({ ...base, settings: { ...settings, morning_on: false } }, at("2026-11-04T12:00:00Z")), false);
+  assert.equal(shouldRetryMorning({ ...base, day: { shutdown: true } }, at("2026-11-04T20:00:00Z")), false);
+});
+
+test("replanState: the retry's own row doesn't count as a second plan beside the morning revision it made", async () => {
+  const { replanState } = await import("../src/sheet/replan.mjs");
+  const settings = { time_zone: "America/New_York", replans_on: true, morning_on: true, plan_edited_at: null };
+  const proposals = [{ rev: 1, run_trigger: "morning", created_at: "2026-11-04T11:50:00Z" }];
+  const replans = [{ at: "2026-11-04T11:40:00Z", result: "started", reasons: ["morning_retry"] }];
+  const s = replanState({ settings, day: null, proposals, replans });
+  assert.equal(s.plans_today, 1);
+  assert.equal(s.last_plan_at, "2026-11-04T11:50:00.000Z");
+});
