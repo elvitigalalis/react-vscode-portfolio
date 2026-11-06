@@ -7,7 +7,7 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep } from "./logic.mjs";
-import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap, shutdownAt, windowOn } from "./planner.mjs";
+import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap, shutdownAt, windowOn, spanOf } from "./planner.mjs";
 import { loadShare, stripSegments } from "./glance.mjs";
 
 // The timeline's window in minutes past midnight. It follows the day being planned (setWindow,
@@ -99,15 +99,25 @@ export function setupPlanToday(root) {
   actHooks.plan = () => loadDialog().then((m) => m.open()).catch(failed);
   keyHooks.push((e) => { if (e.key === "p" || e.key === "P") { actHooks.plan(); return true; } return false; });
   // In the week, each proposed block shows dashed under its task, with its time and Approve.
+  // When the row's own time label already is the block's time (research U17), the time isn't
+  // said twice: the sparkles and Approve go on the row's details line instead.
   renderHooks.push(() => {
     for (const col of root.querySelectorAll(".sheet-day")) {
       const d = col.dataset.day;
       for (const b of proposedOn(state.blocks, d, SHEET.timeZone)) {
         const row = col.querySelector(`.sheet-task[data-id="${b.task_id}"]`);
         if (!row) continue;
-        const span = formatSpan(minutesOn(b.starts_at, d, SHEET.timeZone), minutesOn(b.ends_at, d, SHEET.timeZone));
+        const [from, to] = [minutesOn(b.starts_at, d, SHEET.timeZone), minutesOn(b.ends_at, d, SHEET.timeZone)];
+        const span = formatSpan(from, to);
         const ok = approveButton(`Approve ${span} block for ${state.tasks.get(b.task_id).title}`);
         Object.assign(ok.dataset, { act: "approve", block: b.id });
+        const own = spanOf(state.tasks.get(b.task_id));
+        const body = row.querySelector(".sheet-body");
+        if (own?.start === from && own?.end === to && body) {
+          const details = body.querySelector(":scope > .sheet-details") ?? body.appendChild(el("span", { className: "sheet-details" }));
+          details.append(el("span", { className: "sheet-meta", title: "Proposed by Claude" }, icon("sparkles"), el("span", { className: "visually-hidden", textContent: " proposed" })), ok);
+          continue;
+        }
         row.append(el("span", { className: "sheet-proposal", title: "Proposed by Claude" },
           icon("sparkles"), el("span", { textContent: span }), el("span", { className: "visually-hidden", textContent: " proposed" }), ok));
       }
