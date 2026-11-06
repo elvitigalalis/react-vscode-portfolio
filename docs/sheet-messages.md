@@ -54,13 +54,17 @@ with `trigger: message`, and that run does the reading. Terms are as in
   "HH:MM" | null, est_min 15–480 | null, why? ≤ 140 }], events: [{ title ≤ 120, start
   "YYYY-MM-DDTHH:MM", minutes 15–720, why? ≤ 140 }], reply ≤ 500 }] }`, at most 10 answers, 20
   tasks and 10 events each. Tasks have no due time, so a deadline at a time goes in the title
-  ("Project 2 (due 11:59 pm)"). It logs "Saving" on the messages it answers.
+  ("Project 2 (due 11:59 pm)"). It logs "Saving" on the messages it answers. An answer may also
+  carry `projects` (at most 3), each a due date, a total estimate and 3–10 ordered steps, written
+  through `answer_message`'s five-argument form ([sheet-projects.md](sheet-projects.md)).
   `checkAnswers` checks it: one-line text with no link, real dates, local times in
   `settings.time_zone` (a start the clocks skip is refused; an event keeps its real length across
   a daylight-saving change), past dates allowed, an `at_time` only with a day, and each id a
-  pending message, once. A task with no `due` whose title spells out a date ("Thu, Nov 5, 2026,
-  11:59 PM EST", "Nov 14 11:59pm", "due 11/14") takes it as `due` (`titleDue`, logic.mjs: explicit
-  dates only; none, an impossible one or two different ones leave it null). /plan's add and edit
+  pending message, once. A task with no `due` whose title spells out a deadline ("Thu, Nov 5, 2026,
+  11:59 PM EST", "Nov 14 11:59pm", "due 11/14", "by Dec 1") takes it as `due` (`titleDue`,
+  logic.mjs: a date counts only after due, by or deadline, or with a clock time straight after it,
+  so "start with September 22" is no deadline; none, an impossible one or two different ones
+  leave it null). /plan's add and edit
   and the GitHub and Jira sync do the same. An answer with errors fails alone; the rest are written through
   `answer_message`. It returns `{ ok, answered: [{ id, status }], errors }`.
 - **report_step** `{ text ≤ 120, kind: reading | checking | searching | adding | done, message_ids? }`
