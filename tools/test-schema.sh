@@ -68,6 +68,12 @@ do $$ begin
     then raise exception 'a sheet-* job has no 30 s timeout'; end if;
   raise notice '✓ cron jobs';
 
+  -- feed_state keeps the last good read apart from the last fetch.
+  if not exists (select 1 from information_schema.columns where table_name = 'feed_state'
+                 and column_name = 'last_ok_at' and data_type = 'timestamp with time zone')
+    then raise exception 'feed_state.last_ok_at missing'; end if;
+  raise notice '✓ feed_state.last_ok_at';
+
   -- Course tasks: one task per (source, source_uid); hand-made tasks (both null) never clash.
   insert into tasks (title, list, source, source_uid) values ('HW 1', 'Brightspace', 'brightspace', 'u1');
   begin

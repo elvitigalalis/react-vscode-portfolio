@@ -7,6 +7,8 @@
 // importing files outside the supabase/ directory within Edge Functions": supabase.com/changelog/
 // 33613-deploy-edge-functions-from-cli-without-needing-docker-import-files-outside-of-supabase-directory).
 
+import { feedStateRow } from "../../../src/sheet/feed-state.mjs";
+
 export const env = (name: string) => Deno.env.get(name) ?? "";
 const SUPABASE_URL = env("SUPABASE_URL");
 const SERVICE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
@@ -42,14 +44,14 @@ export async function db(path: string, init: RequestInit = {}) {
 // --- Feeds (brightspace, campus) ------------------------------------------------------------
 
 // Upserts a feed's one feed_state row. Only the columns given change, so a failed run keeps the
-// last good ETag and Last-Modified. Upserts follow PostgREST: on_conflict names the unique
+// last good ETag and Last-Modified, and last_ok_at, which a good read sets (feedStateRow). Upserts follow PostgREST: on_conflict names the unique
 // columns, and Prefer: resolution=merge-duplicates says a clash updates
 // (docs.postgrest.org/en/stable/references/api/tables_views.html#upsert).
 export const saveFeedState = (source: string, row: Record<string, unknown>) =>
   db("feed_state?on_conflict=source", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({ source, ...row }),
+    body: JSON.stringify(feedStateRow(source, row)),
   });
 
 // A fetched feed's text, or a throw when it failed or isn't an iCal calendar.

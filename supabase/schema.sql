@@ -367,6 +367,9 @@ create table if not exists feed_state (
   error text,
   items int
 );
+-- The last read that worked, set by saveFeedState (src/sheet/feed-state.mjs) and left alone by a
+-- failed one, so a catch-up after an outage starts from it and a stalled feed can be told apart.
+alter table feed_state add column if not exists last_ok_at timestamptz;
 
 alter table feed_seen enable row level security;
 alter table feed_state enable row level security;
