@@ -2,6 +2,7 @@
 // (BASE=http://localhost:<port> for another port). Screenshots /plan and /now with Supabase and
 // Google stubbed, and checks the layout (docs/sheet-glance.md, "Quality bar"); exits 1 on a failure.
 import puppeteer from "puppeteer";
+import { createRequire } from "node:module";
 const OUT = process.argv[2];
 const BASE = process.env.BASE ?? "http://localhost:4321";
 // Week of Mon 2026-11-02; today Tue 11-03.
@@ -97,9 +98,10 @@ function route(r) {
   return json(r, map[p] ?? []);
 }
 const b = await puppeteer.launch({ headless: true });
-async function shot(path, name, w, h, dark, after, at = "2026-11-03T15:20:00Z") {
+// `touch` emulates a phone: a touch screen, so (pointer: coarse) and (hover: none) match.
+async function shot(path, name, w, h, dark, after, at = "2026-11-03T15:20:00Z", touch = false) {
   const pg = await b.newPage();
-  await pg.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
+  await pg.setViewport({ width: w, height: h, deviceScaleFactor: 1, hasTouch: touch, isMobile: touch });
   await pg.emulateMediaFeatures([{ name: "prefers-color-scheme", value: dark ? "dark" : "light" }]);
   await pg.emulateTimezone("America/New_York");
   await pg.setRequestInterception(true);
@@ -218,6 +220,91 @@ async function checkNeedsChip(pg, name) {
 }
 for (const dark of [false, true]) {
   await shot("/plan/", `plan-phone-${dark ? "dark" : "light"}`, 390, 844, dark, async (pg) => { await checkTopBar(pg, `/plan 390px ${dark ? "dark" : "light"}`); await checkNeedsChip(pg, `/plan 390px ${dark ? "dark" : "light"}`); });
+}
+
+// --- The phone layout (research/plan-improvements.md 1-3, 7; plan-phone.md 10) -------------
+// Every day and Someday list on screen keeps its "+ Add a task" row.
+async function checkAddRows(pg, name) {
+  const r = await pg.evaluate(() => [...document.querySelectorAll(".sheet-day.is-focus .sheet-rows, .sheet-list .sheet-rows")]
+    .map((ul) => ({ head: ul.parentElement.querySelector(".sheet-head")?.textContent.trim(), add: ul.querySelector(".is-add"), ul }))
+    .filter((x) => x.ul.getClientRects().length)
+    .map((x) => ({ head: x.head, shown: Boolean(x.add?.getClientRects().length) })));
+  if (r.length < 2) failures.push(`${name}: expected the day and Someday lists, got ${r.length}`);
+  for (const x of r) if (!x.shown) failures.push(`${name}: no "+ Add a task" row under ${x.head}`);
+}
+// On a touch screen the top bar's controls and Approve take a 44 px tap area (Apple HIG,
+// Accessibility: https://developer.apple.com/design/human-interface-guidelines/accessibility).
+// An ::after that reaches past the box counts toward it.
+async function checkTargets(pg, name, sel) {
+  const r = await pg.evaluate((sel) => [...document.querySelectorAll(sel)].filter((x) => x.getClientRects().length).map((x) => {
+    const box = x.getBoundingClientRect();
+    const a = getComputedStyle(x, "::after");
+    const pad = a.content !== "none" && a.position === "absolute" ? [parseFloat(a.width) || 0, parseFloat(a.height) || 0] : [0, 0];
+    return { what: x.ariaLabel || x.textContent.trim() || x.className, w: Math.max(box.width, pad[0]), h: Math.max(box.height, pad[1]) };
+  }), sel);
+  if (!r.length) failures.push(`${name}: nothing matches ${sel}`);
+  for (const x of r) if (x.w < 43.5 || x.h < 43.5) failures.push(`${name}: "${x.what}" is ${Math.round(x.w)}x${Math.round(x.h)} px, under 44`);
+}
+// axe-core's target-size (WCAG 2.5.8) and color-contrast (WCAG 1.4.3) rules on what's open.
+const axePath = createRequire(import.meta.url).resolve("axe-core");
+async function checkAxe(pg, name) {
+  await pg.addScriptTag({ path: axePath });
+  const v = await pg.evaluate(async () => (await globalThis.axe.run(document, { runOnly: ["target-size", "color-contrast"] })).violations
+    .flatMap((x) => x.nodes.map((n) => `${x.id}: ${n.target.join(" ")} (${n.failureSummary.split("\n").slice(1).join(" ").trim()})`)));
+  for (const x of v) failures.push(`${name}: axe ${x}`);
+}
+const topBarSel = ".sheet-tools button:not([hidden]), .sheet-tools a";
+for (const dark of [false, true]) {
+  const name = `/plan 390px touch ${dark ? "dark" : "light"}`;
+  await shot("/plan/", `plan-phone-touch-${dark ? "dark" : "light"}`, 390, 844, dark, async (pg) => {
+    await checkTopBar(pg, name);
+    await checkAddRows(pg, name);
+    await checkTargets(pg, name, `${topBarSel}, .sheet-week .sheet-btn-approve`);
+    await checkAxe(pg, name);
+  }, undefined, true);
+  // Plan today on the phone: the resize and shutdown handles and Approve are finger-sized.
+  await shot("/plan/", `plan-today-touch-${dark ? "dark" : "light"}`, 390, 844, dark, async (pg) => {
+    await pg.evaluate(() => document.querySelector('[data-act="plan"]').click());
+    await new Promise((r) => setTimeout(r, 800));
+    await checkTargets(pg, `Plan today ${name}`, "[data-plan] :is(.sheet-resize, .sheet-shutline, .sheet-block-x, .sheet-btn-approve)");
+    await checkAxe(pg, `Plan today ${name}`);
+  }, undefined, true);
+}
+// 4:30 pm, in the shutdown window: Shut down joins the bar, which still holds one row.
+await shot("/plan/", "plan-phone-shutdown", 390, 844, false, async (pg) => {
+  if (!(await pg.$eval('[data-act="shutdown"]', (x) => Boolean(x.getClientRects().length)))) failures.push("390px at 4:30 pm: no Shut down button");
+  await checkTopBar(pg, "/plan 390px touch at 4:30 pm");
+  await checkTargets(pg, "/plan 390px touch at 4:30 pm", topBarSel);
+}, "2026-11-03T21:30:00Z", true);
+// The laptop the phone work must not break: one top-bar row and the same axe rules.
+for (const dark of [false, true]) {
+  const name = `/plan 1366px ${dark ? "dark" : "light"}`;
+  await shot("/plan/", `plan-week-1366-${dark ? "dark" : "light"}`, 1366, 800, dark, async (pg) => { await checkTopBar(pg, name); await checkAddRows(pg, name); await checkAxe(pg, name); });
+}
+// Add to Home Screen opens /plan/ on its own (Web App Manifest, https://www.w3.org/TR/appmanifest/),
+// and standalone hides the site's nav and footer.
+{
+  const pg = await b.newPage();
+  const res = await pg.goto(`${BASE}/plan/manifest.webmanifest`);
+  const m = res.ok() ? await res.json().catch(() => null) : null;
+  if (!m || m.start_url !== "/plan/" || m.scope !== "/plan/" || m.display !== "standalone") failures.push(`manifest: ${JSON.stringify(m)}`);
+  await pg.setRequestInterception(true);
+  pg.on("request", route);
+  await pg.goto(`${BASE}/plan/`, { waitUntil: "networkidle0" });
+  // Headless Chrome can't emulate display-mode, so the page's standalone rules are applied as
+  // plain rules, and the nav and footer must then be gone.
+  const r = await pg.evaluate(() => {
+    const rules = [...document.styleSheets].flatMap((s) => [...s.cssRules])
+      .filter((x) => x instanceof CSSMediaRule && /display-mode:\s*standalone/.test(x.conditionText))
+      .flatMap((x) => [...x.cssRules].map((y) => y.cssText));
+    const parts = () => [...document.querySelectorAll("body > .topbar, body > .footer")];
+    const before = parts().filter((x) => x.getClientRects().length).length;
+    document.head.append(Object.assign(document.createElement("style"), { textContent: rules.join("\n") }));
+    return { link: document.querySelector('link[rel="manifest"]')?.getAttribute("href"), before, after: parts().filter((x) => x.getClientRects().length).length };
+  });
+  if (r.link !== "/plan/manifest.webmanifest") failures.push(`manifest link: ${r.link}`);
+  if (r.before !== 2 || r.after) failures.push(`standalone: nav and footer show ${r.before} in a tab and ${r.after} standalone, expected 2 and 0`);
+  await pg.close();
 }
 // The dialog: four groups in order, only Gmail links, opened with noopener noreferrer, and Done
 // takes a row away.
