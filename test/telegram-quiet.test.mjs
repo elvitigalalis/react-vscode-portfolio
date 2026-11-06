@@ -99,3 +99,49 @@ test("folded brief: with nothing to fold, there are no entities", () => {
   const [brief] = whatToSend(snapshot({ tasks: [task("t1", "Gym")] }), at("2026-10-26T12:00:00Z"));
   assert.equal(brief.entities, undefined);
 });
+
+// ---------------------------------------------------------------- Monday's Last week line
+
+// Last week is Mon 10/19 to Sun 10/25. Each block is 2 h from 1 pm local (17:00Z, EDT).
+const lw = (d, task_id) => ({ task_id, starts_at: `2026-10-${d}T17:00:00Z`, ends_at: `2026-10-${d}T19:00:00Z` });
+const lastWeek = {
+  blocks: [lw(19, "a"), lw(20, "a"), lw(21, "b"), lw(22, "c")],   // 8 h on 4 days
+  done: ["a", "b"],                                                  // 6 h of it done
+  actuals: [
+    { kind: "course", est_min: 60, minutes: 90 }, { kind: "course", est_min: 60, minutes: 84 }, { kind: "course", est_min: 30, minutes: 39 },
+    { kind: "other", est_min: 60, minutes: 60 },
+  ],
+};
+const dueSoon = [
+  task("p1", "OS project", { day: null, list: "Inbox", due: "2026-10-30" }),
+  task("p2", "Essay", { day: null, list: "Inbox", due: "2026-10-29" }),
+  task("p3", "Taxes", { day: null, list: "Inbox", due: "2026-11-10" }),    // next week
+];
+const hzRows = [
+  { task_id: "p1", state: "on_track", short_min: 0, slack_min: 300, finish_day: "2026-10-28", notified: null },
+  { task_id: "p2", state: "tight", short_min: 0, slack_min: 30, finish_day: "2026-10-29", notified: "tight" },
+];
+// p1 and p2 have blocks before they're due, so neither is at risk.
+const covering = [block("x1", "p1", "2026-10-27T13:00:00Z", "2026-10-27T14:00:00Z"), block("x2", "p2", "2026-10-27T15:00:00Z", "2026-10-27T16:00:00Z")];
+
+test("Monday brief: a Last week line with hours done of planned, the pace furthest off, and what's due this week", () => {
+  const snap = snapshot({ tasks: [task("t1", "Gym"), ...dueSoon], blocks: covering, lastWeek, horizon: hzRows });
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text.split("\n").find((l) => l.startsWith("Last week")),
+    "Last week: 6h done of 8h planned. Course tasks ran 1.4× estimate. Due this week: Essay (tight), OS project (on track).");
+});
+
+test("Monday brief: no Last week line when last week had fewer than 3 planned days, or on another day", () => {
+  const thin = { ...lastWeek, blocks: lastWeek.blocks.slice(0, 2) };
+  const [brief] = whatToSend(snapshot({ tasks: [task("t1", "Gym")], lastWeek: thin }), at("2026-10-26T12:00:00Z"));
+  assert.ok(!brief.text.includes("Last week"));
+  const tue = { ...settings };
+  const [tuesday] = whatToSend(snapshot({ settings: tue, tasks: [task("t1", "Gym", { day: "2026-10-27" })], lastWeek }), at("2026-10-27T12:00:00Z"));
+  assert.ok(!tuesday.text.includes("Last week"));
+});
+
+test("Monday brief: paces within 20% of the estimate, or with under 3 samples, are left out", () => {
+  const even = { ...lastWeek, actuals: [{ kind: "course", est_min: 60, minutes: 66 }, { kind: "course", est_min: 60, minutes: 60 }, { kind: "course", est_min: 60, minutes: 70 }, { kind: "jira", est_min: 30, minutes: 90 }] };
+  const [brief] = whatToSend(snapshot({ tasks: [task("t1", "Gym")], lastWeek: even }), at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text.split("\n")[1], "Last week: 6h done of 8h planned.");
+});

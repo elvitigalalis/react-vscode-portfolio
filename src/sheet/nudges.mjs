@@ -231,6 +231,8 @@ function brief(day) {
   // What the brief told him of, which telegram marks told (horizon_state.notified).
   const told = [...wont, ...tight].filter((t) => hz.has(t.id)).map((t) => ({ task_id: t.id, state: hz.get(t.id).state }));
   const marks = told.length ? { horizon: told } : {};
+  const week = lastWeekLine(day, hz);
+  if (week) lines.push(week);
   // The tail: context he can read later, folded (see folded). Oura's score, a tip and the cap;
   // v5 W1's weather line, when the cache has a forecast (snapshot.weather, the weather_cache
   // row); v5 SRC3's academic calendar entries (snapshot.academic, at most 3); v5 M1's Awaiting
@@ -249,6 +251,40 @@ function brief(day) {
   const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
   const head = todays.length || n || risky.length ? [...lines, needs] : ["Nothing on today.", missed && empty, needs];
   return brief(head, [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }]);
+}
+
+// --- Monday's Last week line (research/plan-insights.md I9) -------------------------------------
+// "Last week: 18h30 done of 24h planned. Course tasks ran 1.4× estimate. Due this week: Essay
+// (tight), OS project (on track)." On Mondays only, from snapshot.lastWeek, which the telegram
+// function reads on Mondays: { blocks: last Mon-Sun's approved task blocks { task_id, starts_at,
+// ends_at }, done: the ids of their tasks now done, actuals: last week's actuals { kind, est_min,
+// minutes } }. Planned is every block's minutes and done the minutes of blocks whose task is done.
+// The pace part names the kind whose median actual/estimate is furthest from 1, with 3 or more
+// samples and at least 20% off; due this week lists up to 3 open tasks due today to Sunday with
+// their horizon state. No sleep numbers (docs/adr/0005). Null with fewer than 3 planned days.
+const PACE_WORDS = { course: "Course tasks", campus: "Campus events", github: "GitHub items", jira: "Jira tickets", other: "Other tasks" };
+const median = (xs) => { const v = [...xs].sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+function lastWeekLine({ lastWeek, today, tz, tasks }, hz) {
+  if (!lastWeek || new Date(`${today}T12:00:00Z`).getUTCDay() !== 1) return null;
+  const from = addDays(today, -7);
+  const mins = (b) => Math.max(0, Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000));
+  const blocks = (lastWeek.blocks ?? []).filter((b) => { const d = localNow(new Date(b.starts_at), tz).day; return d >= from && d < today; });
+  if (new Set(blocks.map((b) => localNow(new Date(b.starts_at), tz).day)).size < 3) return null;
+  const done = new Set(lastWeek.done ?? []);
+  const planned = blocks.reduce((n, b) => n + mins(b), 0);
+  const did = blocks.filter((b) => done.has(b.task_id)).reduce((n, b) => n + mins(b), 0);
+  const parts = [`Last week: ${formatMinutes(did)} done of ${formatMinutes(planned)} planned.`];
+  const ratios = {};
+  for (const a of lastWeek.actuals ?? []) if (a.est_min > 0 && PACE_WORDS[a.kind]) (ratios[a.kind] ??= []).push(a.minutes / a.est_min);
+  const [kind, pace] = Object.entries(ratios).filter(([, r]) => r.length >= 3).map(([k, r]) => [k, median(r)])
+    .filter(([, m]) => m >= 1.2 || m <= 0.8).sort((a, b) => Math.abs(Math.log(b[1])) - Math.abs(Math.log(a[1])))[0] ?? [];
+  if (kind) parts.push(`${PACE_WORDS[kind]} ran ${pace.toFixed(1)}× estimate.`);
+  const words = { on_track: "on track", tight: "tight", wont_fit: "won't fit" };
+  const due = tasks.filter((t) => !t.done && t.due && t.due >= today && t.due <= addDays(today, 6))
+    .sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3)
+    .map((t) => { const st = words[hz.get(t.id)?.state]; const name = String(t.title).slice(0, 30).trim(); return st ? `${name} (${st})` : name; });
+  if (due.length) parts.push(`Due this week: ${due.join(", ")}.`);
+  return parts.join(" ");
 }
 
 // research/plan-phone.md P7: the lines to act on stay in view, and the tail folds into one

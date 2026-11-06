@@ -103,7 +103,21 @@ async function snapshot(now: Date) {
   const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
   // Horizon planning: each task's state and the last one he was told of. None until its schema has run.
   const horizon = await db("horizon_state?select=task_id,state,short_min,slack_min,finish_day,notified").catch(() => []);
-  return { settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+  const lastWeek = await lastWeekRows(today).catch(() => null);
+  return { lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+}
+
+// Monday's Last week line (nudges.mjs, lastWeekLine): last Mon-Sun's approved task blocks (a day
+// either side in UTC; the module narrows them to his days), which of their tasks are done, and
+// last week's actuals. Null on other days, so the other six days cost no reads.
+async function lastWeekRows(today: string) {
+  if (new Date(`${today}T12:00:00Z`).getUTCDay() !== 1) return null;
+  const from = addDays(today, -8), to = addDays(today, 1);
+  const blocks = await db(`blocks?select=task_id,starts_at,ends_at&proposed=is.false&task_id=not.is.null&starts_at=gte.${from}T00:00:00Z&starts_at=lt.${to}T00:00:00Z`);
+  const ids = [...new Set(blocks.map((b: { task_id: string }) => b.task_id))];
+  const done = ids.length ? (await db(`tasks?select=id&done=is.true&id=in.(${ids.join(",")})`)).map((t: { id: string }) => t.id) : [];
+  const actuals = await db(`actuals?select=kind,est_min,minutes&day=gte.${addDays(today, -7)}&day=lt.${today}`);
+  return { blocks, done, actuals };
 }
 
 // The campus events a proposal picks. A uid is the feed's own text, so each one is quoted for
