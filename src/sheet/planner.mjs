@@ -362,7 +362,7 @@ function addRow(where, label, placeholder = "+ Add a task") {
 
 // A day's list: its calendar events as to-dos merged with its tasks, in time order
 // (event-todos.mjs). The calendar itself shows on Plan today's timeline.
-const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
+export const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
 
 // An event row looks like a timed task row: its time first, the title, and the calendar icon on
 // the details line under it, where a task shows its source.
