@@ -2,6 +2,10 @@
 // the estimate hint and the prompt for tasks that keep moving. Loaded only with Plan today's
 // dialog or Shutdown, so /plan's first-load script stays small. Text goes in through textContent.
 // Reads are select=* on tasks, so the page works before and after done_at exists.
+// Its styles come with it, as text added on load (Vite's ?inline:
+// https://vite.dev/guide/features#disabling-css-injection-into-the-page), so /plan's first load
+// carries no rules it doesn't use (Lighthouse's unused-css-rules gate).
+import css from "../styles/sheet-lookback.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, formatMinutes, localNow, weekStart, weekdayName, zonedIso } from "./logic.mjs";
@@ -9,6 +13,8 @@ import { paceByKind } from "./pace.mjs";
 import { lightDismiss } from "./dismiss.mjs";
 import { el, state, render, addTask, moveTask, failed, workloadCap } from "./planner.mjs";
 import { callLine, callLookback, dueLine, dueLookback, keepsMoving, weekLine, weekReview, weekTitle } from "./lookback.mjs";
+
+document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
 const tz = SHEET.timeZone;
 const today = () => localNow(new Date(), tz).day;
