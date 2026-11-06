@@ -249,3 +249,36 @@ change waiting, and messages to Claude whose one re-fire failed.
   whose fire failed is fired once more after 5 minutes or its 429's retry time (`messages.
   fire_error`, `retry_at`, `refired_at`). A replan revision with the same blocks as the one
   before doesn't count toward the daily cap of 8.
+- **Expiries** (`credentials`, dates only, never a secret): a token or grant ending within 14
+  days is an issue keyed by its date ("GitHub token expires Thu Nov 19 (make a new one and set
+  SHEET_GITHUB_TOKEN)"), so it is in each brief until renewed and alerted once. `github_pat` is
+  filled in by work-sync from GitHub's `GitHub-Authentication-Token-Expiration` header.
+  `jira_token` has no date: Atlassian's API doesn't report one, so its note says so; set it with
+  `update credentials set expires_at = '2027-…' where name = 'jira_token'`. While the row
+  `google_testing` exists, each Gmail account and the calendar is taken to end 7 days after its
+  `connected_at` (Google's Testing rule; about Nov 10 and Nov 11 for today's grants). Once the
+  consent screen says In production, `delete from credentials where name = 'google_testing'`.
+- **Kept outcomes:** `health_log` keeps 30 days of what failed: each non-2xx or timed-out pg_net
+  response (copied hourly by `sheet-keep-http`, before pg_net's 6-hour TTL drops it), one count
+  row an hour, and any failed step of the telegram tick. No external heartbeat: it needs an
+  account and a ping-URL secret.
+- **Live check:** `sheet_checks()` runs in the database (no Mac needed): cron jobs on, Vault
+  URLs set (sheet-ical left out), no failed cron runs in 24 h, replans settled, `busy_as_of`
+  fresh, pg_net failures in 24 h. The tick calls it hourly; a `fail` row is an issue, and an
+  all-green brief says "Sheet: all green (live check passed)."
+
+### At a block boundary, stale buttons, and the thumb keyboard
+
+- A Finished? and the next block's start due within 5 minutes go as **one message**: the
+  Finished? line, then "Next: ▶ 10:15 am · Gym (45 min)", with the four answers in one row and
+  Done/Snooze in a second. It rings (a Finished? alone is silent). Both log rows are written, so
+  the budget, the repeat and the next Finished? hold.
+- **Dead buttons:** each sent message's id is kept (`nudges.tg_message_id`). A block's newer
+  message, and any answer to it but Snooze, takes the buttons off its older messages
+  (`editMessageReplyMarkup`); the text stays.
+- **Thumb keyboard:** a persistent reply keyboard, Now · Done · +15 min · Today, sent once
+  (`settings.keys_sent_at`) and again on /start or /keys. Now gives the pinned line and the
+  running block's Done/Snooze; Done marks it done; +15 min extends it (or one that ended under
+  30 min ago); Today lists today's open tasks with a Done each (`td:<task id>`). The labels and
+  /now, /done, /today are matched exactly before capture, so they never reach Claude; any other
+  text is captured as before.
