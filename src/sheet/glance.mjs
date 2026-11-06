@@ -1,7 +1,7 @@
 // /plan at a glance (docs/sheet-glance.md, "Contracts → Pure functions"): what the page draws
 // instead of writing out in words. Pure, so node --test covers it.
 import { freeFood } from "./campus.mjs";
-import { atRisk, minutesOn } from "./logic.mjs";
+import { atRisk, minutesOn, weekStart } from "./logic.mjs";
 
 // --- Sources and due levels (G2) ---------------------------------------------------------
 
@@ -83,4 +83,15 @@ export function openView(search) {
   q.delete("open");
   const rest = q.toString();
   return { view: VIEWS.has(v) ? v : null, search: rest ? `?${rest}` : "" };
+}
+
+// --- followToday (coming back the next day) -------------------------------------------------
+
+// A tab left open overnight (iOS keeps it alive) comes back still on yesterday: the phone's one
+// day and, on a Monday, last week. When the day changed since the last load and the day on
+// screen was that day's today, the week and the day on screen move to the new today. A day he
+// stepped to himself stays. Returns the new { week, focus }, or null to leave them.
+export function followToday({ week, focus }, loadedDay, today) {
+  if (!loadedDay || today === loadedDay || focus !== loadedDay) return null;
+  return { week: weekStart(today), focus: today };
 }

@@ -7,7 +7,7 @@ import {
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel, dayWindow, openView } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow, openView, followToday } from "./glance.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
@@ -609,6 +609,7 @@ export async function load({ scroll = true } = {}) {
   state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
   state.parked = parked.length;
   loadedAt = Date.now();
+  loadedDay = now().day;
   render();
   if (scroll) scrollToToday($("[data-week]"));
 }
@@ -625,6 +626,7 @@ export async function load({ scroll = true } = {}) {
 // reload into reloadHooks.
 const STALE_MS = 60_000;
 let loadedAt = 0;
+let loadedDay = null; // the owner's today at the last load (followToday)
 export const reloadHooks = [];
 
 async function refreshStale() {
@@ -632,7 +634,10 @@ async function refreshStale() {
   const a = document.activeElement;
   if (drag || document.querySelector("dialog[open]") || a?.matches?.(".sheet-edit") || (a?.matches?.(".sheet-add") && a.value)) return;
   loadedAt = Date.now();
-  try { await load({ scroll: false }); } catch (e) { console.error(e); }
+  // Back the next day: today's view moves to the new today (glance.mjs, followToday).
+  const moved = followToday({ week: state.week, focus: state.focus }, loadedDay, now().day);
+  if (moved) Object.assign(state, moved);
+  try { await load({ scroll: Boolean(moved) }); } catch (e) { console.error(e); }
   for (const hook of reloadHooks) Promise.resolve().then(hook).catch(console.error);
 }
 
