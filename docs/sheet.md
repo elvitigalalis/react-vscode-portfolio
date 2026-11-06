@@ -160,9 +160,9 @@ block never deletes the task. Changing one block never moves another.
 The "Shut down" button appears on today's header from two hours before shutdown time (`O` works
 any time).
 
-1. Two columns, **Done** and **Missed**. Clicking a task moves it to the other column.
+1. Two columns, **Done** and **Tomorrow**. Clicking a task moves it to the other column.
 2. One box: *What went well, what got in the way?* (private, always).
-3. **Finish:** nothing is saved before this. Missed tasks move to tomorrow (counted as a roll),
+3. **Finish:** nothing is saved before this. Tasks left in Tomorrow move to tomorrow (counted as a roll),
    the day's unapproved proposed blocks are deleted, and the day is marked shut down and gets a
    "Shutdown complete" stamp.
 
