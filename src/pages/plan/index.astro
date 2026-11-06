@@ -78,6 +78,7 @@ import "../../styles/sheet-focus.css";
     <div class="sheet-someday" data-someday></div>
 
     <div class="sheet-menu" data-menu popover>
+      <button type="button" data-move="details">Details…</button>
       <button type="button" data-move="today">To today</button>
       <button type="button" data-move="tomorrow">To tomorrow</button>
       <button type="button" data-move="next-week">To next week</button>
@@ -109,6 +110,7 @@ import "../../styles/sheet-focus.css";
         <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (⚠) within two days with no block</dd>
         <dt>!p</dt><dd>Private: /now shows a bar, Google says Busy</dd>
         <dt>Enter</dt><dd>Add the task, start the next</dd>
+        <dt>⋯ → Details…</dt><dd>The same details without typing, and Clear for each</dd>
       </dl>
       <div class="sheet-help-keys">
         <h3 class="sheet-legend-title">Keys</h3>
@@ -309,6 +311,8 @@ import "../../styles/sheet-focus.css";
       <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
+    <!-- A task's estimate, time, due date and tag, no typed syntax: src/sheet/task-details-dialog.mjs. -->
+    <dialog class="sheet-dialog sheet-taskinfo" data-details aria-labelledby="sheet-details-title"></dialog>
     <dialog class="sheet-dialog sheet-plan" data-plan aria-labelledby="sheet-plan-title"></dialog>
     <dialog class="sheet-dialog sheet-shut" data-shut aria-labelledby="sheet-shut-title"></dialog>
     <dialog class="sheet-dialog sheet-campus" data-campus aria-labelledby="sheet-campus-title"></dialog>

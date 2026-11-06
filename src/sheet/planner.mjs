@@ -820,7 +820,7 @@ function openMenu(id, anchor) {
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
   menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
   const r = anchor.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 330)}px`;
+  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 365)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
   menu.querySelector("button").focus();
@@ -834,6 +834,7 @@ async function menuAction(kind) {
   const id = menuFor;
   $("[data-menu]").hidePopover();
   if (!id) return;
+  if (kind === "details") return import("./task-details-dialog.mjs").then((m) => m.openDetails(root, id), failed);
   await taskAction(id, kind);
   root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus();
 }
