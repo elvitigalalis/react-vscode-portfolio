@@ -121,13 +121,36 @@ export function replanState({ settings, day, today = day?.day, proposals, replan
     settings: { time_zone: settings.time_zone, replans_on: !!settings.replans_on, morning_on: !!settings.morning_on },
     day: day ?? null,
     shutdown: shutdownFor(today, { line: day?.shutdown_at, settings, sleep, sleepTimes, tz: settings.time_zone }),
-    plans_today: (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length,
+    plans_today: Math.max(0, (proposals.some((p) => (p.run_trigger ?? "morning") === "morning") ? 1 : 0) + fired.length - noops(proposals)),
     last_plan_at: last == null ? null : new Date(last).toISOString(),
     seen_until: cut == null ? null : new Date(cut).toISOString(),
     // He skipped the day's plan, or it lapsed: no replan reopens it.
     closed: newest?.status === "skipped" || newest?.status === "lapsed",
     last_edit_at: settings.plan_edited_at ?? null,
   };
+}
+
+// research/plan-reliability.md R7: a replan whose revision proposes the same blocks as the
+// revision before it changed nothing, so it gives its slot under the daily cap back. Counted from
+// proposals rows with `blocks` ([{ task_id, habit_id, starts_at, ends_at }]); rows without them
+// count as changed.
+const blockKey = (b) => `${b.task_id ?? ""}|${b.habit_id ?? ""}|${Date.parse(b.starts_at)}|${Date.parse(b.ends_at)}`;
+const sameBlocks = (a, b) => { const x = a.map(blockKey).sort(), y = b.map(blockKey).sort(); return x.length === y.length && x.every((k, i) => k === y[i]); };
+function noops(proposals) {
+  const revs = [...proposals].sort((a, b) => (a.rev ?? 1) - (b.rev ?? 1));
+  return revs.filter((p, i) => i > 0 && p.run_trigger === "replan" && Array.isArray(p.blocks) && Array.isArray(revs[i - 1].blocks)
+    && sameBlocks(p.blocks, revs[i - 1].blocks)).length;
+}
+
+// When shouldReplan holds at the daily cap: { hold: "daily_cap", used, weighty }, where weighty
+// says a change of fire weight is waiting that the last plan didn't see. The health check says
+// the pause only then (health.mjs), since nothing else that day needs a replan to reach him.
+// Null under the cap.
+export function capHold(changes, state, now) {
+  if (state.plans_today < DAILY_CAP) return null;
+  const seen = ms(state.seen_until ?? state.last_plan_at);
+  const weighty = changes.some((c) => c.weight >= FIRE_WEIGHT && Date.parse(c.at) <= now.getTime() && (seen == null || Date.parse(c.at) > seen));
+  return { hold: "daily_cap", used: state.plans_today, weighty };
 }
 
 // What the tick writes after a fire: the replans row's patch, and whether to untie its changes

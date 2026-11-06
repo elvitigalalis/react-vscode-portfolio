@@ -21,7 +21,7 @@ import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
-import { fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
+import { capHold, fireOutcome, rateLimited, replanState, shouldReplan } from "../../../src/sheet/replan.mjs";
 import { fireRoutine } from "../../../src/sheet/routine-fire.mjs";
 import { tapFeedback } from "../../../src/sheet/triage.mjs";
 import { ackReaction, ackText, ANSWERED, mediaReply, readMedia, readText, readUndo, receipt, undoChanges } from "../../../src/sheet/capture.mjs";
@@ -166,16 +166,19 @@ async function replanTick(now: Date) {
   // Oura's rows only set the shutdown line (bedtime.mjs, shutdownFor); none until its schema ran.
   const [[day = null], proposals, replans, changes, sleep, sleepTimes] = await Promise.all([
     db(`days?select=*&day=eq.${today}`),
-    db(`proposals?select=rev,status,run_trigger,created_at,read_at&day=eq.${today}`),
+    // blocks: a replan that changed nothing doesn't count toward the cap (replan.mjs, noops).
+    db(`proposals?select=rev,status,run_trigger,created_at,read_at,blocks&day=eq.${today}`),
     db(`replans?select=at,result,retry_after&day=eq.${today}`),
     db("changes?select=id,at,kind,reason,weight&replan_id=is.null&consumed_rev=is.null"),
     db("sleep_nights?select=oura_id,day,type,bedtime_start,bedtime_end&order=bedtime_end").catch(() => []),
     db("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []),
   ]);
   if (rateLimited(replans, now)) return { hold: "rate_limited" };
-  const r = shouldReplan(changes, replanState({ settings, day, today, proposals, replans, sleep, sleepTimes }), now) as
+  const state = replanState({ settings, day, today, proposals, replans, sleep, sleepTimes });
+  const r = shouldReplan(changes, state, now) as
     { fire: boolean; hold?: string; reasons: string[]; counts: Record<string, number>; ids: string[] };
-  if (!r.fire) return { hold: r.hold };
+  // At the cap, the health check hears how many ran and whether a weighty change waits.
+  if (!r.fire) return r.hold === "daily_cap" ? capHold(changes, state, now) : { hold: r.hold };
   const id = await db("rpc/claim_replan", {
     method: "POST",
     body: JSON.stringify({ d: today, reasons: r.reasons, counts: r.counts, ids: r.ids }),
