@@ -77,11 +77,20 @@ export function setupFocus(node) {
     // A session whose task was finished elsewhere (the week's ✓, Telegram) ends.
     if (s && state.tasks.get(s.task_id)?.done) { setSession(null); s = null; }
     const target = s ? { id: s.block_id, task_id: s.task_id } : focusTarget(state.blocks, state.tasks, new Date(), SHEET.timeZone);
-    const row = target && root.querySelector(`.sheet-day[data-day="${state.today}"] .sheet-task[data-id="${target.task_id}"]`);
-    if (!row) return;
-    const label = s ? `Resume · ${focusClock(s, new Date()).left}${s.ends_at <= Date.now() ? " over" : " left"}` : "Start";
-    const button = el("button", { type: "button", className: "sheet-focus-start", textContent: label, ariaLabel: `${s ? "Resume" : "Start"} focus on ${state.tasks.get(target.task_id).title}` });
-    Object.assign(button.dataset, { act: "focus-start", block: target.id });
-    row.append(el("span", { className: "sheet-focus-line" }, button));
+    // A Someday task or a project's step can hold a block today without being on today's list
+    // (the horizon gives it minutes, the morning plan times them); its Start goes on its row in
+    // Someday or under its project. Projects draw after this hook, so the lookup waits a tick.
+    if (target) queueMicrotask(() => placeStart(s, target));
   });
+}
+
+function placeStart(s, target) {
+  if (root.querySelector('[data-act="focus-start"]')) return;
+  const row = root.querySelector(`.sheet-day[data-day="${state.today}"] .sheet-task[data-id="${target.task_id}"]`)
+    ?? root.querySelector(`:is(.sheet-list, .sheet-project) .sheet-task[data-id="${target.task_id}"]`);
+  if (!row) return;
+  const label = s ? `Resume · ${focusClock(s, new Date()).left}${s.ends_at <= Date.now() ? " over" : " left"}` : "Start";
+  const button = el("button", { type: "button", className: "sheet-focus-start", textContent: label, ariaLabel: `${s ? "Resume" : "Start"} focus on ${state.tasks.get(target.task_id).title}` });
+  Object.assign(button.dataset, { act: "focus-start", block: target.id });
+  row.append(el("span", { className: "sheet-focus-line" }, button));
 }

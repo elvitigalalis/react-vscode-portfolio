@@ -41,7 +41,8 @@
   .sheet-block { overflow: visible; }
   .sheet-resize::after { content: ""; position: absolute; left: 0; right: 0; top: -0.5rem; height: 2.75rem; }
   .sheet-shutline::after { content: ""; position: absolute; left: 0; right: 0; top: -1.375rem; height: 2.75rem; }
-  .sheet-block-x { position: relative; min-width: 2.75rem; }
+  /* Above the resize bar's hit area, which covers all of a block under 30 minutes. */
+  .sheet-block-x { position: relative; z-index: 1; min-width: 2.75rem; }
   .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
 }
 

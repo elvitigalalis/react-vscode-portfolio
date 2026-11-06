@@ -63,3 +63,39 @@ test("openView: an unknown or missing view opens nothing; an unknown one is stil
   assert.deepEqual(openView("?calendar=ok"), { view: null, search: "?calendar=ok" });
   assert.deepEqual(openView("?open=settings"), { view: null, search: "" });
 });
+
+// ---------------------------------------------------------------- followToday
+
+test("followToday: back the next morning, the week and the day on screen move to today", async () => {
+  const { followToday } = await import("../src/sheet/glance.mjs");
+  // Tuesday's tab, shown again on Wednesday: same week, the phone's one day moves.
+  assert.deepEqual(followToday({ week: "2026-11-02", focus: "2026-11-03" }, "2026-11-03", "2026-11-04"), { week: "2026-11-02", focus: "2026-11-04" });
+  // Sunday night's tab, shown again on Monday: the next week.
+  assert.deepEqual(followToday({ week: "2026-11-02", focus: "2026-11-08" }, "2026-11-08", "2026-11-09"), { week: "2026-11-09", focus: "2026-11-09" });
+});
+
+test("followToday: a day he stepped to, or the same day, stays", async () => {
+  const { followToday } = await import("../src/sheet/glance.mjs");
+  assert.equal(followToday({ week: "2026-11-02", focus: "2026-11-06" }, "2026-11-03", "2026-11-04"), null);
+  assert.equal(followToday({ week: "2026-11-09", focus: "2026-11-10" }, "2026-11-03", "2026-11-04"), null);
+  assert.equal(followToday({ week: "2026-11-02", focus: "2026-11-03" }, "2026-11-03", "2026-11-03"), null);
+});
+
+// ---------------------------------------------------------------- settingsOpen (research U12)
+
+const GROUPS = ["accounts", "day", "claude", "status"];
+
+test("settingsOpen: on a wide screen every group is open; on a phone only the one asked for", async () => {
+  const { settingsOpen } = await import("../src/sheet/glance.mjs");
+  assert.deepEqual(settingsOpen(GROUPS, "status", false), [true, true, true, true]);
+  assert.deepEqual(settingsOpen(GROUPS, "status", true), [false, false, false, true]);
+  assert.deepEqual(settingsOpen(GROUPS, "accounts", true), [true, false, false, false]);
+});
+
+test("settingsOpen: no section (S, the ⋯ menu) opens all on a wide screen and none on a phone", async () => {
+  const { settingsOpen } = await import("../src/sheet/glance.mjs");
+  assert.deepEqual(settingsOpen(GROUPS, null, false), [true, true, true, true]);
+  assert.deepEqual(settingsOpen(GROUPS, null, true), [false, false, false, false]);
+  // An unknown name is no section.
+  assert.deepEqual(settingsOpen(GROUPS, "feeds", true), [false, false, false, false]);
+});

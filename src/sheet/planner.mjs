@@ -7,7 +7,8 @@ import {
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel, dayWindow, openView } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow, openView, followToday } from "./glance.mjs";
+import { hostToast } from "./toast-host.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
@@ -154,20 +155,22 @@ const named = (t) => `"${t?.title ?? "the task"}"`;
 
 let undoFn = null;
 let toastTimer;
+let toast = null; // kept by reference: it moves into an open dialog (toast-host.mjs)
 
 export function offerUndo(text, fn) {
   undoFn = fn;
-  $("[data-toast-text]").textContent = text;
-  $("[data-toast]").hidden = false;
+  toast.querySelector("[data-toast-text]").textContent = text;
+  toast.hidden = false;
+  hostToast(root, toast);
   clearTimeout(toastTimer);
   // On touch there is no ⌘Z, so Undo stays up longer: 12 s, not 6.
-  toastTimer = setTimeout(() => { $("[data-toast]").hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
+  toastTimer = setTimeout(() => { toast.hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
 }
 
 async function undo() {
   const fn = undoFn;
   undoFn = null;
-  $("[data-toast]").hidden = true;
+  toast.hidden = true;
   if (fn) { try { await fn(); } catch (e) { failed(e, "undo that", fn); } render(); }
 }
 
@@ -577,6 +580,7 @@ export function render() {
   notice.hidden = !state.parked;
   notice.textContent = `${plural(state.parked, "task")} moved to Someday.`;
   for (const hook of renderHooks) hook();
+  hostToast(root, toast);
 
   if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
 }
@@ -615,6 +619,7 @@ export async function load({ scroll = true } = {}) {
   state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
   state.parked = parked.length;
   loadedAt = Date.now();
+  loadedDay = now().day;
   render();
   if (scroll) scrollToToday($("[data-week]"));
 }
@@ -631,6 +636,7 @@ export async function load({ scroll = true } = {}) {
 // reload into reloadHooks.
 const STALE_MS = 60_000;
 let loadedAt = 0;
+let loadedDay = null; // the owner's today at the last load (followToday)
 export const reloadHooks = [];
 
 async function refreshStale() {
@@ -638,7 +644,10 @@ async function refreshStale() {
   const a = document.activeElement;
   if (drag || document.querySelector("dialog[open]") || a?.matches?.(".sheet-edit") || (a?.matches?.(".sheet-add") && a.value)) return;
   loadedAt = Date.now();
-  try { await load({ scroll: false }); } catch (e) { console.error(e); }
+  // Back the next day: today's view moves to the new today (glance.mjs, followToday).
+  const moved = followToday({ week: state.week, focus: state.focus }, loadedDay, now().day);
+  if (moved) Object.assign(state, moved);
+  try { await load({ scroll: Boolean(moved) }); } catch (e) { console.error(e); }
   for (const hook of reloadHooks) Promise.resolve().then(hook).catch(console.error);
 }
 
@@ -705,7 +714,7 @@ async function saveCalendars() {
   try {
     await api.saveSettings({ calendars: ids });
     state.calendars = ids;
-    $("[data-calendars]").close();
+    $("[data-cal-ids-note]").textContent = "Saved.";
     await loadEvents(weekDays(state.week));
     render();
   } catch (e) { failed(e); }
@@ -723,12 +732,16 @@ let settingsModule = () => Promise.resolve([]);
 let settingsReady = null;
 const loadSettings = () => (settingsReady ??= settingsModule().then((setups) => { for (const setup of setups) setup(root); }, (e) => { settingsReady = null; throw e; }));
 
-async function openSettings() {
+// `section` is the group it opens at (research U12); settings-sections.mjs fills settingsNav.
+export const settingsNav = { open: null, go: null };
+async function openSettings(section = null) {
   try { await loadSettings(); } catch (e) { return failed(e); }
-  if ($("[data-settings]").open) return;
+  if ($("[data-settings]").open) return settingsNav.go?.(section);
   $("[data-interests-note]").textContent = "";
+  settingsNav.open?.(section);
   $("[data-settings]").showModal();
   await Promise.all(settingsHooks.map(async (fill) => { try { await fill(); } catch (e) { failed(e); } }));
+  settingsNav.go?.(section);
 }
 
 // Settings, interest profile: what Claude picks campus events against (docs/sheet-claude.md).
@@ -1032,14 +1045,10 @@ function wire() {
       if (act === "evtodo-open" || act === "evtodo-hide") return eventMenuAction(act);
       // The stale-events banner: the server grant (Settings, Calendar) is what keeps /plan's
       // Google token, so Reconnect goes straight to its consent screen.
-      if (act === "connect") return openSettings().then(() => actHooks["cal-connect"]?.());
-      if (act === "calendars") {
-        $("#sheet-cal-ids").value = state.calendars.join("\n");
-        return $("[data-calendars]").showModal();
-      }
-      if (act === "close-calendars") return $("[data-calendars]").close();
+      if (act === "connect") return openSettings("accounts").then(() => actHooks["cal-connect"]?.());
+      if (act === "calendars") return openSettings("accounts").then(() => $("#sheet-cal-ids").focus({ preventScroll: true }));
       if (act === "save-calendars") return saveCalendars();
-      if (act === "settings") return openSettings();
+      if (act === "settings") return openSettings(e.target.closest("[data-act]").dataset.section ?? null);
       if (act === "oura-day") return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, e.target.closest("[data-act]").dataset.day), failed);
       if (act === "close-oura-day") return $("[data-oura-day]").close();
       if (act === "oura-week") { $("[data-settings]").close(); return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, state.today), failed); }
@@ -1137,6 +1146,7 @@ function wire() {
 // loads Settings' own plugins on demand (openSettings).
 export async function start(node, plugins = [], settings = settingsModule) {
   root = node;
+  toast = root.querySelector("[data-toast]");
   settingsModule = settings;
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();

@@ -6,6 +6,7 @@ import { SHEET } from "../../site.mjs";
 import "../../styles/sheet.css";
 import "../../styles/plan-phone.css";
 import "../../styles/sheet-focus.css";
+import "../../styles/plan-settings.css";
 ---
 
 <Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
@@ -33,7 +34,7 @@ import "../../styles/sheet-focus.css";
         <!-- Status chips: Needs you first, then Feed failed. -->
         <span class="sheet-chips" data-chips>
           <button type="button" class="sheet-chip" data-act="needs" data-needs-chip aria-haspopup="dialog" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="sheet-chip-text">Needs you · </span><span data-needs-n></span></button>
-          <button type="button" class="sheet-chip is-alert" data-act="settings" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
+          <button type="button" class="sheet-chip is-alert" data-act="settings" data-section="status" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
         </span>
         <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
         <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: gym, calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
@@ -43,7 +44,7 @@ import "../../styles/sheet-focus.css";
          here, a failed feed shows as a dot on ⋯ and the Feed failed item below, and in the shutdown
          window Plan today moves here to make room for Shut down. -->
     <div class="sheet-menu" id="sheet-more" data-more popover>
-      <button type="button" class="is-alert" data-act="settings" data-feed-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg> Feed failed</button>
+      <button type="button" class="is-alert" data-act="settings" data-section="status" data-feed-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg> Feed failed</button>
       <button type="button" data-act="plan" data-plan-menu>Plan today</button>
       <a href="/plan/gym/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg> Gym</a>
       <button type="button" data-act="calendars">Calendars</button>
@@ -182,141 +183,166 @@ import "../../styles/sheet-focus.css";
       <p class="small">From your Oura ring. Only you see these.</p>
       <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
     </dialog>
-    <dialog class="sheet-dialog" data-calendars aria-labelledby="sheet-cal-title">
-      <h2 id="sheet-cal-title">Calendars</h2>
-      <p class="small">Your main Google calendar always shows. To add another one, like a class schedule: in Google Calendar, open Settings, click the calendar under "Settings for my calendars", and copy its Calendar ID from "Integrate calendar". Paste one ID per line.</p>
-      <label class="visually-hidden" for="sheet-cal-ids">Extra calendar IDs, one per line</label>
-      <textarea id="sheet-cal-ids" class="sheet-reflect" rows="4" spellcheck="false" placeholder="abc123@group.calendar.google.com"></textarea>
-      <p class="small">Only you see these events. They never show on /now.</p>
-      <div class="sheet-dialog-end">
-        <button type="button" class="sheet-btn" data-act="close-calendars">Cancel</button>
-        <button type="button" class="sheet-btn primary" data-act="save-calendars">Save</button>
-      </div>
-    </dialog>
-
-    <dialog class="sheet-dialog" data-settings aria-labelledby="sheet-settings-title">
+    <dialog class="sheet-dialog sheet-settings" data-settings aria-labelledby="sheet-settings-title">
       <h2 id="sheet-settings-title">Settings</h2>
+      <!-- Four groups you can jump to (research/plan-improvements.md 12). planner.mjs opens Settings
+           at one (the Feed failed chip at Status, Calendars at Accounts); on phones the others
+           start closed. -->
+      <nav class="sheet-settings-index" aria-label="Settings sections">
+        <button type="button" class="sheet-chip" data-act="settings-go" data-section="accounts">Accounts</button>
+        <button type="button" class="sheet-chip" data-act="settings-go" data-section="day">Day</button>
+        <button type="button" class="sheet-chip" data-act="settings-go" data-section="claude">Claude</button>
+        <button type="button" class="sheet-chip" data-act="settings-go" data-section="status">Status</button>
+      </nav>
 
-      <!-- Mail accounts (docs/sheet-sources.md, "/plan"): src/sheet/mail-settings.mjs fills the list. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-mail-title">
-        <h3 id="sheet-mail-title">Mail accounts</h3>
-        <p class="small">Claude reads these, read-only, when you plan your day. Their sign-ins stay on the server.</p>
-        <ul class="sheet-mail" data-mail-accounts></ul>
-        <template data-mail-row>
-          <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-link" data-act="mail-remove">Remove</button></li>
-        </template>
-        <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
-      </section>
+      <details class="sheet-settings-group" id="sheet-settings-accounts" data-section="accounts" open>
+        <summary class="sheet-settings-group-title">Accounts</summary>
+        <!-- Mail accounts (docs/sheet-sources.md, "/plan"): src/sheet/mail-settings.mjs fills the list. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-mail-title">
+          <h3 id="sheet-mail-title">Mail accounts</h3>
+          <p class="small">Claude reads these, read-only, when you plan your day. Their sign-ins stay on the server.</p>
+          <ul class="sheet-mail" data-mail-accounts></ul>
+          <template data-mail-row>
+            <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-link" data-act="mail-remove">Remove</button></li>
+          </template>
+          <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
+        </section>
 
       <!-- Calendar (docs/sheet-v5.md, "/plan"): src/sheet/calendar-settings.mjs fills it. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-calsync-title">
-        <h3 id="sheet-calsync-title">Calendar</h3>
-        <p class="small">The server saves your busy times (start and end only) every 10 minutes from your calendars' free/busy, never Time blocks.</p>
-        <p><span role="status" data-busy-saved></span></p>
-        <p class="small"><span data-cal-account></span> <span class="sheet-mail-error" data-cal-error></span></p>
-        <button type="button" class="sheet-btn" data-act="cal-connect">Connect</button>
-        <button type="button" class="sheet-link" data-act="cal-disconnect" hidden>Disconnect</button>
-      </section>
+        <section class="sheet-settings-part" aria-labelledby="sheet-calsync-title">
+          <h3 id="sheet-calsync-title">Calendar</h3>
+          <p class="small">The server saves your busy times (start and end only) every 10 minutes from your calendars' free/busy, never Time blocks.</p>
+          <p><span role="status" data-busy-saved></span></p>
+          <p class="small"><span data-cal-account></span> <span class="sheet-mail-error" data-cal-error></span></p>
+          <button type="button" class="sheet-btn" data-act="cal-connect">Connect</button>
+          <button type="button" class="sheet-link" data-act="cal-disconnect" hidden>Disconnect</button>
+          <!-- Extra calendars (was its own dialog): planner.mjs fills and saves them. -->
+          <h4 id="sheet-cal-ids-title">Other calendars</h4>
+          <p class="small">Your main Google calendar always shows. Paste another one's Calendar ID, one per line. Only you see them; never on /now.</p>
+          <details class="sheet-settings-more"><summary>Where to find an ID</summary><p class="small">In Google Calendar, open Settings, click the calendar under "Settings for my calendars", and copy its Calendar ID from "Integrate calendar".</p></details>
+          <label class="visually-hidden" for="sheet-cal-ids">Extra calendar IDs, one per line</label>
+          <textarea id="sheet-cal-ids" class="sheet-reflect" rows="3" spellcheck="false" placeholder="abc123@group.calendar.google.com"></textarea>
+          <p class="sheet-dialog-end"><span class="small" role="status" data-cal-ids-note></span> <button type="button" class="sheet-btn primary" data-act="save-calendars">Save</button></p>
+        </section>
 
       <!-- Oura (docs/sheet-v5.md, "Oura"): src/sheet/oura-settings.mjs fills it. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-oura-title">
-        <h3 id="sheet-oura-title">Oura</h3>
-        <p class="small">The plan starts 30 minutes after you wake; your readiness, a short night or Rest Mode can lighten the day, and a ring workout ticks your Gym habit. Kept for 60 days, never shared and never sent to Claude: sleep start and end times; each day's sleep, readiness and activity scores and their contributors, hours slept, efficiency, deep and REM time, lowest and average heart rate, HRV, temperature deviation, steps and stress; Oura's bedtime window; workouts' day, times and type; Rest Mode's days; and a low-battery flag.</p>
-        <p class="small"><span role="status" data-oura-status></span> <span class="sheet-mail-error" data-oura-error></span></p>
-        <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
-        <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
-        <!-- Wind-down (docs/sheet-v5.md, "Wind-down"): src/sheet/bedtime-settings.mjs fills it. -->
-        <h4 id="sheet-sleep-title">Sleep</h4>
-        <p class="small">No block or habit goes in the hour before bed, and Telegram says when to wind down and when it's bedtime. With no bedtime set, Oura's suggested one is used when it has one.</p>
-        <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn" data-act="bedtime-ease" aria-pressed="true">Ease in</button> <button type="button" class="sheet-btn" data-act="wind-down" aria-pressed="true">Wind-down</button> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
-        <p class="small" role="status" data-bedtime-note></p>
-        <p><button type="button" class="sheet-link" data-act="oura-week">Sleep this week</button></p>
-        <!-- Wake alarm (docs/sheet-alarms.md): src/sheet/bedtime-settings.mjs fills the link. -->
-        <p class="small"><a data-alarm href="#">Set iPhone alarm</a> <span data-alarm-note></span></p>
-      </section>
+        <section class="sheet-settings-part" aria-labelledby="sheet-oura-title">
+          <h3 id="sheet-oura-title">Oura</h3>
+          <p class="small">Wake times and day scores from your ring. Never shared or sent to Claude.</p>
+          <details class="sheet-settings-more"><summary>More</summary><p class="small">The plan starts 30 minutes after you wake; your readiness, a short night or Rest Mode can lighten the day, and a ring workout ticks your Gym habit. Kept for 60 days, never shared and never sent to Claude: sleep start and end times; each day's sleep, readiness and activity scores and their contributors, hours slept, efficiency, deep and REM time, lowest and average heart rate, HRV, temperature deviation, steps and stress; Oura's bedtime window; workouts' day, times and type; Rest Mode's days; and a low-battery flag.</p></details>
+          <p class="small"><span role="status" data-oura-status></span> <span class="sheet-mail-error" data-oura-error></span></p>
+          <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
+          <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
+        </section>
+      </details>
 
-      <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-int-title">
-        <h3 id="sheet-int-title">Interest profile</h3>
-        <p class="small">A few plain lines on what you like: topics, clubs, career goals, and what you'd skip. Claude picks campus events against them when it plans your day.</p>
-        <label class="visually-hidden" for="sheet-interests">Your interest profile, a few lines</label>
-        <textarea id="sheet-interests" class="sheet-reflect" rows="6" placeholder="Robotics, embedded systems, free food"></textarea>
-        <p class="small">Only you and Claude read this. It never shows on /now.</p>
-        <p class="sheet-dialog-end"><span class="small" role="status" data-interests-note></span> <button type="button" class="sheet-btn primary" data-act="save-interests">Save</button></p>
-      </section>
+      <details class="sheet-settings-group" id="sheet-settings-day" data-section="day" open>
+        <summary class="sheet-settings-group-title">Day</summary>
+        <!-- Workload cap (docs/sheet-v5.md, "/plan"): src/sheet/planner.mjs fills and saves it. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-cap-title">
+          <h3 id="sheet-cap-title">Workload cap</h3>
+          <p class="small">The most hours of blocks Claude plans in a day, and the load bar's full mark.</p>
+          <p class="sheet-dialog-end"><label for="sheet-cap">Hours a day</label> <input id="sheet-cap" class="sheet-cap" type="number" min="1" max="16" step="0.5" inputmode="decimal"> <span class="small" role="status" data-cap-note></span> <button type="button" class="sheet-btn primary" data-act="save-cap">Save</button></p>
+        </section>
 
-      <!-- Workload cap (docs/sheet-v5.md, "/plan"): src/sheet/planner.mjs fills and saves it. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-cap-title">
-        <h3 id="sheet-cap-title">Workload cap</h3>
-        <p class="small">The most hours of blocks Claude plans in a day, and the load bar's full mark.</p>
-        <p class="sheet-dialog-end"><label for="sheet-cap">Hours a day</label> <input id="sheet-cap" class="sheet-cap" type="number" min="1" max="16" step="0.5" inputmode="decimal"> <span class="small" role="status" data-cap-note></span> <button type="button" class="sheet-btn primary" data-act="save-cap">Save</button></p>
-      </section>
+        <section class="sheet-settings-part" aria-labelledby="sheet-sleep-title">
+          <!-- Wind-down (docs/sheet-v5.md, "Wind-down"): src/sheet/bedtime-settings.mjs fills it. -->
+          <h3 id="sheet-sleep-title">Sleep</h3>
+          <p class="small">No block or habit goes in the hour before bed, and Telegram says when to wind down and when it's bedtime. With no bedtime set, Oura's suggested one is used when it has one.</p>
+          <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn" data-act="bedtime-ease" aria-pressed="true">Ease in</button> <button type="button" class="sheet-btn" data-act="wind-down" aria-pressed="true">Wind-down</button> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
+          <p class="small" role="status" data-bedtime-note></p>
+          <p><button type="button" class="sheet-link" data-act="oura-week">Sleep this week</button></p>
+          <!-- Wake alarm (docs/sheet-alarms.md): src/sheet/bedtime-settings.mjs fills the link. -->
+          <p class="small"><a data-alarm href="#">Set iPhone alarm</a> <span data-alarm-note></span></p>
+        </section>
 
       <!-- Habits (docs/sheet-v5.md, "/plan"): src/sheet/habit-settings.mjs fills and saves them. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-habits-title">
-        <h3 id="sheet-habits-title">Habits</h3>
-        <p class="small">Claude places these around your tasks on their days, starting within the ideal time ± flex. Firm ones go in before tasks, flexible ones after hard deadlines; one that can't fit is left out that day. They never show on /now.</p>
-        <ul class="sheet-mail" data-habits></ul>
-        <form class="sheet-habit-form" data-habit-form>
-          <label>Name <input name="name" type="text" maxlength="40" required placeholder="Gym"></label>
-          <fieldset><legend>Days</legend> <label><input type="checkbox" name="days[]" value="1"> Mon</label> <label><input type="checkbox" name="days[]" value="2"> Tue</label> <label><input type="checkbox" name="days[]" value="3"> Wed</label> <label><input type="checkbox" name="days[]" value="4"> Thu</label> <label><input type="checkbox" name="days[]" value="5"> Fri</label> <label><input type="checkbox" name="days[]" value="6"> Sat</label> <label><input type="checkbox" name="days[]" value="7"> Sun</label></fieldset>
-          <label>Ideal time <input name="ideal" type="time" value="12:00" required></label>
-          <label>Minutes <input name="minutes" class="sheet-cap" type="number" min="15" max="240" step="5" value="30" required></label>
-          <label>Flex ± <input name="flex_min" class="sheet-cap" type="number" min="0" max="240" step="5" value="30" required></label>
-          <label>Defence <select name="defence"><option value="flexible">Flexible</option><option value="firm">Firm</option></select></label>
-          <p class="sheet-dialog-end"><span class="small" role="status" data-habit-note></span> <button type="submit" class="sheet-btn primary">Add habit</button></p>
-        </form>
-      </section>
-
-      <!-- Replans (docs/sheet-v5.md, "/plan"): src/sheet/replan-settings.mjs fills and saves it. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-replans-title">
-        <h3 id="sheet-replans-title">Replans</h3>
-        <p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. A replan may move a block it placed until the block starts; one you moved stays put.</p>
-        <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
-      </section>
-
-      <section class="sheet-settings-part" aria-labelledby="sheet-auto-approve-title">
-        <h3 id="sheet-auto-approve-title">Auto-approve</h3>
-        <p class="small">A plan's blocks count as soon as Claude makes them: they get calendar events and nudges without Approve all. Move or remove any of them here.</p>
-        <p class="sheet-dialog-end"><span class="small" role="status" data-auto-approve-note></span> <button type="button" class="sheet-btn" data-act="auto-approve" aria-pressed="false">Auto-approve</button></p>
-      </section>
+        <section class="sheet-settings-part" aria-labelledby="sheet-habits-title">
+          <h3 id="sheet-habits-title">Habits</h3>
+          <p class="small">Claude places these around your tasks on their days.</p>
+          <details class="sheet-settings-more"><summary>More</summary><p class="small">Claude places these around your tasks on their days, starting within the ideal time ± flex. Firm ones go in before tasks, flexible ones after hard deadlines; one that can't fit is left out that day. They never show on /now.</p></details>
+          <ul class="sheet-mail" data-habits></ul>
+          <form class="sheet-habit-form" data-habit-form>
+            <label>Name <input name="name" type="text" maxlength="40" required placeholder="Gym"></label>
+            <fieldset><legend>Days</legend> <label><input type="checkbox" name="days[]" value="1"> Mon</label> <label><input type="checkbox" name="days[]" value="2"> Tue</label> <label><input type="checkbox" name="days[]" value="3"> Wed</label> <label><input type="checkbox" name="days[]" value="4"> Thu</label> <label><input type="checkbox" name="days[]" value="5"> Fri</label> <label><input type="checkbox" name="days[]" value="6"> Sat</label> <label><input type="checkbox" name="days[]" value="7"> Sun</label></fieldset>
+            <label>Ideal time <input name="ideal" type="time" value="12:00" required></label>
+            <label>Minutes <input name="minutes" class="sheet-cap" type="number" min="15" max="240" step="5" value="30" required></label>
+            <label>Flex ± <input name="flex_min" class="sheet-cap" type="number" min="0" max="240" step="5" value="30" required></label>
+            <label>Defence <select name="defence"><option value="flexible">Flexible</option><option value="firm">Firm</option></select></label>
+            <p class="sheet-dialog-end"><span class="small" role="status" data-habit-note></span> <button type="submit" class="sheet-btn primary">Add habit</button></p>
+          </form>
+        </section>
 
       <!-- Enrollment time (docs/sheet-v5.md, "/plan"): src/sheet/enrollment-settings.mjs fills and saves it. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-enroll-title">
-        <h3 id="sheet-enroll-title">Enrollment</h3>
-        <p class="small">When your spring enrollment opens. It becomes a private task at that time.</p>
-        <p class="sheet-dialog-end"><label for="sheet-enroll">Opens</label> <input id="sheet-enroll" type="datetime-local"> <span class="small" role="status" data-enroll-note></span> <button type="button" class="sheet-btn primary" data-act="save-enroll">Save</button></p>
-      </section>
+        <section class="sheet-settings-part" aria-labelledby="sheet-enroll-title">
+          <h3 id="sheet-enroll-title">Enrollment</h3>
+          <p class="small">When your spring enrollment opens. It becomes a private task at that time.</p>
+          <p class="sheet-dialog-end"><label for="sheet-enroll">Opens</label> <input id="sheet-enroll" type="datetime-local"> <span class="small" role="status" data-enroll-note></span> <button type="button" class="sheet-btn primary" data-act="save-enroll">Save</button></p>
+        </section>
+      </details>
 
-      <!-- Feeds status (docs/sheet-sources.md, "/plan"): src/sheet/feed-status.mjs fills the list. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-feeds-title">
-        <h3 id="sheet-feeds-title">Feeds</h3>
-        <p class="small">What the server reads every hour, and how the last read went. GitHub and Jira read "not connected" until their tokens are set.</p>
-        <ul class="sheet-mail" data-feeds></ul>
-        <!-- v5 SRC1: the orgs whose GitHub reviews and issues become tasks; feed-status.mjs saves them. -->
-        <p class="sheet-dialog-end"><label for="sheet-gh-orgs">GitHub orgs</label> <input id="sheet-gh-orgs" type="text" placeholder="acme-robotics, other-org"> <span class="small" role="status" data-gh-note></span> <button type="button" class="sheet-btn primary" data-act="save-gh-orgs">Save</button></p>
-      </section>
+      <details class="sheet-settings-group" id="sheet-settings-claude" data-section="claude" open>
+        <summary class="sheet-settings-group-title">Claude</summary>
+        <!-- Interest profile (docs/sheet-claude.md): src/sheet/planner.mjs fills and saves it. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-int-title">
+          <h3 id="sheet-int-title">Interest profile</h3>
+          <p class="small">A few plain lines on what you like: topics, clubs, career goals, and what you'd skip. Claude picks campus events against them when it plans your day.</p>
+          <label class="visually-hidden" for="sheet-interests">Your interest profile, a few lines</label>
+          <textarea id="sheet-interests" class="sheet-reflect" rows="6" placeholder="Robotics, embedded systems, free food"></textarea>
+          <p class="small">Only you and Claude read this. It never shows on /now.</p>
+          <p class="sheet-dialog-end"><span class="small" role="status" data-interests-note></span> <button type="button" class="sheet-btn primary" data-act="save-interests">Save</button></p>
+        </section>
 
-      <!-- Pace (docs/sheet-v5.md, "/plan"): src/sheet/pace-settings.mjs fills the list. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-pace-title">
-        <h3 id="sheet-pace-title">Pace</h3>
-        <p class="small">How long each kind of task really takes next to its estimate, from your Finished? answers in Telegram and Done in focus. Claude sizes blocks by it once a kind has 5.</p>
-        <ul class="sheet-mail" data-pace></ul>
-      </section>
+      <!-- Replans (docs/sheet-v5.md, "/plan"): src/sheet/replan-settings.mjs fills and saves it. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-replans-title">
+          <h3 id="sheet-replans-title">Replans</h3>
+          <p class="small">Claude replans the rest of the day when something changes, at most once an hour.</p>
+          <details class="sheet-settings-more"><summary>More</summary><p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. A replan may move a block it placed until the block starts; one you moved stays put.</p></details>
+          <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
+        </section>
+
+        <section class="sheet-settings-part" aria-labelledby="sheet-auto-approve-title">
+          <h3 id="sheet-auto-approve-title">Auto-approve</h3>
+          <p class="small">A plan's blocks count without Approve all.</p>
+          <details class="sheet-settings-more"><summary>More</summary><p class="small">A plan's blocks count as soon as Claude makes them: they get calendar events and nudges without Approve all. Move or remove any of them here.</p></details>
+          <p class="sheet-dialog-end"><span class="small" role="status" data-auto-approve-note></span> <button type="button" class="sheet-btn" data-act="auto-approve" aria-pressed="false">Auto-approve</button></p>
+        </section>
 
       <!-- Triage rules (docs/sheet-v5.md, "/plan"): src/sheet/triage-settings.mjs fills and saves them. -->
-      <section class="sheet-settings-part" aria-labelledby="sheet-triage-title">
-        <h3 id="sheet-triage-title">Triage rules</h3>
-        <p class="small">Mail from a sender or domain you always or never want in Needs you. Never show holds whatever Claude decides.</p>
-        <ul class="sheet-mail" data-triage-rules></ul>
-        <form class="sheet-dialog-end" data-triage-add>
-          <label for="sheet-triage-pattern">Address or domain</label>
-          <input id="sheet-triage-pattern" name="pattern" type="text" required minlength="3" maxlength="254" pattern="[^\s]+" placeholder="jobs@acme.com or acme.com" autocomplete="off">
-          <label class="visually-hidden" for="sheet-triage-action">Rule</label>
-          <select id="sheet-triage-action" name="action"><option value="never">Never show</option><option value="always">Always show</option></select>
-          <button type="submit" class="sheet-btn primary">Add</button>
-        </form>
-      </section>
+        <section class="sheet-settings-part" aria-labelledby="sheet-triage-title">
+          <h3 id="sheet-triage-title">Triage rules</h3>
+          <p class="small">Mail from a sender or domain you always or never want in Needs you. Never show holds whatever Claude decides.</p>
+          <ul class="sheet-mail" data-triage-rules></ul>
+          <form class="sheet-dialog-end" data-triage-add>
+            <label for="sheet-triage-pattern">Address or domain</label>
+            <input id="sheet-triage-pattern" name="pattern" type="text" required minlength="3" maxlength="254" pattern="[^\s]+" placeholder="jobs@acme.com or acme.com" autocomplete="off">
+            <label class="visually-hidden" for="sheet-triage-action">Rule</label>
+            <select id="sheet-triage-action" name="action"><option value="never">Never show</option><option value="always">Always show</option></select>
+            <button type="submit" class="sheet-btn primary">Add</button>
+          </form>
+        </section>
+      </details>
+
+      <details class="sheet-settings-group" id="sheet-settings-status" data-section="status" open>
+        <summary class="sheet-settings-group-title">Status</summary>
+        <!-- Feeds status (docs/sheet-sources.md, "/plan"): src/sheet/feed-status.mjs fills the list. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-feeds-title">
+          <h3 id="sheet-feeds-title">Feeds</h3>
+          <p class="small">What the server reads every hour, and how the last read went.</p>
+          <details class="sheet-settings-more"><summary>More</summary><p class="small">What the server reads every hour, and how the last read went. GitHub and Jira read "not connected" until their tokens are set.</p></details>
+          <ul class="sheet-mail" data-feeds></ul>
+          <!-- v5 SRC1: the orgs whose GitHub reviews and issues become tasks; feed-status.mjs saves them. -->
+          <p class="sheet-dialog-end"><label for="sheet-gh-orgs">GitHub orgs</label> <input id="sheet-gh-orgs" type="text" placeholder="acme-robotics, other-org"> <span class="small" role="status" data-gh-note></span> <button type="button" class="sheet-btn primary" data-act="save-gh-orgs">Save</button></p>
+        </section>
+
+      <!-- Pace (docs/sheet-v5.md, "/plan"): src/sheet/pace-settings.mjs fills the list. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-pace-title">
+          <h3 id="sheet-pace-title">Pace</h3>
+          <p class="small">How long each kind of task really takes next to its estimate.</p>
+          <details class="sheet-settings-more"><summary>More</summary><p class="small">How long each kind of task really takes next to its estimate, from your Finished? answers in Telegram and Done in focus. Claude sizes blocks by it once a kind has 5.</p></details>
+          <ul class="sheet-mail" data-pace></ul>
+        </section>
+      </details>
 
       <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
@@ -404,7 +430,7 @@ import "../../styles/sheet-focus.css";
   const setupSwipe = (root) => { if (matchMedia("(pointer: coarse)").matches) import("../../sheet/swipe-ui.mjs").then((m) => m.setupSwipe(root)); };
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
-  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupBedtimeSettings]);
+  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupBedtimeSettings, m.setupSettingsSections]);
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupNowNext, setupSwipe], settings);
