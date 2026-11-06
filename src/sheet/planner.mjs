@@ -687,7 +687,9 @@ async function loadEvents(days) {
       try { localStorage.setItem(key, JSON.stringify(state.todoEvents)); } catch {}
       // Work that needs Google and runs after each load, in the background (busy times, events
       // for blocks approved off the page). A hook that fails never stops the page.
-      for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error);
+      // Pending deletes and moves first (syncGoogle), so a replan's old events go before its new
+      // ones are added, on a refresh as well as on opening.
+      syncGoogle().then(() => { for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error); });
       return;
     } catch (e) { console.error(e); }
   }

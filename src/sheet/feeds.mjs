@@ -84,7 +84,11 @@ export function courseTaskChanges(events, { tasks, seen, timeZone }) {
 export function courseChanges({ insert, update, removed = [] }, tasks, today) {
   const soon = (due) => due != null && due >= today && due <= addDays(today, 2);
   const uid = new Map(tasks.map((t) => [t.id, t.source_uid]));
-  return [...insert.map((r) => [r.due ?? r.day, r.source_uid]), ...update.map((u) => [u.due ?? u.day, uid.get(u.id)]),
+  // An update that only fills in or changes the link (courseLink) changes nothing the plan uses.
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const same = (a, b) => String(a ?? "").slice(0, 5) === String(b ?? "").slice(0, 5) || (a ?? null) === (b ?? null);
+  const planned = (u) => { const t = byId.get(u.id); return !t || Object.keys(u).some((k) => k !== "id" && k !== "link" && !(k === "at_time" ? same(u[k], t[k]) : (u[k] ?? null) === (t[k] ?? null))); };
+  return [...insert.map((r) => [r.due ?? r.day, r.source_uid]), ...update.filter(planned).map((u) => [u.due ?? u.day, uid.get(u.id)]),
     ...removed.map((r) => [null, r.uid])]
     .map(([due, ref]) => changeRow(soon(due) ? "course_due_soon" : "course_change", ref ?? null));
 }

@@ -32,3 +32,13 @@ test("course events carry their link too", () => {
   const out = courseEventChanges([exam], { tasks: [], seen: [], timeZone: TZ, today: "2026-11-06" });
   assert.equal(out.insert[0].link, PAGE);
 });
+
+test("courseChanges: an update that only adds a link asks for no replan", async () => {
+  const { courseChanges } = await import("../src/sheet/feeds.mjs");
+  const t = { id: "t1", title: "Project 2", due: "2026-11-09", day: null, source_uid: "u1", at_time: null };
+  assert.deepEqual(courseChanges({ insert: [], update: [{ id: "t1", title: "Project 2", due: "2026-11-09", link: PAGE }] }, [t], "2026-11-06"), []);
+  assert.equal(courseChanges({ insert: [], update: [{ id: "t1", title: "Project 2", due: "2026-11-10", link: PAGE }] }, [t], "2026-11-06").length, 1);
+  // An event's "19:15" against the row's "19:15:00" is the same time.
+  const ev = { id: "t2", title: "Exam 2", day: "2026-11-12", at_time: "19:15:00", est_min: 80, list: null, source_uid: "u2" };
+  assert.deepEqual(courseChanges({ insert: [], update: [{ id: "t2", title: "Exam 2", day: "2026-11-12", at_time: "19:15", est_min: 80, list: null, link: PAGE }] }, [ev], "2026-11-06"), []);
+});
