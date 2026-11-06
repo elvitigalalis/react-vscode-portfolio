@@ -6,14 +6,20 @@ import * as api from "./api.mjs";
 import { plural } from "./logic.mjs";
 import { actHooks, el, failed, icon, settingsHooks, state } from "./planner.mjs";
 import { feedAlert } from "./glance.mjs";
+import { feedRows } from "./feed-state.mjs";
 import { githubOrgsFromInput } from "./sources.mjs";
 
-const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", gmail: "Gmail", oura: "Oura", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack" };
+// Every source a sync job writes to feed_state, in Settings order. One that has never written a
+// row (Handshake and the academic calendar until their links are set) shows as "not set up".
+const SOURCES = ["brightspace", "campus", "freebusy", "gmail", "oura", "github", "jira", "slack", "handshake", "academic", "weather"];
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-// "Brightspace: ok, 12 items, Nov 3, 2:20 PM", or the error. A row with no fetch yet says so.
+// "Brightspace: ok, 12 items, Nov 3, 2:20 PM", or the error. A row with no fetch yet says so, and
+// a source with no row at all is "not set up".
 function line(f) {
   const name = NAMES[f.source] ?? f.source;
+  if (f.missing) return `${name}: not set up`;
   if (!f.fetched_at) return `${name}: not read yet`;
   // A sync with nothing to read yet ("not connected") hasn't failed.
   if (f.ok === null && f.error) return `${name}: ${f.error}`;
@@ -29,8 +35,7 @@ async function draw(root) {
   root.querySelector("[data-gh-note]").textContent = "";
   const list = root.querySelector("[data-feeds]");
   const rows = await api.listFeedState();
-  list.replaceChildren(...rows.map((f) => el("li", { className: f.ok === false ? "sheet-mail-error" : "" }, mark(f), " ", line(f))));
-  if (!rows.length) list.append(el("li", { className: "small", textContent: "No feed has been read yet." }));
+  list.replaceChildren(...feedRows(rows, SOURCES).map((f) => el("li", { className: f.ok === false ? "sheet-mail-error" : "" }, mark(f), " ", line(f))));
   chip(root, rows);
 }
 
