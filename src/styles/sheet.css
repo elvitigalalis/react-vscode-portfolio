@@ -553,53 +553,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-evtodo:hover .sheet-check, .sheet-evtodo:hover .sheet-more { opacity: 1; }
 .sheet-evtodo:hover { border-bottom-color: var(--accent); }
 
-/* Phones and touch screens (research/plan-improvements.md 2, 3, 6, 7; plan-phone.md 9, 10). */
-/* The ⋯ menu: Gym is a link that reads like the buttons. Feed failed shows only on phones. */
-.sheet-menu a {
-  display: block; font-size: 0.875rem; color: inherit; text-decoration: none;
-  border-radius: 0.25rem; padding: 0.4rem 0.6rem;
-}
-.sheet-menu a:hover, .sheet-menu a:focus-visible { background: var(--chip); }
-.sheet-menu .sheet-icon { margin-right: 0.15rem; }
-.sheet-menu [data-feed-menu] { display: none; color: var(--danger); }
-.sheet-menu [data-plan-menu] { display: none; }
 /* Opened from the Home Screen (display: standalone, the manifests' display), /plan and the gym
    page are an app: the site's nav and footer go. https://www.w3.org/TR/mediaqueries-5/#display-mode */
 @media (display-mode: standalone) { body > :is(.topbar, .footer) { display: none; } }
-/* Help lists the keys only where there is a keyboard and pointer to use them. */
-@media (pointer: coarse) and (hover: none) { .sheet-help-keys { display: none; } }
-/* Phones: the bar holds ‹ day ›, Plan, Needs you, Nudges and ⋯ on one row. A failed feed folds
-   into ⋯ as a dot and the menu's Feed failed item, which opens Settings like the chip. */
-@media (max-width: 30rem) {
-  .sheet-chips .sheet-chip.is-alert { display: none; }
-  .sheet-planner:has([data-feed-alert]:not([hidden])) [data-feed-menu] { display: block; }
-  .sheet-planner:has([data-feed-alert]:not([hidden])) [popovertarget="sheet-more"] { position: relative; }
-  .sheet-planner:has([data-feed-alert]:not([hidden])) [popovertarget="sheet-more"]::after {
-    content: ""; position: absolute; top: 0.3rem; right: 0.3rem; width: 0.5rem; height: 0.5rem;
-    border-radius: 50%; background: var(--danger);
-  }
-  /* In the shutdown window, Shut down takes Plan's place and Plan today moves into ⋯. */
-  .sheet-tools:has([data-act="shutdown"]:not([hidden])) [data-act="plan"] { display: none; }
-  .sheet-planner:has([data-act="shutdown"]:not([hidden])) [data-plan-menu] { display: block; }
-}
-/* Touch: 44 px tap areas (Apple HIG, Accessibility, "at least 44x44 pt":
-   https://developer.apple.com/design/human-interface-guidelines/accessibility). Where the
-   mark must stay small, an ::after reaches past it and takes the taps. */
-@media (pointer: coarse) {
-  .sheet-tools .sheet-btn, .sheet-chips .sheet-chip { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
-  .sheet-nav { gap: 0; }
-  .sheet-btn-approve { position: relative; }
-  .sheet-btn-approve::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 2.75rem); height: 2.75rem; translate: -50% -50%; }
-  /* In the week and the banner, Approve itself is 24 px tall (WCAG 2.5.8). */
-  :is(.sheet-proposal, .sheet-banner) > .sheet-btn-approve { min-height: 1.5rem; padding-inline: 0.5rem; }
-  /* Plan today: the 6 px resize bar and the shutdown line keep their look; the block lets the
-     hit areas reach past its edge (its title still clips itself). */
-  .sheet-block { overflow: visible; }
-  .sheet-resize::after { content: ""; position: absolute; left: 0; right: 0; top: -0.5rem; height: 2.75rem; }
-  .sheet-shutline::after { content: ""; position: absolute; left: 0; right: 0; top: -1.375rem; height: 2.75rem; }
-  .sheet-block-x { position: relative; min-width: 2.75rem; }
-  .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
-}
 
 /* Projects (docs/sheet-projects.md, src/sheet/project-list.mjs): one quiet row per project,
    opening to its steps as task rows. */
