@@ -1876,4 +1876,66 @@ do $$ begin
   raise notice '✓ horizon: anon has no table and no function';
 end $$;
 SQL
+# Projects (docs/sheet-projects.md): answer_message adds a project and its steps, Undo takes it
+# off, and finishing the last step finishes it; under pg-safeupdate, as the owner.
+psql_as supabase_admin >/dev/null <<'SQL'
+\set QUIET on
+load 'safeupdate';
+create function pg_temp.as_user(r text, email text) returns void language sql as $$
+  select set_config('role', r, false),
+         set_config('request.jwt.claims', coalesce(json_build_object('email', email)::text, ''), false) $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$
+declare
+  m uuid;
+  p uuid;
+  s3 uuid;
+  out jsonb;
+begin
+  insert into messages (text) values ('CSE 416 final project due Dec 10, about 15 hours') returning id into m;
+  if answer_message(m, '[]', '[]', 'Added the project in 3 steps.',
+       '[{"title": "PRJ CSE 416 final project", "due": "2026-12-10", "est_min": 900, "why": "15h, as given",
+          "steps": [{"title": "PRJ Plan", "est_min": 120}, {"title": "PRJ Build", "est_min": 600}, {"title": "PRJ Write up", "est_min": 180}]}]') <> 'done'
+    then raise exception 'a project-only answer did not say done'; end if;
+  select (tasks -> 0 ->> 'id')::uuid into p from messages where id = m;
+  if (select title <> 'PRJ CSE 416 final project' or due <> '2026-12-10' or est_min <> 900 or done from projects where id = p) is not false
+    then raise exception 'answer_message did not add the project'; end if;
+  if (select tasks -> 0 ->> 'kind' <> 'project' or (tasks -> 0 ->> 'steps')::int <> 3 or tasks_added <> 1 from messages where id = m)
+    then raise exception 'the message does not list the project'; end if;
+  if (select string_agg(title || ':' || step || ':' || due || ':' || est_min || ':' || list || ':' || source, ',' order by step)
+        from tasks where project_id = p)
+     <> 'PRJ Plan:1:2026-12-10:120:Inbox:message,PRJ Build:2:2026-12-10:600:Inbox:message,PRJ Write up:3:2026-12-10:180:Inbox:message'
+    then raise exception 'the steps are not tasks in order with the project''s due date'; end if;
+  begin insert into tasks (title, list, project_id) values ('PRJ stray', 'Inbox', p); raise exception 'a step without a position';
+  exception when check_violation then null; end;
+
+  -- Finishing the last step finishes the project; reopening one opens it again.
+  update tasks set done = true where project_id = p and step < 3;
+  if (select done from projects where id = p) then raise exception 'a project finished with a step left'; end if;
+  select id into s3 from tasks where project_id = p and step = 3;
+  update tasks set done = true where id = s3;
+  if not (select done from projects where id = p) then raise exception 'the last step did not finish the project'; end if;
+  update tasks set done = false where id = s3;
+  if (select done from projects where id = p) then raise exception 'reopening a step left the project done'; end if;
+
+  -- Undo takes the project and its steps off.
+  out := undo_message_item(m, p);
+  if out ->> 'kind' <> 'project' or out ->> 'title' <> 'PRJ CSE 416 final project' then raise exception 'undo of a project returned %', out; end if;
+  if exists (select 1 from projects where id = p) or exists (select 1 from tasks where title like 'PRJ %')
+    then raise exception 'undo kept the project or its steps'; end if;
+  if (select jsonb_array_length(tasks) <> 0 or tasks_added <> 0 from messages where id = m)
+    then raise exception 'undo did not take the project off the message'; end if;
+  delete from messages where id = m;
+  raise notice '✓ projects: added with their steps, finished by the last step, undone whole';
+end $$;
+select pg_temp.as_user('anon', null);
+do $$ begin
+  begin perform 1 from projects; raise exception 'anon read projects';
+  exception when insufficient_privilege then null; end;
+  if exists (select 1 from information_schema.view_column_usage
+             where view_name in ('public_week', 'public_days', 'public_now') and (table_name = 'projects' or column_name in ('project_id', 'step')))
+    then raise exception 'a public view reads projects'; end if;
+  raise notice '✓ projects: anon sees none';
+end $$;
+SQL
 echo "✓ all schema checks passed"
