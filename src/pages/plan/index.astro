@@ -4,11 +4,17 @@ import Base from "../../layouts/Base.astro";
 import { siteConfig } from "../../config";
 import { SHEET } from "../../site.mjs";
 import "../../styles/sheet.css";
+import "../../styles/plan-phone.css";
 import "../../styles/sheet-focus.css";
 ---
 
 <Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
   {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
+  <!-- Add to Home Screen: /plan/ opens full screen, as its own app (Web App Manifest,
+       https://www.w3.org/TR/appmanifest/; scope and display as in /plan/gym/'s). -->
+  <link slot="head" rel="manifest" href="/plan/manifest.webmanifest" />
+  <link slot="head" rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta slot="head" name="apple-mobile-web-app-title" content="Plan" />
   <section class="sheet-page sheet-planner">
     <!-- The top bar (docs/sheet-glance.md, change 6): ‹ Today › (‹ Tue Nov 3 › on phones, where
          the arrows step a day), Plan today, Shut down in its window, chips, Nudges and a ⋯ menu.
@@ -23,18 +29,23 @@ import "../../styles/sheet-focus.css";
           <button type="button" class="sheet-btn sheet-icon-btn" data-act="next" aria-label="Next week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg></button>
         </span>
         <button type="button" class="sheet-btn primary" data-act="plan">Plan<span class="sheet-chip-text"> today</span> <kbd>P</kbd></button>
-        <button type="button" class="sheet-btn" data-act="shutdown" hidden>Shut down <kbd>O</kbd></button>
+        <button type="button" class="sheet-btn" data-act="shutdown" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-moon"></use></svg><span class="sheet-chip-text">Shut down</span> <kbd>O</kbd></button>
         <!-- Status chips: Needs you first, then Feed failed. -->
         <span class="sheet-chips" data-chips>
           <button type="button" class="sheet-chip" data-act="needs" data-needs-chip aria-haspopup="dialog" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="sheet-chip-text">Needs you · </span><span data-needs-n></span></button>
           <button type="button" class="sheet-chip is-alert" data-act="settings" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
         </span>
         <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
-        <a class="sheet-btn sheet-icon-btn" href="/plan/gym/" aria-label="Gym: today's workout" title="Gym"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg></a>
-        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
+        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: gym, calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
       </div>
     </div>
+    <!-- On phones the bar holds ‹ day ›, Plan, Needs you, Nudges and ⋯ (sheet.css), so Gym lives
+         here, a failed feed shows as a dot on ⋯ and the Feed failed item below, and in the shutdown
+         window Plan today moves here to make room for Shut down. -->
     <div class="sheet-menu" id="sheet-more" data-more popover>
+      <button type="button" class="is-alert" data-act="settings" data-feed-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg> Feed failed</button>
+      <button type="button" data-act="plan" data-plan-menu>Plan today</button>
+      <a href="/plan/gym/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg> Gym</a>
       <button type="button" data-act="calendars">Calendars</button>
       <button type="button" data-act="settings">Settings <kbd>S</kbd></button>
       <button type="button" data-act="help">Help <kbd>?</kbd></button>
@@ -89,25 +100,33 @@ import "../../styles/sheet-focus.css";
     </div>
 
     <dialog class="sheet-dialog" data-help aria-labelledby="sheet-help-title">
-      <h2 id="sheet-help-title">Keys</h2>
+      <h2 id="sheet-help-title">Help</h2>
+      <!-- Typed syntax first: it works on every screen. The keys follow, on a mouse or trackpad
+           only (sheet.css hides them on a touch screen). -->
+      <h3 class="sheet-legend-title">Typing a task</h3>
       <dl class="sheet-keys">
-        <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>~45m · @3pm · #tag</dt><dd>Estimate, fixed time, tag</dd>
         <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (⚠) within two days with no block</dd>
         <dt>!p</dt><dd>Private: /now shows a bar, Google says Busy</dd>
-        <dt>P</dt><dd>Plan today</dd>
-        <dt>O</dt><dd>Shut down</dd>
-        <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
-        <dt>↑ ↓</dt><dd>While planning: move the focused block 15 min</dd>
-        <dt>A · Shift+A</dt><dd>While planning: approve the focused block, approve all</dd>
-        <dt>← →</dt><dd>Previous or next week</dd>
-        <dt>T</dt><dd>This week</dd>
-        <dt>.</dt><dd>Menu for the focused task</dd>
-        <dt>⌘Z</dt><dd>Undo</dd>
-        <dt>S</dt><dd>Settings: mail accounts, calendar, interest profile, habits, feeds</dd>
-        <dt>C</dt><dd>Campus events for the focused day (or the campus chip under its calendar)</dd>
-        <dt>M</dt><dd>Needs you: mail waiting on you (or the Needs you chip)</dd>
+        <dt>Enter</dt><dd>Add the task, start the next</dd>
       </dl>
+      <div class="sheet-help-keys">
+        <h3 class="sheet-legend-title">Keys</h3>
+        <dl class="sheet-keys">
+          <dt>P</dt><dd>Plan today</dd>
+          <dt>O</dt><dd>Shut down</dd>
+          <dt>D · Z</dt><dd>While planning: tomorrow, Someday</dd>
+          <dt>↑ ↓</dt><dd>While planning: move the focused block 15 min</dd>
+          <dt>A · Shift+A</dt><dd>While planning: approve the focused block, approve all</dd>
+          <dt>← →</dt><dd>Previous or next week</dd>
+          <dt>T</dt><dd>This week</dd>
+          <dt>.</dt><dd>Menu for the focused task</dd>
+          <dt>⌘Z</dt><dd>Undo</dd>
+          <dt>S</dt><dd>Settings: mail accounts, calendar, interest profile, habits, feeds</dd>
+          <dt>C</dt><dd>Campus events for the focused day (or the campus chip under its calendar)</dd>
+          <dt>M</dt><dd>Needs you: mail waiting on you (or the Needs you chip)</dd>
+        </dl>
+      </div>
       <!-- What each icon means (docs/sheet-glance.md, "The icon set"). One line per icon in use. -->
       <h3 class="sheet-legend-title">Icons</h3>
       <dl class="sheet-keys sheet-legend">
@@ -126,6 +145,8 @@ import "../../styles/sheet-focus.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg><span class="visually-hidden">More</span></dt><dd>Menu for the task, or Calendars, Settings, Help and Sign out</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg><span class="visually-hidden">Sparkles</span></dt><dd>Proposed by Claude, until you approve it</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-repeat"></use></svg><span class="visually-hidden">Repeat</span></dt><dd>A habit's block, from Settings</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-moon"></use></svg><span class="visually-hidden">Moon</span></dt><dd>Shut down: close out the day</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg><span class="visually-hidden">Dumbbell</span></dt><dd>Gym: today's workout, in the ⋯ menu</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell"></use></svg><span class="visually-hidden">Bell</span></dt><dd>Nudges: Telegram reminds you of blocks (crossed out when off)</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="visually-hidden">Alert</span></dt><dd>A feed failed: open Settings to see which</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="visually-hidden">Mail</span></dt><dd>Needs you: mail waiting on you</dd>

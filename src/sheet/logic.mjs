@@ -362,8 +362,9 @@ export function visibleEvents(dayEvents, max, nowMin = null) {
 
 export const ROLL_MARKS = ["", "②", "③"];
 export const rollMark = (rolls) => (rolls >= 1 && rolls <= 2 ? ROLL_MARKS[rolls] : "");
-// Ink fades a step per roll.
-export const rollOpacity = (rolls) => [1, 0.8, 0.6][Math.min(rolls, 2)];
+// The title's ink fades a step per roll, never under 4.5:1 (WCAG 1.4.3): 0.7 of --fg is 5.0:1
+// on --chip in light mode, the worst case (test/roll-contrast.test.mjs).
+export const rollOpacity = (rolls) => [1, 0.85, 0.7][Math.min(rolls, 2)];
 
 // --- The public view ---------------------------------------------------------------------
 

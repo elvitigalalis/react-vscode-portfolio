@@ -1,0 +1,15 @@
+{
+  "name": "The Sheet",
+  "short_name": "Plan",
+  "description": "Lisul's planner.",
+  "id": "/plan/",
+  "start_url": "/plan/",
+  "scope": "/plan/",
+  "display": "standalone",
+  "background_color": "#f9f3ea",
+  "theme_color": "#f9f3ea",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

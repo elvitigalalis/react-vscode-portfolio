@@ -1,8 +1,8 @@
 // The top bar on /plan (docs/sheet-glance.md, change 6): the ‹ Today › labels, the Nudges
-// toggle's state and the ⋯ menu. planner.mjs handles the clicks; feed-status.mjs the Feed
+// toggle's state and the ⋯ menu (which holds Gym, and on phones Feed failed). planner.mjs handles the clicks; feed-status.mjs the Feed
 // failed chip. Text goes in through textContent only.
 import { state, renderHooks, NARROW } from "./planner.mjs";
-import { dayLabel, weekdayName } from "./logic.mjs";
+import { weekdayName } from "./logic.mjs";
 
 function draw(root) {
   // On phones the arrows step the one day on screen, and the middle button names it.
@@ -10,7 +10,9 @@ function draw(root) {
   const unit = phone ? "day" : "week";
   root.querySelector('[data-act="prev"]').ariaLabel = `Previous ${unit}`;
   root.querySelector('[data-act="next"]').ariaLabel = `Next ${unit}`;
-  if (state.focus) root.querySelector("[data-focus-day]").textContent = `${weekdayName(state.focus)} ${dayLabel(state.focus).date}`;
+  // The weekday and day of the month ("Tue 3"), short enough to keep the bar on one row; the
+  // day's own header under it gives the month.
+  if (state.focus) root.querySelector("[data-focus-day]").textContent = `${weekdayName(state.focus)} ${Number(state.focus.slice(8))}`;
   // A toggle keeps one label and says its state with aria-pressed.
   const on = Boolean(state.settings?.nudges_on);
   const nudges = root.querySelector('[data-act="telegram"]');
@@ -30,6 +32,7 @@ export function setupTopBar(root) {
     const r = button.getBoundingClientRect();
     menu.style.top = `${r.bottom + 4}px`;
     menu.style.left = `${Math.max(8, Math.min(r.right - menu.offsetWidth, document.documentElement.clientWidth - menu.offsetWidth - 8))}px`;
-    menu.querySelector("button").focus();
+    // The first item shown: Feed failed shows only on phones while a feed failed (sheet.css).
+    [...menu.querySelectorAll("a, button")].find((x) => x.getClientRects().length)?.focus();
   });
 }

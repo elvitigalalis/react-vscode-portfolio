@@ -20,7 +20,8 @@
 .sheet-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0 1rem; }
 @media (max-width: 48rem) {
   .sheet-week { grid-template-columns: 1fr; gap: 1.25rem; }
-  .sheet-row.is-empty { display: none; }
+  /* Filler rows go; every day and Someday list keeps its "+ Add a task" row. */
+  .sheet-row.is-empty:not(.is-add) { display: none; }
 }
 .sheet-head {
   display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.9375rem;
@@ -121,7 +122,9 @@
 .sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
 
 .sheet-task { position: relative; cursor: grab; }
-.sheet-task > :not(.sheet-check, .sheet-more, .visually-hidden) { opacity: var(--ink, 1); }
+/* A rolled task fades its title only (rollOpacity); its time, details and Approve keep full ink.
+   A done title is already muted, so it doesn't fade again. */
+.sheet-task:not(.is-done) .sheet-title { opacity: var(--ink, 1); }
 .sheet-title {
   flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
   padding: 0; cursor: text; overflow-wrap: anywhere;
@@ -461,8 +464,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 /* Empty states (change 7): an empty today's muted line, and its "+ Add a task", always show. */
 .sheet-blank { color: var(--muted); }
 .sheet-rows.is-blank .sheet-add::placeholder { color: var(--muted); }
-/* Phones hide empty rows, but not these. */
-@media (max-width: 48rem) { .sheet-rows.is-blank > .sheet-row.is-add { display: flex; } }
 /* /now, safe polish (change 8): the row fix, a project icon, and an accent dot on Right now. */
 .sheet-week-public .sheet-row > :is(span, a):not(.sheet-bar, .visually-hidden) { min-width: min(8ch, 100%); }
 .sheet-week-public .sheet-row > .sheet-icon { color: var(--muted); margin-top: 0.125em; }
@@ -551,6 +552,10 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-evtodo .sheet-source { color: var(--muted); }
 .sheet-evtodo:hover .sheet-check, .sheet-evtodo:hover .sheet-more { opacity: 1; }
 .sheet-evtodo:hover { border-bottom-color: var(--accent); }
+
+/* Opened from the Home Screen (display: standalone, the manifests' display), /plan and the gym
+   page are an app: the site's nav and footer go. https://www.w3.org/TR/mediaqueries-5/#display-mode */
+@media (display-mode: standalone) { body > :is(.topbar, .footer) { display: none; } }
 
 /* Projects (docs/sheet-projects.md, src/sheet/project-list.mjs): one quiet row per project,
    opening to its steps as task rows. */
