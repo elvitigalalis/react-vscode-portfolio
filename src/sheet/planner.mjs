@@ -7,7 +7,8 @@ import {
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
 } from "./logic.mjs";
-import { sourceOf, dueLevel, dayWindow, openView, followToday, settingsOpen } from "./glance.mjs";
+import { sourceOf, dueLevel, dayWindow, openView, followToday } from "./glance.mjs";
+import { hostToast } from "./toast-host.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
@@ -154,27 +155,13 @@ const named = (t) => `"${t?.title ?? "the task"}"`;
 
 let undoFn = null;
 let toastTimer;
-let toast = null; // the Undo toast, kept by reference: it moves between dialogs (hostToast)
-
-// A modal dialog (Plan today, Shut down) makes the page under it inert and draws over it, and a
-// popover over it is inert too, so a toast left in the page can't be tapped while one is open
-// (https://html.spec.whatwg.org/multipage/interaction.html#modal-dialogs-and-inert-subtrees).
-// The toast goes inside the open dialog instead, and back when it closes. Plan today redraws its
-// dialog's children, so render() hosts it again after the hooks. Needs you and Campus show their
-// own Undo, so the toast stays out of them.
-function hostToast() {
-  if (!toast || toast.hidden) return;
-  const top = [...root.querySelectorAll("dialog[open]")].at(-1);
-  const own = top && [...top.querySelectorAll('[data-act="undo"]')].some((b) => !toast.contains(b));
-  const host = top && !own ? top : root;
-  if (toast.parentElement !== host) host.append(toast);
-}
+let toast = null; // kept by reference: it moves into an open dialog (toast-host.mjs)
 
 export function offerUndo(text, fn) {
   undoFn = fn;
   toast.querySelector("[data-toast-text]").textContent = text;
   toast.hidden = false;
-  hostToast();
+  hostToast(root, toast);
   clearTimeout(toastTimer);
   // On touch there is no ⌘Z, so Undo stays up longer: 12 s, not 6.
   toastTimer = setTimeout(() => { toast.hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
@@ -593,7 +580,7 @@ export function render() {
   notice.hidden = !state.parked;
   notice.textContent = `${plural(state.parked, "task")} moved to Someday.`;
   for (const hook of renderHooks) hook();
-  hostToast();
+  hostToast(root, toast);
 
   if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
 }
@@ -722,8 +709,6 @@ async function syncGoogle() {
   } catch (e) { console.error(e); }
 }
 
-// Settings, Accounts, Calendar: the extra calendar IDs (once a dialog of their own). Settings
-// stays open, so the note beside Save says it worked.
 async function saveCalendars() {
   const ids = [...new Set($("#sheet-cal-ids").value.split(/\s+/).filter(Boolean))];
   try {
@@ -747,37 +732,17 @@ let settingsModule = () => Promise.resolve([]);
 let settingsReady = null;
 const loadSettings = () => (settingsReady ??= settingsModule().then((setups) => { for (const setup of setups) setup(root); }, (e) => { settingsReady = null; throw e; }));
 
-// Settings' four groups (research U12): `section` ("accounts", "day", "claude" or "status") is the
-// one it opens at, scrolled to; on a phone the others start closed (glance.mjs, settingsOpen).
+// `section` is the group it opens at (research U12); settings-sections.mjs fills settingsNav.
+export const settingsNav = { open: null, go: null };
 async function openSettings(section = null) {
   try { await loadSettings(); } catch (e) { return failed(e); }
-  const dialog = $("[data-settings]");
-  if (!dialog.open) {
-    const groups = [...dialog.querySelectorAll(".sheet-settings-group")];
-    settingsOpen(groups.map((g) => g.dataset.section), section, matchMedia(NARROW).matches).forEach((open, i) => { groups[i].open = open; });
-    $("[data-interests-note]").textContent = "";
-    $("[data-cal-ids-note]").textContent = "";
-    dialog.showModal();
-  }
-  goToSection(section);
-  if (dialog.dataset.filled) return;
-  dialog.dataset.filled = "1";
-  dialog.addEventListener("close", () => delete dialog.dataset.filled, { once: true });
+  if ($("[data-settings]").open) return settingsNav.go?.(section);
+  $("[data-interests-note]").textContent = "";
+  settingsNav.open?.(section);
+  $("[data-settings]").showModal();
   await Promise.all(settingsHooks.map(async (fill) => { try { await fill(); } catch (e) { failed(e); } }));
-  // The filled lists move the group down; bring it back to the top.
-  goToSection(section);
+  settingsNav.go?.(section);
 }
-
-// The index's buttons, and openSettings: open the group and bring it to the top of the dialog.
-function goToSection(section) {
-  const group = section && $(`.sheet-settings-group[data-section="${section}"]`);
-  if (!group) return;
-  group.open = true;
-  group.scrollIntoView({ block: "start" });
-  group.querySelector("summary").focus({ preventScroll: true });
-}
-
-settingsHooks.push(() => { $("#sheet-cal-ids").value = state.calendars.join("\n"); });
 
 // Settings, interest profile: what Claude picks campus events against (docs/sheet-claude.md).
 // Blank saves null, so the column stays "not written yet" rather than an empty profile. Settings
@@ -1081,12 +1046,9 @@ function wire() {
       // The stale-events banner: the server grant (Settings, Calendar) is what keeps /plan's
       // Google token, so Reconnect goes straight to its consent screen.
       if (act === "connect") return openSettings("accounts").then(() => actHooks["cal-connect"]?.());
-      // Calendars (the ⋯ menu) is Settings, Accounts, where the extra calendar IDs now live.
       if (act === "calendars") return openSettings("accounts").then(() => $("#sheet-cal-ids").focus({ preventScroll: true }));
       if (act === "save-calendars") return saveCalendars();
-      // The Feed failed chip and menu item say which group (data-section="status").
       if (act === "settings") return openSettings(e.target.closest("[data-act]").dataset.section ?? null);
-      if (act === "settings-go") return goToSection(e.target.closest("[data-act]").dataset.section);
       if (act === "oura-day") return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, e.target.closest("[data-act]").dataset.day), failed);
       if (act === "close-oura-day") return $("[data-oura-day]").close();
       if (act === "oura-week") { $("[data-settings]").close(); return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, state.today), failed); }
