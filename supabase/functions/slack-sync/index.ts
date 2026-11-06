@@ -33,13 +33,13 @@
 import { slackNeeds } from "../../../src/sheet/sources.mjs";
 import { changeRow } from "../../../src/sheet/replan.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
+import { slackSince } from "../../../src/sheet/feed-state.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const SLACK_TOKEN = env("SHEET_SLACK_TOKEN");
 const PER_PAGE = 100;
 const PAGES = 3;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -55,9 +55,9 @@ Deno.serve(async (req) => {
   try {
     const [settings] = await db("settings?select=time_zone");
     const timeZone = settings.time_zone;
-    // The last good sync, or a day ago the first time ("since yesterday", spec 47 story 65).
-    const [last] = await db("feed_state?select=fetched_at,ok&source=eq.slack");
-    const since = last?.ok === true && last.fetched_at ? new Date(last.fetched_at) : new Date(now.getTime() - DAY_MS);
+    // The last good sync, however many failed since, or a day ago the first time (slackSince).
+    const [last] = await db("feed_state?select=fetched_at,ok,last_ok_at&source=eq.slack");
+    const since = slackSince(last, now);
     const after = addDays(localNow(since, timeZone).day, -1);
     const self = await userId();
     const matches = [...await search(`<@${self}> after:${after}`), ...await search(`to:me after:${after}`)];

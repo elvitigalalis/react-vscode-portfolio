@@ -712,14 +712,16 @@ function planDecision(tap, { proposal, blocks, settings }) {
 
 // Didn't start's slot starts at least this long after the tap, on a quarter hour.
 const SLOT_LEAD = 5;
-// Whether `b` could run from `start` (ms) for `len` ms today: after now, by the day's shutdown
-// line and quiet hours, over no busy time (with travel_min each side) and no other approved
+// Whether `b` could run from `start` (ms) for `len` ms today: after now and once he's up, by the
+// day's shutdown line and quiet hours, over no busy time (with travel_min each side) and no other approved
 // block. Proposed blocks don't count, as for More time.
 const TRAVEL_MS = 10 * 60_000;
 function slotFree(b, start, len, snapshot, now) {
   const tz = snapshot.settings.time_zone;
   const { day: today } = localNow(now, tz);
   if (!Number.isFinite(start) || start <= now.getTime() || localNow(new Date(start), tz).day !== today) return false;
+  // Not before he's up: a tap at 1:30 am or 7:00 am offers nothing in quiet hours.
+  if (minutesOn(new Date(start).toISOString(), today, tz) < wakeTimes(snapshot, now, today, tz).openAt) return false;
   const line = shutdownFor(today, { line: snapshot.day?.shutdown_at, settings: snapshot.settings, sleep: snapshot.sleep ?? [], sleepTimes: snapshot.sleepTimes ?? [], tz });
   const end = start + len;
   if (minutesOn(new Date(end).toISOString(), today, tz) > Math.min(QUIET_FROM, Number(line.slice(0, 2)) * 60 + Number(line.slice(3, 5)))) return false;

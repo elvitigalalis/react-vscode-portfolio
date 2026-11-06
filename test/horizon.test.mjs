@@ -112,6 +112,14 @@ test("a frozen day keeps its minutes and takes nothing new", () => {
   assert.deepEqual(r2.allocations, []);
 });
 
+test("a frozen day keeps only the minutes that fit; those past the cap stay past it", () => {
+  // Tomorrow is frozen and held 200 of the task's minutes, 110 of them past the cap.
+  const previous = [{ task_id: "a", day: "2026-11-06", minutes: 200, over_min: 110 }];
+  const r = plan({ tasks: [task("a", "2026-11-06", 300)], free: { ...days(30), [TODAY]: 0 }, frozen_days: ["2026-11-06"], previous });
+  assert.deepEqual(r.allocations, [{ task_id: "a", day: "2026-11-06", minutes: 300, over_min: 210 }]);
+  assert.equal(r.tasks.a.short_min, 210);
+});
+
 test("an overdue task is planned from today and is tight at best", () => {
   const r = plan({ tasks: [task("a", "2026-11-03", 60)] });
   assert.deepEqual(on(r, "a"), [["2026-11-05", 60]]);

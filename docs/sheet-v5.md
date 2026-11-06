@@ -755,7 +755,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 
 - **Settings** gains rows for: the calendar (Connect or Reconnect, and "Busy times saved 4 min
   ago" from `busy_as_of`), replans on or off, the workload cap (in hours, 1–16, step 0.5), pace
-  per kind ("Course ×1.4 (12)", or "Course: 3 of 5 needed"), habits, triage rules, the
+  per kind ("Course tasks: took 1.4× your estimate (median of 12) · most ran 1.1–1.9×", or "Course: 3 of 5 needed"), habits, triage rules, the
   enrollment time, and a status row for each source in `feed_state`.
 - **Needs you** gains Not needed (with undo) beside Done, Slack rows with their icon, a link
   only when it starts with `https://` and holds `.slack.com/` for Slack rows, an "Awaiting reply"
@@ -1097,7 +1097,8 @@ Each rule is skipped when `day_rules` lacks its numbers, and each error names th
 
 - A start nudge (and a snooze) of a block with `first_step` reads `Now: OS homework — first:
   open HW4, do Q1 (2:00 pm, 45 min)`; without one, as before.
-- **Didn't start** offers the next free quarter hour today, at least 5 minutes on, that holds the
+- **Didn't start** offers the next free quarter hour today, at least 5 minutes on and not before
+  he's up (quiet hours' morning end, 8:00 at the earliest), that holds the
   block's length by the shutdown line and quiet hours, clear of busy times (with 10 minutes of
   travel) and other approved blocks: `Next free slot: 4:15 pm (45 min) · OS homework` with
   **Move to 4:15 pm** (`move:<block id>:<start in epoch minutes>`) and **Tomorrow**. With no slot:

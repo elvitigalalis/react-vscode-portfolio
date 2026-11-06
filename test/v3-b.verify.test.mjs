@@ -232,8 +232,10 @@ test("schema: the whole file stays safe to re-run", async () => {
   assert.equal([...sql.matchAll(/add column (?!if not exists)/g)].length, 0, "every add column has if not exists");
   for (const [stmt, name, table] of sql.matchAll(/create policy (\w+) on (\w+)/g))
     assert.ok(sql.indexOf(`drop policy if exists ${name} on ${table};`) > -1 && sql.indexOf(`drop policy if exists ${name} on ${table};`) < sql.indexOf(stmt), `${stmt} is dropped first`);
-  for (const [, job] of sql.matchAll(/cron\.schedule\('([\w-]+)'/g))
-    assert.match(sql, new RegExp(`cron\\.unschedule\\(jobid\\) from cron\\.job where jobname = '${job}'`), `${job} is unscheduled first`);
+  // cron.schedule by name updates an existing job in place (same jobid), so each job is
+  // scheduled by name exactly once and a re-run neither doubles nor recreates it.
+  const jobs = [...sql.matchAll(/cron\.schedule\('([\w-]+)'/g)].map((m) => m[1]);
+  assert.deepEqual(jobs, [...new Set(jobs)], "each cron job is scheduled once, by name");
 });
 
 test("schema: the public views never select source or source_uid", async () => {
@@ -258,7 +260,7 @@ test("schema: sheet-brightspace runs at minute 20 through Vault, and does nothin
   assert.match(body, /'x-sheet-cron',\s*\(select decrypted_secret from vault\.decrypted_secrets where name = 'sheet_cron_secret'\)/);
   assert.match(body, /where exists \(select 1 from vault\.decrypted_secrets where name = 'sheet_cron_secret'\)/);
   assert.match(body, /exists \(select 1 from vault\.decrypted_secrets where name = 'sheet_brightspace_url'\)/);
-  assert.ok(sql.indexOf("jobname = 'sheet-brightspace'") < sql.indexOf(job[0]), "unscheduled before it is scheduled");
+  assert.match(body, /timeout_milliseconds := 30000\)/);
 });
 
 // --- The brightspace Edge Function (supabase/functions/brightspace/index.ts) -------------------

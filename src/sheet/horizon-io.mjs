@@ -65,14 +65,17 @@ export function horizonInput(rows, now) {
   const paces = paceByKind(rows.actuals ?? []);
   // The states are judged at the 80th-percentile pace, and the kind of work sets the per-day rules.
   const p80 = paceP80ByKind(rows.actuals ?? []);
-  const done = confirmedDoneMin((rows.blocks ?? []).filter((b) => b.task_id), rows.feedback ?? []);
+  // A block locked today counts toward the task as locked, so its More time answer is not also
+  // done minutes: both would take it off what is left.
+  const lockedToday = (b) => localNow(new Date(b.starts_at), tz).day === today && locked(b, now);
+  const done = confirmedDoneMin((rows.blocks ?? []).filter((b) => b.task_id && !lockedToday(b)), rows.feedback ?? []);
   const tasks = rows.tasks.filter((t) => !t.done && t.due && !t.at_time)
     .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0, minutes_p80: horizonMinutes(t, p80), kind: workKind(t),
       // A project's step (docs/sheet-projects.md) is planned after the steps before it.
       ...(t.project_id ? { project: t.project_id, step: t.step } : {}) }))
     .sort((a, b) => a.due.localeCompare(b.due) || a.id.localeCompare(b.id));
 
-  const onToday = (rows.blocks ?? []).filter((b) => localNow(new Date(b.starts_at), tz).day === today && locked(b, now));
+  const onToday = (rows.blocks ?? []).filter(lockedToday);
   const lockedBy = new Map();
   for (const b of onToday) if (b.task_id && !b.habit_id) lockedBy.set(b.task_id, (lockedBy.get(b.task_id) ?? 0) + blockMinutes(b));
   const lockedRows = [...lockedBy].map(([task_id, minutes]) => ({ task_id, day: today, minutes })).sort((a, b) => a.task_id.localeCompare(b.task_id));

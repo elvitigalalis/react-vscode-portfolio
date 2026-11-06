@@ -23,7 +23,7 @@ Pure, deterministic, no network. Same input, same output.
 | field | what |
 | --- | --- |
 | `today` | `"YYYY-MM-DD"` in `settings.time_zone` |
-| `tasks` | `[{ id, due, minutes, done_min, minutes_p80?, kind?, project?, step? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`. Optional `minutes_p80` is `horizonMinutes(task, paceP80ByKind(actuals))`, the minutes at his 80th-percentile overrun; without it the states are judged at `minutes`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. Optional `project` and `step` mark a project's step (rule 11). |
+| `tasks` | `[{ id, due, minutes, done_min, minutes_p80?, kind?, project?, step? }]`: every task that is not done, has a `due` and has no `at_time` (a fixed-time task stays on its day). `minutes` is `horizonMinutes(task, paces)`; `done_min` is `confirmedDoneMin(...)[id] ?? 0`, leaving out blocks locked today (they count as `locked`, so a More time answer on one is not counted twice). Optional `minutes_p80` is `horizonMinutes(task, paceP80ByKind(actuals))`, the minutes at his 80th-percentile overrun; without it the states are judged at `minutes`. Optional `kind` is `workKind(task)` ("exam", "programming", "writing" or null); without it every task gets the plain rules. Optional `project` and `step` mark a project's step (rule 11). |
 | `free` | `{ day: minutes }` for every day from today to the latest due date: `dayFree(...)` of that day. A missing day has 0. |
 | `locked` | `[{ task_id, day, minutes }]`: today's locked task blocks, past ones too (one row per task, minutes summed). |
 | `frozen_days` | `[day]`: tomorrow once today is shut down (`days.shutdown`), else `[]`. |
@@ -121,7 +121,7 @@ day of a task that won't fit).
 A re-flow starts from `previous` and changes only what the change forces:
 
 - **Frozen:** today's locked blocks and, once today is shut down, all of tomorrow. Frozen minutes
-  are kept as they were (cut, latest first, only if they now exceed what is left; a done task's
+  are kept as they were, less any `over_min` (minutes past the cap are worked out again) (cut, latest first, only if they now exceed what is left; a done task's
   go).
 - **Kept:** every other previous minute that still holds stays on its day: within today to the
   task's due day, up to what is left (earliest days kept first), within the chunk rule. Last
