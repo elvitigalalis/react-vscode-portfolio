@@ -5,7 +5,7 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { dayLabel, dueLabel, localNow } from "./logic.mjs";
-import { el, icon, sourceIcon, state, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
+import { el, icon, sourceIcon, state, renderHooks, reloadHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
 import { needsGroups, gmailLink, threadLink, slackLink } from "./morning.mjs";
 import { needsFeedback, neverOffers } from "./triage.mjs";
 
@@ -147,6 +147,7 @@ export function setupNeedsYou(node) {
   root = node;
   dialog = root.querySelector("[data-needs]");
   renderHooks.push(draw);
+  reloadHooks.push(refresh);
   actHooks.needs = () => open();
   keyHooks.push((e) => { if (e.key === "m" || e.key === "M") { open(); return true; } return false; });
   dialog.addEventListener("click", (e) => {

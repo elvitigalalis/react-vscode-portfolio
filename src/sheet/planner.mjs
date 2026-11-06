@@ -551,7 +551,8 @@ export const renderHooks = [];
 
 // --- Loading -----------------------------------------------------------------------------
 
-export async function load() {
+// `scroll: false` keeps the week where it is (a reload on coming back, refreshStale).
+export async function load({ scroll = true } = {}) {
   const days = weekDays(state.week);
   const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states] = await Promise.all([
     api.listTasks(days[0], days[6]),
@@ -579,8 +580,32 @@ export async function load() {
   state.blocks = blocks;
   state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
   state.parked = parked.length;
+  loadedAt = Date.now();
   render();
-  scrollToToday($("[data-week]"));
+  if (scroll) scrollToToday($("[data-week]"));
+}
+
+// --- Coming back (research U8/P1) ----------------------------------------------------------
+
+// Telegram taps (Done, Move, Tomorrow), replans and Claude's answers change tasks, blocks and
+// Needs you while /plan sits in a background tab, and iOS Safari keeps the tab alive, so coming
+// back shows an old plan. When the page is shown again (visibilitychange to visible; pageshow
+// from the back/forward cache, https://developer.mozilla.org/en-US/docs/Web/API/Window/pageshow_event)
+// or the network returns (online), the week reloads if the last load is over a minute old.
+// Not mid-edit, mid-drag, while typing a task or with a dialog open: render() would drop what
+// he is doing, and the next return catches up. Modules with their own data (Needs you) push a
+// reload into reloadHooks.
+const STALE_MS = 60_000;
+let loadedAt = 0;
+export const reloadHooks = [];
+
+async function refreshStale() {
+  if (document.visibilityState !== "visible" || !state.week || Date.now() - loadedAt < STALE_MS) return;
+  const a = document.activeElement;
+  if (drag || document.querySelector("dialog[open]") || a?.matches?.(".sheet-edit") || (a?.matches?.(".sheet-add") && a.value)) return;
+  loadedAt = Date.now();
+  try { await load({ scroll: false }); } catch (e) { console.error(e); }
+  for (const hook of reloadHooks) Promise.resolve().then(hook).catch(console.error);
 }
 
 // Oura: the week's day numbers and sleep again, redrawn only when something changed.
@@ -987,6 +1012,9 @@ function wire() {
   // Oura: oura-sync runs every 10 minutes, so today's chips refresh as often while /plan shows.
   setInterval(refreshOura, 10 * 60_000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshOura(); });
+  document.addEventListener("visibilitychange", refreshStale);
+  window.addEventListener("pageshow", (e) => { if (e.persisted) refreshStale(); });
+  window.addEventListener("online", refreshStale);
   root.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
   document.addEventListener("pointerup", (e) => { if (drag?.on) wasDrag.at = Date.now(); onPointerUp(e); });
