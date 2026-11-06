@@ -57,7 +57,7 @@ type Changes = {
 
 async function sync(now: Date) {
   const [settings] = await db("settings?select=time_zone");
-  const tasks = await db(`tasks?select=id,title,day,list,due,at_time,est_min,done,source,source_uid&source=eq.${SOURCE}`);
+  const tasks = await db(`tasks?select=id,title,day,list,due,at_time,est_min,done,source,source_uid,link&source=eq.${SOURCE}`);
   const seen = (await db(`feed_seen?select=uid&source=eq.${SOURCE}`)).map((r: { uid: string }) => r.uid);
 
   const text = await calendarText(await fetch(FEED_URL, { headers: { Accept: "text/calendar" } }));
