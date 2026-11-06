@@ -18,7 +18,7 @@
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
 import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent, deadButtons, keyStep, keysDue, KEYBOARD } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
-import { health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
+import { expiries, health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
 import { addDays, localNow } from "../../../src/sheet/logic.mjs";
 import { capHold, fireOutcome, MORNING_RETRY, rateLimited, replanState, shouldReplan, shouldRetryMorning } from "../../../src/sheet/replan.mjs";
@@ -51,7 +51,15 @@ Deno.serve(async (req) => {
     // Horizon planning: re-flow before the messages, so they see fresh states. Failing (or the
     // horizon schema not run yet) stops nothing else.
     const horizon = await horizonTick(now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    return Response.json({ ...(await send(now, { replanHold: replan, hook })), replan, receipts: receipted, refired, hook, horizon });
+    let sent;
+    try {
+      sent = await send(now, { replanHold: replan, hook });
+    } catch (e) {
+      await logFailures({ send: { error: e instanceof Error ? e.message : String(e) } });
+      throw e;
+    }
+    await logFailures({ replan, receipts: receipted, refired, hook, horizon, pin: sent.pin, keys: sent.keys });
+    return Response.json({ ...sent, replan, receipts: receipted, refired, hook, horizon });
   }
   if (WEBHOOK_SECRET && secretMatches(req.headers.get("x-telegram-bot-api-secret-token") ?? "", WEBHOOK_SECRET)) {
     await webhook(await req.json(), new Date());
@@ -59,6 +67,17 @@ Deno.serve(async (req) => {
   }
   return new Response("forbidden", { status: 403 });
 });
+
+// research/plan-reliability.md R3: a step of the tick that failed is kept in health_log (30
+// days), since its JSON answer lives only in net._http_response, for 6 hours. Recording can fail
+// too (the database being the problem, or the table not made yet): only logged then.
+async function logFailures(steps: Record<string, unknown>) {
+  const rows = Object.entries(steps).flatMap(([step, r]) => r && typeof r === "object" && "error" in r
+    ? [{ source: `telegram ${step}`, ok: false, detail: String((r as { error: unknown }).error).replace(/[a-z]+:\/\/\S+/gi, "<link>").slice(0, 300) }]
+    : []);
+  if (rows.length) await db("health_log", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(rows) })
+    .catch((e) => console.error("health_log:", e instanceof Error ? e.message : e));
+}
 
 // The snapshot whatToSend takes: settings, today's day row, today's tasks and every undone task
 // with a due date (which covers the check-in's "due tomorrow"), the blocks of those tasks and of
@@ -121,19 +140,35 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
 // The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the three connected
 // accounts' last errors, and today's replans, with the tick's own facts.
 async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) {
-  const [feeds, mail, [calendar = null], [oura = null], replans, revisions, unsent] = await Promise.all([
+  const [feeds, mail, [calendar = null], [oura = null], replans, revisions, unsent, credentials, checks] = await Promise.all([
     db("feed_state?select=*"),
-    db("mail_accounts?select=email,label,last_error").catch(() => []),
-    db("calendar_account?select=last_error").catch(() => []),
+    db("mail_accounts?select=email,label,last_error,connected_at").catch(() => []),
+    db("calendar_account?select=last_error,connected_at").catch(() => []),
     db("oura_account?select=last_error").catch(() => []),
     db(`replans?select=at,result,reasons&day=eq.${today}`),
     db(`proposals?select=rev&day=eq.${today}&limit=1`),
     // Messages whose one re-fire failed too (refire), until Claude answers them.
     db(`messages?select=id&status=eq.pending&refired_at=not.is.null&fired_at=is.null&at=gte.${new Date(now.getTime() - 86_400_000).toISOString()}&order=at`).catch(() => []),
+    // R5: the expiry register (dates only); none until its schema has run.
+    db("credentials?select=name,label,expires_at,fix").catch(() => []),
+    liveCheck(),
   ]);
   const hook = facts.hook && typeof facts.hook === "object" && "url" in facts.hook ? facts.hook : undefined;
   const replanHold = facts.replanHold && typeof facts.replanHold === "object" && "hold" in facts.replanHold ? facts.replanHold : undefined;
-  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, unsent, hook, replanHold }, now);
+  const expiring = expiries({ credentials, mail, calendar });
+  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, unsent, hook, replanHold, expiring, checks }, now);
+}
+
+// R10: the live check (schema.sql, sheet_checks()), at most hourly per isolate, which covers the
+// daily brief. A failed call (or the function not made yet) leaves it out.
+const CHECK_EVERY = 60 * 60_000;
+let checkSeen: { at: number; rows: unknown[] } | null = null;
+async function liveCheck() {
+  if (checkSeen && Date.now() - checkSeen.at < CHECK_EVERY) return checkSeen.rows;
+  const rows = await db("rpc/sheet_checks", { method: "POST", body: "{}" }).catch((e) => (console.error("sheet_checks:", e instanceof Error ? e.message : e), null));
+  if (!Array.isArray(rows)) return [];
+  checkSeen = { at: Date.now(), rows };
+  return rows;
 }
 
 // Monday's Last week line (nudges.mjs, lastWeekLine): last Mon-Sun's approved task blocks (a day

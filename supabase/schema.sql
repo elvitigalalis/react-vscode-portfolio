@@ -2064,3 +2064,120 @@ alter table nudges add column if not exists tg_message_id bigint;
 -- When the tick sent the persistent reply keyboard (Now · Done · +15 min · Today), once; null
 -- until then. /start or /keys sends it again.
 alter table settings add column if not exists keys_sent_at timestamptz;
+
+-- --- Token and grant expiries (research/plan-reliability.md R5; 2026-11-06) --------------------
+-- Dates only, never a secret. src/sheet/health.mjs (expiries) turns a date within 14 days into a
+-- "Sheet:" line in the brief and one Telegram alert. expires_at null means the date isn't known,
+-- and the note says why. "google_testing" stands for "the Google OAuth app may still be in
+-- Testing", where each Gmail and Calendar grant ends 7 days after consent; delete it once the
+-- consent screen says In production. work-sync fills in github_pat. Owner-only; the server writes.
+create table if not exists credentials (
+  name text primary key check (name ~ '^[a-z][a-z0-9_]{0,40}$'),
+  label text check (char_length(label) <= 60),
+  expires_at timestamptz,
+  fix text check (char_length(fix) <= 120),
+  note text check (char_length(note) <= 400),
+  updated_at timestamptz not null default now()
+);
+alter table credentials enable row level security;
+drop policy if exists owner_all on credentials;
+create policy owner_all on credentials for all using (is_owner()) with check (is_owner());
+revoke all on credentials from anon;
+insert into credentials (name, label, expires_at, fix, note) values
+  ('google_testing', 'Google sign-ins', null, null,
+   'The Google OAuth app''s publishing status can''t be read from here. In Testing, a Gmail or Calendar grant ends 7 days after it was connected (Nov 10 and Nov 11, 2026 for the grants made Nov 3 and Nov 4). Delete this row once the consent screen says In production.'),
+  ('github_pat', 'GitHub token', null, 'make a new one and set SHEET_GITHUB_TOKEN',
+   'Filled in by work-sync from GitHub''s GitHub-Authentication-Token-Expiration header. Null until the next sync, and for a token with no expiry.'),
+  ('jira_token', 'Jira token', null, 'make a new one and set SHEET_JIRA_TOKEN',
+   'Not knowable from live data: Atlassian''s API doesn''t report an API token''s expiry. Tokens made after 2024-12-15 last 1-365 days (1 year by default). Set expires_at from id.atlassian.com, Security, API tokens.')
+on conflict (name) do nothing;
+
+-- --- Outcomes past pg_net's 6 hours (research/plan-reliability.md R3; 2026-11-06) ---------------
+-- net._http_response keeps a response for 6 hours (pg_net's ttl:
+-- supabase.com/docs/guides/database/extensions/pg_net), and cron.job_run_details only says the
+-- request was queued. health_log keeps what failed: each non-2xx or timed-out pg_net response
+-- (copied hourly, ref = its id, so a copy happens once), one count row an hour, and the telegram
+-- tick's own failed steps. 30 days. Owner-only to read; only the server writes.
+create table if not exists health_log (
+  id bigint generated always as identity primary key,
+  at timestamptz not null default now(),
+  source text not null check (char_length(source) <= 40),
+  ok boolean not null,
+  detail text check (char_length(detail) <= 300),
+  ref bigint
+);
+create unique index if not exists health_log_ref on health_log (ref) where ref is not null;
+create index if not exists health_log_at on health_log (at);
+alter table health_log enable row level security;
+drop policy if exists owner_all on health_log;
+create policy owner_all on health_log for all using (is_owner()) with check (is_owner());
+revoke all on health_log from anon;
+revoke insert, update, delete on health_log from authenticated;
+
+-- Links are taken out of the error text: a function's URL is a Vault secret.
+create or replace function keep_http_outcomes() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into health_log (at, source, ok, detail, ref)
+  select r.created, 'pg_net', false,
+         left(regexp_replace(case when r.timed_out then 'timed out: ' || coalesce(r.error_msg, '')
+                                  when r.status_code is null then coalesce(r.error_msg, 'no response')
+                                  else 'HTTP ' || r.status_code end, '[a-z]+://\S+', '<link>', 'gi'), 300),
+         r.id
+  from net._http_response r
+  where r.created > now() - interval '2 hours'
+    and (r.timed_out or r.status_code is null or r.status_code not between 200 and 299)
+  on conflict (ref) where ref is not null do nothing;
+  insert into health_log (source, ok, detail)
+  select 'pg_net hour', count(*) filter (where status_code between 200 and 299) = count(*),
+         count(*) || ' responses, ' || count(*) filter (where status_code between 200 and 299) || ' ok'
+  from net._http_response where created > now() - interval '1 hour';
+  delete from health_log where at < now() - interval '30 days';
+end $$;
+revoke execute on function keep_http_outcomes() from public, anon, authenticated;
+select cron.schedule('sheet-keep-http', '55 * * * *', 'select public.keep_http_outcomes()');
+
+-- --- The live check in the database (research/plan-reliability.md R10; 2026-11-06) --------------
+-- A SQL subset of tools/verify-sheet-v5.sh, so it runs with Lisul's Mac off: the telegram tick
+-- calls it (hourly per isolate) and its failures join the brief's "Sheet:" line and the health
+-- alerts. Rows (name, status ok|warn|fail, detail); detail holds names and counts only.
+-- sheet-ical is left out: its links aren't set up yet, on purpose.
+create or replace function sheet_checks() returns table (name text, status text, detail text)
+language sql stable security definer set search_path = public as $$
+  with want(job, secret) as (values
+    ('sheet-rollover', null), ('sheet-telegram', 'sheet_telegram_url'), ('sheet-busy', 'sheet_busy_url'),
+    ('sheet-mail', 'sheet_mail_url'), ('sheet-oura', 'sheet_oura_url'), ('sheet-brightspace', 'sheet_brightspace_url'),
+    ('sheet-campus', 'sheet_campus_url'), ('sheet-weather', 'sheet_weather_url'), ('sheet-work', 'sheet_work_url'),
+    ('sheet-slack', 'sheet_slack_url'), ('sheet-keep-http', null)),
+  jobs as (select w.job, j.active from want w left join cron.job j on j.jobname = w.job),
+  urls as (select w.secret from want w where w.secret is not null
+           and not exists (select 1 from vault.secrets s where s.name = w.secret)),
+  s as (select time_zone, busy_as_of, (now() at time zone time_zone)::date as today from settings limit 1)
+  select 'cron jobs active',
+         case when bool_and(coalesce(active, false)) then 'ok' else 'fail' end,
+         coalesce(nullif(string_agg(job, ', ') filter (where not coalesce(active, false)), '') || ' missing or off',
+                  count(*) || ' of ' || count(*))
+  from jobs
+  union all
+  select 'Vault URLs', case when count(*) = 0 then 'ok' else 'fail' end,
+         coalesce(string_agg(secret, ', ') || ' missing', 'all set') from urls
+  union all
+  select 'cron runs (24 h)', case when count(*) = 0 then 'ok' else 'fail' end, count(*) || ' failed'
+  from cron.job_run_details d join cron.job j using (jobid)
+  where j.jobname like 'sheet-%' and d.status = 'failed' and d.start_time > now() - interval '1 day'
+  union all
+  select 'replans settle', case when count(*) = 0 then 'ok' else 'fail' end, count(*) || ' with no result after 5 min'
+  from replans r, s where r.day = s.today and r.result is null and r.at < now() - interval '5 minutes'
+  union all
+  select 'busy_as_of fresh',
+         case when not exists (select 1 from calendar_account) then 'warn'
+              when s.busy_as_of is null or s.busy_as_of < now() - interval '30 minutes' then 'fail' else 'ok' end,
+         case when s.busy_as_of is null then 'never set'
+              else floor(extract(epoch from now() - s.busy_as_of) / 60)::int || ' min old' end
+  from s
+  union all
+  select 'pg_net failures (24 h)', case when count(*) > 60 then 'warn' else 'ok' end, count(*) || ' kept in health_log'
+  from health_log where source = 'pg_net' and not ok and at > now() - interval '1 day'
+$$;
+revoke execute on function sheet_checks() from public, anon, authenticated;
+grant execute on function sheet_checks() to service_role;
