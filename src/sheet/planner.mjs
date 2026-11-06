@@ -78,6 +78,8 @@ const $ = (sel) => root.querySelector(sel);
 const now = () => localNow(new Date(), SHEET.timeZone);
 // Phones show one day at a time (sheet.css, max-width 48rem).
 export const NARROW = "(max-width: 48rem)";
+// A touch screen (research U6): words that name keys ("Press P", ⌘Z) give way to buttons.
+const COARSE = "(pointer: coarse)";
 
 const tasksOn = (day) => [...state.tasks.values()].filter((t) => t.day === day).sort(byPosition);
 const tasksIn = (list) => [...state.tasks.values()].filter((t) => t.day === null && t.list === list).sort(byPosition);
@@ -158,7 +160,8 @@ export function offerUndo(text, fn) {
   $("[data-toast-text]").textContent = text;
   $("[data-toast]").hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $("[data-toast]").hidden = true; undoFn = null; }, 6000);
+  // On touch there is no ⌘Z, so Undo stays up longer: 12 s, not 6.
+  toastTimer = setTimeout(() => { $("[data-toast]").hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
 }
 
 async function undo() {
@@ -451,6 +454,14 @@ async function eventMenuAction(act) {
   render();
 }
 
+// An empty today: "Press P" on a keyboard, a Plan button on touch (research U6).
+function blankRow() {
+  if (!matchMedia(COARSE).matches) return el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" });
+  const plan = el("button", { type: "button", className: "sheet-link", textContent: "Plan today" });
+  plan.dataset.act = "plan";
+  return el("li", { className: "sheet-row sheet-blank" }, "Nothing planned yet. ", plan);
+}
+
 function dayColumn(day, rows, items) {
   const list = tasksOn(day);
   const { weekday, date } = dayLabel(day);
@@ -459,7 +470,7 @@ function dayColumn(day, rows, items) {
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
   const blank = day === state.today && !items.length;
   const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : eventTodoRow(r))),
-    blank ? el("li", { className: "sheet-row sheet-blank", textContent: "Nothing planned. Press P to plan today" }) : null,
+    blank ? blankRow() : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`));
   ul.dataset.day = day;
   for (let i = items.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
