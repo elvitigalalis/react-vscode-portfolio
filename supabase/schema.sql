@@ -2041,6 +2041,6 @@ alter table nudges add constraint nudges_kind_check
 -- the task once more after retry_at (or 5 minutes on), claiming it by setting refired_at, and
 -- records the outcome: fired_at on a start, or the new fire_error. A second failure stays pending
 -- and the health check tells Lisul.
-alter table messages add column if not exists fire_error text check (char_length(fire_error) <= 40);
+alter table messages add column if not exists fire_error text check (char_length(fire_error) <= 300);
 alter table messages add column if not exists retry_at timestamptz;
 alter table messages add column if not exists refired_at timestamptz;
