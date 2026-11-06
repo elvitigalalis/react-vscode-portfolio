@@ -110,7 +110,7 @@ every day, weekends included.
 
 | Kind | When | Text (template) | Buttons |
 |---|---|---|---|
-| Morning brief | 8:00, or the first run after it if one was missed | One line each: "Today: 5 tasks, 0 blocks." "At risk: OS homework (due Fri)." "Nothing planned yet: say "plan my day" to Claude." With more than 6 blocks that can be nudged (see the budget below) the first line reads "Today: 5 tasks, 8 blocks, nudging the first 6." On an empty day (no tasks, blocks or at-risk tasks): "Nothing on today." | Open /plan |
+| Morning brief | 8:00, or the first run after it if one was missed | One line each: "Today: 5 tasks, 0 blocks." "At risk: OS homework (due Fri)." "Nothing planned yet: say "plan my day" to Claude." With more than 6 blocks that can be nudged (see the budget below) the first line reads "Today: 5 tasks, 8 blocks, nudging the first 6." On an empty day (no tasks, blocks or at-risk tasks): "Nothing on today." When the ring has seen him up today, it opens "Good morning! Up at 8:50 am. First up: OS homework at 7:15 pm." | Open /plan |
 | Nudge | The start of an approved block | "▶ 2:00 pm · OS homework (45 min)" | Done, Snooze 10 min |
 | Repeat | 10 min after a nudge, if the task isn't done or snoozed | "Still on: OS homework" | Done, Snooze 10 min |
 | Check-in | Shutdown time (10:55 pm if the shutdown line is at 11 pm or later), unless the day is already shut down | "Shutdown time. 4 done, 2 left." | Open /plan |
