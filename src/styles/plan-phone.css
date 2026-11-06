@@ -44,3 +44,16 @@
   .sheet-block-x { position: relative; min-width: 2.75rem; }
   .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
 }
+
+/* The Now/Next line above today (research U18). In the week's narrow column each part keeps one
+   line and shows the rest as hover text; on a phone it wraps. */
+.sheet-nownext { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.35rem; margin: 0.2rem 0 0; font-size: 0.8125rem; line-height: 1.5rem; color: var(--muted); }
+.sheet-nownext b { font-weight: 600; color: var(--fg); }
+.sheet-nownext-part { min-width: 0; }
+.sheet-nownext-done { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 0.3rem; cursor: pointer; }
+@media (min-width: 48.01rem) {
+  .sheet-nownext-part { flex: 1 1 calc(100% - 2rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}
+@media (pointer: coarse) {
+  .sheet-nownext-done::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2.75rem; height: 2.75rem; translate: -50% -50%; }
+}

@@ -237,6 +237,12 @@ export async function completeTask(id, done = true) {
   if (done) offerUndo(`Done: ${t.title}`, () => patch(id, { done: false }));
 }
 
+// ✓ on a row (and a swipe or the Now/Next line): flip it, and say so if it didn't save.
+export async function toggleDone(id) {
+  const done = !state.tasks.get(id).done;
+  try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
+}
+
 async function removeTask(id) {
   const t = state.tasks.get(id);
   await dropBlocks(id);
@@ -414,7 +420,7 @@ async function saveEventTodo(key, day, change) {
   else state.todos.push({ cal_event_key: key, title_ai: null, done: false, hidden: false, ...change });
 }
 
-async function toggleEventTodo(target) {
+export async function toggleEventTodo(target) {
   const { key, day, row } = eventRowOf(target);
   if (!row) return;
   try {
@@ -1052,8 +1058,7 @@ function wire() {
     }
     const id = li.dataset.id;
     if (e.target.closest(".sheet-check")) {
-      const done = !state.tasks.get(id).done;
-      try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
+      await toggleDone(id);
       render();
       root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
     } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
