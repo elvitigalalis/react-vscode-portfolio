@@ -284,24 +284,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 /* Settings: mail accounts (src/sheet/mail-settings.mjs) */
 .sheet-settings-part h3 { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
-/* Settings' groups and their index (research/plan-improvements.md 12). The index stays at the top
-   of the dialog while it scrolls; each group is a <details>, closed on phones but the one asked
-   for (planner.mjs, openSettings). */
-.sheet-settings-index {
-  position: sticky; top: -1.25rem; z-index: 1; display: flex; flex-wrap: wrap; gap: 0.4rem;
-  margin: 0 -1.25rem 0.5rem; padding: 0.5rem 1.25rem; background: var(--bg); border-bottom: 1px solid var(--line);
-}
-.sheet-settings-group { border-bottom: 1px solid var(--line); padding: 0.25rem 0 0.75rem; scroll-margin-top: 3.5rem; }
-.sheet-settings-group-title { font-size: 1.0625rem; font-weight: 600; padding: 0.5rem 0; cursor: pointer; }
-.sheet-settings-part h4 { font-size: 0.9375rem; margin: 0.75rem 0 0.25rem; }
-.sheet-settings-more > summary { font-size: 0.8125rem; color: var(--muted); cursor: pointer; width: fit-content; }
-.sheet-settings-more > p { margin-top: 0.25rem; }
-@media (pointer: coarse) {
-  .sheet-settings-index .sheet-chip { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
-  /* Line height, not flex, so the summaries keep their disclosure triangle. */
-  .sheet-settings-group-title { line-height: 2.75rem; padding: 0; }
-  .sheet-settings-more > summary { line-height: 1.5rem; }
-}
 .sheet-mail { list-style: none; padding: 0; margin: 0.5rem 0; }
 .sheet-mail li { padding: 0.25rem 0; }
 
