@@ -154,20 +154,36 @@ const named = (t) => `"${t?.title ?? "the task"}"`;
 
 let undoFn = null;
 let toastTimer;
+let toast = null; // the Undo toast, kept by reference: it moves between dialogs (hostToast)
+
+// A modal dialog (Plan today, Shut down) makes the page under it inert and draws over it, and a
+// popover over it is inert too, so a toast left in the page can't be tapped while one is open
+// (https://html.spec.whatwg.org/multipage/interaction.html#modal-dialogs-and-inert-subtrees).
+// The toast goes inside the open dialog instead, and back when it closes. Plan today redraws its
+// dialog's children, so render() hosts it again after the hooks. Needs you and Campus show their
+// own Undo, so the toast stays out of them.
+function hostToast() {
+  if (!toast || toast.hidden) return;
+  const top = [...root.querySelectorAll("dialog[open]")].at(-1);
+  const own = top && [...top.querySelectorAll('[data-act="undo"]')].some((b) => !toast.contains(b));
+  const host = top && !own ? top : root;
+  if (toast.parentElement !== host) host.append(toast);
+}
 
 export function offerUndo(text, fn) {
   undoFn = fn;
-  $("[data-toast-text]").textContent = text;
-  $("[data-toast]").hidden = false;
+  toast.querySelector("[data-toast-text]").textContent = text;
+  toast.hidden = false;
+  hostToast();
   clearTimeout(toastTimer);
   // On touch there is no ⌘Z, so Undo stays up longer: 12 s, not 6.
-  toastTimer = setTimeout(() => { $("[data-toast]").hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
+  toastTimer = setTimeout(() => { toast.hidden = true; undoFn = null; }, matchMedia(COARSE).matches ? 12_000 : 6000);
 }
 
 async function undo() {
   const fn = undoFn;
   undoFn = null;
-  $("[data-toast]").hidden = true;
+  toast.hidden = true;
   if (fn) { try { await fn(); } catch (e) { failed(e, "undo that", fn); } render(); }
 }
 
@@ -571,6 +587,7 @@ export function render() {
   notice.hidden = !state.parked;
   notice.textContent = `${plural(state.parked, "task")} moved to Someday.`;
   for (const hook of renderHooks) hook();
+  hostToast();
 
   if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
 }
@@ -1136,6 +1153,7 @@ function wire() {
 // loads Settings' own plugins on demand (openSettings).
 export async function start(node, plugins = [], settings = settingsModule) {
   root = node;
+  toast = root.querySelector("[data-toast]");
   settingsModule = settings;
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
