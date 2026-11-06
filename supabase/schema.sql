@@ -1355,7 +1355,8 @@ language sql security invoker set search_path = public as $$
 $$;
 revoke execute on function message_event_created(uuid, uuid, text) from public, anon;
 
--- Undo item `item` (a task's or an event's id) of message m: a task is deleted, an event comes
+-- Undo item `item` (a task's, a project's or an event's id) of message m: a task is deleted (a
+-- project with its steps), an event comes
 -- off the message and out of busy (another message's event at the same times keeps the time
 -- busy). Either way it leaves the message's list. Returns the item with its kind ('task' or
 -- 'event'; an event keeps its gcal_id, for /plan to delete from Google), or null when there is
@@ -1373,10 +1374,12 @@ begin
   select x into found_item from jsonb_array_elements(msg.tasks) as x where x ->> 'id' = item::text;
   if found_item is not null then
     delete from tasks where id = item and source = 'message';
+    -- A project (docs/sheet-projects.md) goes with its steps.
+    delete from projects where id = item;
     update messages set tasks = (select coalesce(jsonb_agg(x), '[]') from jsonb_array_elements(msg.tasks) as x where x ->> 'id' <> item::text),
       tasks_added = greatest(tasks_added - 1, 0)
     where id = m;
-    return found_item || '{"kind": "task"}';
+    return found_item || jsonb_build_object('kind', coalesce(found_item ->> 'kind', 'task'));
   end if;
   select x into found_item from jsonb_array_elements(msg.events) as x where x ->> 'id' = item::text;
   if found_item is null then return null; end if;
@@ -1915,6 +1918,81 @@ begin
 end $$;
 revoke execute on function replace_horizon(date, text, jsonb, jsonb) from public, anon;
 grant execute on function replace_horizon(date, text, jsonb, jsonb) to authenticated, service_role;
+
+-- --- Projects (docs/sheet-projects.md) ------------------------------------------------------
+-- A project is a due date and a total estimate made of ordered steps, each an ordinary task with
+-- project_id and its position (step), sharing the project's due date. The horizon engine plans
+-- the steps in order. done follows the steps: the trigger below sets it when the last step is
+-- done, and clears it when one is reopened. Owner-only, in no public view: the public views list
+-- tasks' columns by name and leave project_id and step out.
+create table if not exists projects (
+  id uuid primary key default gen_random_uuid(),
+  title text not null check (char_length(title) between 1 and 120),
+  due date not null,
+  est_min int not null check (est_min between 15 and 6000),
+  done boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table projects enable row level security;
+drop policy if exists owner_all on projects;
+create policy owner_all on projects for all using (is_owner()) with check (is_owner());
+revoke all on projects from anon;
+alter table tasks add column if not exists project_id uuid references projects on delete cascade;
+alter table tasks add column if not exists step int check (step > 0);
+alter table tasks drop constraint if exists tasks_project_step_check;
+alter table tasks add constraint tasks_project_step_check check ((project_id is null) = (step is null));
+create index if not exists tasks_project on tasks (project_id) where project_id is not null;
+
+-- A step done, reopened or deleted: its project is done exactly when no step is left undone.
+create or replace function project_follows_steps() returns trigger
+language plpgsql security invoker set search_path = public as $$
+declare p uuid := case when tg_op = 'DELETE' then old.project_id else new.project_id end;
+begin
+  if p is not null then
+    update projects set done = not exists (select 1 from tasks t where t.project_id = p and not t.done)
+    where id = p and done is distinct from not exists (select 1 from tasks t where t.project_id = p and not t.done);
+  end if;
+  return null;
+end $$;
+drop trigger if exists tasks_project_done on tasks;
+create trigger tasks_project_done after update of done or delete on tasks
+  for each row execute function project_follows_steps();
+
+-- answer_message with projects: new_projects is [{ title, due, est_min, steps: [{ title, est_min
+-- }], why? }], checked by checkAnswers (src/sheet/messages.mjs). The tasks and events go through
+-- answer_message above; each project is added with its steps as Inbox tasks in order, with source
+-- 'message' and the project's due date, and listed on the message as one item ({ id, kind:
+-- 'project', title, due, list, steps }) that Undo takes off whole. A message that added only
+-- projects is done.
+create or replace function answer_message(m uuid, new_tasks jsonb, new_events jsonb, answer text, new_projects jsonb) returns text
+language plpgsql security invoker set search_path = public as $$
+declare
+  p record;
+  pid uuid;
+  base double precision;
+  added jsonb := '[]';
+  result text;
+begin
+  result := answer_message(m, new_tasks, new_events, answer);
+  for p in select * from jsonb_to_recordset(coalesce(new_projects, '[]')) as x(title text, due date, est_min int, steps jsonb, why text)
+  loop
+    insert into projects (title, due, est_min) values (p.title, p.due, p.est_min) returning id into pid;
+    select coalesce(max(position), 0) into base from tasks where day is null and list = 'Inbox';
+    insert into tasks (title, list, due, est_min, source, position, project_id, step)
+    select s.v ->> 'title', 'Inbox', p.due, (s.v ->> 'est_min')::int, 'message', base + s.n, pid, s.n
+    from jsonb_array_elements(p.steps) with ordinality as s(v, n);
+    added := added || jsonb_build_array(jsonb_build_object('id', pid, 'kind', 'project', 'title', p.title, 'day', null,
+      'list', 'Inbox', 'due', p.due, 'at_time', null, 'steps', jsonb_array_length(p.steps))
+      || case when p.why is null then '{}' else jsonb_build_object('why', p.why) end);
+  end loop;
+  if jsonb_array_length(added) > 0 then
+    update messages set status = 'done', tasks = tasks || added, tasks_added = tasks_added + jsonb_array_length(added)
+    where id = m;
+    result := 'done';
+  end if;
+  return result;
+end $$;
+revoke execute on function answer_message(uuid, jsonb, jsonb, text, jsonb) from public, anon;
 
 -- --- Telegram: quieter, self-checking (docs/sheet-nudges.md, "Health"; 2026-11-06) ------------
 -- When the bot last told him it reads only text, after a voice note or photo (capture.mjs,

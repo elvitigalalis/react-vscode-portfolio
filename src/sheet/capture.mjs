@@ -96,7 +96,7 @@ function long(s) {
 }
 const undoData = (m, item) => `mu:${short(m)}:${short(item)}`;
 
-const KIND = { task: "To-do", event: "Event" };
+const KIND = { task: "To-do", event: "Event", project: "Project" };
 
 // The message the bot sends once Claude has answered message m (a messages row), in /plan's
 // words: where it stands (addedLine, or Couldn't parse), Claude's reply, then each to-do and
@@ -131,13 +131,15 @@ export function readUndo(update, settings) {
 // (its blocks go with it); an event loses its Google event when /plan made one, then comes off
 // the message and out of busy. Telegram can't reach Google, so each Google event to delete is a
 // gcal_pending row ({ gcal_id, ends_at: null }), which /plan applies when it opens, as for a Done
-// tap. `blocks` are the task's blocks. Returns { title, changes } in handleTap's shape, or null
+// tap. `blocks` are the task's blocks, or a project's steps' blocks. Returns { title, changes } in handleTap's shape, or null
 // when the item is gone (undone already).
 export function undoChanges(m, item, blocks) {
   const task = (m?.tasks ?? []).find((t) => t.id === item);
   const event = !task && (m?.events ?? []).find((e) => e.id === item);
   if (!task && !event) return null;
-  const gone = task ? blocks.filter((b) => b.task_id === item && b.gcal_id).map((b) => b.gcal_id) : event.gcal_id ? [event.gcal_id] : [];
+  // A project's blocks are its steps' (the caller reads them by project).
+  const mine = (b) => (task?.kind === "project" || b.task_id === item);
+  const gone = task ? blocks.filter((b) => mine(b) && b.gcal_id).map((b) => b.gcal_id) : event.gcal_id ? [event.gcal_id] : [];
   return {
     title: (task ?? event).title,
     changes: [
