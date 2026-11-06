@@ -35,6 +35,15 @@ function dueItems(events) {
   return read.filter((r) => r.role === "Due" || ((r.role === "Availability Ends" || r.role === "End Date") && !hasDue.has(r.base)));
 }
 
+// A course item's page, for tasks.link (https only, like its check): the event's URL (RFC 5545
+// 3.8.4.6, Brightspace's "detailsview" page), else the first https link in its description, else
+// null. A feed without a link never clears one already stored (linkChange).
+export function courseLink(e) {
+  const ok = (u) => (typeof u === "string" && /^https:\/\/[^\s"<>]+$/.test(u) && u.length <= 2000 ? u : null);
+  return ok(e?.url?.trim()) ?? ok(String(e?.description ?? "").match(/https:\/\/[^\s"<>)]+/)?.[0]) ?? null;
+}
+const linkChange = (t, link) => (link && t.link !== link ? { link } : {});
+
 // The changes one Brightspace fetch makes to the planner. `seen` is the feed_seen UIDs for
 // 'brightspace'. Returns { insert, update, seen }:
 // - only due dates count (dueItems above), titled without D2L's suffix ("Quiz 6 - Due" -> "Quiz 6");
@@ -57,12 +66,13 @@ export function courseTaskChanges(events, { tasks, seen, timeZone }) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) continue;
     done.add(uid);
     if (!known.has(uid)) {
-      insert.push({ title, day: null, list: "Brightspace", due, public: false, source: "brightspace", source_uid: uid });
+      insert.push({ title, day: null, list: "Brightspace", due, public: false, source: "brightspace", source_uid: uid, link: courseLink(e) });
       added.push({ source: "brightspace", uid });
       continue;
     }
     const t = mine.get(uid);
-    if (t && !t.done && (t.title !== title || t.due !== due)) update.push({ id: t.id, title, due });
+    const link = t ? linkChange(t, courseLink(e)) : {};
+    if (t && !t.done && (t.title !== title || t.due !== due || link.link)) update.push({ id: t.id, title, due, ...link });
   }
   return { insert, update, seen: added };
 }
@@ -137,15 +147,16 @@ export function courseEventChanges(events, { tasks, seen, timeZone, today }) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(slot.day) || slot.day < today) continue;
     done.add(uid);
     if (!known.has(uid)) {
-      insert.push({ title, ...slot, list: null, due: null, public: false, source: "brightspace", source_uid: uid });
+      insert.push({ title, ...slot, list: null, due: null, public: false, source: "brightspace", source_uid: uid, link: courseLink(e) });
       added.push({ source: "brightspace", uid });
       continue;
     }
     const t = mine.get(uid);
     if (!t || t.done) continue;
     const at = t.at_time ? String(t.at_time).slice(0, 5) : null;
-    if (t.title !== title || t.day !== slot.day || t.list != null || at !== slot.at_time || (t.est_min ?? null) !== slot.est_min) {
-      update.push({ id: t.id, title, ...slot, list: null });
+    const link = linkChange(t, courseLink(e));
+    if (t.title !== title || t.day !== slot.day || t.list != null || at !== slot.at_time || (t.est_min ?? null) !== slot.est_min || link.link) {
+      update.push({ id: t.id, title, ...slot, list: null, ...link });
     }
   }
   return { insert, update, seen: added };

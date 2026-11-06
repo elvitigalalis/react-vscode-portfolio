@@ -530,6 +530,10 @@ function replanWords(reasons, day) {
 
 // Done and Snooze carry the block they belong to; the webhook reads them back on a tap.
 const tapButtons = (id) => [{ text: "Done", callback_data: `done:${id}` }, { text: "Snooze 10 min", callback_data: `snooze:${id}` }];
+// A task with a page (tasks.link: a Brightspace assignment, a GitHub issue, a Jira ticket) gets an
+// Open button beside them on its start and repeat nudges, so starting is one tap. A url button
+// (core.telegram.org/bots/api#inlinekeyboardbutton) opens the page and sends the bot nothing.
+const startButtons = (b, task) => [...tapButtons(b.id), ...(/^https:\/\//.test(task?.link ?? "") ? [{ text: "Open", url: task.link }] : [])];
 
 // "▶ 2:00 pm · OS homework (45 min)"
 // With a first step (docs/sheet-v5.md, "Day rules and first steps") it leads with it.
@@ -552,7 +556,7 @@ const running = (day) => live(day).filter(({ b }) => day.now < Date.parse(b.ends
 // A nudge at the start of each of today's blocks.
 function starts(day) {
   return running(day).map(({ b, task }) => {
-    return { kind: "start", block_id: b.id, day: day.today, send_at: new Date(b.starts_at).toISOString(), text: nudgeText(b, task, day), buttons: tapButtons(b.id) };
+    return { kind: "start", block_id: b.id, day: day.today, send_at: new Date(b.starts_at).toISOString(), text: nudgeText(b, task, day), buttons: startButtons(b, task) };
   });
 }
 
@@ -565,7 +569,7 @@ function repeats(day) {
     if (!startSent(day.log, b)) return [];
     // A snooze takes the repeat's place.
     if (day.log.some((n) => n.block_id === b.id && n.kind === "snooze")) return [];
-    return [{ kind: "repeat", block_id: b.id, day: day.today, send_at: new Date(Date.parse(b.starts_at) + REPEAT_AFTER).toISOString(), text: `Still on: ${task.title}`, buttons: tapButtons(b.id) }];
+    return [{ kind: "repeat", block_id: b.id, day: day.today, send_at: new Date(Date.parse(b.starts_at) + REPEAT_AFTER).toISOString(), text: `Still on: ${task.title}`, buttons: startButtons(b, task) }];
   });
 }
 

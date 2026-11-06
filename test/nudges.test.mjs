@@ -650,3 +650,13 @@ test("pinStep: no second message while one is being made; a stale claim lets one
   assert.equal(pinStep(claimed("2026-10-26T15:59:00Z"), noon), null);
   assert.deepEqual(pinStep(claimed("2026-10-26T15:45:00Z"), noon), { action: "create", text: "Nothing scheduled" });
 });
+
+test("start nudge: a task with a page gets an Open button beside Done and Snooze", () => {
+  const link = "https://mycourses.stonybrook.edu/d2l/le/calendar/1/event/2/detailsview";
+  const brief = { block_id: null, kind: "brief", day, send_at: "2026-10-26T12:00:00.000Z", sent_at: "2026-10-26T12:00:02Z" };
+  const snap = (t) => snapshot({ tasks: [t], blocks: [block("b1", "t1", "2026-10-26T14:00:00Z", "2026-10-26T15:00:00Z")], log: [brief] });
+  const start = whatToSend(snap(task("t1", "PAGES", { link })), at("2026-10-26T14:00:10Z")).find((m) => m.kind === "start");
+  assert.deepEqual(start.buttons, [{ text: "Done", callback_data: "done:b1" }, { text: "Snooze 10 min", callback_data: "snooze:b1" }, { text: "Open", url: link }]);
+  const plain = whatToSend(snap(task("t1", "Gym")), at("2026-10-26T14:00:10Z")).find((m) => m.kind === "start");
+  assert.equal(plain.buttons.length, 2);
+});
