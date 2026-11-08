@@ -76,3 +76,24 @@ test("nice lift: with Hevy not connected there is nothing", () => {
   assert.deepEqual(whatToSend(snapshot({ hevy: undefined }), at("2026-10-26T23:40:00Z")), []);
   assert.deepEqual(whatToSend(snapshot({ hevy: hevy({ account: null }) }), at("2026-10-26T23:40:00Z")), []);
 });
+
+// ---------------------------------------------------------------- the brief's next routine
+
+// The Gym habit block, 5:30 to 7:00 pm, beside a Read habit's.
+const habits = [{ id: "h-gym", name: "Gym" }, { id: "h-read", name: "Read" }];
+const gymBlock = { id: "b-gym", task_id: null, habit_id: "h-gym", starts_at: "2026-10-26T21:30:00Z", ends_at: "2026-10-26T23:00:00Z", proposed: false };
+const readBlock = { id: "b-read", task_id: null, habit_id: "h-read", starts_at: "2026-10-26T14:00:00Z", ends_at: "2026-10-26T14:30:00Z", proposed: false };
+// Before tonight's workout: Push #1, then Pull #1, then Push #1 again, so Pull comes next.
+const before = [push1, pull1, { ...push1, id: "w-push-1b", title: "Push #1", starts_at: "2026-10-25T14:00:00+00:00", ends_at: "2026-10-25T15:00:00+00:00" }];
+const morning = (extra = {}) => snapshot({ log: [], habits, blocks: [readBlock, gymBlock], hevy: hevy({ recent: [], history: before }), ...extra });
+
+test("brief: a Gym block today names the routine Hevy's history says is next", () => {
+  const [brief] = whatToSend(morning(), at("2026-10-26T12:00:00Z"));
+  assert.equal(brief.text, "Today: 0 tasks, 2 blocks.\nGym 5:30 pm: Pull #1 next.");
+});
+
+test("brief: no line without a Gym block today, or with no next routine known", () => {
+  assert.equal(whatToSend(morning({ blocks: [readBlock] }), at("2026-10-26T12:00:00Z"))[0].text, "Today: 0 tasks, 1 block.");
+  assert.equal(whatToSend(morning({ hevy: hevy({ recent: [], history: [push1] }) }), at("2026-10-26T12:00:00Z"))[0].text, "Today: 0 tasks, 2 blocks.");
+  assert.equal(whatToSend(morning({ hevy: undefined }), at("2026-10-26T12:00:00Z"))[0].text, "Today: 0 tasks, 2 blocks.");
+});

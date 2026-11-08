@@ -17,7 +17,7 @@ import { lateNap } from "./oura-day.mjs";
 import { pickTips, tipContext } from "./tips.mjs";
 import { GYM_HABIT } from "./ring.mjs";
 import { healthLine } from "./health.mjs";
-import { prs, workoutText } from "./hevy.mjs";
+import { nextRoutine, prs, workoutText } from "./hevy.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -276,6 +276,8 @@ function brief(day) {
   const wont = risky.filter((t) => hz.get(t.id)?.state === "wont_fit");
   const n = blocksToday.length;
   const lines = [greeting(day, blocksToday), `Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
+  const gym = gymLine(day);
+  if (gym) lines.push(gym);
   const tight = risky.filter((t) => !wont.includes(t));
   if (tight.length) lines.push(`At risk: ${tight.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
   if (wont.length) lines.push(`Won't fit: ${wont.map((t) => `${t.title}, ${formatMinutes(hz.get(t.id).short_min)} short (${dueLabel(t.due, today)})`).join("; ")}. ${FIXES}`);
@@ -361,6 +363,22 @@ function workoutMessages(day) {
       text: workoutText(w, mine, prs(w, mine, before, unit), unit), buttons: [{ text: "Open /plan", url: PLAN_URL }],
     }];
   });
+}
+
+// Today's Gym habit blocks (a habit whose name GYM_HABIT matches; snapshot.habits), earliest
+// first, each with its habit's name.
+function gymBlocks({ blocks, habits, today, tz }) {
+  const gym = new Map((habits ?? []).filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => [h.id, h.name]));
+  return blocks.filter((b) => gym.has(b.habit_id)).map((b) => ({ b, name: gym.get(b.habit_id), start: minutesOn(b.starts_at, today, tz) }))
+    .filter(({ start }) => start >= 0 && start < 1440).sort((x, y) => x.start - y.start);
+}
+
+// The brief's "Gym 5:30 pm: Push #2 next.", when today has a Gym habit block and Hevy's history
+// says which routine comes next (hevy.mjs, nextRoutine); otherwise no line.
+function gymLine(day) {
+  const [g] = gymBlocks(day);
+  const next = g && nextRoutine(day.hevy?.history);
+  return next ? `${g.name} ${formatClock(g.start)}: ${next.title} next.` : null;
 }
 
 // --- Monday's Last week line (research/plan-insights.md I9) -------------------------------------
