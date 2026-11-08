@@ -1,0 +1,11 @@
+[
+  { "page": 1, "page_count": 2, "events": [
+    { "type": "deleted", "id": "w-old", "deleted_at": "2026-11-08T12:00:00Z" },
+    { "type": "updated", "workout": { "id": "w-push-2", "title": "Push #2 (edited)", "routine_id": "r-push", "start_time": "2026-11-07T22:30:00Z", "end_time": "2026-11-07T23:35:00Z", "updated_at": "2026-11-08T10:00:00Z", "exercises": [] } }
+  ] },
+  { "page": 2, "page_count": 2, "events": [
+    { "type": "updated", "workout": { "id": "w-push-2", "title": "Push #2", "routine_id": "r-push", "start_time": "2026-11-07T22:30:00Z", "end_time": "2026-11-07T23:35:00Z", "updated_at": "2026-11-07T23:36:00Z", "exercises": [] } },
+    { "type": "updated", "workout": { "id": "w-old", "title": "Legs", "routine_id": "r-legs", "start_time": "2026-11-06T22:30:00Z", "end_time": "2026-11-06T23:30:00Z", "updated_at": "2026-11-06T23:31:00Z", "exercises": [] } },
+    { "type": "updated", "workout": { "id": "w-pull-2", "title": "Pull #2", "routine_id": "r-pull", "start_time": "2026-11-05T22:30:00Z", "end_time": "2026-11-05T23:20:00Z", "updated_at": "2026-11-05T23:21:00Z", "exercises": [] } }
+  ] }
+]
