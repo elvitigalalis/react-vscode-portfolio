@@ -162,3 +162,27 @@ test("health: a failed replan backing off says when the next try is, under the s
   const h = health({ tz, replans: [failed], replanHold: { hold: "fire_failed", until: "2026-10-26T14:05:00.000Z" } }, now);
   assert.deepEqual(h.issues, [{ key: "replan", words: "a replan didn't start, next try after 10:05 am", fix: null }]);
 });
+
+// ---------------------------------------------------------------- Hevy
+
+test("health: Hevy's refused key or lapsed Pro is an issue, and owns its feed", () => {
+  const hevyFeed = feed("hevy", "2026-10-26T13:54:00Z", { ok: false });
+  const refused = health({ tz, feeds: [hevyFeed], hevy: { last_error: "key refused", synced_at: "2026-10-26T13:39:00Z" } }, now);
+  assert.deepEqual(refused.issues, [{ key: "hevy", words: "Hevy needs a new key", fix: "paste one in Settings" }]);
+  const lapsed = health({ tz, hevy: { last_error: "not pro", synced_at: null, connected_at: "2026-10-26T13:00:00Z" } }, now);
+  assert.deepEqual(lapsed.issues, [{ key: "hevy", words: "Hevy's API needs Hevy Pro", fix: "renew Pro, then paste the key again in Settings" }]);
+});
+
+test("health: a connected Hevy not synced for over 2 hours is an issue; a few failed polls are not", () => {
+  const failing = feed("hevy", "2026-10-26T13:54:00Z", { ok: false });
+  assert.deepEqual(health({ tz, feeds: [failing], hevy: { last_error: null, synced_at: "2026-10-26T12:30:00Z" } }, now), { green: true, issues: [] });
+  assert.deepEqual(health({ tz, feeds: [failing], hevy: { last_error: null, synced_at: "2026-10-26T11:40:00Z" } }, now).issues,
+    [{ key: "hevy:stale", words: "Hevy not synced since 7:40 am", fix: "see Settings" }]);
+  assert.deepEqual(health({ tz, hevy: { last_error: null, synced_at: null, connected_at: "2026-10-26T11:00:00Z" } }, now).issues,
+    [{ key: "hevy:stale", words: "Hevy hasn't synced yet", fix: "see Settings" }]);
+});
+
+test("health: with Hevy not connected, its feed row (ok null) is no issue", () => {
+  const h = health({ tz, feeds: [feed("hevy", "2026-10-26T09:00:00Z", { ok: null, error: "not connected" })], hevy: null }, now);
+  assert.deepEqual(h, { green: true, issues: [] });
+});
