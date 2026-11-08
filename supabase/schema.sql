@@ -2234,3 +2234,162 @@ end $$;
 revoke execute on function horizon_call() from public, anon, authenticated;
 drop trigger if exists horizon_call on horizon_state;
 create trigger horizon_call after insert or update on horizon_state for each row execute function horizon_call();
+
+-- --- Hevy (docs/sheet-hevy.md) ------------------------------------------------------------------
+-- Lifts logged in Hevy, read by hevy-sync from Hevy's API (GET /v1/workouts/events) every 15
+-- minutes: each workout's title, routine, start and end, and its sets. Notes and descriptions are
+-- never stored. The API key lives only in Vault (hevy_api_key); no function hands it to the
+-- browser. Owner-only, in no public view, never read by read_planner or the routine; only the
+-- server writes. Kept without a limit: PRs need the whole history.
+create table if not exists hevy_account (           -- one row: connected or not
+  id boolean primary key default true check (id),
+  key_secret_id uuid,                                -- Vault secret 'hevy_api_key'
+  connected_at timestamptz not null default now(),
+  events_since timestamptz,                          -- null until the first full sync
+  synced_at timestamptz,
+  weight_unit text check (weight_unit in ('kg', 'lbs')),
+  last_error text check (char_length(last_error) <= 300)   -- 'key refused', 'not pro'
+);
+create table if not exists hevy_workouts (
+  id text primary key check (char_length(id) <= 64),
+  title text not null check (char_length(title) <= 200),
+  routine_id text check (char_length(routine_id) <= 64),
+  day date not null,                                 -- his local day of starts_at
+  starts_at timestamptz not null,
+  ends_at timestamptz not null check (ends_at >= starts_at),
+  updated_at timestamptz not null
+);
+create index if not exists hevy_workouts_day on hevy_workouts (day);
+create table if not exists hevy_sets (
+  workout_id text not null references hevy_workouts on delete cascade,
+  exercise_index int not null, set_index int not null,
+  template_id text not null check (char_length(template_id) <= 64),
+  exercise text not null check (char_length(exercise) <= 120),
+  set_type text not null check (set_type in ('normal', 'warmup', 'dropset', 'failure')),
+  weight_kg numeric check (weight_kg >= 0 and weight_kg < 1000),
+  reps int check (reps between 0 and 1000),
+  rpe numeric check (rpe between 1 and 10),
+  primary key (workout_id, exercise_index, set_index)
+);
+create index if not exists hevy_sets_template on hevy_sets (template_id);
+alter table hevy_account enable row level security;
+alter table hevy_workouts enable row level security;
+alter table hevy_sets enable row level security;
+drop policy if exists owner_all on hevy_account;
+drop policy if exists owner_all on hevy_workouts;
+drop policy if exists owner_all on hevy_sets;
+create policy owner_all on hevy_account for all using (is_owner()) with check (is_owner());
+create policy owner_all on hevy_workouts for all using (is_owner()) with check (is_owner());
+create policy owner_all on hevy_sets for all using (is_owner()) with check (is_owner());
+revoke all on hevy_account, hevy_workouts, hevy_sets from anon;
+-- The owner reads all three and deletes hevy_account (Disconnect); only the server writes.
+revoke insert, update on hevy_account from authenticated;
+revoke insert, update, delete on hevy_workouts, hevy_sets from authenticated;
+
+-- Save the key pasted in Settings (owner only): Vault secret hevy_api_key, created or updated. A
+-- new key clears the error and re-reads everything (events_since null). Never returns the key.
+create or replace function hevy_key_save(key text) returns void
+language plpgsql security definer set search_path = public as $$
+declare k uuid;
+begin
+  if not is_owner() then raise exception 'not the owner'; end if;
+  if key is null or key !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    raise exception 'not a Hevy API key';
+  end if;
+  select id into k from vault.secrets where name = 'hevy_api_key';
+  if k is null then k := vault.create_secret(lower(key), 'hevy_api_key', 'Hevy API key');
+  else perform vault.update_secret(k, lower(key)); end if;
+  insert into hevy_account (id, key_secret_id, connected_at, events_since, last_error)
+  values (true, k, now(), null, null)
+  on conflict (id) do update set key_secret_id = k, connected_at = now(), events_since = null, last_error = null;
+end $$;
+revoke execute on function hevy_key_save(text) from public, anon;
+grant execute on function hevy_key_save(text) to authenticated;
+
+-- hevy-sync's key: { key, events_since }, or null when nothing is connected. Service key only.
+create or replace function hevy_key() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return (select jsonb_build_object('key', s.decrypted_secret, 'events_since', h.events_since)
+          from hevy_account h join vault.decrypted_secrets s on s.id = h.key_secret_id);
+end $$;
+revoke execute on function hevy_key() from public, anon, authenticated;
+grant execute on function hevy_key() to service_role;
+
+-- hevy-sync's write, in one transaction: the workouts upserted by id ([{ id, title, routine_id,
+-- day, starts_at, ends_at, updated_at }]), each upserted workout's sets replaced ([{ workout_id,
+-- exercise_index, set_index, template_id, exercise, set_type, weight_kg, reps, rpe }]), the
+-- deleted ids removed, and the account stamped. Does nothing once disconnected, so a sync that
+-- ends after a Disconnect writes no rows back. Service key only.
+create or replace function hevy_sync_save(workouts jsonb, sets jsonb, deleted text[], since timestamptz, unit text default null)
+returns void language plpgsql security invoker set search_path = public as $$
+begin
+  if not exists (select 1 from hevy_account where id) then return; end if;
+  insert into hevy_workouts (id, title, routine_id, day, starts_at, ends_at, updated_at)
+  select x.id, x.title, x.routine_id, x.day, x.starts_at, x.ends_at, x.updated_at
+  from jsonb_to_recordset(coalesce(workouts, '[]')) as x(id text, title text, routine_id text, day date,
+    starts_at timestamptz, ends_at timestamptz, updated_at timestamptz)
+  on conflict (id) do update
+  set title = excluded.title, routine_id = excluded.routine_id, day = excluded.day,
+      starts_at = excluded.starts_at, ends_at = excluded.ends_at, updated_at = excluded.updated_at;
+  delete from hevy_sets
+  where workout_id in (select x.id from jsonb_to_recordset(coalesce(workouts, '[]')) as x(id text));
+  insert into hevy_sets (workout_id, exercise_index, set_index, template_id, exercise, set_type, weight_kg, reps, rpe)
+  select x.workout_id, x.exercise_index, x.set_index, x.template_id, x.exercise, x.set_type, x.weight_kg, x.reps, x.rpe
+  from jsonb_to_recordset(coalesce(sets, '[]')) as x(workout_id text, exercise_index int, set_index int,
+    template_id text, exercise text, set_type text, weight_kg numeric, reps int, rpe numeric);
+  delete from hevy_workouts where id = any(coalesce(deleted, '{}'));
+  update hevy_account
+  set events_since = since, synced_at = now(), weight_unit = coalesce(unit, weight_unit), last_error = null
+  where id;
+end $$;
+revoke execute on function hevy_sync_save(jsonb, jsonb, text[], timestamptz, text) from public, anon, authenticated;
+grant execute on function hevy_sync_save(jsonb, jsonb, text[], timestamptz, text) to service_role;
+
+-- A refused key ('key refused') or a lapsed Pro ('not pro'): Settings asks for a new key.
+-- Service key only.
+create or replace function hevy_broken(why text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update hevy_account set last_error = left(why, 300) where id;
+end $$;
+revoke execute on function hevy_broken(text) from public, anon, authenticated;
+grant execute on function hevy_broken(text) to service_role;
+
+-- Disconnecting deletes the key and every Hevy workout (their sets go by cascade).
+create or replace function hevy_account_forget() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from vault.secrets where id = old.key_secret_id;
+  delete from hevy_workouts where true;
+  return old;
+end $$;
+drop trigger if exists hevy_account_forget on hevy_account;
+create trigger hevy_account_forget after delete on hevy_account for each row execute function hevy_account_forget();
+revoke execute on function hevy_account_forget() from public, anon, authenticated;
+
+-- The Gym habit block's start nudge (kind 'gym'), off until he turns it on in Settings.
+alter table settings add column if not exists gym_nudge_on boolean not null default false;
+-- Copying the old tracker's history into Hevy (hevy-import): each exercise's Hevy template, and
+-- each copied session's Hevy workout, so a second run copies nothing twice.
+alter table gym_exercises add column if not exists hevy_template_id text;
+alter table gym_sessions add column if not exists hevy_workout_id text unique;
+
+-- A finished workout's message (kind 'workout', block_id null) and the Gym start nudge ('gym').
+alter table nudges drop constraint if exists nudges_kind_check;
+alter table nudges add constraint nudges_kind_check
+  check (kind in ('brief', 'start', 'repeat', 'snooze', 'checkin', 'proposal', 'finished', 'replan', 'wind_down', 'bedtime', 'horizon', 'health', 'workout', 'gym'));
+
+-- Every 15 minutes, at :09, :24, :39 and :54 (Hevy asks callers to stay off :00), call hevy-sync.
+-- Like sheet-oura, its URL and the shared secret come from Vault; until both exist the job does
+-- nothing.
+select cron.schedule('sheet-hevy', '9-59/15 * * * *', $job$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_hevy_url'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-sheet-cron',
+      (select decrypted_secret from vault.decrypted_secrets where name = 'sheet_cron_secret')),
+    body := '{"job": "hevy"}'::jsonb,
+    timeout_milliseconds := 30000)
+  where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
+    and exists (select 1 from vault.decrypted_secrets where name = 'sheet_hevy_url')
+$job$);

@@ -2012,4 +2012,117 @@ begin
   raise notice '✓ look-back: done_at follows done; one horizon call per task and due date';
 end $$;
 SQL
+# --- Hevy (docs/sheet-hevy.md) --------------------------------------------------------------------
+# Private and server-written; the key only in Vault, never handed to the browser; a sync upserts
+# workouts, replaces their sets and drops deleted ones; Disconnect forgets the key and the rows.
+psql_as postgres >/dev/null <<'SQL'
+\set QUIET on
+\pset tuples_only on
+create function pg_temp.as_user(r text, email text) returns void language sql as $$
+  select set_config('role', r, false),
+         set_config('request.jwt.claims', coalesce(json_build_object('email', email)::text, ''), false) $$;
+do $$ begin
+  if exists (select 1 from pg_class where relname in ('hevy_account', 'hevy_workouts', 'hevy_sets') and not relrowsecurity)
+    then raise exception 'RLS off on a Hevy table'; end if;
+  if (select schedule from cron.job where jobname = 'sheet-hevy') is distinct from '9-59/15 * * * *'
+    or (select count(*) from cron.job where jobname = 'sheet-hevy') <> 1
+    then raise exception 'sheet-hevy not scheduled once every 15 minutes'; end if;
+  if has_function_privilege('anon', 'hevy_key_save(text)', 'execute')
+    or has_function_privilege('authenticated', 'hevy_key()', 'execute')
+    or has_function_privilege('authenticated', 'hevy_sync_save(jsonb, jsonb, text[], timestamptz, text)', 'execute')
+    or has_function_privilege('authenticated', 'hevy_broken(text)', 'execute')
+    then raise exception 'a Hevy function is open to the browser'; end if;
+  if not has_function_privilege('service_role', 'hevy_key()', 'execute')
+    or not has_function_privilege('service_role', 'hevy_sync_save(jsonb, jsonb, text[], timestamptz, text)', 'execute')
+    or not has_function_privilege('authenticated', 'hevy_key_save(text)', 'execute')
+    then raise exception 'a Hevy function is missing its grant'; end if;
+  if (select gym_nudge_on from settings) is not false then raise exception 'gym_nudge_on did not default off'; end if;
+  insert into nudges (day, kind, send_at) values (current_date, 'workout', now()), (current_date, 'gym', now());
+  delete from nudges where kind in ('workout', 'gym');
+  raise notice '✓ Hevy: private, functions server-only, gym_nudge_on off, nudges take workout and gym';
+end $$;
+
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  begin perform hevy_key_save('11111111-2222-3333-4444-555555555555'); raise exception 'a non-owner saved a Hevy key';
+  exception when raise_exception then if sqlerrm <> 'not the owner' then raise; end if; end;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  begin perform hevy_key_save('not-a-key'); raise exception 'a malformed key saved';
+  exception when raise_exception then if sqlerrm <> 'not a Hevy API key' then raise; end if; end;
+  perform hevy_key_save('11111111-2222-3333-4444-555555555555');
+  perform hevy_key_save('AAAAAAAA-2222-3333-4444-555555555555');
+  if (select count(*) from hevy_account) <> 1 then raise exception 'the owner cannot read hevy_account'; end if;
+end $$;
+reset role;
+do $$ begin
+  if (select count(*) from vault.secrets where name = 'hevy_api_key') <> 1
+    or hevy_key()->>'key' <> 'aaaaaaaa-2222-3333-4444-555555555555' or hevy_key()->>'events_since' is not null
+    then raise exception 'hevy_key_save did not keep one secret, updated in place'; end if;
+  perform hevy_sync_save(
+    '[{"id": "w1", "title": "Push #1", "routine_id": "r1", "day": "2030-01-02", "starts_at": "2030-01-02T22:00:00Z", "ends_at": "2030-01-02T23:00:00Z", "updated_at": "2030-01-02T23:00:00Z"},
+      {"id": "w2", "title": "Pull #1", "routine_id": null, "day": "2030-01-03", "starts_at": "2030-01-03T22:00:00Z", "ends_at": "2030-01-03T23:00:00Z", "updated_at": "2030-01-03T23:00:00Z"}]',
+    '[{"workout_id": "w1", "exercise_index": 0, "set_index": 0, "template_id": "t1", "exercise": "Bench Press", "set_type": "warmup", "weight_kg": 60, "reps": 5, "rpe": null},
+      {"workout_id": "w1", "exercise_index": 0, "set_index": 1, "template_id": "t1", "exercise": "Bench Press", "set_type": "normal", "weight_kg": 84, "reps": 6, "rpe": 8.5},
+      {"workout_id": "w2", "exercise_index": 0, "set_index": 0, "template_id": "t2", "exercise": "Row", "set_type": "normal", "weight_kg": 70, "reps": 8, "rpe": null}]',
+    '{}', '2030-01-04T00:00:00Z', 'lbs');
+  perform hevy_broken('key refused');
+  -- An edit rewrites w1's sets; w2 is deleted, its sets by cascade.
+  perform hevy_sync_save(
+    '[{"id": "w1", "title": "Push #1", "routine_id": "r1", "day": "2030-01-02", "starts_at": "2030-01-02T22:00:00Z", "ends_at": "2030-01-02T23:10:00Z", "updated_at": "2030-01-04T10:00:00Z"}]',
+    '[{"workout_id": "w1", "exercise_index": 0, "set_index": 0, "template_id": "t1", "exercise": "Bench Press", "set_type": "normal", "weight_kg": 86, "reps": 6, "rpe": 9}]',
+    '{w2}', '2030-01-05T00:00:00Z', null);
+  if (select count(*) from hevy_workouts) <> 1 or (select count(*) from hevy_sets) <> 1
+    or (select weight_kg from hevy_sets) <> 86 or (select ends_at from hevy_workouts) <> '2030-01-02T23:10:00Z'
+    then raise exception 'hevy_sync_save did not upsert, replace sets and delete'; end if;
+  if (select (events_since, weight_unit, last_error) from hevy_account) is distinct from ('2030-01-05T00:00:00Z'::timestamptz, 'lbs'::text, null::text)
+    or (select synced_at from hevy_account) is null
+    then raise exception 'hevy_sync_save did not stamp the account'; end if;
+  begin
+    insert into hevy_sets (workout_id, exercise_index, set_index, template_id, exercise, set_type) values ('w1', 9, 0, 't', 'x', 'cluster');
+    raise exception 'hevy_sets took an unknown set type';
+  exception when check_violation then null; end;
+  raise notice '✓ Hevy: key saved once and updated in place; sync upserts, replaces sets, deletes, stamps';
+end $$;
+
+select pg_temp.as_user('anon', null);
+do $$ declare t text; begin
+  foreach t in array array['hevy_account', 'hevy_workouts', 'hevy_sets'] loop
+    begin execute format('select 1 from %I limit 1', t); raise exception 'anon read %', t;
+    exception when insufficient_privilege then null; end;
+  end loop;
+  begin perform hevy_key(); raise exception 'anon read the Hevy key';
+  exception when insufficient_privilege then null; end;
+end $$;
+select pg_temp.as_user('authenticated', 'stranger@example.com');
+do $$ begin
+  if (select count(*) from hevy_account) + (select count(*) from hevy_workouts) + (select count(*) from hevy_sets) <> 0
+    then raise exception 'a non-owner sees Hevy rows'; end if;
+end $$;
+select pg_temp.as_user('authenticated', 'owner@example.com');
+do $$ begin
+  if (select count(*) from hevy_workouts) <> 1 or (select count(*) from hevy_sets) <> 1 then raise exception 'the owner cannot read Hevy rows'; end if;
+  begin perform hevy_key(); raise exception 'the browser read the Hevy key';
+  exception when insufficient_privilege then null; end;
+  begin
+    insert into hevy_workouts (id, title, day, starts_at, ends_at, updated_at) values ('x', 'x', current_date, now(), now(), now());
+    raise exception 'the browser wrote hevy_workouts';
+  exception when insufficient_privilege then null; end;
+  begin update hevy_account set last_error = null where id; raise exception 'the browser updated hevy_account';
+  exception when insufficient_privilege then null; end;
+  delete from hevy_account where id;
+end $$;
+reset role;
+do $$ begin
+  if exists (select 1 from hevy_account) or exists (select 1 from vault.secrets where name = 'hevy_api_key')
+    or exists (select 1 from hevy_workouts) or exists (select 1 from hevy_sets)
+    then raise exception 'Disconnect kept the Hevy key or rows'; end if;
+  -- A sync that ends after a Disconnect writes nothing back.
+  perform hevy_sync_save('[{"id": "w9", "title": "Late", "routine_id": null, "day": "2030-01-02", "starts_at": "2030-01-02T22:00:00Z", "ends_at": "2030-01-02T23:00:00Z", "updated_at": "2030-01-02T23:00:00Z"}]',
+    '[]', '{}', now(), null);
+  if exists (select 1 from hevy_workouts) then raise exception 'a sync after Disconnect wrote rows'; end if;
+  raise notice '✓ Hevy: closed to anon and strangers, owner reads only, Disconnect forgets key and rows';
+end $$;
+SQL
 echo "✓ all schema checks passed"
