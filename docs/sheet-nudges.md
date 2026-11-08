@@ -282,3 +282,31 @@ change waiting, and messages to Claude whose one re-fire failed.
   30 min ago); Today lists today's open tasks with a Done each (`td:<task id>`). The labels and
   /now, /done, /today are matched exactly before capture, so they never reach Claude; any other
   text is captured as before.
+
+## Hevy (2026-11-08)
+
+Lifts are logged in Hevy and synced by hevy-sync ([sheet-hevy.md](sheet-hevy.md)). The telegram
+tick reads the Hevy rows (`snapshot.hevy`); the rules are in `nudges.mjs`, the PRs, text and next
+routine in `hevy.mjs`. Hevy rows never go to read_planner or the routine.
+
+- **Nice lift** (kind `workout`, block_id null, `send_at` = the workout's end, `day` = the day it
+  ended): one message per synced workout that ended in the last **12 hours** and **after Hevy
+  was connected** (`hevy_account.connected_at`, which a new key resets), so the first full sync of
+  his history sends nothing. "Nice lift · Push #2 · 1h 05m · 18 sets", then "PRs: Bench Press 185
+  × 6 (e1RM 222)", at most 4, in his Hevy unit. Open /plan button. It goes after the brief and
+  outside quiet hours (a workout ending at 11:10 pm is told after the next brief), beside the
+  nudge budget, and **silent**: it only reports. PRs count against workouts that started before
+  this one; an exercise's first time is no PR.
+- **The brief** adds "Gym 5:30 pm: Push #2 next." when today has a Gym habit block (a habit whose
+  name has gym, lift or workout) and Hevy's history gives a next routine: the one done right after
+  the last time the latest routine was done. No next routine, no line.
+- **Gym start nudge** (kind `gym`), only while `settings.gym_nudge_on` (off by default): at the
+  first Gym block still on that starts between 8 am and 11 pm, "▶ 5:30 pm · Gym: Push #2 (90
+  min)". One a day, even if the block moves; no buttons (a habit block has no Done tap, and Hevy
+  has no usable deep link), no repeat, no Finished?: the workout that ends the block answers it.
+  It rings, and sits beside the nudge budget.
+- **Health:** while Hevy is connected, its feed row is replaced by the account: "Hevy needs a new
+  key (paste one in Settings)" when the key was refused, "Hevy's API needs Hevy Pro" when Pro
+  lapsed, and "Hevy not synced since 7:40 am (see Settings)" when `synced_at` is over 2 hours old
+  (a few failed 15-minute polls are not an incident). Told like the Oura one: in the brief, and
+  one alert per incident.
