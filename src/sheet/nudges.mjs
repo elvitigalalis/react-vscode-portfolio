@@ -83,7 +83,7 @@ export function whatToSend(snapshot, now) {
   // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
   // wake syncs, so it goes once a day, whenever it went.
   const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
-  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day), ...(briefOut ? healthMessage(day) : []), ...(briefOut ? workoutMessages(day) : [])]
+  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...gymNudge(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day), ...(briefOut ? healthMessage(day) : []), ...(briefOut ? workoutMessages(day) : [])]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -379,6 +379,19 @@ function gymLine(day) {
   const [g] = gymBlocks(day);
   const next = g && nextRoutine(day.hevy?.history);
   return next ? `${g.name} ${formatClock(g.start)}: ${next.title} next.` : null;
+}
+
+// The Gym habit block's start nudge, only while settings.gym_nudge_on: "▶ 5:30 pm · Gym: Push #2
+// (90 min)". One a day, at the first Gym block still on that starts outside quiet hours; no
+// buttons (a habit block has no Done tap), no repeat and no Finished?: the workout that ends the
+// block is the answer. Beside the nudge budget.
+function gymNudge(day) {
+  if (!day.settings.gym_nudge_on || day.log.some((n) => n.kind === "gym")) return [];
+  const g = gymBlocks(day).find(({ b, start }) => start >= BRIEF_AT && start < QUIET_FROM && day.now < Date.parse(b.ends_at));
+  if (!g) return [];
+  const next = nextRoutine(day.hevy?.history);
+  const text = `▶ ${formatClock(g.start)} · ${g.name}${next ? `: ${next.title}` : ""} (${blockMinutes(g.b)} min)`;
+  return [{ kind: "gym", block_id: g.b.id, day: day.today, send_at: new Date(g.b.starts_at).toISOString(), text, buttons: [] }];
 }
 
 // --- Monday's Last week line (research/plan-insights.md I9) -------------------------------------

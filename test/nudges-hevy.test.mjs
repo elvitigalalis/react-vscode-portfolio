@@ -97,3 +97,33 @@ test("brief: no line without a Gym block today, or with no next routine known", 
   assert.equal(whatToSend(morning({ hevy: hevy({ recent: [], history: [push1] }) }), at("2026-10-26T12:00:00Z"))[0].text, "Today: 0 tasks, 2 blocks.");
   assert.equal(whatToSend(morning({ hevy: undefined }), at("2026-10-26T12:00:00Z"))[0].text, "Today: 0 tasks, 2 blocks.");
 });
+
+// ---------------------------------------------------------------- the Gym start nudge
+
+const nudgeOn = (extra = {}) => morning({ settings: { ...settings, gym_nudge_on: true }, log: [briefSent], ...extra });
+
+test("gym nudge: off by default", () => {
+  assert.deepEqual(whatToSend(morning({ log: [briefSent] }), at("2026-10-26T21:30:00Z")), []);
+});
+
+test("gym nudge: when on, one at the Gym block's start with the next routine and no buttons", () => {
+  const [m, ...rest] = whatToSend(nudgeOn(), at("2026-10-26T21:30:00Z"));
+  assert.deepEqual(rest, []);
+  assert.deepEqual(m, { kind: "gym", block_id: "b-gym", day, send_at: "2026-10-26T21:30:00.000Z", text: "▶ 5:30 pm · Gym: Pull #1 (90 min)", buttons: [] });
+  assert.equal(silent(m), false);
+  assert.deepEqual(whatToSend(nudgeOn(), at("2026-10-26T21:29:00Z")), []);
+});
+
+test("gym nudge: without a known next routine it names the habit only", () => {
+  const [m] = whatToSend(nudgeOn({ hevy: undefined }), at("2026-10-26T21:31:00Z"));
+  assert.equal(m.text, "▶ 5:30 pm · Gym (90 min)");
+});
+
+test("gym nudge: once a day, never repeated, and not once the block is over", () => {
+  const sent = { block_id: "b-gym", kind: "gym", day, send_at: "2026-10-26T21:30:00.000Z", sent_at: "2026-10-26T21:30:02Z" };
+  assert.deepEqual(whatToSend(nudgeOn({ log: [briefSent, sent] }), at("2026-10-26T21:45:00Z")), []);
+  // A replan moved the block to 6 pm after the nudge went: still no second one.
+  const moved = { ...gymBlock, starts_at: "2026-10-26T22:00:00Z", ends_at: "2026-10-26T23:30:00Z" };
+  assert.deepEqual(whatToSend(nudgeOn({ log: [briefSent, sent], blocks: [moved] }), at("2026-10-26T22:00:00Z")), []);
+  assert.deepEqual(whatToSend(nudgeOn(), at("2026-10-26T23:00:00Z")), []);
+});
