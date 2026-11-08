@@ -25,11 +25,11 @@
 // Secrets: SHEET_CRON_SECRET, OURA_CLIENT_ID and OURA_CLIENT_SECRET. The tokens come from Vault
 // (oura_tokens) and are never logged or written anywhere else.
 import { dayRows, freshAccess, ouraDocs, ouraLatest, Refused, restRows, ringLow, sleepRows, sleepTimeRows, syncRange, workoutRows } from "../../../src/sheet/oura.mjs";
-import { gymMatches } from "../../../src/sheet/ring.mjs";
 import { wakeProfile, wokeLate } from "../../../src/sheet/sleep.mjs";
 import { changeRow } from "../../../src/sheet/replan.mjs";
-import { addDays, localNow } from "../../../src/sheet/logic.mjs";
+import { localNow } from "../../../src/sheet/logic.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
+import { tickGym } from "../_shared/gym-tick.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
 const CLIENT_ID = env("OURA_CLIENT_ID");
@@ -105,28 +105,4 @@ async function sync(tokens: Tokens, now: Date) {
   await db("rpc/oura_sync_save", { method: "POST", body: JSON.stringify({ nights, days, change, times, extra }) });
   const gym = workouts?.length ? await tickGym(workouts, tz, today) : 0;
   return { items: nights.length, days: days.length, times: times.length, workouts: workouts?.length ?? null, gym, woke_late: Boolean(change) };
-}
-
-// The Gym habit blocks of yesterday and today that a ring workout finished, ended or dropped as
-// a Done tap does (nudges.mjs): the block by its id, and its Google event through gcal_pending,
-// which /plan applies when it opens.
-async function tickGym(workouts: unknown[], tz: string, today: string) {
-  const from = new Date(Date.parse(`${addDays(today, -1)}T00:00:00Z`) - 86_400_000).toISOString();
-  const to = new Date(Date.parse(`${today}T00:00:00Z`) + 2 * 86_400_000).toISOString();
-  const [habits, blocks] = await Promise.all([
-    db("habits?select=id,name"),
-    db(`blocks?select=id,habit_id,starts_at,ends_at,proposed,gcal_id&habit_id=not.is.null&starts_at=gte.${from}&starts_at=lt.${to}`),
-  ]);
-  const matches = gymMatches(workouts, blocks, habits, tz);
-  for (const m of matches) {
-    if (m.action === "shrink") await db(`blocks?id=eq.${m.block_id}`, { method: "PATCH", body: JSON.stringify({ ends_at: m.ends_at }) });
-    else await db(`blocks?id=eq.${m.block_id}`, { method: "DELETE" });
-    if (m.gcal_id) {
-      await db("gcal_pending?on_conflict=gcal_id", {
-        method: "POST", headers: { Prefer: "resolution=merge-duplicates" },
-        body: JSON.stringify({ gcal_id: m.gcal_id, ends_at: m.action === "shrink" ? m.ends_at : null }),
-      });
-    }
-  }
-  return matches.length;
 }
