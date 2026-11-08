@@ -20,6 +20,11 @@ test("feedAlert: a connected feed not read for over 3x its interval is flagged",
   assert.deepEqual(feedAlert(rows, now), ["gmail", "brightspace"]);
 });
 
+test("feedAlert: Hevy, read every 15 min, is stale after 45 min", () => {
+  const now = at("2026-11-06T15:00:00Z");
+  assert.deepEqual(feedAlert([row("hevy", "2026-11-06T14:16:00Z"), row("hevy", "2026-11-06T14:14:00Z")], now), ["hevy"]);
+});
+
 test("feedAlert: a not-connected feed (ok null) is never stale; a failed one is still named", () => {
   const now = at("2026-11-06T15:00:00Z");
   assert.deepEqual(feedAlert([row("slack", "2026-11-01T00:00:00Z", null), row("oura", "2026-11-06T14:59:00Z", false)], now), ["oura"]);
