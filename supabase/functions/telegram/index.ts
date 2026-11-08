@@ -16,7 +16,7 @@
 // SHEET_CRON_SECRET and TELEGRAM_WEBHOOK_SECRET, and for replans (v5 R1) SHEET_ROUTINE_ID and
 // SHEET_ROUTINE_TOKEN, the same pair routine-fire holds. SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are
 // provided by Supabase and read in ../_shared/server.ts, with the secret check and db().
-import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent, deadButtons, keyStep, keysDue, KEYBOARD } from "../../../src/sheet/nudges.mjs";
+import { whatToSend, handleTap, readTap, needsTappedBlock, planTap, pinStep, PIN_CLAIM, horizonMarks, horizonResets, silent, deadButtons, keyStep, keysDue, KEYBOARD, WORKOUT_FRESH } from "../../../src/sheet/nudges.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { expiries, health, hookAction, HOOK_UPDATES, nextTold } from "../../../src/sheet/health.mjs";
 import { queryPath } from "../../../src/sheet/proposal-io.mjs";
@@ -131,20 +131,62 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
   // Horizon planning: each task's state and the last one he was told of. None until its schema has run.
   const horizon = await db("horizon_state?select=task_id,state,short_min,slack_min,finish_day,notified").catch(() => []);
   const lastWeek = await lastWeekRows(today).catch(() => null);
+  // Hevy (nudges.mjs, "Hevy"): a failed read, or no Hevy schema yet, leaves it out.
+  const hevy = await hevyOf(now, today).catch((e) => (console.error("hevy:", e instanceof Error ? e.message : e), undefined));
   // The Sheet's health (health.mjs). A failed read leaves it out: the brief then has no Sheet
   // line, and nothing is alerted, rather than the messages stopping.
   const sheetHealth = await healthOf(today, now, settings.time_zone, facts).catch((e) => (console.error("health:", e instanceof Error ? e.message : e), undefined));
-  return { health: sheetHealth, lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon };
+  return { health: sheetHealth, lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon, hevy };
 }
 
-// The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the three connected
-// accounts' last errors, and today's replans, with the tick's own facts.
+// snapshot.hevy (nudges.mjs, "Hevy"): the account; the workouts that ended in the last
+// WORKOUT_FRESH; every workout's start, routine and title (nextRoutine, and which sets came
+// before a workout); the Nice lift rows since yesterday; and, only while a recent workout has had
+// no Nice lift yet, the sets its PRs are worked out from: every set of its exercise templates.
+// Hevy rows never go to read_planner or the routine (docs/sheet-hevy.md).
+async function hevyOf(now: Date, today: string) {
+  const [account = null] = await db("hevy_account?select=connected_at,synced_at,last_error,weight_unit");
+  if (!account) return { account: null };
+  const after = new Date(now.getTime() - WORKOUT_FRESH).toISOString();
+  const [recent, history, sent] = await Promise.all([
+    db(`hevy_workouts?select=id,title,routine_id,day,starts_at,ends_at&ends_at=gte.${encodeURIComponent(after)}&order=ends_at`),
+    allRows("hevy_workouts?select=id,routine_id,title,starts_at&order=starts_at,id"),
+    db(`nudges?select=day,send_at&kind=eq.workout&day=gte.${addDays(today, -1)}`),
+  ]);
+  type Row = { id: string; ends_at: string };
+  const owed = recent.filter((w: Row) => Date.parse(w.ends_at) > Date.parse(account.connected_at)
+    && !sent.some((n: { send_at: string }) => Date.parse(n.send_at) === Date.parse(w.ends_at)));
+  let sets: unknown[] = [];
+  if (owed.length) {
+    const list = (xs: string[]) => xs.map((x) => `"${encodeURIComponent(x)}"`).join(",");
+    const mine = await db(`hevy_sets?select=template_id&workout_id=in.(${list(owed.map((w: Row) => w.id))})`);
+    const templates = [...new Set(mine.map((s: { template_id: string }) => s.template_id))] as string[];
+    if (templates.length) sets = await allRows(`hevy_sets?select=workout_id,exercise_index,set_index,template_id,exercise,set_type,weight_kg,reps&template_id=in.(${list(templates)})&order=workout_id,exercise_index,set_index`);
+  }
+  return { account, recent, history, sets, sent };
+}
+
+// Every row of an ordered read, a page at a time: PostgREST caps one response (max-rows, 1000 on
+// Supabase), and years of sets can pass that.
+const PAGE = 1000;
+async function allRows(path: string) {
+  const out: unknown[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const rows = await db(`${path}&limit=${PAGE}&offset=${from}`);
+    out.push(...rows);
+    if (rows.length < PAGE) return out;
+  }
+}
+
+// The rows health() reads (docs/sheet-nudges.md, "Health"): every feed, the connected accounts'
+// last errors (Hevy's with when it last synced), and today's replans, with the tick's own facts.
 async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) {
-  const [feeds, mail, [calendar = null], [oura = null], replans, revisions, unsent, credentials, checks] = await Promise.all([
+  const [feeds, mail, [calendar = null], [oura = null], [hevy = null], replans, revisions, unsent, credentials, checks] = await Promise.all([
     db("feed_state?select=*"),
     db("mail_accounts?select=email,label,last_error,connected_at").catch(() => []),
     db("calendar_account?select=last_error,connected_at").catch(() => []),
     db("oura_account?select=last_error").catch(() => []),
+    db("hevy_account?select=last_error,synced_at,connected_at").catch(() => []),
     db(`replans?select=at,result,reasons&day=eq.${today}`),
     db(`proposals?select=rev&day=eq.${today}&limit=1`),
     // Messages whose one re-fire failed too (refire), until Claude answers them.
@@ -156,7 +198,7 @@ async function healthOf(today: string, now: Date, tz: string, facts: TickFacts) 
   const hook = facts.hook && typeof facts.hook === "object" && "url" in facts.hook ? facts.hook : undefined;
   const replanHold = facts.replanHold && typeof facts.replanHold === "object" && "hold" in facts.replanHold ? facts.replanHold : undefined;
   const expiring = expiries({ credentials, mail, calendar });
-  return health({ tz, feeds, mail, calendar, oura, replans, planned: revisions.length > 0, unsent, hook, replanHold, expiring, checks }, now);
+  return health({ tz, feeds, mail, calendar, oura, hevy, replans, planned: revisions.length > 0, unsent, hook, replanHold, expiring, checks }, now);
 }
 
 // R10: the live check (schema.sql, sheet_checks()), at most hourly per isolate, which covers the

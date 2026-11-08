@@ -8,14 +8,19 @@
 import { formatClock, localNow, weekdayName } from "./logic.mjs";
 
 // Feed names as Settings shows them (feed-status.mjs), with the two it doesn't list.
-const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack", gmail: "Gmail", oura: "Oura" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack", gmail: "Gmail", oura: "Oura", hevy: "Hevy" };
 // Each source's cron interval in minutes (supabase/schema.sql's cron.schedule lines): busy every
 // 10, mail every 5, Oura every 10, the rest hourly. A feed is stale after 3 intervals, and never
 // before 30 minutes, so one slow run is not an incident.
 const EVERY = { freebusy: 10, gmail: 5, oura: 10 };
 const staleAfter = (source) => Math.max(3 * (EVERY[source] ?? 60), 30) * 60_000;
 // A feed whose account has its own issue is that issue, said once.
-const ACCOUNT_OF = { gmail: "mail", freebusy: "calendar", oura: "oura" };
+// Hevy's connected account owns its feed outright: hevy_account says both a refused key and a sync
+// that stopped (synced_at), so its feed_state row adds nothing while it is connected.
+const ACCOUNT_OF = { gmail: "mail", freebusy: "calendar", oura: "oura", hevy: "hevy" };
+// Hevy syncs every 15 minutes; a connected account not synced for this long is broken. Longer than
+// three intervals, so a few failed polls in a row (Hevy's 429s and 5xx) are not an incident.
+const HEVY_STALE = 2 * 60 * 60_000;
 // Telegram's webhook: updates waiting past this, or a delivery error this recent, means taps
 // aren't arriving (getWebhookInfo's pending_update_count and last_error_date, Unix seconds:
 // core.telegram.org/bots/api#webhookinfo).
@@ -36,6 +41,7 @@ function when(iso, now, tz) {
 //   mail        mail_accounts rows { email, label, last_error }
 //   calendar    the calendar_account row { last_error }, or null
 //   oura        the oura_account row { last_error }, or null
+//   hevy        the hevy_account row { last_error, synced_at, connected_at }, or null (not connected)
 //   hook        getWebhookInfo's result { url, pending_update_count, last_error_date? }
 //   replans     today's replans rows { at, result, reasons }
 //   planned     whether today has a plan revision yet
@@ -53,6 +59,15 @@ export function health(input, now) {
   for (const m of input.mail ?? []) if (m.last_error) { accounts.add("mail"); add(`mail:${m.email}`, `Gmail${m.label ? ` (${m.label})` : ""} needs reconnecting`, RECONNECT); }
   if (input.calendar?.last_error) { accounts.add("calendar"); add("calendar", "Google Calendar needs reconnecting", RECONNECT); }
   if (input.oura?.last_error) { accounts.add("oura"); add("oura", "Oura needs reconnecting", RECONNECT); }
+  const hevy = input.hevy;
+  if (hevy) {
+    accounts.add("hevy");
+    const last = hevy.synced_at ?? hevy.connected_at;
+    // hevy-sync's two errors (hevy_broken): 'key refused' and 'not pro' (the API is Pro only).
+    if (hevy.last_error === "not pro") add("hevy", "Hevy's API needs Hevy Pro", "renew Pro, then paste the key again in Settings");
+    else if (hevy.last_error) add("hevy", "Hevy needs a new key", "paste one in Settings");
+    else if (last && now.getTime() - Date.parse(last) > HEVY_STALE) add("hevy:stale", hevy.synced_at ? `Hevy not synced since ${when(hevy.synced_at, now, tz)}` : "Hevy hasn't synced yet", "see Settings");
+  }
   const feeds = [];
   for (const f of input.feeds ?? []) {
     // ok null: not set up, or nothing to read yet; that isn't failing.

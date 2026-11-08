@@ -17,6 +17,7 @@ import { lateNap } from "./oura-day.mjs";
 import { pickTips, tipContext } from "./tips.mjs";
 import { GYM_HABIT } from "./ring.mjs";
 import { healthLine } from "./health.mjs";
+import { nextRoutine, prs, workoutText } from "./hevy.mjs";
 
 // Quiet hours run from 11 pm to 8 am; the brief opens the day.
 export const QUIET_FROM = 23 * 60;
@@ -51,9 +52,9 @@ const planUrl = (view) => `${PLAN_URL}?open=${view}`;
 // sound." (core.telegram.org/bots/api#sendmessage, Bot API 10.3). What asks him to act now rings:
 // the brief, the plan, a block's start, its repeat and snooze, wind-down, bedtime and a health
 // alert. What only reports, or can wait for his next look, is silent: Finished?, the check-in,
-// replan and horizon messages (and, in the telegram function, receipts). They still show in the
-// chat and badge the app.
-const SILENT_KINDS = new Set(["finished", "checkin", "replan", "horizon"]);
+// replan and horizon messages, Hevy's Nice lift (and, in the telegram function, receipts). They
+// still show in the chat and badge the app.
+const SILENT_KINDS = new Set(["finished", "checkin", "replan", "horizon", "workout"]);
 // A Finished? carrying the next block's start (P3, `also`) asks him to start something: it rings.
 export const silent = (m) => SILENT_KINDS.has(m.kind) && !m.also?.length;
 
@@ -82,7 +83,7 @@ export function whatToSend(snapshot, now) {
   // Each kind of message is one rule over the same day. Oura: the brief's time can move once his
   // wake syncs, so it goes once a day, whenever it went.
   const briefOut = day.log.some((n) => n.kind === "brief" && n.day === day.today && !pending(n));
-  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day), ...(briefOut ? healthMessage(day) : [])]
+  const due = [...(briefOut ? [] : [brief(day)]), ...(briefOut ? horizonMessage(day) : []), ...planMessage(day), ...replanMessage(day), ...starts(day), ...gymNudge(day), ...repeats(day), ...snoozes(day), ...finishedChecks(day), ...checkin(day), ...(briefOut ? healthMessage(day) : []), ...(briefOut ? workoutMessages(day) : [])]
     .filter((m) => Date.parse(m.send_at) <= now.getTime() && !logged(snapshot.log, m))
     .sort((a, b) => Date.parse(a.send_at) - Date.parse(b.send_at));
   // The brief and check-in are outside the budget, and a snooze took its slot when it was tapped.
@@ -275,6 +276,8 @@ function brief(day) {
   const wont = risky.filter((t) => hz.get(t.id)?.state === "wont_fit");
   const n = blocksToday.length;
   const lines = [greeting(day, blocksToday), `Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
+  const gym = gymLine(day);
+  if (gym) lines.push(gym);
   const tight = risky.filter((t) => !wont.includes(t));
   if (tight.length) lines.push(`At risk: ${tight.map((t) => `${t.title} (${dueLabel(t.due, today)})`).join(", ")}.`);
   if (wont.length) lines.push(`Won't fit: ${wont.map((t) => `${t.title}, ${formatMinutes(hz.get(t.id).short_min)} short (${dueLabel(t.due, today)})`).join("; ")}. ${FIXES}`);
@@ -326,6 +329,69 @@ function healthMessage(day) {
   if (!fresh.length || day.log.filter((n) => n.kind === "health").length >= HEALTH_BUDGET) return [];
   const send_at = new Date(Math.floor(day.now / 60_000) * 60_000).toISOString();
   return [{ kind: "health", block_id: null, day: day.today, send_at, text: healthLine(h, fresh), buttons: [{ text: "Open /plan", url: PLAN_URL }], health: fresh.map((i) => i.key) }];
+}
+
+// --- Hevy (docs/sheet-nudges.md, "Hevy"; docs/sheet-hevy.md) --------------------------------
+// snapshot.hevy, which the telegram function reads (absent or account null: Hevy isn't connected):
+//   account  the hevy_account row { connected_at, synced_at, last_error, weight_unit }
+//   recent   hevy_workouts rows that ended in the last WORKOUT_FRESH
+//   history  every hevy_workouts row { id, routine_id, title, starts_at }
+//   sets     hevy_sets of the recent workouts, and every set of their exercise templates
+//   sent     the nudges rows of kind 'workout' since yesterday { day, send_at }
+
+// "Nice lift": one message per workout hevy-sync brings in, at most WORKOUT_FRESH after it ended,
+// keyed by its end (send_at) on the day it ended. Only workouts that ended after Hevy was
+// connected: the first full sync (or a new key's) reads his whole history, and none of it is
+// news. After the brief, beside the nudge budget like it, and silent (it only reports). PRs are
+// worked out against the sets of workouts that started before this one (hevy.mjs, prs).
+export const WORKOUT_FRESH = 12 * 60 * 60_000;
+function workoutMessages(day) {
+  const h = day.hevy;
+  if (!h?.account) return [];
+  const since = Date.parse(h.account.connected_at ?? "");
+  const startOf = new Map((h.history ?? []).map((w) => [w.id, Date.parse(w.starts_at)]));
+  const unit = h.account.weight_unit === "kg" ? "kg" : "lbs";
+  const sets = h.sets ?? [];
+  return (h.recent ?? []).flatMap((w) => {
+    const end = Date.parse(w.ends_at);
+    if (!(end > since) || end > day.now || day.now - end > WORKOUT_FRESH) return [];
+    if ((h.sent ?? []).some((n) => Date.parse(n.send_at) === end)) return [];
+    const mine = sets.filter((s) => s.workout_id === w.id);
+    const before = sets.filter((s) => startOf.get(s.workout_id) < Date.parse(w.starts_at));
+    return [{
+      kind: "workout", block_id: null, day: localNow(new Date(end), day.tz).day, send_at: new Date(end).toISOString(),
+      text: workoutText(w, mine, prs(w, mine, before, unit), unit), buttons: [{ text: "Open /plan", url: PLAN_URL }],
+    }];
+  });
+}
+
+// Today's Gym habit blocks (a habit whose name GYM_HABIT matches; snapshot.habits), earliest
+// first, each with its habit's name.
+function gymBlocks({ blocks, habits, today, tz }) {
+  const gym = new Map((habits ?? []).filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => [h.id, h.name]));
+  return blocks.filter((b) => gym.has(b.habit_id)).map((b) => ({ b, name: gym.get(b.habit_id), start: minutesOn(b.starts_at, today, tz) }))
+    .filter(({ start }) => start >= 0 && start < 1440).sort((x, y) => x.start - y.start);
+}
+
+// The brief's "Gym 5:30 pm: Push #2 next.", when today has a Gym habit block and Hevy's history
+// says which routine comes next (hevy.mjs, nextRoutine); otherwise no line.
+function gymLine(day) {
+  const [g] = gymBlocks(day);
+  const next = g && nextRoutine(day.hevy?.history);
+  return next ? `${g.name} ${formatClock(g.start)}: ${next.title} next.` : null;
+}
+
+// The Gym habit block's start nudge, only while settings.gym_nudge_on: "▶ 5:30 pm · Gym: Push #2
+// (90 min)". One a day, at the first Gym block still on that starts outside quiet hours; no
+// buttons (a habit block has no Done tap), no repeat and no Finished?: the workout that ends the
+// block is the answer. Beside the nudge budget.
+function gymNudge(day) {
+  if (!day.settings.gym_nudge_on || day.log.some((n) => n.kind === "gym")) return [];
+  const g = gymBlocks(day).find(({ b, start }) => start >= BRIEF_AT && start < QUIET_FROM && day.now < Date.parse(b.ends_at));
+  if (!g) return [];
+  const next = nextRoutine(day.hevy?.history);
+  const text = `▶ ${formatClock(g.start)} · ${g.name}${next ? `: ${next.title}` : ""} (${blockMinutes(g.b)} min)`;
+  return [{ kind: "gym", block_id: g.b.id, day: day.today, send_at: new Date(g.b.starts_at).toISOString(), text, buttons: [] }];
 }
 
 // --- Monday's Last week line (research/plan-insights.md I9) -------------------------------------
