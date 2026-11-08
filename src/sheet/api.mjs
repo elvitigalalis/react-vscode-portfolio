@@ -186,6 +186,12 @@ export const listSleepDays = (from, to) => rest(`sleep_days?select=*&day=gte.${f
 export const listRingWorkouts = (from) => rest(`ring_workouts?select=day,starts_at,ends_at,activity&day=gte.${from}&order=starts_at`).catch(() => []);
 // Wind-down: Oura's bedtime windows, for tonight's bedtime without a target.
 export const listSleepTimes = () => rest("sleep_times?select=day,start_offset,end_offset&order=day").catch(() => []);
+// Hevy (docs/sheet-hevy.md): the account row's times and error, never the key. Saving the key
+// goes through hevy_key_save, which puts it in Vault and returns nothing. Deleting the row deletes
+// the key and every synced workout (a trigger). Before the Hevy schema has run, there is no row.
+export const hevyAccount = async () => (await rest("hevy_account?select=connected_at,synced_at,last_error,weight_unit").catch(() => []))[0] ?? null;
+export const saveHevyKey = (key) => rest("rpc/hevy_key_save", { method: "POST", body: { key } });
+export const disconnectHevy = () => rest("hevy_account?id=eq.true", { method: "DELETE" });
 
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
 // and a day's proposal with the campus events it picked.

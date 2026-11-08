@@ -9,5 +9,6 @@ export { setupReplanSettings } from "./replan-settings.mjs";
 export { setupTriageSettings } from "./triage-settings.mjs";
 export { setupHabitSettings } from "./habit-settings.mjs";
 export { setupOuraSettings } from "./oura-settings.mjs";
+export { setupHevySettings } from "./hevy-settings.mjs";
 export { setupBedtimeSettings } from "./bedtime-settings.mjs";
 export { setupSettingsSections } from "./settings-sections.mjs";

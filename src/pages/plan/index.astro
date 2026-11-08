@@ -234,6 +234,24 @@ import "../../styles/plan-settings.css";
           <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
           <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
         </section>
+
+      <!-- Hevy (docs/sheet-hevy.md): src/sheet/hevy-settings.mjs fills it. The key field is write-only. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-hevy-title">
+          <h3 id="sheet-hevy-title">Hevy</h3>
+          <p class="small">A finished Hevy workout ends the day's Gym block, and Telegram says how it went. Never shared or sent to Claude.</p>
+          <p class="small"><span role="status" data-hevy-status></span> <span class="sheet-mail-error" data-hevy-error></span></p>
+          <p class="small">Copy your API key from <a href="https://hevy.com/settings?developer" target="_blank" rel="noopener">Hevy's developer settings</a> (needs Hevy Pro). It is kept on the server and never shown again.</p>
+          <form class="sheet-dialog-end" data-hevy-form>
+            <label for="sheet-hevy-key">API key</label>
+            <input id="sheet-hevy-key" type="password" autocomplete="new-password" spellcheck="false" required maxlength="64">
+            <button type="submit" class="sheet-btn primary">Save</button>
+          </form>
+          <p class="small" role="status" data-hevy-note></p>
+          <button type="button" class="sheet-link" data-act="hevy-disconnect" hidden>Disconnect</button>
+          <h4 id="sheet-gym-nudge-title">Gym start nudge</h4>
+          <p class="small">Telegram says when the Gym block starts and which routine is next. One a day, no buttons.</p>
+          <p class="sheet-dialog-end"><span class="small" role="status" data-gym-nudge-note></span> <button type="button" class="sheet-btn" data-act="gym-nudge" aria-pressed="false">Gym start nudge</button></p>
+        </section>
       </details>
 
       <details class="sheet-settings-group" id="sheet-settings-day" data-section="day" open>
@@ -430,7 +448,7 @@ import "../../styles/plan-settings.css";
   const setupSwipe = (root) => { if (matchMedia("(pointer: coarse)").matches) import("../../sheet/swipe-ui.mjs").then((m) => m.setupSwipe(root)); };
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
-  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupBedtimeSettings, m.setupSettingsSections]);
+  const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupNowNext, setupSwipe], settings);
