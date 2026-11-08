@@ -61,8 +61,8 @@ export function dayWindow(open, shutdown, spans = []) {
 // --- feedAlert (G4: the top bar's Feed failed chip) ------------------------------------------
 
 // How often each feed's cron job reads it, in minutes (supabase/schema.sql: sheet-mail every 5,
-// sheet-busy and sheet-oura every 10, the rest hourly).
-const FEED_EVERY = { gmail: 5, freebusy: 10, oura: 10 };
+// sheet-busy and sheet-oura every 10, sheet-hevy every 15, the rest hourly).
+const FEED_EVERY = { gmail: 5, freebusy: 10, oura: 10, hevy: 15 };
 const STALE_AFTER = 3; // missed reads before a feed counts as stuck (research R6)
 
 // The sources whose last read failed, in row order. ok null means not read yet (or not
