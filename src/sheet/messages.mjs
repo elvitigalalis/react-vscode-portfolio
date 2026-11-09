@@ -88,7 +88,7 @@ const whyOf = (item, name, errors) => {
 
 // One task: the tasks row it becomes ({ title, day, list, due, at_time, est_min }), or null with
 // errors pushed. No day puts it on the Inbox Someday list; a fixed time needs a day and a length.
-function taskRow(t, name, errors, today) {
+export function taskRow(t, name, errors, today) {
   const before = errors.length;
   const title = text(t?.title, `${name}.title`, 120, errors);
   const day = t?.day ?? null, due = t?.due ?? null, at = t?.at_time ?? null, est = t?.est_min ?? null;
