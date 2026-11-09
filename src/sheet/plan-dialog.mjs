@@ -5,6 +5,7 @@ import * as api from "./api.mjs";
 import { addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, dialogDay, snap, formatMinutes, formatClock, formatSpan, proposedOn, DEFAULT_EST, blockMinutes, weekdayName, plural } from "./logic.mjs";
 import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets, failed, dayCapacity, dayStart, windowOn, rowsOn, sourceIcon, sourceWords } from "./planner.mjs";
 import { sourceOf, loadShare } from "./glance.mjs";
+import { burst } from "./celebrate.mjs";
 import { approveAllCall, planNotes } from "./morning.mjs";
 import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock, setWindow } from "./plan-today.mjs";
 import { estimateHint, keepsMoving } from "./lookback.mjs";
@@ -319,11 +320,17 @@ export function setupPlanDialog(node) {
   dialog.addEventListener("click", async (e) => {
     const ok = e.target.closest(".sheet-approve, .sheet-approve-all");
     if (ok) {
+      // A small burst from the button once it's approved (celebrate.mjs); draw() replaces it.
+      const at = ok.getBoundingClientRect();
+      let saved = false;
       try {
         if (ok.classList.contains("sheet-approve")) await saveBlock(state.blocks.find((b) => b.id === ok.closest(".sheet-block").dataset.block));
         else await approveAll();
+        saved = true;
       } catch (err) { failed(err); }
-      return draw();
+      draw();
+      if (saved) burst(at, dialog);
+      return;
     }
     const x = e.target.closest(".sheet-block-x");
     if (x) {
