@@ -14,14 +14,15 @@
   .card h3 a, .writeup-head h1 a { display: inline-block; view-transition-name: var(--vt, none); }
 
   /* A project's photo rises 12px and fades in as its card scrolls into view. Scroll-driven, so no
-     script; where unsupported it is simply there. Screens only: print has no scroll, and would
+     script; where unsupported it is simply there. It ends as the photo's last edge enters, so a
+     photo fully on screen is always whole. Screens only: print has no scroll, and would
      keep whatever half-faded state the page was in. */
   @supports (animation-timeline: view()) {
     @media screen {
       .card img { animation: rise linear both; }
       /* A rule of its own: the minifier would fold the timeline into the shorthand, which browsers
          reject, and the shorthand resets both longhands, so they must come after it. */
-      .card > img { animation-timeline: view(); animation-range: entry 0% cover 30%; }
+      .card > img { animation-timeline: view(); animation-range: entry 0% entry 100%; }
     }
   }
 
