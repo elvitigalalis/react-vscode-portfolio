@@ -2408,3 +2408,25 @@ alter table habit_done enable row level security;
 drop policy if exists owner_all on habit_done;
 create policy owner_all on habit_done for all using (is_owner()) with check (is_owner());
 revoke all on habit_done from anon;
+
+-- --- Focus notes (docs/sheet-focus.md, "Stop and where I left off") ---------------------------
+-- Stop in /plan's focus view ends a session without finishing the task: its minutes and a
+-- one-line "where I left off" note land here, and the next Start on that task shows them. Done
+-- in focus adds a row with done = true after its actuals row, which closes the task's earlier
+-- rows (their minutes went into that actuals row). Rows carry their id from the page, so a
+-- retried write is a duplicate PostgREST ignores. No foreign keys, as with actuals. Owner-only.
+create table if not exists focus_log (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  day date not null,
+  task_id uuid not null,
+  block_id uuid,
+  minutes int not null check (minutes between 0 and 960),
+  note text check (char_length(note) between 1 and 280),
+  done boolean not null default false
+);
+create index if not exists focus_log_task_at on focus_log (task_id, at desc);
+alter table focus_log enable row level security;
+drop policy if exists owner_all on focus_log;
+create policy owner_all on focus_log for all using (is_owner()) with check (is_owner());
+revoke all on focus_log from anon;
