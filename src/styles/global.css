@@ -1,7 +1,7 @@
 /* 60-30-10: ivory-cream surfaces, brown text and beige rules, and deep sage only for links and the
    one main button in each place. Dark mode is the same palette at night. Headings in Fraunces, text
-   in Inter (self-hosted below), metadata in the system monospace. The only motion is the hero plant
-   growing in once, and only for visitors who allow motion.
+   in Inter (self-hosted below), metadata in the system monospace. Motion is only for visitors who
+   allow it: here, the hero plant growing in once; the content pages add motion.css.
    Each colour is light-dark(day, night): the OS picks unless the visitor used the top bar's switch,
    which sets data-theme on <html> before first paint and so forces color-scheme. */
 :root {
