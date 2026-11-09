@@ -26,14 +26,16 @@
     }
   }
 
-  /* Hover only where a pointer can hover. Cards gain a soft shadow (no lift: a moving card slips
+  /* Hover only where a pointer can hover. Cards gain a soft shadow by day and a brighter
+     border at night, where a shadow cannot show (no lift: a moving card slips
      out from under the pointer at its edge and flickers), and the top bar's links draw their
      underline from the left. */
   @media (hover: hover) and (pointer: fine) {
     .card { position: relative; }
     .card::after {
-      content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-      box-shadow: 0 0.5rem 1.5rem -0.75rem light-dark(rgb(46 38 30 / 0.28), rgb(0 0 0 / 0.6));
+      content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+      border: 1px solid light-dark(transparent, var(--line-strong));
+      box-shadow: 0 0.5rem 1.5rem -0.75rem light-dark(rgb(46 38 30 / 0.28), transparent);
       opacity: 0; transition: opacity 160ms cubic-bezier(0.23, 1, 0.32, 1);
     }
     .card:hover::after { opacity: 1; }
