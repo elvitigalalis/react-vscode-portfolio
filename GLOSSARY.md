@@ -181,6 +181,14 @@ _Avoid_: Usual wake, average wake, chronotype
 A recurring time Lisul protects, such as gym or lunch, with set days, an ideal time, a flex window and a defence level (flexible or firm).
 _Avoid_: Routine, recurring task, ritual
 
+**Habit day**:
+The day a habit tick counts for, running 4 am to 4 am local, so a 1 am tick belongs to the day before.
+_Avoid_: Calendar day, streak day
+
+**Habit rate**:
+How many of a habit's last seven scheduled days it was done, shown as "5 of last 7"; never a streak.
+_Avoid_: Streak, score, chain
+
 **Morning plan**:
 The proposal Claude makes on its own at 6:07 each morning, delivered with the morning brief for Lisul to approve or skip, or approved at once with Auto-approve on.
 _Avoid_: Auto-plan, daily run, routine

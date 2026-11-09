@@ -77,6 +77,8 @@ tasks jumping days across time zones.
 - **Clash mark:** an `@3:45` task that lands inside a busy event shows ⚠ ("Clashes with …").
 - **The Log sits under the Someday lists:** a closed section holding finished Someday tasks, newest
   first. Completing one moves it there; ↺ puts it back on its list.
+- **Habits sit under the week** ([sheet-habits.md](sheet-habits.md)): a ✓ for today, the last
+  seven days as dots and "5 of last 7", a rate rather than a streak.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
