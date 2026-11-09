@@ -32,7 +32,7 @@ const { description, summary, video, screenshot, demo, code } = entry.data;
   <article class="writeup">
     <header class="writeup-head">
       <a class="back" href="/#projects">← All projects</a>
-      <h1><a href={p.url}>{p.title}</a></h1>
+      <h1><a href={p.url} style={`--vt: title-${p.slug}`}>{p.title}</a></h1>
       <p class="meta">{p.role && <>{p.role} · </>}{p.dates}</p>
       <Tags items={p.stack} />
       <p class="links"><a class="btn primary" href={code ?? p.url}>Code</a>{demo && <a class="btn" href={demo.url}>{demo.label}</a>}</p>

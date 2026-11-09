@@ -4,6 +4,15 @@
    strong ease-out, so nothing shifts the layout and nothing waits on it. Text never fades: the
    page reads at full contrast at every scroll position. */
 @media (prefers-reduced-motion: no-preference) {
+  /* Page to page: a short crossfade in browsers with cross-document view transitions (the rest
+     just navigate). A project's title carries over from its card to its write-up. The "page" type
+     keeps these timings to navigations, not to view transitions a page starts itself. */
+  @view-transition { navigation: auto; types: page; }
+  html:active-view-transition-type(page)::view-transition-group(*) {
+    animation-duration: 220ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .card h3 a, .writeup-head h1 a { display: inline-block; view-transition-name: var(--vt, none); }
+
   /* A project's photo rises 12px and fades in as its card scrolls into view. Scroll-driven, so no
      script; where unsupported it is simply there. */
   @supports (animation-timeline: view()) {
