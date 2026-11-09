@@ -75,6 +75,8 @@ tasks jumping days across time zones.
   leave less free time between 9:30 am and 10 pm (today: from now). Then it reads `2h45 / 3h10`.
   All-day events and events marked free in Google don't count. Amber within 15 %, red over.
 - **Clash mark:** an `@3:45` task that lands inside a busy event shows ⚠ ("Clashes with …").
+- **The Log sits under the Someday lists:** a closed section holding finished Someday tasks, newest
+  first. Completing one moves it there; ↺ puts it back on its list.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.

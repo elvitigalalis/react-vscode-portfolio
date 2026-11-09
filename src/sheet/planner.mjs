@@ -6,6 +6,7 @@ import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
   positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
+  somedayLog,
 } from "./logic.mjs";
 import { sourceOf, dueLevel, dayWindow, openView, followToday } from "./glance.mjs";
 import { hostToast } from "./toast-host.mjs";
@@ -547,7 +548,8 @@ function windDownMark() {
 
 function listColumn(name) {
   // A project's steps show under it (project-list.mjs), not in Someday.
-  const list = tasksIn(name).filter((t) => !t.project_id);
+  // Done ones wait in the Log below the lists (somedayLog).
+  const list = tasksIn(name).filter((t) => !t.project_id && !t.done);
   // An empty list always shows its "+ Add a task" hint.
   const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map((t) => taskRow(t, null)), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
@@ -570,6 +572,10 @@ export function render() {
   const newList = el("input", { className: "sheet-add sheet-newlist", type: "text", autocomplete: "off", placeholder: "New list…", ariaLabel: "New Someday list" });
   $("[data-someday]").replaceChildren(...[...state.lists].map(listColumn), el("section", { className: "sheet-list" }, newList));
   $("[data-someday-title]").hidden = false;
+  const log = somedayLog(state.tasks.values());
+  $("[data-log]").hidden = !log.length;
+  $("[data-log-count]").textContent = String(log.length);
+  $("[data-log-list]").replaceChildren(...log.map((t) => taskRow(t, null)));
 
   // Reconnect only helps when there is no Google token at all; a read that failed with one
   // (Google down, say) just shows the kept copy.
