@@ -56,7 +56,7 @@ export function schoolDue(tasks, days, today) {
     .filter((t) => !t.done && isSchoolWork(t) && !t.project_id)
     .map((t) => ({ task: t, due: dueOf(t), ...schoolMinutes(t) }))
     .filter(({ due }) => due && due <= last && (due >= first || (thisWeek && due < today)))
-    .sort((a, b) => a.due.localeCompare(b.due) || String(a.task.title).localeCompare(String(b.task.title)));
+    .sort((a, b) => a.due.localeCompare(b.due) || String(a.task.title).localeCompare(String(b.task.title), "en", { numeric: true }));
 }
 
 // A day's free minutes: the gaps between his busy calendar events (`dayEvents`, eventsOnDay's
