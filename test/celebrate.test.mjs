@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shouldBurst, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS } from "../src/sheet/celebrate.mjs";
+import { shouldBurst, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS, once } from "../src/sheet/celebrate.mjs";
 
 const never = () => 0.99;
 const always = () => 0;
@@ -82,4 +82,19 @@ test("a hung save holds the redraw only until the cap", async () => {
   assert.equal(await capped(wait(40, "slow"), 10), LATE);
   // The caps are short: the animation's about a second, the whole ✓ a few.
   assert.ok(ANIM_MS <= 1500 && SAVE_MS <= 5000 && ANIM_MS < SAVE_MS);
+});
+
+test("a second ✓ while the first still saves runs nothing", async () => {
+  const busy = new Set();
+  let saves = 0;
+  const save = async () => { saves++; await wait(20); };
+  const [a, b] = await Promise.all([once(busy, "task:t2", save), once(busy, "task:t2", save)]);
+  assert.deepEqual([a, b, saves], [true, false, 1]);
+  // Another task isn't blocked, and the same one can run again once it has landed.
+  assert.equal(await once(busy, "task:t3", save), true);
+  assert.equal(await once(busy, "task:t2", save), true);
+  assert.equal(saves, 3);
+  // A save that throws still frees its key.
+  await assert.rejects(once(busy, "task:t4", async () => { throw new Error("boom"); }));
+  assert.equal(busy.size, 0);
 });

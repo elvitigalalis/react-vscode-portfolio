@@ -56,6 +56,14 @@ export const LATE = Symbol("late");
 export const wait = (ms, value) => new Promise((r) => setTimeout(r, ms, value));
 export const capped = (work, ms) => Promise.race([work, wait(ms, LATE)]);
 
+// Runs `fn` for `key` unless a run for that key is still going (a double tap), so one ✓ saves
+// once. True when it ran.
+export async function once(busy, key, fn) {
+  if (busy.has(key)) return false;
+  busy.add(key);
+  try { await fn(); return true; } finally { busy.delete(key); }
+}
+
 // The site's own greens and its amber (global.css), so it reads as part of the page.
 export const COLORS = ["--accent", "--leaf-1", "--leaf-2", "--leaf-3", "--warn"];
 export const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";

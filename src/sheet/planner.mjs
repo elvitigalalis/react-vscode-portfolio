@@ -288,20 +288,26 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
 // ✓ on a task, from its row, a key, a swipe, the Now/Next line or focus mode. Reopening a done
 // task just saves and redraws. `save` defaults to toggleDone (focus mode passes its outbox).
 // A Someday row leaves for the Log once done, so it fades out and the Log's count pops.
+// A second tap while the first still saves does nothing (cheer.once, keyed by task or event).
+const inFlight = new Set();
 export async function checkOff(id, { li = rowOf(id), save = () => toggleDone(id), quiet = false, from } = {}) {
   const t = state.tasks.get(id);
-  if (!t || li?.classList.contains("is-checking")) return;
-  if (t.done || !li) { await save(); render(); return; }
-  const moment = cheer.momentOf(t, state.tasks.values(), state.today);
-  const leave = Boolean(li.closest(".sheet-list"));
-  await playOff(li, save, { leave, moment, quiet, ...(from ? { from } : {}) });
-  if (!state.tasks.get(id)?.done) return;
-  if (moment) {
-    const words = toast.querySelector("[data-toast-text]");
-    if (!toast.hidden && words.textContent.startsWith("Done:")) words.textContent = `${cheer.MOMENT_WORDS[moment]} ${words.textContent}`;
-    if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
-  }
-  if (leave) cheer.pop($("[data-log-count]"));
+  if (!t) return;
+  await cheer.once(inFlight, `task:${id}`, async () => {
+    if (t.done || !li) { await save(); render(); return; }
+    const moment = cheer.momentOf(t, state.tasks.values(), state.today);
+    const leave = Boolean(li.closest(".sheet-list"));
+    const { saving } = await playOff(li, save, { leave, moment, quiet, ...(from ? { from } : {}) });
+    if (state.tasks.get(id)?.done) {
+      if (moment) {
+        const words = toast.querySelector("[data-toast-text]");
+        if (!toast.hidden && words.textContent.startsWith("Done:")) words.textContent = `${cheer.MOMENT_WORDS[moment]} ${words.textContent}`;
+        if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
+      }
+      if (leave) cheer.pop($("[data-log-count]"));
+    }
+    await saving;
+  });
 }
 
 // After a ✓, focus goes back to the row (`sel` in it), or to the row now in its place when it
@@ -493,15 +499,18 @@ export async function toggleEventTodo(target, { quiet = false } = {}) {
   const { key, day, row } = eventRowOf(target);
   if (!row) return;
   const li = target.closest?.(".sheet-evtodo") ?? root.querySelector(`.sheet-day[data-day="${day}"] .sheet-evtodo[data-key="${CSS.escape(key)}"]`);
-  if (li?.classList.contains("is-checking")) return;
   const save = async () => {
     try {
       await saveEventTodo(key, day, { done: !row.done });
       if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
     } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
   };
-  if (row.done || !li) { await save(); render(); } else await playOff(li, save, { quiet, ...(target.matches?.(".sheet-nownext-done") ? { from: target } : {}) });
-  root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
+  const ran = await cheer.once(inFlight, `event:${day}:${key}`, async () => {
+    if (row.done || !li) { await save(); render(); return; }
+    const { saving } = await playOff(li, save, { quiet, ...(target.matches?.(".sheet-nownext-done") ? { from: target } : {}) });
+    await saving;
+  });
+  if (ran) root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
 }
 
 let evMenuFor = null;
