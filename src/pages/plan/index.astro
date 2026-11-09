@@ -267,6 +267,13 @@ import "../../styles/plan-settings.css";
           <p class="sheet-dialog-end"><label for="sheet-cap">Hours a day</label> <input id="sheet-cap" class="sheet-cap" type="number" min="1" max="16" step="0.5" inputmode="decimal"> <span class="small" role="status" data-cap-note></span> <button type="button" class="sheet-btn primary" data-act="save-cap">Save</button></p>
         </section>
 
+        <!-- Completion sound (docs/sheet.md, "Completion"): src/sheet/planner.mjs keeps it in this browser. -->
+        <section class="sheet-settings-part" aria-labelledby="sheet-sound-title">
+          <h3 id="sheet-sound-title">Completion sound</h3>
+          <p class="small">A soft tick when you check something off, on this device only. It follows the silent switch.</p>
+          <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="sound" aria-pressed="false">Sound</button></p>
+        </section>
+
         <section class="sheet-settings-part" aria-labelledby="sheet-sleep-title">
           <!-- Wind-down (docs/sheet-v5.md, "Wind-down"): src/sheet/bedtime-settings.mjs fills it. -->
           <h3 id="sheet-sleep-title">Sleep</h3>

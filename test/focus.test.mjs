@@ -2,7 +2,7 @@
 // minutes it records into actuals, +15 min, the retried writes and Stuck's message.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusTarget, startSession, focusClock, countdown, readSession, focusActual, extendFocus, drainOutbox, readOutbox, stuckMessage } from "../src/sheet/focus.mjs";
+import { focusTarget, startSession, focusClock, countdown, readSession, focusActual, extendFocus, drainOutbox, readOutbox, stuckMessage, outboxAfter, serialDrain } from "../src/sheet/focus.mjs";
 
 const TZ = "America/New_York";
 const at = (iso) => new Date(iso);
@@ -104,4 +104,36 @@ test("Stuck asks Claude for 2-4 smaller to-dos today, naming the task and its fi
     "I'm stuck on \"OS homework\". Break it into 2-4 smaller to-dos for today (2026-11-04), about 10-25 min each, in the order to do them, each a concrete action. Its first step was: open HW4, do Q1.");
   assert.equal(stuckMessage({ title: "OS homework" }, null, "2026-11-04"),
     "I'm stuck on \"OS homework\". Break it into 2-4 smaller to-dos for today (2026-11-04), about 10-25 min each, in the order to do them, each a concrete action.");
+});
+
+test("ops queued during a drain stay for the next one", () => {
+  const taken = [{ n: 1 }, { n: 2 }];
+  assert.deepEqual(outboxAfter(taken, [], [...taken, { n: 3 }]), [{ n: 3 }]);
+  assert.deepEqual(outboxAfter(taken, [{ n: 2 }], [...taken, { n: 3 }]), [{ n: 2 }, { n: 3 }]);
+  assert.deepEqual(outboxAfter(taken, [], taken), []);
+});
+
+test("a queue during a running drain gets a fresh drain after it", async () => {
+  const box = [];
+  const seen = [];
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let first = true;
+  const d = serialDrain(async () => {
+    const taken = [...box];
+    if (first) { first = false; await gate; }
+    seen.push(taken.map((o) => o.n));
+    box.splice(0, taken.length);
+  });
+  box.push({ n: 1 });
+  const a = d.sync();
+  assert.equal(d.sync(), a); // sync joins the running drain
+  await new Promise((r) => setTimeout(r, 0)); // the drain has read the box and waits
+  box.push({ n: 2 }); // focus Done queues while it runs
+  const b = d.after();
+  release();
+  await b;
+  // The second drain ran after the first and saw the new op: its promise means "done" landed.
+  assert.deepEqual(seen, [[1], [2]]);
+  assert.deepEqual(box, []);
 });

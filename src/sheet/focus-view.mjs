@@ -4,7 +4,7 @@
 // No sound and no animation beyond the bar's one-second step, which reduced motion turns off.
 import { SHEET } from "../site.mjs";
 import { focusClock, focusActual, extendFocus, startSession, stuckMessage, EXTEND_MIN } from "./focus.mjs";
-import { el, state, render } from "./planner.mjs";
+import { el, state, render, checkOff } from "./planner.mjs";
 
 let io, dialog, parts, timer;
 
@@ -72,6 +72,7 @@ function tick() {
 }
 
 // Done: the minutes since Start into actuals, then the task done, in that order (the outbox).
+// The task's row in the week plays its ✓ while the outbox saves (planner.mjs, checkOff).
 function done() {
   const s = io.getSession();
   if (!s) return dialog.close();
@@ -79,7 +80,8 @@ function done() {
   const row = task ? focusActual(s, task, new Date(), SHEET.timeZone) : null;
   io.setSession(null);
   dialog.close();
-  io.queue(...(row ? [{ op: "actual", row }] : []), { op: "done", task: s.task_id });
+  const save = () => io.queue(...(row ? [{ op: "actual", row }] : []), { op: "done", task: s.task_id });
+  if (task) checkOff(s.task_id, { save }).catch(console.error); else save();
 }
 
 // +15 min: the block's end moves when the time is free; the timer follows it.

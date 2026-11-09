@@ -80,12 +80,37 @@ tasks jumping days across time zones.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
-- **No badges or sounds.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)).
+- **No badges.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)). The only sound
+  is the optional completion tick (below), off by default.
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
 - The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
-  fades and is off under `prefers-reduced-motion`.
+  fades and the check-off below, all off under `prefers-reduced-motion`.
+
+### Completion
+
+Checking something off should feel good every time without getting old (src/sheet/celebrate.mjs).
+
+- **Every ✓** (a row's ✓, X or Space, a swipe, Now/Next ✓, focus Done, an event to-do): the old row
+  shows done at once, before the save ends. The ✓ springs (1 → 1.18 → 1, 350 ms) and draws itself
+  (250 ms), a strike runs through the title left to right (250 ms, line by line when it wraps) and
+  the words go muted. The page redraws only when both the save and the animation are over; any
+  other redraw meanwhile (a reload on coming back, say) waits and runs once after. A save that
+  fails puts the row back open and the status line says so, as before. Reopening (↺) has no motion.
+- **A Someday row** then fades out and the rows under it slide up (transform only); the Log's count
+  pops.
+- **Sometimes, a burst:** eight specks in the site's greens and amber fly from the ✓ (about
+  550 ms). Always on the third ✓ within ten minutes, otherwise about one in five. Never from a key.
+- **Big moments:** a Brightspace task (an assignment), or the last open task of today. Confetti for
+  1.2 s on one canvas, loaded only then, and the Undo toast reads "Assignment done." or "Day
+  cleared." before "Done: …". Clearing the day also pops the header's ✓.
+- **Shutdown complete** and **Approve / Approve all** in Plan today get the small burst.
+- **Sound:** Settings, Day, "Completion sound": two quiet rising notes per ✓, a soft chord for a
+  big moment. Off by default, kept in this browser, silent under the iPhone's silent switch.
+- **Reduced motion:** no spring, strike, specks, confetti or slide; the row fades to done in
+  150 ms and the toast's words stay. Effects never take input (`pointer-events: none`) and
+  nothing lasts past 1.5 s.
 
 ## On the phone
 
@@ -212,7 +237,7 @@ A skipped shutdown costs nothing: the nightly rollover does the same move.
 - **Never shown:** times, estimates, due dates, Someday lists, rollover counts, reflections, Google events,
   streaks, totals. "Last updated" shows the date only.
 - One small reward when every task today is done: the day's header gets a check mark (no
-  animation).
+  animation on /now; /plan's check-off is in "Completion" above).
 
 ## Out of scope for v1
 

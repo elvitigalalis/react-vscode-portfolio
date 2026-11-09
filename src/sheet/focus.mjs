@@ -107,6 +107,19 @@ export async function drainOutbox(ops, run) {
   return left;
 }
 
+// The outbox after a drain that took `taken` and left `left`: those, then whatever was queued
+// while it ran (queue only appends, so the new ops are the tail of `now`).
+export const outboxAfter = (taken, left, now) => [...left, ...now.slice(taken.length)];
+
+// One drain at a time. `sync` joins a running drain; `after` (a queue) runs a fresh drain once
+// the running one ends, so ops queued mid-drain are in it and its promise means they landed.
+export function serialDrain(drain) {
+  let running = null;
+  const sync = () => (running ??= Promise.resolve().then(drain).finally(() => { running = null; }));
+  const after = () => (running ? running.then(sync, sync) : sync());
+  return { sync, after };
+}
+
 // --- Stuck ---------------------------------------------------------------------------------
 
 // Stuck's message to Claude, sent through /plan's message box (message-box.mjs), so the to-dos it

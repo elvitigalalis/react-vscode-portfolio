@@ -4,7 +4,7 @@
 import { SHEET } from "../site.mjs";
 import { formatClock, localNow } from "./logic.mjs";
 import { nowNext, rowTitle } from "./now-next.mjs";
-import { actHooks, el, icon, render, renderHooks, rowsOn, state, toggleDone, toggleEventTodo } from "./planner.mjs";
+import { actHooks, checkOff, el, icon, renderHooks, rowsOn, state, toggleEventTodo } from "./planner.mjs";
 
 function draw(root) {
   root.querySelector(".sheet-nownext")?.remove();
@@ -31,6 +31,6 @@ export function setupNowNext(root) {
   setInterval(() => { if (state.week) draw(root); }, 60_000);
   actHooks["now-done"] = (e) => {
     const b = e.target.closest("[data-act]");
-    return b.dataset.key ? toggleEventTodo(b) : toggleDone(b.dataset.task).then(render);
+    return b.dataset.key ? toggleEventTodo(b) : checkOff(b.dataset.task, { from: b });
   };
 }

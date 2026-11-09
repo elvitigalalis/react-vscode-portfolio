@@ -6,6 +6,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { localNow, byPosition } from "./logic.mjs";
 import { el, state, render, load, completeTask, keyHooks, actHooks, renderHooks, failed } from "./planner.mjs";
+import { burst } from "./celebrate.mjs";
 import { shutdownAt } from "./plan-today.mjs";
 
 let dialog;
@@ -74,13 +75,16 @@ async function open() {
   dialog.showModal();
 }
 
-async function finish() {
+// Finish: the day's changes saved, then "Shutdown complete" with a small burst from the button.
+async function finish(e) {
+  const at = e?.currentTarget?.getBoundingClientRect();
   try {
     for (const t of todays()) if (done.get(t.id) !== t.done) await completeTask(t.id, done.get(t.id));
     await api.shutDown(today, reflection.trim() || null);
     await load();
     step = "today";
     draw(true);
+    if (at) burst(at, dialog);
   } catch (e) { failed(e); }
 }
 
