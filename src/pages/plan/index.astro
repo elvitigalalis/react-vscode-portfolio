@@ -465,10 +465,12 @@ import "../../styles/plan-settings.css";
   const setupSwipe = (root) => { if (matchMedia("(pointer: coarse)").matches) import("../../sheet/swipe-ui.mjs").then((m) => m.setupSwipe(root)); };
   // Habits (docs/sheet-habits.md) load after first paint; the row draws once they arrive.
   const setupHabits = (root) => import("../../sheet/habit-list.mjs").then((m) => m.setupHabits(root));
+  // School load (docs/sheet-glance.md) loads after sign-in, off the first load.
+  const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root), console.error);
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe], settings);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad], settings);
 </script>
