@@ -74,6 +74,11 @@ export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 // at 500 with no ellipsis. Feed titles and "Add to my day" both go through it.
 export const cutTitle = (s) => String(s ?? "").trim().slice(0, 500).trim();
 
+// Finished Someday tasks, most recently touched first: the Log under the Someday lists. A
+// project's steps stay under their project.
+export const somedayLog = (tasks) => [...tasks].filter((t) => t.day === null && t.done && !t.project_id)
+  .sort((a, b) => String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? "")));
+
 // --- Typed details -----------------------------------------------------------------------
 
 const EST = /(?:^|\s)~(?:(\d+)h)?(?:(\d+)m?)?(?=\s|$)/i;

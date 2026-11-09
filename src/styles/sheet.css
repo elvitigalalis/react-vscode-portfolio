@@ -564,3 +564,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-project summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; padding: 0.25rem 0; }
 .sheet-project-title { font-weight: 600; }
 .sheet-project-steps { margin: 0 0 0.5rem 1rem; }
+
+/* Finished Someday tasks, folded away under the lists. */
+.sheet-log { margin-top: 1rem; }
+.sheet-log summary { cursor: pointer; color: var(--muted); }
