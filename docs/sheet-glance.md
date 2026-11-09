@@ -126,6 +126,34 @@ the base spec is [sheet.md](sheet.md).
    - Public `#workit` and `#micromouse` tasks get their project's icon.
    - Nothing new is revealed: no times, estimates, totals or streaks.
 
+## School load
+
+Shovel's "time cushion" and Sunsama's workload threshold, for one student: is the school work due
+this week less than the time he has? Logic in `src/sheet/school-load.mjs` (covered by
+`test/school-load.test.mjs`); the view in `school-load-view.mjs` with `src/styles/school-load.css`,
+both loaded after sign-in, so /plan's first load doesn't carry them.
+
+- **School work** is an undone task from the Brightspace feed (`source = 'brightspace'`, pace.mjs's
+  "course"), or one tagged with a course code (`#cse316`, `#ams-261`) or `#school`, that has no
+  `at_time` and is not a project step. A timed Brightspace item (an exam, a class meeting) is an
+  event he goes to, so it takes free time instead.
+- **Due this week:** its `due`, else its `day`, falls in the week on screen. In the current week,
+  overdue work counts too.
+- **Hours due:** each item's `est_min`, or a guess from its title when it has none: project, paper,
+  essay or report 4h; exam or midterm 3h; homework, problem set, assignment or lab 2h; quiz 1h;
+  discussion, post, reading or survey 30m; anything else 1h. A guess shows as "~2h".
+- **Free hours:** for each day from today on, the calendar's free time from the day's start (now, on
+  today) to its shutdown line, less the fixed-time tasks on it (`at_time`, `est_min` long, 30m
+  without one) where no event already covers them. No workload cap applies: this is time, not
+  budget.
+- **The bar** sits above the week: "School this week · 8h45 due · 80h10 free" with a 6px meter in
+  the day load's colours (`loadShare`: near from 85%, over above 100%). It is hidden when nothing
+  is due and for past weeks. It opens to the items, earliest due first; one with no estimate shows
+  one-tap picks (30m, 1h, 2h, 4h, 8h) that set `est_min` at once, save behind with Undo, and put
+  the guess back if the save fails.
+- **Crunch week:** when hours due exceed free hours, the week title reads "Week of Nov 2 · Crunch
+  week" and the bar adds "· 16h35 short". Phones hide the title, so the bar shows "Crunch week".
+
 ## Out of scope
 
 - New colours beyond the site's palette. A colour switch like Todoist's is out: the one
