@@ -1,8 +1,18 @@
 /* The site's motion beyond the hero plant (global.css), for the home page, the write-ups and the
    other content pages; the planner pages leave it out. Everything sits inside a no-preference
    query, so under reduced motion the site is still. Only transform and opacity move, with one
-   strong ease-out, so nothing shifts the layout and nothing waits on it. */
+   strong ease-out, so nothing shifts the layout and nothing waits on it. Text never fades: the
+   page reads at full contrast at every scroll position. */
 @media (prefers-reduced-motion: no-preference) {
+  /* A project's photo rises 12px and fades in as its card scrolls into view. Scroll-driven, so no
+     script; where unsupported it is simply there. */
+  @supports (animation-timeline: view()) {
+    .card img { animation: rise linear both; }
+    /* A rule of its own: the minifier would fold the timeline into the shorthand, which browsers
+       reject, and the shorthand resets both longhands, so they must come after it. */
+    .card > img { animation-timeline: view(); animation-range: entry 0% cover 30%; }
+  }
+
   /* Hover only where a pointer can hover. Cards lift 2px over a soft shadow, and the top bar's
      links draw their underline from the left. */
   @media (hover: hover) and (pointer: fine) {
@@ -28,3 +38,4 @@
   .btn, .theme-toggle { transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1); }
   .btn:active, .theme-toggle:active { transform: scale(0.97); }
 }
+@keyframes rise { from { opacity: 0; translate: 0 12px; } }
