@@ -110,3 +110,17 @@
   :is(.sheet-task, .sheet-evtodo) > *, .sheet-day { transition: translate 0.15s ease-out; }
   .is-swiping > *, .is-day-swiping { transition: none; }
 }
+
+/* Checking off (src/sheet/celebrate.mjs, docs/sheet.md "Completion"), here so the gym page and
+   /now don't carry it. The row being checked shows its ✓ in the accent, its words go muted while
+   a strike runs through them, and specks or confetti fly over the page. The script adds none of
+   it under reduced motion. */
+.sheet-row.is-checking .sheet-check { opacity: 1; color: var(--accent); }
+.sheet-row.is-checking .sheet-check path { stroke-dasharray: 1 1; }
+.sheet-row.is-checking :is(.sheet-title, .sheet-when, .sheet-details) { color: var(--muted); }
+.sheet-strike { background: linear-gradient(currentColor 0 0) no-repeat 0 58% / 0% 1px; }
+.sheet-speck { position: fixed; z-index: 20; border-radius: 50%; pointer-events: none; }
+.sheet-confetti { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 20; pointer-events: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-row.is-checking :is(.sheet-title, .sheet-when, .sheet-details) { transition: color 0.25s ease-out; }
+}
