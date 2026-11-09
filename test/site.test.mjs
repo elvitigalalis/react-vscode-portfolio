@@ -496,6 +496,38 @@ test("the hero shows a grown plant beside the text, hidden from screen readers, 
   assert.doesNotMatch(outside, /\.plant[^{]*\{[^}]*animation/, "no plant animation outside that query");
 });
 
+test("site motion is a page crossfade, photo reveals and hover feedback, off under reduced motion, never on text or the planner", () => {
+  const styles = (html) => [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map((m) => m[1]).join("");
+  const css = styles(home);
+  // The no-preference blocks, nested braces included, and everything outside them.
+  const calm = /@media\s*\(prefers-reduced-motion:\s*no-preference\)\s*\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*\})*\}/g;
+  const inside = (css.match(calm) ?? []).join("");
+  const outside = css.replace(calm, "");
+  assert.match(inside, /@view-transition\s*\{[^}]*navigation:\s*auto/, "cross-document page transitions are on");
+  assert.match(inside, /animation-timeline:\s*view\(\)/, "the reveal follows the scroll, with no script");
+  // Print has no scroll, so the reveal is for screens only; a printed page shows every photo whole.
+  const screen = /@media\s+screen\s*\{(?:[^{}]|\{[^{}]*\})*\}/g;
+  assert.match((inside.match(screen) ?? []).join(""), /\.card img\s*\{[^{}]*animation:/, "the reveal sits in a screen query");
+  assert.doesNotMatch(inside.replace(screen, ""), /\.card[^{}]*img\s*\{[^{}]*animation/, "no photo reveal outside the screen query");
+  for (const [what, re] of [["page transition", /@view-transition/], ["animation", /[{;]\s*animation(-timeline)?:/], ["transition", /[{;]\s*transition:/], ["view-transition-name", /view-transition-name/]]) {
+    assert.doesNotMatch(outside, re, `no ${what} outside a no-preference query`);
+  }
+  // Only photos fade in: text keeps full contrast at every scroll position, and the hero never waits.
+  const animated = [...inside.matchAll(/([^{}]+)\{[^{}]*\banimation:/g)].map((m) => m[1].trim());
+  assert.ok(animated.length > 0);
+  for (const sel of animated) assert.match(sel, /^(\.card img|\.plant \.[sf])$/, `${sel}: only photos and the plant animate`);
+  // The planner pages keep their own, quieter motion rules.
+  for (const page of ["plan/index.html", "now/index.html"]) {
+    assert.doesNotMatch(styles(readFileSync(join(dist, page), "utf8")), /view-transition|\brise\b/, `${page}: no site motion`);
+  }
+  // Each project's title carries over from its card to its write-up under the same name.
+  for (const slug of writeupSlugs()) {
+    const name = `--vt: title-${slug}`;
+    assert.ok(home.includes(name), `${slug}: card title named`);
+    assert.ok(writeupHtml(slug).includes(name), `${slug}: write-up title named`);
+  }
+});
+
 test("the first screen names the most recent past role beside the current one", () => {
   const hero = home.match(/<section class="hero[^"]*"[\s\S]*?<\/section>/)[0];
   const past = resume.experience.find((e) => !/Present$/.test(e.dates));

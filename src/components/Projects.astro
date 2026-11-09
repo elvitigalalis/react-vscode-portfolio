@@ -37,7 +37,7 @@ const writeups = new Map((await getCollection("writeups")).map((w) => [w.id, w.d
         )}
         <div>
           <p class="dates">{p.dates}</p>
-          <h3><a href={p.url}>{p.title}</a>{p.role && <span class="role"> · {p.role}</span>}</h3>
+          <h3><a href={p.url} style={`--vt: title-${p.slug}`}>{p.title}</a>{p.role && <span class="role"> · {p.role}</span>}</h3>
           {extra.summary && <p class="summary">{extra.summary}</p>}
           <ul class="bullets">{p.bullets.map((b) => <li>{b}</li>)}</ul>
           <Tags items={p.stack} />

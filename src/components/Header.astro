@@ -26,6 +26,7 @@ import { resume } from "../data/resume";
 
 <!-- The Plan link for a signed-in owner, and the light/dark switch. After a pick, the browser bar
      takes the page's colour instead of following the OS. -->
+{/* On pageshow it re-syncs, after the head's script has re-read the theme of a page that Back/Forward restored from the bfcache. */}
 <script is:inline data-topbar>
   (() => {
     try { if (localStorage.getItem("sheet.session")) document.querySelector("[data-owner]").hidden = false; } catch {}
@@ -43,5 +44,6 @@ import { resume } from "../data/resume";
       try { localStorage.setItem("theme", root.dataset.theme); } catch {}
       sync();
     });
+    addEventListener("pageshow", sync);
   })();
 </script>
