@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, laterThisWeek, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
@@ -196,6 +196,10 @@ test("the carried-over note and the public view's redaction", () => {
   assert.equal(carriedNote(0), null);
   assert.equal(carriedNote(1), "Carried over once");
   assert.equal(carriedNote(3), "Carried over 3 times");
+  assert.equal(laterThisWeek("2026-11-09"), "2026-11-15"); // Mon → Sun
+  assert.equal(laterThisWeek("2026-11-13"), "2026-11-15"); // Fri → Sun
+  assert.equal(laterThisWeek("2026-11-14"), null); // Sat: Sun is tomorrow
+  assert.equal(laterThisWeek("2026-11-15"), null);
   assert.equal(barWidth(2), 4);
   assert.equal(barWidth(40), 24);
   assert.equal(rightNow({ public: true, title: "WorkIt auth" }), "WorkIt auth");

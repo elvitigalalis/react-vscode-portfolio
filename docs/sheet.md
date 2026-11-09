@@ -175,8 +175,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
 - **Tasks are public by default.** Private ones carry a small "private" label in the planner.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To
   tomorrow, To next week, Day before, Day after, To Someday, Public/Private, Clear due date (when
-  it has one), Delete. This menu is also the keyboard and
-  screen-reader way to do everything drag does.
+  it has one), Delete. A task carried over twice or more leads with where it could go
+  (Rollover). This menu is also the keyboard and screen-reader way to do everything drag does.
 - **Drag** a task within a day, between days, or to and from Someday (Pointer Events). On touch,
   hold a task for 0.3 s to pick it up, so a swipe still scrolls. The dragged task leaves a 25 % ghost.
 - **Hover** shows a check circle at the row's right end; clicking it completes the task.
@@ -188,6 +188,10 @@ Under 48 rem, one day shows at a time (above). On top of that:
   its `rolls` count goes up by one.
 - The task shows a neutral "carried over" tag in its details, the same at every roll; the count
   is only in the tag's hover text. Its title keeps full ink: a rolled task isn't made to look worse.
+- **Where it could go:** a task carried over twice or more opens its menu with "Carried over a few
+  times. Where should it go?" and Tomorrow, Later this week (the week's last day, when that is
+  past tomorrow), Someday and Drop. Drop never deletes: the task moves to the Someday list
+  "Dropped", with Undo, and can be dragged back any time.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.

@@ -188,6 +188,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 .sheet-menu button:hover, .sheet-menu button:focus-visible { background: var(--chip); }
 .sheet-menu button[hidden] { display: none; }
+.sheet-menu-triage { border-bottom: 1px solid var(--line); margin-bottom: 0.3rem; padding-bottom: 0.3rem; }
+.sheet-menu-triage p { margin: 0; padding: 0.3rem 0.6rem 0.2rem; font-size: 0.75rem; color: var(--muted); max-width: 13rem; }
 .sheet-toast {
   position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 5;
   background: var(--fg); color: var(--bg); border-radius: 0.4rem; padding: 0.5rem 0.9rem; font-size: 0.875rem;

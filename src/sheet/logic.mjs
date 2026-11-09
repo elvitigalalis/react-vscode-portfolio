@@ -369,6 +369,10 @@ export function visibleEvents(dayEvents, max, nowMin = null) {
 // no count on the row. The count is only in the tag's hover text.
 export const carriedNote = (rolls) => (rolls >= 1 ? `Carried over ${rolls === 1 ? "once" : `${rolls} times`}` : null);
 
+// A carried-over task's "Later this week": the week's last day, when that is past tomorrow;
+// else null (the choice is hidden).
+export const laterThisWeek = (today) => { const end = addDays(weekStart(today), 6); return end > addDays(today, 1) ? end : null; };
+
 // --- The public view ---------------------------------------------------------------------
 
 // Bar width in ch for a private task of `len` characters: never empty, never past the column.

@@ -22,7 +22,7 @@ A Google Calendar event shown as a row in its day's list, in time order among th
 _Avoid_: Calendar task, event row
 
 **Someday list**:
-A named column of tasks with no day. "Inbox" is the one that takes rolled-out tasks.
+A named column of tasks with no day. "Inbox" is the one that takes rolled-out tasks; "Dropped" holds tasks he dropped from a carried-over task's menu (never deleted).
 _Avoid_: Backlog, capture list
 
 **Due date**:

@@ -4,7 +4,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
-  positionBetween, byPosition, carriedNote, blockOnComplete, zonedIso, formatClock, formatSpan,
+  positionBetween, byPosition, carriedNote, laterThisWeek, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
   somedayLog,
 } from "./logic.mjs";
@@ -1008,16 +1008,25 @@ function openMenu(id, anchor) {
   const t = state.tasks.get(id);
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
   menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
+  // Where it could go: a task carried over twice or more leads with Tomorrow, Later this week,
+  // Someday and Drop; the plain "To tomorrow" and "To Someday" step aside meanwhile.
+  const triage = Boolean(t.day && !t.done && t.rolls >= 2);
+  menu.querySelector("[data-triage]").hidden = !triage;
+  menu.querySelector('[data-triage] [data-move="this-week"]').hidden = !laterThisWeek(now().day);
+  for (const kind of ["tomorrow", "someday"]) menu.querySelector(`:scope > [data-move="${kind}"]`).hidden = triage;
   const r = anchor.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 365)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
-  menu.querySelector("button").focus();
+  menu.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
+  menu.querySelector("button:not([hidden], [hidden] *)").focus();
 }
+
+// Drop never deletes: the task goes to the Someday list "Dropped", where it can be picked back up.
+export const DROPPED = "Dropped";
 
 // What each task action is, for the status line when it fails.
 const ACTION_WORDS = { today: "move %s to today", tomorrow: "move %s to tomorrow", "next-week": "move %s to next week", "day-before": "move %s a day earlier",
-  "day-after": "move %s a day later", someday: "move %s to Someday", visibility: "change who sees %s", "clear-due": "clear the due date of %s", delete: "delete %s" };
+  "day-after": "move %s a day later", "this-week": "move %s to later this week", someday: "move %s to Someday", drop: "drop %s", visibility: "change who sees %s", "clear-due": "clear the due date of %s", delete: "delete %s" };
 
 async function menuAction(kind) {
   const id = menuFor;
@@ -1044,7 +1053,9 @@ async function runAction(id, kind) {
   if (kind === "day-before" || kind === "day-after") {
     await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
   }
+  if (kind === "this-week") await moveTask(id, { day: laterThisWeek(today) ?? addDays(today, 1) });
   if (kind === "someday") await moveTask(id, { list: "Inbox" });
+  if (kind === "drop") await moveTask(id, { list: DROPPED });
   if (kind === "visibility") await toggleVisibility(id);
   if (kind === "clear-due") await clearDue(id);
   if (kind === "delete") await removeTask(id);

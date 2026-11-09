@@ -89,6 +89,14 @@ import "../../styles/plan-settings.css";
     </details>
 
     <div class="sheet-menu" data-menu popover>
+      <!-- A task carried over twice or more leads with where it could go instead (docs/sheet.md, Rollover). -->
+      <div class="sheet-menu-triage" data-triage hidden>
+        <p>Carried over a few times. Where should it go?</p>
+        <button type="button" data-move="tomorrow">Tomorrow</button>
+        <button type="button" data-move="this-week">Later this week</button>
+        <button type="button" data-move="someday">Someday</button>
+        <button type="button" data-move="drop">Drop (to Someday, "Dropped")</button>
+      </div>
       <button type="button" data-move="details">Details…</button>
       <button type="button" data-move="today">To today</button>
       <button type="button" data-move="tomorrow">To tomorrow</button>
