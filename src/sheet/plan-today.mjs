@@ -43,9 +43,10 @@ function loadBar(d) {
 // opens (`open`) a list of its undone untimed tasks; a tap moves one to the next day. It warns and
 // never blocks. `toggle` flips `open`; `where` names the note ("week", "dialog") so focus can
 // find it again after a redraw. Null when the day isn't over.
-const refocus = (where) => {
+// The toggle keeps focus, as a disclosure button does; after a move, the next task in the list.
+const refocus = (where, pick = false) => {
   const box = document.querySelector(`[data-over="${where}"]`);
-  box?.querySelector(".sheet-over-pick button, .sheet-link")?.focus();
+  ((pick && box?.querySelector(".sheet-over-pick button")) || box?.querySelector(".sheet-link"))?.focus();
 };
 export function overNote(d, open, toggle, where) {
   const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now()), dayCapacity(d).free);
@@ -62,7 +63,7 @@ export function overNote(d, open, toggle, where) {
   const picks = tasksOn(d).filter((t) => !t.done && !spanOf(t)).map((t) => {
     const b = el("button", { type: "button", ariaLabel: `Move ${t.title} to ${next}` },
       el("span", { textContent: t.title }), t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null);
-    b.onclick = () => taskAction(t.id, "day-after").then(() => refocus(where));
+    b.onclick = () => taskAction(t.id, "day-after").then(() => refocus(where, true));
     return el("li", {}, b);
   });
   out.append(picks.length ? el("ul", { className: "sheet-over-pick" }, ...picks) : el("p", { className: "sheet-over", textContent: "Nothing untimed left to move." }));
