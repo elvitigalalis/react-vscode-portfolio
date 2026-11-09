@@ -394,7 +394,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-seg.is-busy { background: color-mix(in srgb, var(--muted) 55%, transparent); }
 .sheet-seg.is-block { background: var(--accent); }
 .sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
-.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--danger); }
+/* Red is for what needs acting on (overdue, over capacity, a failed feed); the time of day isn't. */
+.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); }
 /* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
 .sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
 .sheet-planbar .sheet-meter { height: 6px; border-radius: 3px; }
@@ -419,11 +420,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block.is-short .sheet-btn-approve { align-self: center; }
 /* The now line: 2px, a dot at the timeline's edge and its time in the hour gutter. It comes
    before the blocks, which cover it, so it never runs through their text. */
-.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--danger); margin-top: -1px; pointer-events: none; }
-.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--accent); margin-top: -1px; pointer-events: none; }
+.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .sheet-nowline span {
   position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
-  font-size: 0.6875rem; line-height: 1; color: var(--danger); font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem; line-height: 1; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .sheet-banner {
   display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.875rem;
