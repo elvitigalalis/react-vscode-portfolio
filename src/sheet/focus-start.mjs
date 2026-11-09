@@ -4,7 +4,7 @@
 // Start. Logic is in focus.mjs.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { focusTarget, readSession, readOutbox, drainOutbox, focusClock } from "./focus.mjs";
+import { focusTarget, readSession, readOutbox, drainOutbox, focusClock, outboxAfter, serialDrain } from "./focus.mjs";
 import { el, state, render, renderHooks, actHooks, completeTask } from "./planner.mjs";
 import { saveBlock } from "./plan-today.mjs";
 
@@ -35,20 +35,22 @@ async function run(op) {
   }
 }
 
-let draining = null;
-export function sync() {
-  return (draining ??= (async () => {
-    const left = await drainOutbox(readOutbox(get(OUTBOX_KEY)), run);
-    put(OUTBOX_KEY, left.length ? JSON.stringify(left) : null);
-    note.hidden = !left.length;
-    render();
-  })().finally(() => { draining = null; }));
-}
+// Ops queued while a drain runs stay in the outbox (outboxAfter) for the next one.
+const drain = serialDrain(async () => {
+  const taken = readOutbox(get(OUTBOX_KEY));
+  const left = outboxAfter(taken, await drainOutbox(taken, run), readOutbox(get(OUTBOX_KEY)));
+  put(OUTBOX_KEY, left.length ? JSON.stringify(left) : null);
+  note.hidden = !left.length;
+  render();
+});
+export const sync = drain.sync;
 
-// Queues writes behind any still waiting, then tries them all.
+// Queues writes behind any still waiting, then tries them all: in a fresh drain after one already
+// running, so the promise settles once these ops have been tried (focus Done's check-off waits
+// on it).
 export function queue(...ops) {
   put(OUTBOX_KEY, JSON.stringify([...readOutbox(get(OUTBOX_KEY)), ...ops]));
-  return sync();
+  return drain.after();
 }
 
 let view = null;
