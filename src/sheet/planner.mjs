@@ -273,8 +273,8 @@ const rowOf = (id) => [...root.querySelectorAll(`.sheet-task[data-id="${CSS.esca
 // or after cheer.SAVE_MS at most: a save that hangs (a slow network) mustn't freeze every redraw.
 // It then redraws again when it lands. A failed save needs nothing undone: state never changed,
 // so the redraw shows the row open again. Returns { saving }, the save itself.
-async function playOff(li, save, { leave = false, moment = null, quiet = false, from = li.querySelector(".sheet-check") } = {}) {
-  cheer.cheer(from, { moment, quiet });
+async function playOff(li, save, { leave = false, moment = null, quiet = false, why = {}, from = li.querySelector(".sheet-check") } = {}) {
+  cheer.cheer(from, { moment, quiet, why });
   const list = li.closest(".sheet-rows");
   const before = leave ? cheer.places(list) : null;
   const drew = nextDraw();
@@ -293,8 +293,9 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
 // task just saves and redraws. `save` defaults to toggleDone (focus mode passes its outbox).
 // A Someday row leaves for the Log once done, so it fades out and the Log's count pops.
 // A second tap while the first still saves does nothing (cheer.once, keyed by task or event).
+// `focusMin`: the minutes of the focus session that finished it (focus Done), for the burst.
 const inFlight = new Set();
-export async function checkOff(id, { li = rowOf(id), save = null, quiet = false, from } = {}) {
+export async function checkOff(id, { li = rowOf(id), save = null, quiet = false, from, focusMin = null } = {}) {
   const t = state.tasks.get(id);
   if (!t) return;
   await cheer.once(inFlight, `task:${id}`, async () => {
@@ -302,7 +303,8 @@ export async function checkOff(id, { li = rowOf(id), save = null, quiet = false,
     save ??= () => toggleDone(id, cheer.MOMENT_WORDS[moment] ?? null);
     if (t.done || !li) { await save(); render(); return; }
     const leave = Boolean(li.closest(".sheet-list"));
-    const { saving } = await playOff(li, save, { leave, moment, quiet, ...(from ? { from } : {}) });
+    const why = { first: cheer.firstToday(state.tasks.values(), state.today, SHEET.timeZone), rolls: t.rolls ?? 0, early: cheer.inside(t, focusMin) };
+    const { saving } = await playOff(li, save, { leave, moment, quiet, why, ...(from ? { from } : {}) });
     if (state.tasks.get(id)?.done) {
       if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
       if (leave) cheer.pop($("[data-log-count]"));

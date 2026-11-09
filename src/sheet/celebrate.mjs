@@ -2,25 +2,36 @@
 // it is clicked, while the save runs, and now and then a little more.
 // - Every ✓: the check springs and draws itself, the title is struck left to right and settles
 //   to the done look. A Someday row then fades out and the rows under it slide up (FLIP).
-// - Sometimes: a burst of eight specks from the check. Always on the third ✓ within ten minutes,
-//   otherwise about one in five (shouldBurst), so it stays a surprise.
+// - When it means something: a burst of eight specks from the check (shouldBurst) on the day's
+//   first ✓, a task carried over three times or more, one a focus session finished inside its
+//   estimate, or the third ✓ within ten minutes. Never by chance.
 // - Big moments: a course assignment, or the last open task of today. Confetti for 1.2 s (its own
 //   module, loaded only then) and a word in the Undo toast.
 // - An optional soft tick (Settings, Day, "Completion sound"), off by default.
 // Under prefers-reduced-motion only a 150 ms fade to the done look and the toast's words remain.
 // The pure helpers on top are tested in test/celebrate.test.mjs; nothing here touches the page
 // until a function is called, so planner.mjs stays importable in node.
+import { localNow } from "./logic.mjs";
 
 // --- Pure helpers ----------------------------------------------------------------------------
 
 export const STREAK_MS = 10 * 60_000;
-export const BURST_ODDS = 0.2;
+export const STUBBORN_ROLLS = 3;
 
-// Whether this ✓ gets the small burst. `history` is the times (ms) of earlier ✓s this visit.
-export function shouldBurst(history, now, rand = Math.random) {
+// Whether this ✓ gets the small burst. `history` is the times (ms) of earlier ✓s this visit;
+// `first`: nothing else is done today yet; `rolls`: how often the task was carried over;
+// `early`: a focus session finished it before its estimate ran out.
+export function shouldBurst(history, now, { first = false, rolls = 0, early = false } = {}) {
   const recent = history.filter((t) => now - t < STREAK_MS && t <= now).length;
-  return recent + 1 >= 3 || rand() < BURST_ODDS;
+  return recent + 1 >= 3 || first || rolls >= STUBBORN_ROLLS || early;
 }
+
+// No task was finished today yet (by done_at, on the owner's clock).
+export const firstToday = (tasks, today, timeZone) =>
+  ![...tasks].some((t) => t.done && t.done_at && localNow(new Date(t.done_at), timeZone).day === today);
+
+// A focus session of `minutes` ended the task before its estimate ran out.
+export const inside = (task, minutes) => minutes != null && task?.est_min > 0 && minutes < task.est_min;
 
 // A course task from Brightspace: the assignments, quizzes and labs the feed brings in.
 export const isAssignment = (task) => task?.source === "brightspace";
@@ -209,11 +220,12 @@ export function tick(big = false) {
 
 const history = [];
 
-// The extras of one ✓, at click time: confetti for a big moment, else maybe the burst, and the
-// tick. `quiet` (a key press) keeps only the big moment: keys are for going fast.
-export function cheer(from, { moment = null, quiet = false } = {}) {
+// The extras of one ✓, at click time: confetti for a big moment, else the burst when it means
+// something (`why`: shouldBurst's first, rolls, early), and the tick. `quiet` (a key press)
+// keeps only the big moment: keys are for going fast.
+export function cheer(from, { moment = null, quiet = false, why = {} } = {}) {
   const now = Date.now();
-  const burstNow = shouldBurst(history, now);
+  const burstNow = shouldBurst(history, now, why);
   history.push(now);
   while (history.length && now - history[0] > STREAK_MS) history.shift();
   if (moment) { confetti(from); tick(true); return; }

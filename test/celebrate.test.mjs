@@ -3,25 +3,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shouldBurst, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS, once } from "../src/sheet/celebrate.mjs";
+import { shouldBurst, firstToday, inside, STUBBORN_ROLLS, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS, once } from "../src/sheet/celebrate.mjs";
 
-const never = () => 0.99;
-const always = () => 0;
 const T = (id, day, extra = {}) => ({ id, day, done: false, source: null, ...extra });
 
 test("the burst comes on the third ✓ within ten minutes", () => {
   const now = 1_000_000_000;
-  assert.equal(shouldBurst([], now, never), false);
-  assert.equal(shouldBurst([now - 60_000], now, never), false);
-  assert.equal(shouldBurst([now - 120_000, now - 60_000], now, never), true);
+  assert.equal(shouldBurst([], now), false);
+  assert.equal(shouldBurst([now - 60_000], now), false);
+  assert.equal(shouldBurst([now - 120_000, now - 60_000], now), true);
   // Older ones don't count toward the streak.
-  assert.equal(shouldBurst([now - STREAK_MS - 1, now - 60_000], now, never), false);
+  assert.equal(shouldBurst([now - STREAK_MS - 1, now - 60_000], now), false);
 });
 
-test("otherwise the burst is a roll of the dice, about one in five", () => {
-  assert.equal(shouldBurst([], 0, always), true);
-  assert.equal(shouldBurst([], 0, () => 0.19), true);
-  assert.equal(shouldBurst([], 0, () => 0.2), false);
+test("otherwise only a ✓ that means something bursts, never by chance", () => {
+  for (let i = 0; i < 50; i++) assert.equal(shouldBurst([], i), false);
+  assert.equal(shouldBurst([], 0, { first: true }), true);
+  assert.equal(shouldBurst([], 0, { rolls: STUBBORN_ROLLS - 1 }), false);
+  assert.equal(shouldBurst([], 0, { rolls: STUBBORN_ROLLS }), true);
+  assert.equal(shouldBurst([], 0, { early: true }), true);
+});
+
+test("the day's first ✓ is the first with a done_at today on his clock", () => {
+  const tz = "America/New_York";
+  const today = "2026-11-03";
+  assert.equal(firstToday([], today, tz), true);
+  // Finished at 11:30 pm the night before (04:30 UTC on the 3rd) is yesterday.
+  assert.equal(firstToday([T("a", null, { done: true, done_at: "2026-11-03T04:30:00Z" })], today, tz), true);
+  assert.equal(firstToday([T("a", today, { done: true, done_at: "2026-11-03T15:00:00Z" })], today, tz), false);
+  // Done before done_at existed (null) tells nothing.
+  assert.equal(firstToday([T("a", today, { done: true, done_at: null })], today, tz), true);
+});
+
+test("a focus session finished it inside its estimate", () => {
+  assert.equal(inside({ est_min: 45 }, 30), true);
+  assert.equal(inside({ est_min: 45 }, 45), false);
+  assert.equal(inside({ est_min: null }, 10), false);
+  assert.equal(inside({ est_min: 45 }, null), false);
 });
 
 test("a Brightspace task is an assignment; others are not", () => {
