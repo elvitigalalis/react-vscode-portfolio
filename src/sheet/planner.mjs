@@ -277,7 +277,9 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
   const before = leave ? cheer.places(list) : null;
   const drew = nextDraw();
   const saving = Promise.resolve().then(save);
-  const anim = cheer.capped(cheer.playRow(li, { leave }), cheer.ANIM_MS);
+  // A hidden tab doesn't run animations, so a short timer stands in for one there; a tab hidden
+  // midway is covered by the cap.
+  const anim = document.hidden ? cheer.wait(150) : cheer.capped(cheer.playRow(li, { leave }), cheer.ANIM_MS);
   const got = await hold(cheer.capped(Promise.all([saving, anim]), cheer.SAVE_MS));
   if (got === cheer.LATE) saving.then(() => render(), () => render());
   await drew;
