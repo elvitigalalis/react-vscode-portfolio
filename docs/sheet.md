@@ -199,6 +199,11 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
 - **Load meter** in the header: `3h20 / 5h30`, the sum of today's undone estimates against the
   day's budget (5 h 30, or the free time around his events, as in the week). Amber within 15 %
   of it, red over it.
+- **Estimates against actuals:** once 8 finished tasks have an estimate and an actual time,
+  one line under the meter: "You usually take 1.4× your estimates (median of your last 12
+  finished tasks). Today's 4h of estimates is about 5h35." Below 8 it shows nothing
+  ([sheet-focus.md](sheet-focus.md), "Estimates against actuals"). A task Stopped sessions have
+  credited reads "40m focused of 1h30" in the list.
 - **Finish line:** "Done ≈ 4:40 pm · shutdown 5:00 pm". The shutdown line on the timeline can be
   dragged; it is saved per day. Undragged, it sits where wind-down starts (5 pm to 11 pm), else at
   5 pm ([sheet-v5.md](sheet-v5.md), "Shutdown follows wind-down").
