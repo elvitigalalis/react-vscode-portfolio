@@ -61,7 +61,11 @@ Code: `src/sheet/` (logic in `logic.mjs`, tested by `test/sheet.test.mjs`), the 
   their own Lighthouse budget (research/site-fonts.md), and a plant grown from the build's commit
   beside the hero that draws in once, only when the visitor allows motion (research/design-survey.md
   chose it as the site's one signature element). The plant is generated at build time, so it adds
-  no client JS.
+  no client JS. In 2026-11 a little more motion joined it, all CSS and all off under reduced
+  motion: a short crossfade between pages, with a project's title carrying over from its card to
+  its write-up; project photos that rise into place as their cards scroll in (text never fades);
+  and hover and press feedback on cards, top-bar links and buttons. The planner pages leave it
+  out.
 
 ### How a write-up's length is counted
 
