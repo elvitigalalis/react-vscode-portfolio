@@ -19,6 +19,7 @@ import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
 import * as cheer from "./celebrate.mjs";
+import { dayProgress, progressText, weekDone, weekTitle } from "./progress.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -73,6 +74,7 @@ export const state = {
   todos: [],        // event_todos rows: done, hidden and Claude's titles
   horizon: [],      // horizon_alloc rows from today on, each with its task's title
   states: new Map(), // horizon_state rows by task id
+  actuals: [],      // today's focus minutes (actuals rows: day, minutes), for the progress line
   eventsStale: false,
 };
 
@@ -577,11 +579,49 @@ function dayColumn(day, rows, items) {
     el("div", { className: "sheet-stamps-row" },
       el("p", { className: "sheet-stamps", textContent: marks }),
       day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
+      day === state.today ? progressMark(day) : null,
       day === state.today ? windDownMark() : null,
       day > state.today ? horizonDay(day) : null),
     ul);
   section.dataset.day = day;
   return section;
+}
+
+// Progress (progress.mjs): today's "3 of 7 done · 1h40 focused" after a small ring that closes
+// as today's tasks get done (a ring, so it doesn't read as the load meter's bar). Real progress
+// only: an empty day shows nothing.
+function progressMark(day) {
+  const p = dayProgress(state.tasks.values(), day, state.actuals);
+  const text = progressText(p);
+  if (!text) return null;
+  let ring = null;
+  if (p.total) {
+    ring = document.createElementNS(SVG, "svg");
+    ring.setAttribute("viewBox", "0 0 16 16");
+    ring.setAttribute("aria-hidden", "true");
+    ring.setAttribute("class", "sheet-progress-ring");
+    for (const cls of ["sheet-progress-track", "sheet-progress-fill"]) {
+      const c = document.createElementNS(SVG, "circle");
+      for (const [k, v] of Object.entries({ cx: 8, cy: 8, r: 6, pathLength: 1, class: cls })) c.setAttribute(k, String(v));
+      ring.append(c);
+    }
+    ring.lastChild.style.strokeDashoffset = String(1 - p.done / p.total);
+  }
+  // Each half stays whole ("1 of 4 done ·" / "1h40 focused") when a narrow column wraps it.
+  const halves = text.split(" · ").map((h, i, all) => el("span", { textContent: i < all.length - 1 ? `${h} · ` : h }));
+  return el("p", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
+}
+
+// The ring closes from where it was before the redraw (render() replaces it), so a ✓ shows as
+// the ring filling a step.
+let leftWas = null;
+function growProgress() {
+  const fill = root.querySelector(".sheet-day.is-today .sheet-progress-fill");
+  const left = fill ? Number(fill.style.strokeDashoffset) : null;
+  if (fill && leftWas != null && left !== leftWas && cheer.calm()) {
+    fill.animate([{ strokeDashoffset: leftWas }, { strokeDashoffset: left }], { duration: 400, easing: cheer.EASE_OUT });
+  }
+  leftWas = left;
 }
 
 // Oura (oura-day.mjs): a past day's or today's "☾ 82 · ⚡ 86 · 7h 40m", a button that opens the
@@ -647,8 +687,9 @@ export function render() {
   const rows = rowCount(items);
   $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])));
   $("[data-week]").style.setProperty("--rows", String(rows));
+  growProgress();
   const first = dayLabel(days[0]);
-  $("[data-week-title]").textContent = `Week of ${first.date}`;
+  $("[data-week-title]").textContent = weekTitle(first.date, weekDone(state.tasks.values(), days, SHEET.timeZone));
 
   for (const t of state.tasks.values()) if (t.day === null) state.lists.add(t.list);
   const newList = el("input", { className: "sheet-add sheet-newlist", type: "text", autocomplete: "off", placeholder: "New list…", ariaLabel: "New Someday list" });
@@ -681,7 +722,7 @@ export const renderHooks = [];
 // `scroll: false` keeps the week where it is (a reload on coming back, refreshStale).
 export async function load({ scroll = true } = {}) {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states] = await Promise.all([
+  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
@@ -693,7 +734,9 @@ export async function load({ scroll = true } = {}) {
     api.listSleepDays(addDays(days[0], -13), days[6]),
     api.listHorizon(now().day),
     api.listHorizonStates(),
+    api.listActualsOn(now().day),
   ]);
+  state.actuals = actuals;
   state.horizon = horizon;
   state.states = new Map(states.map((h) => [h.task_id, h]));
   state.sleepTimes = sleepTimes;

@@ -80,13 +80,19 @@ tasks jumping days across time zones.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
+- **Progress** (src/sheet/progress.mjs): counts that say what got done, never points, levels,
+  streaks or anything a miss takes away. Today's header line reads "3 of 7 done · 1h40 focused"
+  after a small accent ring that closes as today's tasks get done; the focused half (today's actuals,
+  from focus Done and Telegram's Finished) shows only when there is some, and an empty day shows
+  nothing. No head start is faked. The week title adds the tasks finished that week by done_at
+  ("Week of Nov 9 · 14 done", nothing at 0), Someday ones included.
 - **No badges.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)). The only sound
   is the optional completion tick (below), off by default.
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
 - The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
-  fades and the check-off below, all off under `prefers-reduced-motion`.
+  fades, the check-off below and the progress ring closing a step (400 ms), all off under `prefers-reduced-motion`.
 
 ### Completion
 

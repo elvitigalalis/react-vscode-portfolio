@@ -220,6 +220,8 @@ export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,
 export const listHorizon = (from) => rest(`horizon_alloc?select=task_id,day,minutes,over_min,task:tasks(title)&day=gte.${from}&order=day`).catch(() => []);
 export const listHorizonStates = () => rest("horizon_state?select=task_id,state,slack_min,short_min,remaining_min,finish_day").catch(() => []);
 export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
+// Progress (docs/sheet.md): the focus minutes logged on `day`. None before the table exists.
+export const listActualsOn = (day) => rest(`actuals?select=day,minutes&day=eq.${day}`).catch(() => []);
 
 // v5 H1, habits (Settings).
 export const listHabits = () => rest("habits?select=id,name,days,ideal,minutes,flex_min,defence,position&order=position,created_at");

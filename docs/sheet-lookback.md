@@ -11,7 +11,8 @@ unchanged.
 - **Sample gates.** Every insight returns null below its gate, and the screen then shows nothing
   at all, not a weak claim.
 - **Facts about tasks, not grades.** No scores, percentages, streaks or good/bad colours. Done is
-  one colour whatever the day was. Moved work is "moved" or "Tomorrow", never "missed".
+  one colour whatever the day was. (The week's plain counts on /plan, "3 of 7 done" and "14 done",
+  are progress, not grades: docs/sheet.md, "Progress".) Moved work is "moved" or "Tomorrow", never "missed".
 - **His own past only**, and every gap names a next move.
 - **No Oura.** Nothing here reads sleep data (ADR 0005), and none of it reaches read_planner.
 
