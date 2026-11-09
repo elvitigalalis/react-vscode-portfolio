@@ -389,6 +389,19 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
 /* Red is for what needs acting on (overdue, over capacity, a failed feed); the time of day isn't. */
 .sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); }
+/* The over-commit note (plan-today.mjs, overNote): one calm line in muted ink, never red. Its
+   list of tasks to move sits under it; each is a whole-row button (44px on touch). */
+.sheet-over { margin: 0.2rem 0 0; font-size: 0.75rem; color: var(--muted); }
+.sheet-over .sheet-link { font-size: inherit; }
+.sheet-over-pick { list-style: none; margin: 0.25rem 0 0; padding: 0; }
+.sheet-over-pick button {
+  display: flex; gap: 0.4rem; align-items: baseline; justify-content: space-between; width: 100%; min-height: 2rem;
+  font: inherit; font-size: 0.8125rem; text-align: left; color: var(--fg); background: none;
+  border: 0; border-bottom: 1px solid var(--line); padding: 0.25rem 0; cursor: pointer;
+}
+.sheet-over-pick button:hover, .sheet-over-pick button:focus-visible { background: var(--chip); }
+.sheet-over-pick button > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+@media (hover: none) { .sheet-over-pick button { min-height: 2.75rem; } }
 /* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
 .sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
 .sheet-planbar .sheet-meter { height: 6px; border-radius: 3px; }

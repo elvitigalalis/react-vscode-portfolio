@@ -6,9 +6,9 @@
 // the first time Plan today opens.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep } from "./logic.mjs";
-import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap, shutdownAt, windowOn, spanOf } from "./planner.mjs";
-import { loadShare, stripSegments } from "./glance.mjs";
+import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, weekdayName, addDays } from "./logic.mjs";
+import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap, shutdownAt, windowOn, spanOf, taskAction } from "./planner.mjs";
+import { loadShare, stripSegments, plannedLeft, overCommit } from "./glance.mjs";
 
 // The timeline's window in minutes past midnight. It follows the day being planned (setWindow,
 // planner.mjs windowOn): from his wake to an hour past shutdown, no longer fixed at 7 am–11 pm.
@@ -37,6 +37,38 @@ function loadBar(d) {
   fill.style.width = `${pct}%`;
   return el("span", { className: "sheet-meter" }, fill);
 }
+
+// Over-commit (docs/sheet.md, "Over-commit note"): when day `d` holds more than the free time
+// left before its shutdown, one calm line says so, "Planned 9h · about 6h free", with a link that
+// opens (`open`) a list of its undone untimed tasks; a tap moves one to the next day. It warns and
+// never blocks. `toggle` flips `open`; `where` names the note ("week", "dialog") so focus can
+// find it again after a redraw. Null when the day isn't over.
+const refocus = (where) => {
+  const box = document.querySelector(`[data-over="${where}"]`);
+  box?.querySelector(".sheet-over-pick button, .sheet-link")?.focus();
+};
+export function overNote(d, open, toggle, where) {
+  const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now()), dayCapacity(d).free);
+  if (!o) return null;
+  const next = d === state.today ? "tomorrow" : weekdayName(addDays(d, 1));
+  const link = el("button", { type: "button", className: "sheet-link", textContent: `Move some to ${next}` });
+  link.setAttribute("aria-expanded", String(open));
+  link.onclick = () => { toggle(); refocus(where); };
+  const free = o.free ? `about ${formatMinutes(o.free)} free` : "no free time left before shutdown";
+  const line = el("p", { className: "sheet-over" }, `Planned ${formatMinutes(o.planned)} · ${free} · `, link);
+  const out = open ? el("div", { className: "sheet-over-wrap" }, line) : line;
+  out.dataset.over = where;
+  if (!open) return out;
+  const picks = tasksOn(d).filter((t) => !t.done && !spanOf(t)).map((t) => {
+    const b = el("button", { type: "button", ariaLabel: `Move ${t.title} to ${next}` },
+      el("span", { textContent: t.title }), t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null);
+    b.onclick = () => taskAction(t.id, "day-after").then(() => refocus(where));
+    return el("li", {}, b);
+  });
+  out.append(picks.length ? el("ul", { className: "sheet-over-pick" }, ...picks) : el("p", { className: "sheet-over", textContent: "Nothing untimed left to move." }));
+  return out;
+}
+let picking = false; // the week's list is open
 
 // A small accent button with the check icon (docs/sheet-glance.md, change 5).
 export const approveButton = (ariaLabel, cls = "", text = "Approve") =>
@@ -96,6 +128,12 @@ export function setupPlanToday(root) {
   dialog = root.querySelector("[data-plan]");
   eventHooks.push(createMissedOnce);
   renderHooks.push(() => { if (dialog.open) planDialog?.draw(); });
+  // Today's over-commit note, under its glance strip.
+  renderHooks.push(() => {
+    const note = overNote(state.today, picking, () => { picking = !picking; render(); }, "week");
+    if (!note) picking = false;
+    else root.querySelector(`.sheet-day[data-day="${state.today}"] .sheet-stamps-row`)?.append(note);
+  });
   actHooks.plan = () => loadDialog().then((m) => m.open()).catch(failed);
   keyHooks.push((e) => { if (e.key === "p" || e.key === "P") { actHooks.plan(); return true; } return false; });
   // In the week, each proposed block shows dashed under its task, with its time and Approve.

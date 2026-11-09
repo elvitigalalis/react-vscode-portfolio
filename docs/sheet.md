@@ -193,6 +193,17 @@ Under 48 rem, one day shows at a time (above). On top of that:
 - Tasks with a fixed time, done tasks and Someday tasks never roll.
 - Proposed blocks of earlier days are deleted: a proposal lapses at the end of its day.
 
+## Over-commit note (Sunsama, Akiflow)
+
+- When today's planned minutes (undone estimates, plus what is left of blocks no estimate
+  counts, such as habit blocks) are more than the free time left before shutdown, today shows
+  one calm line under its strip in muted ink: "Planned 9h · about 6h free · Move some to
+  tomorrow". Free time is rounded to a quarter hour.
+- "Move some to tomorrow" opens a list of today's undone untimed tasks under the line (no
+  fixed time, no block); a tap moves one to tomorrow, with the usual Undo. The line goes away
+  once the plan fits.
+- It warns and never blocks: nothing is moved for him, and adding more still works.
+
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
 Opens over the week: today's tasks on the left, today's timeline on the right (07:00 to 23:00,
@@ -209,6 +220,8 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
 - **Finish line:** "Done ≈ 4:40 pm · shutdown 5:00 pm". The shutdown line on the timeline can be
   dragged; it is saved per day. Undragged, it sits where wind-down starts (5 pm to 11 pm), else at
   5 pm ([sheet-v5.md](sheet-v5.md), "Shutdown follows wind-down").
+- **Over-commit note:** the same line as on the week's today ("Over-commit note" above), under
+  the meter, for the day being planned; its list moves a task a day on.
 - **Drag a task onto the timeline → a block as tall as its estimate** (30 min if none). The block
   is created as an event on the "Time blocks" Google calendar: its title is the task's title if
   public, **"Busy" if private** (Ellie's privacy mode). One task may have several blocks.
