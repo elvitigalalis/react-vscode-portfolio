@@ -184,6 +184,8 @@ export function tick(big = false) {
   if (!soundOn()) return;
   try {
     audio ??= new AudioContext();
+    // iOS suspends the context when the phone locks; each tick wakes it (inside the tap).
+    if (audio.state !== "running") audio.resume().catch(() => {});
     const t0 = audio.currentTime;
     const notes = big ? [[523.25, 0], [659.25, 0.05], [783.99, 0.1]] : [[880, 0], [1318.5, 0.05]];
     for (const [f, at] of notes) {
