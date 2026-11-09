@@ -222,9 +222,13 @@ export const listHorizonStates = () => rest("horizon_state?select=task_id,state,
 export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
 
 // v5 H1, habits (Settings).
-export const listHabits = () => rest("habits?select=id,name,days,ideal,minutes,flex_min,defence,position&order=position,created_at");
+export const listHabits = () => rest("habits?select=id,name,days,ideal,minutes,flex_min,defence,position,created_at&order=position,created_at");
 export const insertHabit = async (habit) => one(await rest("habits", { method: "POST", body: habit, prefer: "return=representation" }));
 export const deleteHabit = (id) => rest(`habits?id=eq.${id}`, { method: "DELETE" });
+// Habits as rates (docs/sheet-habits.md): the days each habit was ticked, from `from` on.
+export const listHabitDone = (from) => rest(`habit_done?select=habit_id,day&day=gte.${from}`);
+export const markHabitDone = (habitId, day) => rest("habit_done?on_conflict=habit_id,day", { method: "POST", body: { habit_id: habitId, day }, prefer: "resolution=ignore-duplicates,return=minimal" });
+export const unmarkHabitDone = (habitId, day) => rest(`habit_done?habit_id=eq.${habitId}&day=eq.${day}`, { method: "DELETE" });
 
 // v5 L1, learning from his taps (docs/sheet-v5.md): Done and Not needed on a Needs you row
 // (Not needed is done as well; Undo clears both), the append-only feedback log, and the triage
