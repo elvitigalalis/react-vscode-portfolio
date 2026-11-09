@@ -222,7 +222,9 @@ export async function moveTask(id, where, position) {
   offerUndo("Moved.", () => patch(id, before));
 }
 
-export async function completeTask(id, done = true) {
+// `lead` goes before "Done: …" in the Undo toast ("Day cleared."), written with it in one go so
+// a screen reader hears the toast once.
+export async function completeTask(id, done = true, lead = null) {
   const t = state.tasks.get(id);
   if (done) {
     const at = new Date();
@@ -239,13 +241,13 @@ export async function completeTask(id, done = true) {
     }
   }
   await patch(id, { done });
-  if (done) offerUndo(`Done: ${t.title}`, () => patch(id, { done: false }));
+  if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false }));
 }
 
 // ✓ on a row (and a swipe or the Now/Next line): flip it, and say so if it didn't save.
-export async function toggleDone(id) {
+export async function toggleDone(id, lead = null) {
   const done = !state.tasks.get(id).done;
-  try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
+  try { await completeTask(id, done, lead); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
 }
 
 // --- Checking off (celebrate.mjs) -------------------------------------------------------------
@@ -292,20 +294,17 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
 // A Someday row leaves for the Log once done, so it fades out and the Log's count pops.
 // A second tap while the first still saves does nothing (cheer.once, keyed by task or event).
 const inFlight = new Set();
-export async function checkOff(id, { li = rowOf(id), save = () => toggleDone(id), quiet = false, from } = {}) {
+export async function checkOff(id, { li = rowOf(id), save = null, quiet = false, from } = {}) {
   const t = state.tasks.get(id);
   if (!t) return;
   await cheer.once(inFlight, `task:${id}`, async () => {
+    const moment = t.done ? null : cheer.momentOf(t, state.tasks.values(), state.today);
+    save ??= () => toggleDone(id, cheer.MOMENT_WORDS[moment] ?? null);
     if (t.done || !li) { await save(); render(); return; }
-    const moment = cheer.momentOf(t, state.tasks.values(), state.today);
     const leave = Boolean(li.closest(".sheet-list"));
     const { saving } = await playOff(li, save, { leave, moment, quiet, ...(from ? { from } : {}) });
     if (state.tasks.get(id)?.done) {
-      if (moment) {
-        const words = toast.querySelector("[data-toast-text]");
-        if (!toast.hidden && words.textContent.startsWith("Done:")) words.textContent = `${cheer.MOMENT_WORDS[moment]} ${words.textContent}`;
-        if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
-      }
+      if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
       if (leave) cheer.pop($("[data-log-count]"));
     }
     await saving;
