@@ -422,6 +422,11 @@ export const saveEventTodo = (row) => rest("event_todos?on_conflict=cal_event_ke
 // Done's minutes into actuals: true when recorded, false when the task is done or Telegram's
 // Finished? already counted it (supabase/schema.sql, record_focus).
 export const recordFocus = (row) => rest("rpc/record_focus", { method: "POST", body: row });
+// focus_log (focus-notes.mjs): a row whose id is already there is skipped, so a retry is safe.
+export const logFocus = (row) => rest("focus_log?on_conflict=id", { method: "POST", body: row, prefer: "resolution=ignore-duplicates,return=minimal" });
+// Its rows from `since` on, oldest first. Until the table exists PostgREST answers 404: none.
+export const listFocusLog = (since) => rest(`focus_log?select=task_id,at,minutes,note,done&at=gte.${since}&order=at`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
 
 // --- Projects (docs/sheet-projects.md) -------------------------------------------------------
 // Open projects, soonest due first, and the steps (tasks) of the given projects in order. A

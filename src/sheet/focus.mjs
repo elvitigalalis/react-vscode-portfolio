@@ -60,8 +60,10 @@ export function focusClock(s, now) {
 // kind and estimate, as Telegram's Finished writes them (nudges.mjs). Under a minute: none.
 // `since` is Start: record_focus writes nothing when the task is done or already has a row from
 // then on (a Finished? answer in Telegram), so focus time and Telegram never both count.
-export function focusActual(s, task, now, timeZone) {
-  const minutes = Math.min(Math.round((now.getTime() - s.started_at) / 60_000), 960);
+// `prior` is the minutes earlier sessions Stopped on this task credited it (focus-notes.mjs), so
+// the row holds the whole time the task took.
+export function focusActual(s, task, now, timeZone, prior = 0) {
+  const minutes = Math.min(Math.round((now.getTime() - s.started_at) / 60_000) + prior, 960);
   if (minutes < 1) return null;
   return { task: s.task_id, block: s.block_id, d: localNow(new Date(s.started_at), timeZone).day, kind: paceKind(task), est: task.est_min ?? null, minutes, since: new Date(s.started_at).toISOString() };
 }
@@ -88,8 +90,9 @@ export function extendFocus(s, b, taken, timeZone) {
 
 // Done and +15 min save through an outbox kept beside the session, so a write made offline (or
 // that failed) is tried again on the next load or when the browser is back online. The ops are
-// { op: "actual", row } (record_focus), { op: "done", task } and { op: "extend", block, ends_at }.
-const OPS = new Set(["actual", "done", "extend"]);
+// { op: "actual", row } (record_focus), { op: "done", task }, { op: "extend", block, ends_at } and
+// { op: "log", row } (a focus_log row: Stop's, or Done's closing one; focus-notes.mjs).
+const OPS = new Set(["actual", "done", "extend", "log"]);
 export function readOutbox(raw) {
   let q;
   try { q = JSON.parse(raw); } catch { return []; }

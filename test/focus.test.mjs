@@ -66,6 +66,14 @@ test("Done records the minutes since Start, on the session's day, as Finished do
   assert.equal(focusActual(s, task("t1"), at("2026-11-06T19:05:00Z"), TZ).minutes, 960);
 });
 
+test("Done adds the minutes earlier Stopped sessions credited the task", () => {
+  const s = startSession(blocks[1], at("2026-11-04T19:05:00Z"));
+  assert.equal(focusActual(s, task("t1"), at("2026-11-04T19:35:00Z"), TZ, 40).minutes, 70);
+  // A Done right after Start still records the earlier time.
+  assert.equal(focusActual(s, task("t1"), at("2026-11-04T19:05:10Z"), TZ, 25).minutes, 25);
+  assert.equal(focusActual(s, task("t1"), at("2026-11-04T19:35:00Z"), TZ, 950).minutes, 960);
+});
+
 test("+15 min moves the block's end and the session's when the next 15 min are free", () => {
   const s = startSession(blocks[1], at("2026-11-04T19:05:00Z"));
   assert.deepEqual(extendFocus(s, blocks[1], [], TZ), { ends_at: "2026-11-04T20:00:00.000Z", session: { ...s, ends_at: Date.parse("2026-11-04T20:00:00Z") } });
@@ -94,7 +102,7 @@ test("writes run in order and stop at the first that fails, which stays for the 
 });
 
 test("a stored outbox reads back as its whole ops only", () => {
-  assert.deepEqual(readOutbox(JSON.stringify([{ op: "done", task: "t1" }, { op: "bogus" }, 3])), [{ op: "done", task: "t1" }]);
+  assert.deepEqual(readOutbox(JSON.stringify([{ op: "done", task: "t1" }, { op: "log", row: {} }, { op: "bogus" }, 3])), [{ op: "done", task: "t1" }, { op: "log", row: {} }]);
   assert.deepEqual(readOutbox("nope"), []);
   assert.deepEqual(readOutbox(null), []);
 });
