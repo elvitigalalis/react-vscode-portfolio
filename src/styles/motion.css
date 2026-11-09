@@ -14,12 +14,15 @@
   .card h3 a, .writeup-head h1 a { display: inline-block; view-transition-name: var(--vt, none); }
 
   /* A project's photo rises 12px and fades in as its card scrolls into view. Scroll-driven, so no
-     script; where unsupported it is simply there. */
+     script; where unsupported it is simply there. Screens only: print has no scroll, and would
+     keep whatever half-faded state the page was in. */
   @supports (animation-timeline: view()) {
-    .card img { animation: rise linear both; }
-    /* A rule of its own: the minifier would fold the timeline into the shorthand, which browsers
-       reject, and the shorthand resets both longhands, so they must come after it. */
-    .card > img { animation-timeline: view(); animation-range: entry 0% cover 30%; }
+    @media screen {
+      .card img { animation: rise linear both; }
+      /* A rule of its own: the minifier would fold the timeline into the shorthand, which browsers
+         reject, and the shorthand resets both longhands, so they must come after it. */
+      .card > img { animation-timeline: view(); animation-range: entry 0% cover 30%; }
+    }
   }
 
   /* Hover only where a pointer can hover. Cards lift 2px over a soft shadow, and the top bar's
