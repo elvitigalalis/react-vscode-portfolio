@@ -365,11 +365,9 @@ export function visibleEvents(dayEvents, max, nowMin = null) {
 
 // --- Rollover display --------------------------------------------------------------------
 
-export const ROLL_MARKS = ["", "②", "③"];
-export const rollMark = (rolls) => (rolls >= 1 && rolls <= 2 ? ROLL_MARKS[rolls] : "");
-// The title's ink fades a step per roll, never under 4.5:1 (WCAG 1.4.3): 0.7 of --fg is 5.0:1
-// on --chip in light mode, the worst case (test/roll-contrast.test.mjs).
-export const rollOpacity = (rolls) => [1, 0.85, 0.7][Math.min(rolls, 2)];
+// A carried-over task gets a neutral "carried over" tag, the same at every roll: no fading and
+// no count on the row. The count is only in the tag's hover text.
+export const carriedNote = (rolls) => (rolls >= 1 ? `Carried over ${rolls === 1 ? "once" : `${rolls} times`}` : null);
 
 // --- The public view ---------------------------------------------------------------------
 

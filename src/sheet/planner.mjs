@@ -4,7 +4,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
-  positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
+  positionBetween, byPosition, carriedNote, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
   somedayLog,
 } from "./logic.mjs";
@@ -395,9 +395,10 @@ const DUE = {
 };
 
 // A task's details beside its title: source, time (when its title doesn't show it), clash,
-// estimate, due date and private.
+// estimate, due date, private and carried over (on a day, while undone).
 function detailsOf(t, clash, level, span, hz) {
   const src = sourceOf(t);
+  const carried = t.day && !t.done ? carriedNote(t.rolls) : null;
   const due = DUE[level];
   const chip = hz && !t.done ? horizonChip(hz) : null;
   const kids = [
@@ -411,6 +412,7 @@ function detailsOf(t, clash, level, span, hz) {
     // Horizon planning: the task's state, in the due date's colours.
     chip ? el("span", { className: `sheet-meta sheet-hz is-${chip.level}`, textContent: chip.text }) : null,
     t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+    carried ? el("span", { className: "sheet-meta sheet-carried", textContent: "carried over", title: carried }) : null,
   ].filter(Boolean);
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
 }
@@ -431,7 +433,6 @@ export function taskRow(t, span = spanOf(t)) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
   if (sourceOf(t)) li.dataset.source = sourceOf(t);
-  li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const when = span ? spoken(span.start, span.end) : "";
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
@@ -439,10 +440,9 @@ export function taskRow(t, span = spanOf(t)) {
   const hz = state.states.get(t.id);
   const level = hz ? (t.due && !t.done && t.due < state.today ? "overdue" : null) : dueLevel(t, state.blocks, state.today, SHEET.timeZone);
   const line = hz && !t.done ? horizonLine(hz, state.horizon.filter((a) => a.task_id === t.id), t.due, state.today) : null;
-  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}${t.day && !t.done && t.rolls >= 1 ? ", carried over" : ""}. Edit`);
   li.append(...[
     ...withWhen(span?.start, span?.end, [
-      rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
       title,
       // The details, kept together so they move under the title as one line when they don't fit.
       detailsOf(t, clash, level, span, hz),

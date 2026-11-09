@@ -186,7 +186,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
 
 - Each night, every task that is **undone, untimed and dated before today** moves to today and
   its `rolls` count goes up by one.
-- The task shows a small circled count (②, ③), and its text fades a step with each roll.
+- The task shows a neutral "carried over" tag in its details, the same at every roll; the count
+  is only in the tag's hover text. Its title keeps full ink: a rolled task isn't made to look worse.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.

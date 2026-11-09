@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
@@ -192,10 +192,10 @@ test("calendar alerts: block events have none while Telegram is on, Google's def
   assert.deepEqual(blockReminders(null), google);
 });
 
-test("rollover marks and the public view's redaction", () => {
-  assert.equal(rollMark(0), "");
-  assert.equal(rollMark(1), "②");
-  assert.equal(rollMark(2), "③");
+test("the carried-over note and the public view's redaction", () => {
+  assert.equal(carriedNote(0), null);
+  assert.equal(carriedNote(1), "Carried over once");
+  assert.equal(carriedNote(3), "Carried over 3 times");
   assert.equal(barWidth(2), 4);
   assert.equal(barWidth(40), 24);
   assert.equal(rightNow({ public: true, title: "WorkIt auth" }), "WorkIt auth");

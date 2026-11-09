@@ -122,9 +122,6 @@
 .sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
 
 .sheet-task { position: relative; cursor: grab; }
-/* A rolled task fades its title only (rollOpacity); its time, details and Approve keep full ink.
-   A done title is already muted, so it doesn't fade again. */
-.sheet-task:not(.is-done) .sheet-title { opacity: var(--ink, 1); }
 .sheet-title {
   flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
   padding: 0; cursor: text; overflow-wrap: anywhere;
@@ -133,7 +130,6 @@
 .sheet-clash { color: var(--warn); font-size: 0.8125rem; cursor: help; }
 .sheet-risk { color: var(--warn); cursor: help; }
 .sheet-typed { white-space: nowrap; }
-.sheet-roll { color: var(--muted); font-size: 0.8125rem; }
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 /* Check and menu sit over the row's right end on hover, so titles keep the full width. */
 .sheet-check, .sheet-more {
@@ -331,9 +327,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
    subgrid, and the week's rows would stop lining up. */
 .sheet-task { container: sheet-row / inline-size; flex-wrap: wrap; align-content: flex-start; }
 .sheet-title { min-width: min(8ch, 100%); }
-/* A roll mark stays on the title's line: the title's basis leaves room for it. */
-.sheet-roll { flex: none; }
-.sheet-roll + .sheet-title { max-width: calc(100% - 1.25rem); }
 .sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
