@@ -267,16 +267,22 @@ async function hold(work) {
 // The row a task shows in on the page (not in a dialog or a closed Log or project), if any.
 const rowOf = (id) => [...root.querySelectorAll(`.sheet-task[data-id="${CSS.escape(id)}"]`)].find((r) => !r.closest("dialog, details:not([open])") && r.getClientRects().length) ?? null;
 
-// The old row plays its ✓ (cheer.playRow) while `save` runs; the page redraws once both are over.
-// A failed save needs nothing undone: state never changed, so the redraw shows the row open again.
+// The old row plays its ✓ (cheer.playRow) while `save` runs; the page redraws once both are over,
+// or after cheer.SAVE_MS at most: a save that hangs (a slow network) mustn't freeze every redraw.
+// It then redraws again when it lands. A failed save needs nothing undone: state never changed,
+// so the redraw shows the row open again. Returns { saving }, the save itself.
 async function playOff(li, save, { leave = false, moment = null, quiet = false, from = li.querySelector(".sheet-check") } = {}) {
   cheer.cheer(from, { moment, quiet });
   const list = li.closest(".sheet-rows");
   const before = leave ? cheer.places(list) : null;
   const drew = nextDraw();
-  await hold(Promise.all([save(), cheer.playRow(li, { leave })]));
+  const saving = Promise.resolve().then(save);
+  const anim = cheer.capped(cheer.playRow(li, { leave }), cheer.ANIM_MS);
+  const got = await hold(cheer.capped(Promise.all([saving, anim]), cheer.SAVE_MS));
+  if (got === cheer.LATE) saving.then(() => render(), () => render());
   await drew;
   if (before) cheer.slide(before, root.querySelectorAll(`.sheet-rows[data-list="${CSS.escape(list.dataset.list ?? "")}"] [data-id]`));
+  return { saving };
 }
 
 // ✓ on a task, from its row, a key, a swipe, the Now/Next line or focus mode. Reopening a done

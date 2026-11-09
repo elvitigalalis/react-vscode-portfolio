@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shouldBurst, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS } from "../src/sheet/celebrate.mjs";
+import { shouldBurst, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS } from "../src/sheet/celebrate.mjs";
 
 const never = () => 0.99;
 const always = () => 0;
@@ -74,4 +74,12 @@ test("check-off motion stays behind prefers-reduced-motion", () => {
   // Every effect checks calm() first; no ease-in anywhere.
   for (const fn of ["burst", "confetti", "pop", "slide"]) assert.match(js, new RegExp(`export function ${fn}\\(.*\\) \\{\\n  if \\(.*!calm\\(\\)`));
   assert.doesNotMatch(js, /ease-in[^-]/);
+});
+
+test("a hung save holds the redraw only until the cap", async () => {
+  assert.equal(await capped(Promise.resolve(7), 50), 7);
+  assert.equal(await capped(new Promise(() => {}), 20), LATE);
+  assert.equal(await capped(wait(40, "slow"), 10), LATE);
+  // The caps are short: the animation's about a second, the whole ✓ a few.
+  assert.ok(ANIM_MS <= 1500 && SAVE_MS <= 5000 && ANIM_MS < SAVE_MS);
 });

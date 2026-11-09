@@ -48,6 +48,14 @@ export function specks(n, rand = Math.random) {
   });
 }
 
+// A redraw is never held for long: the row's animation counts for at most ANIM_MS and the whole
+// ✓ (save included) for at most SAVE_MS. `capped` settles with the work's result, or LATE.
+export const ANIM_MS = 1000;
+export const SAVE_MS = 4000;
+export const LATE = Symbol("late");
+export const wait = (ms, value) => new Promise((r) => setTimeout(r, ms, value));
+export const capped = (work, ms) => Promise.race([work, wait(ms, LATE)]);
+
 // The site's own greens and its amber (global.css), so it reads as part of the page.
 export const COLORS = ["--accent", "--leaf-1", "--leaf-2", "--leaf-3", "--warn"];
 export const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
