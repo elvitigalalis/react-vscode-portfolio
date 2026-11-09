@@ -56,10 +56,10 @@ Deno.serve(async (req) => {
       const [[{ time_zone }], terms] = await Promise.all([db("settings?select=time_zone"), recentTerms(raw.id)]);
       rows = await parsed(text, localNow(new Date(), time_zone).day, terms);
       if (rows) {
-        const [first, ...rest] = rows;
-        // Extras first: if either write fails the raw words are still there.
-        if (rest.length) await db("tasks", { method: "POST", body: JSON.stringify(rest.map((r, i) => ({ ...r, public: false, position: position + i + 1 }))) });
-        await db(`tasks?id=eq.${raw.id}`, { method: "PATCH", body: JSON.stringify(first) });
+        // One insert is all-or-nothing, so the raw row goes only once every task exists. A failed
+        // delete leaves a stray copy of the words, which beats losing them.
+        await db("tasks", { method: "POST", body: JSON.stringify(rows.map((r, i) => ({ ...r, public: false, position: position + i }))) });
+        await db(`tasks?id=eq.${raw.id}`, { method: "DELETE" }).catch(() => console.error("capture: raw row stayed"));
       }
     } catch (e) {
       rows = null;

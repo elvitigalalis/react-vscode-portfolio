@@ -18,7 +18,7 @@ and calls Haiku directly. Every other AI step still runs through his subscriptio
 - The model's only tool is `add_tasks`, and the call forces it. It can't read or change anything.
 - Its output is checked by `taskRow`, the rule `answer_messages` uses. If any task fails, or the
   reply was cut off, none are written and the raw words stay in the Inbox.
-- The raw words are saved before the model is called, so a failure loses nothing.
+- The raw words are saved before the model is called, so a failed tidy keeps the words (a note over 500 characters keeps its first 500).
 - All rows are private. Nothing it writes reaches /now.
 - It sends the note, the date and up to 40 open task titles, as spelling vocabulary only. No Oura
   data ([ADR 0005](0005-oura-data-never-reaches-claude.md)), no mail bodies, and no titles of

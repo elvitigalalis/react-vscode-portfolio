@@ -34,7 +34,6 @@ test("captureRows: refuses all of a bad answer, so the raw words stay", () => {
   assert.equal(captureRows({ tasks: [{ title: "ok" }, { title: "x", day: "friday" }] }, TODAY), null);
   assert.equal(captureRows({ tasks: [] }, TODAY), null);
   assert.equal(captureRows(undefined, TODAY), null);
-  assert.equal(captureRows({ tasks: [{ title: "x", at_time: "15:00", day: TODAY }] }, TODAY), null);
 });
 
 test("rawRow: a private Inbox task on one line", () => {
@@ -66,4 +65,9 @@ test("replyLine says what was added", () => {
   assert.equal(replyLine([{ title: "Email Priya", due: "2026-11-13" }]), "Added: Email Priya, due Fri");
   assert.equal(replyLine([{ title: "Gas", day: "2026-11-10" }]), "Added: Gas, Tue");
   assert.equal(replyLine([{ title: "A" }, { title: "B" }]), "Added 2: A; B");
+});
+
+test("captureRows: a clock time with no length gets 30 minutes", () => {
+  const [r] = captureRows({ tasks: [{ title: "Call Sam", day: "2026-11-10", at_time: "15:00" }] }, "2026-11-09");
+  assert.equal(r.est_min, 30);
 });

@@ -6,6 +6,7 @@ import { cutTitle } from "./logic.mjs";
 
 export const MODEL = "claude-haiku-5-5";
 export const MAX_TASKS = 5;
+const DEFAULT_TIMED_MIN = 30;
 export const MAX_VOCABULARY = 40;
 const MAX_TERM = 80;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -59,7 +60,9 @@ export function captureRows(input, today) {
   const errors = [];
   // tasks has no why column (taskRow keeps one for answer_message's reply), and a bulk insert
   // needs every row to have the same keys.
-  const rows = tasks.map((t, i) => taskRow({ ...t, why: null }, `tasks[${i}]`, errors, today));
+  // A clock time with no length ("call at 3") is normal speech, and taskRow needs a length for it.
+  const sized = (t) => (t?.at_time && t.est_min == null ? { ...t, est_min: DEFAULT_TIMED_MIN } : t);
+  const rows = tasks.map((t, i) => taskRow({ ...sized(t), why: null }, `tasks[${i}]`, errors, today));
   return errors.length ? null : rows;
 }
 
