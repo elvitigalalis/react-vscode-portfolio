@@ -18,6 +18,7 @@ import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
+import * as cheer from "./celebrate.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -247,6 +248,64 @@ export async function toggleDone(id) {
   try { await completeTask(id, done); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
 }
 
+// --- Checking off (celebrate.mjs) -------------------------------------------------------------
+
+// render() replaces every row, which would cut a row's animation short. While a ✓ plays and
+// saves, redraws wait (a background reload included) and run once when the last one ends.
+let holds = 0;
+let owed = false;
+let drawn = [];
+const nextDraw = () => new Promise((r) => drawn.push(r));
+async function hold(work) {
+  holds++;
+  try { return await work; } finally {
+    owed = true;
+    if (!--holds) { owed = false; render(); }
+  }
+}
+
+// The row a task shows in on the page (not in a dialog or a closed Log or project), if any.
+const rowOf = (id) => [...root.querySelectorAll(`.sheet-task[data-id="${CSS.escape(id)}"]`)].find((r) => !r.closest("dialog, details:not([open])") && r.getClientRects().length) ?? null;
+
+// The old row plays its ✓ (cheer.playRow) while `save` runs; the page redraws once both are over.
+// A failed save needs nothing undone: state never changed, so the redraw shows the row open again.
+async function playOff(li, save, { leave = false, moment = null, quiet = false, from = li.querySelector(".sheet-check") } = {}) {
+  cheer.cheer(from, { moment, quiet });
+  const list = li.closest(".sheet-rows");
+  const before = leave ? cheer.places(list) : null;
+  const drew = nextDraw();
+  await hold(Promise.all([save(), cheer.playRow(li, { leave })]));
+  await drew;
+  if (before) cheer.slide(before, root.querySelectorAll(`.sheet-rows[data-list="${CSS.escape(list.dataset.list ?? "")}"] [data-id]`));
+}
+
+// ✓ on a task, from its row, a key, a swipe, the Now/Next line or focus mode. Reopening a done
+// task just saves and redraws. `save` defaults to toggleDone (focus mode passes its outbox).
+// A Someday row leaves for the Log once done, so it fades out and the Log's count pops.
+export async function checkOff(id, { li = rowOf(id), save = () => toggleDone(id), quiet = false, from } = {}) {
+  const t = state.tasks.get(id);
+  if (!t || li?.classList.contains("is-checking")) return;
+  if (t.done || !li) { await save(); render(); return; }
+  const moment = cheer.momentOf(t, state.tasks.values(), state.today);
+  const leave = Boolean(li.closest(".sheet-list"));
+  await playOff(li, save, { leave, moment, quiet, ...(from ? { from } : {}) });
+  if (!state.tasks.get(id)?.done) return;
+  if (moment) {
+    const words = toast.querySelector("[data-toast-text]");
+    if (!toast.hidden && words.textContent.startsWith("Done:")) words.textContent = `${cheer.MOMENT_WORDS[moment]} ${words.textContent}`;
+    if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
+  }
+  if (leave) cheer.pop($("[data-log-count]"));
+}
+
+// After a ✓, focus goes back to the row (`sel` in it), or to the row now in its place when it
+// left its list.
+function focusAfter(id, sel, list, index) {
+  const back = rowOf(id)?.querySelector(sel);
+  if (back) back.focus();
+  else if (list) refocus(list, index);
+}
+
 async function removeTask(id) {
   const t = state.tasks.get(id);
   await dropBlocks(id);
@@ -424,14 +483,18 @@ async function saveEventTodo(key, day, change) {
   else state.todos.push({ cal_event_key: key, title_ai: null, done: false, hidden: false, ...change });
 }
 
-export async function toggleEventTodo(target) {
+export async function toggleEventTodo(target, { quiet = false } = {}) {
   const { key, day, row } = eventRowOf(target);
   if (!row) return;
-  try {
-    await saveEventTodo(key, day, { done: !row.done });
-    if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
-  } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
-  render();
+  const li = target.closest?.(".sheet-evtodo") ?? root.querySelector(`.sheet-day[data-day="${day}"] .sheet-evtodo[data-key="${CSS.escape(key)}"]`);
+  if (li?.classList.contains("is-checking")) return;
+  const save = async () => {
+    try {
+      await saveEventTodo(key, day, { done: !row.done });
+      if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
+    } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
+  };
+  if (row.done || !li) { await save(); render(); } else await playOff(li, save, { quiet, ...(target.matches?.(".sheet-nownext-done") ? { from: target } : {}) });
   root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
 }
 
@@ -557,6 +620,7 @@ function listColumn(name) {
 }
 
 export function render() {
+  if (holds) { owed = true; return; }
   const keep = document.activeElement?.classList.contains("sheet-add") ? { day: document.activeElement.dataset.day, list: document.activeElement.dataset.list } : null;
   state.today = now().day;
   const days = weekDays(state.week);
@@ -589,6 +653,7 @@ export function render() {
   hostToast(root, toast);
 
   if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
+  for (const r of drawn.splice(0)) r();
 }
 
 export const renderHooks = [];
@@ -764,6 +829,17 @@ async function saveInterests() {
     state.settings = { ...state.settings, interests };
     $("[data-interests-note]").textContent = "Saved.";
   } catch (e) { failed(e); }
+}
+
+// Settings, completion sound (celebrate.mjs): a soft tick on each ✓, kept in this browser. Off
+// until he turns it on.
+const soundButton = () => $('[data-act="sound"]');
+settingsHooks.push(() => soundButton()?.setAttribute("aria-pressed", String(cheer.soundOn())));
+function toggleSound() {
+  const on = !cheer.soundOn();
+  cheer.setSound(on);
+  soundButton().setAttribute("aria-pressed", String(on));
+  if (on) cheer.tick();
 }
 
 // Settings, workload cap (v5 D2): the most hours of blocks Claude plans in a day, and the load
@@ -1007,7 +1083,7 @@ function rowKey(e) {
   if (li.classList.contains("sheet-evtodo")) {
     if (key !== "x") return false;
     e.preventDefault();
-    toggleEventTodo(li);
+    toggleEventTodo(li, { quiet: true });
     return true;
   }
   const id = li.dataset.id;
@@ -1015,14 +1091,12 @@ function rowKey(e) {
   if (!kind || (key === " " && !e.target.matches(".sheet-title"))) return false;
   e.preventDefault();
   if (kind === "edit") { startEdit(li); return true; }
-  if (kind === "done") {
-    const done = !state.tasks.get(id).done;
-    completeTask(id, done).catch((err) => failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)))
-      .finally(() => { render(); root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus(); });
-    return true;
-  }
   const list = li.closest(".sheet-rows");
   const index = [...list.querySelectorAll(".sheet-task, .sheet-evtodo")].indexOf(li);
+  if (kind === "done") {
+    checkOff(id, { li, quiet: true }).finally(() => focusAfter(id, ".sheet-title", list, index));
+    return true;
+  }
   taskAction(id, kind).then(() => refocus(list, index));
   return true;
 }
@@ -1062,6 +1136,7 @@ function wire() {
       if (act === "oura-week") { $("[data-settings]").close(); return import("./oura-popover.mjs").then((m) => m.openOuraDay(root, state.today), failed); }
       if (act === "save-interests") return saveInterests();
       if (act === "save-cap") return saveCap();
+      if (act === "sound") return toggleSound();
       if (act === "telegram") return toggleTelegram();
       return actHooks[act]?.(e);
     }
@@ -1076,9 +1151,10 @@ function wire() {
     }
     const id = li.dataset.id;
     if (e.target.closest(".sheet-check")) {
-      await toggleDone(id);
-      render();
-      root.querySelector(`[data-id="${id}"] .sheet-check`)?.focus();
+      const list = li.closest(".sheet-rows");
+      const index = list ? [...list.querySelectorAll(".sheet-task, .sheet-evtodo")].indexOf(li) : 0;
+      await checkOff(id, { li });
+      focusAfter(id, ".sheet-check", list, index);
     } else if (e.target.closest(".sheet-more")) openMenu(id, e.target.closest(".sheet-more"));
     else if (e.target.closest(".sheet-title")) startEdit(li);
   });

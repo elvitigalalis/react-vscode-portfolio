@@ -8,7 +8,7 @@
 // - Start. An open row takes its own swipe (done, tomorrow). Anywhere else in the focused day (the
 //   heading, Now/Next, an empty add row, a done row) steps the day, as the arrows do.
 // Not from the left screen edge (Safari's back swipe), with a second finger or while zoomed in.
-import { NARROW, state, taskAction, toggleDone, toggleEventTodo, render } from "./planner.mjs";
+import { NARROW, state, taskAction, checkOff, toggleEventTodo } from "./planner.mjs";
 import { dayStep, lockAxis, rowArmed, swipeActions } from "./swipe.mjs";
 
 const EDGE = 24;
@@ -28,11 +28,13 @@ function begin(e) {
   return day ? { day } : null;
 }
 
+// Done plays the ✓ on the row (planner.mjs, checkOff); a move dims it until the redraw.
 function run(li, act) {
   const id = li.dataset.id;
-  li.classList.add("is-leaving");
   if (!id) return toggleEventTodo(li);
-  return act === "done" ? toggleDone(id).then(render) : taskAction(id, act);
+  if (act === "done") return checkOff(id, { li });
+  li.classList.add("is-leaving");
+  return taskAction(id, act);
 }
 
 export function setupSwipe(root) {
