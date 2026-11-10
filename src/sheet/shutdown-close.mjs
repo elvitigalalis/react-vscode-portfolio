@@ -41,7 +41,7 @@ export function winLines(w) {
   const lines = [];
   if (w.tasks.length) lines.push({ key: "tasks", text: `${plural(w.tasks.length, "task")} done`, detail: someTitles(w.tasks) });
   if (w.focused > 0) lines.push({ key: "focus", text: `${formatMinutes(w.focused)} focused`, detail: null });
-  if (w.github.length) lines.push({ key: "github", text: `${w.github.length} done on GitHub`, detail: someTitles(w.github) });
+  if (w.github.length) lines.push({ key: "github", text: `${w.github.length} closed on GitHub`, detail: someTitles(w.github) });
   if (w.jira.length) lines.push({ key: "jira", text: `${plural(w.jira.length, "Jira ticket")} done`, detail: someTitles(w.jira) });
   for (const x of w.workouts) {
     const min = x.starts_at && x.ends_at ? minutesBetween(x.starts_at, x.ends_at) : 0;

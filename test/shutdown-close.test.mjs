@@ -31,7 +31,7 @@ test("wins: tasks, focus, GitHub and Jira apart, the workout and the habits", ()
   assert.deepEqual(winLines(w), [
     { key: "tasks", text: "2 tasks done", detail: "Laundry, OS homework 4" },
     { key: "focus", text: "1h40 focused", detail: null },
-    { key: "github", text: "1 done on GitHub", detail: "Review: Fix login redirect" },
+    { key: "github", text: "1 closed on GitHub", detail: "Review: Fix login redirect" },
     { key: "jira", text: "1 Jira ticket done", detail: "KAN-12 Add form validation" },
     { key: "lift-w1", text: "Lifted: Push day", detail: "55m" },
     { key: "habits", text: "2 habits ticked", detail: "Read, Gym" },
