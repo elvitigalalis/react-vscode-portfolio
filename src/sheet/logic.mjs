@@ -369,6 +369,15 @@ export function visibleEvents(dayEvents, max, nowMin = null) {
 // no count on the row. The count is only in the tag's hover text.
 export const carriedNote = (rolls) => (rolls >= 1 ? `Carried over ${rolls === 1 ? "once" : `${rolls} times`}` : null);
 
+// A move's patch and what Undo puts back. A task sent to a Someday list (To Someday, Drop, a drag)
+// starts over: its fixed time and its roll count go, as the nightly park does, so the look-back
+// and shutdown stop treating it as one that keeps moving.
+export function moveChange(t, where, position) {
+  const change = { day: where.day ?? null, list: where.day ? null : where.list, position, ...(where.day ? {} : { at_time: null, rolls: 0 }) };
+  const before = { day: t.day, list: t.list, position: t.position, at_time: t.at_time, ...(where.day ? {} : { rolls: t.rolls ?? 0 }) };
+  return { change, before };
+}
+
 // A carried-over task's "Later this week": the week's last day, when that is past tomorrow;
 // else null (the choice is hidden).
 export const laterThisWeek = (today) => { const end = addDays(weekStart(today), 6); return end > addDays(today, 1) ? end : null; };

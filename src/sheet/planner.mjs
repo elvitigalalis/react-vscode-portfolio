@@ -4,7 +4,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
-  positionBetween, byPosition, carriedNote, laterThisWeek, blockOnComplete, zonedIso, formatClock, formatSpan,
+  positionBetween, byPosition, carriedNote, laterThisWeek, moveChange, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
   somedayLog,
 } from "./logic.mjs";
@@ -217,11 +217,11 @@ export async function addTask(text, where, extra = {}) {
 // another day removes its blocks: a block is a plan for one day.
 export async function moveTask(id, where, position) {
   const t = state.tasks.get(id);
-  const before = { day: t.day, list: t.list, position: t.position, at_time: t.at_time };
   const target = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const pos = position ?? positionBetween(lastPosition(target.filter((x) => x.id !== id)), null);
+  const { change, before } = moveChange(t, where, pos);
   if (where.day !== t.day) await dropBlocks(id);
-  await patch(id, { day: where.day ?? null, list: where.day ? null : where.list, position: pos, ...(where.day ? {} : { at_time: null }) });
+  await patch(id, change);
   offerUndo("Moved.", () => patch(id, before));
 }
 

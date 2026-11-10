@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, laterThisWeek, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, laterThisWeek, moveChange, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
@@ -306,4 +306,15 @@ test("capMinutes: hours from Settings as the cap's minutes, or null", () => {
   assert.equal(capMinutes("1"), 60);
   assert.equal(capMinutes("16"), 960);
   for (const bad of ["", "0.5", "16.5", "6.25", "six", "6h"]) assert.equal(capMinutes(bad), null, bad);
+});
+
+test("moveChange: a move to Someday resets rolls, and Undo puts them back", () => {
+  const t = { day: "2026-11-09", list: null, position: 3, at_time: null, rolls: 2 };
+  const drop = moveChange(t, { list: "Dropped" }, 7);
+  assert.deepEqual(drop.change, { day: null, list: "Dropped", position: 7, at_time: null, rolls: 0 });
+  assert.deepEqual(drop.before, { day: "2026-11-09", list: null, position: 3, at_time: null, rolls: 2 });
+  // A move between days keeps the count: rollover's own rule.
+  const later = moveChange(t, { day: "2026-11-15" }, 1);
+  assert.deepEqual(later.change, { day: "2026-11-15", list: null, position: 1 });
+  assert.equal("rolls" in later.before, false);
 });

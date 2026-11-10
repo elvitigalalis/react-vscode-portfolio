@@ -191,7 +191,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
 - **Where it could go:** a task carried over twice or more opens its menu with "Carried over a few
   times. Where should it go?" and Tomorrow, Later this week (the week's last day, when that is
   past tomorrow), Someday and Drop. Drop never deletes: the task moves to the Someday list
-  "Dropped", with Undo, and can be dragged back any time.
+  "Dropped", with Undo, and can be dragged back any time. Any move to a Someday list resets
+  `rolls` to 0 (Undo restores it), so the look-back and shutdown stop counting it as moving.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.
