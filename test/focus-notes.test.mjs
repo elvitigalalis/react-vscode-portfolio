@@ -2,7 +2,7 @@
 // the credit each task carries and the line its row shows.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stopRow, doneRow, closingRow, progressByTask, progressText, sessionMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
+import { stopRow, doneRow, closingRow, closeFinished, progressByTask, progressText, sessionMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
 
 const TZ = "America/New_York";
 // Started 11:50 pm on Nov 4 (EST), so the day is the 4th even when stopped on the 5th.
@@ -56,6 +56,14 @@ test("a closing row closes only the rows it lists, so credit this page never rea
   // A closing row with no session (the task done elsewhere) has no minutes of its own.
   assert.deepEqual(closingRow({ task_id: "t1", day: "2026-11-05", closes: ["r-stop"] }, at(60), "c1"), { id: "c1", at: at(60).toISOString(), day: "2026-11-05", task_id: "t1", block_id: null, minutes: 0, note: null, done: true, closes: ["r-stop"] });
   assert.equal(progressByTask([stop, closingRow({ task_id: "t1", day: "2026-11-05", closes: ["r-stop"] }, at(60), "c1")]).has("t1"), false);
+});
+
+test("a task finished outside focus gets a closing row for its open rows; open tasks don't", () => {
+  const progress = new Map([["t1", { minutes: 40, note: "x", ids: ["a", "b"] }], ["t2", { minutes: 10, note: null, ids: ["c"] }], ["gone", { minutes: 5, note: null, ids: ["d"] }]]);
+  const tasks = new Map([["t1", { id: "t1", done: true }], ["t2", { id: "t2", done: false }]]);
+  let i = 0;
+  assert.deepEqual(closeFinished(progress, tasks, "2026-11-05", at(0), () => `c${i++}`),
+    [{ id: "c0", at: at(0).toISOString(), day: "2026-11-05", task_id: "t1", block_id: null, minutes: 0, note: null, done: true, closes: ["a", "b"] }]);
 });
 
 test("the row's line says the minutes focused, against the estimate when there is one", () => {

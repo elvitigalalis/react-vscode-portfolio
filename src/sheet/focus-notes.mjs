@@ -29,6 +29,12 @@ export const closingRow = ({ task_id, block_id = null, day, minutes = 0, closes 
 // row carries these plus those rows' credit.
 export const doneRow = (s, now, timeZone, id, closes = []) => closingRow({ task_id: s.task_id, block_id: s.block_id, day: localNow(new Date(s.started_at), timeZone).day, minutes: sessionMinutes(s, now), closes }, now, id);
 
+// Closing rows for tasks finished outside focus (the week's ✓, Telegram) that still have open
+// rows, so a reopened task doesn't bring back old credit and notes: no session, so no minutes.
+export const closeFinished = (progress, tasks, day, now, makeId) => [...progress]
+  .filter(([id]) => tasks.get(id)?.done)
+  .map(([task_id, p]) => closingRow({ task_id, day, closes: p.ids }, now, makeId()));
+
 // Per task, its open rows (not done, closed by no closing row): { minutes, note, ids }, with the
 // newest note among them (or null) and their ids, which a closing row lists.
 export function progressByTask(rows) {

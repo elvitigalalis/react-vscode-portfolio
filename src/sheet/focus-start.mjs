@@ -5,7 +5,7 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { focusTarget, readSession, readOutbox, drainOutbox, focusClock, outboxAfter, serialDrain } from "./focus.mjs";
-import { progressByTask, progressText } from "./focus-notes.mjs";
+import { progressByTask, progressText, closeFinished } from "./focus-notes.mjs";
 import { addDays } from "./logic.mjs";
 import { el, state, render, renderHooks, actHooks, completeTask } from "./planner.mjs";
 import { saveBlock } from "./plan-today.mjs";
@@ -108,6 +108,12 @@ export function setupFocus(node) {
     let s = getSession();
     // A session whose task was finished elsewhere (the week's ✓, Telegram) ends.
     if (s && state.tasks.get(s.task_id)?.done) { setSession(null); s = null; }
+    // So does its credit: a closing row for each done task with open rows (once they're read).
+    if (logLoaded) {
+      const rows = closeFinished(progress, state.tasks, state.today, new Date(), () => crypto.randomUUID());
+      for (const row of rows) addLog(row);
+      if (rows.length) queue(...rows.map((row) => ({ op: "log", row }))).catch(console.error);
+    }
     const target = s ? { id: s.block_id, task_id: s.task_id } : focusTarget(state.blocks, state.tasks, new Date(), SHEET.timeZone);
     // A Someday task or a project's step can hold a block today without being on today's list
     // (the horizon gives it minutes, the morning plan times them); its Start goes on its row in

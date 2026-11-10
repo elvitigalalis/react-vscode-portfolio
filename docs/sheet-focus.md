@@ -54,8 +54,10 @@ next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glo
   and estimate learning see the whole time the task took, and adds a `focus_log` row with
   `done = true` whose `closes` lists exactly the rows it counted; a row this page never read (a
   Stop on another device) stays open. If `focus_log` hasn't been read yet (offline since load),
-  Done counts no earlier credit and writes no closing row. A task finished with the week's ✓ or Telegram keeps
-  its credit rows but shows none (it is done); reopened, the old credit would show again.
+  Done counts no earlier credit and writes no closing row. A task finished outside focus (the
+  week's ✓, Telegram) gets a closing row for its open rows the next time /plan draws it done
+  (`closeFinished`, no minutes of its own), so reopening it doesn't bring back old credit or
+  notes.
 - Writes go through the same outbox as Done (`{ op: "log", row }`), each row with an id made in the
   page, so a retry is a duplicate PostgREST skips. The credit shows at once, before the row saves.
   The note is cut to 280 characters by code point, so an emoji is never split. Any outbox write
