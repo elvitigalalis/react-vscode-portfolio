@@ -22,7 +22,8 @@ import { choicesFor, closedLine, decisionChange, firstUp, rollsOnServer, targetO
 document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
 const tz = SHEET.timeZone;
-const FRESH_MS = 2 * 60_000; // a warm read this recent is used as it is
+const FRESH_MS = 2 * 60_000; // a warm look-ahead this recent is used as it is
+const WINS_FRESH_MS = 5_000; // wins read this recently (the opening tap's own press) aren't read again
 
 let dialog;
 let today;
@@ -39,19 +40,31 @@ let drawnWins = false;
 
 const quiet = (p) => p.catch((e) => { console.error(e); return []; });
 
-// The wins' own reads (today's Hevy workouts, the habits ticked today) and the look back and ahead.
-// Each lands on its own; a read that fails leaves its part out.
-export function prefetch(day) {
-  if (reads?.day === day && Date.now() - reads.at < FRESH_MS) return reads;
-  const r = { day, at: Date.now(), winsData: null, extrasOk: null };
+// The wins' own reads: today's Hevy workouts and the habits ticked today. Each lands on its own; a
+// read that fails leaves its part out.
+function readWins(r) {
+  r.winsAt = Date.now();
+  const mine = r.winsGen = (r.winsGen ?? 0) + 1;
+  r.winsData = null;
   r.wins = Promise.all([
-    quiet(api.rest(`hevy_workouts?select=id,title,starts_at,ends_at&day=eq.${day}&order=starts_at`)),
+    quiet(api.rest(`hevy_workouts?select=id,title,starts_at,ends_at&day=eq.${r.day}&order=starts_at`)),
     quiet(api.rest(`habit_done?select=habit_id&day=eq.${habitDay(new Date(), tz)}`)),
     quiet(api.rest("habits?select=id,name&order=position,created_at")),
   ]).then(([workouts, ticks, habits]) => {
     const ticked = new Set(ticks.map((t) => t.habit_id));
-    r.winsData = { workouts, habits: habits.filter((h) => ticked.has(h.id)).map((h) => h.name) };
+    const data = { workouts, habits: habits.filter((h) => ticked.has(h.id)).map((h) => h.name) };
+    if (r.winsGen === mine) r.winsData = data; // an older read landing late is dropped
   });
+  return r.wins;
+}
+
+// Warm-up (shutdown.mjs): the wins and the look back and ahead. A warm look-ahead under two
+// minutes old is used as it is; the wins are read again on every open (WINS_FRESH_MS covers the
+// read the same tap's press started), since a workout or a habit can land at any minute.
+export function prefetch(day) {
+  if (reads?.day === day && Date.now() - reads.at < FRESH_MS) return reads;
+  const r = { day, at: Date.now(), winsData: null, extrasOk: null };
+  readWins(r);
   // A prepare a newer one overtook leaves its own reads object stale; only `reads` is drawn.
   r.extras = lb.prepare(day).then((latest) => { if (latest) r.extrasOk = true; }, (e) => { console.error(e); r.extrasOk = false; });
   reads = r;
@@ -263,6 +276,7 @@ export function open(day) {
   shown = new Set();
   drawnWins = false;
   const r = prefetch(today);
+  if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
   r.wins.then(redraw(r));
   r.extras.then(redraw(r));
   draw();
