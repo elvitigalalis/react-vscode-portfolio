@@ -305,28 +305,44 @@ export function moveTask(id, where, position) {
     .then(() => offerUndo("Moved.", () => patch(id, before), ticket));
 }
 
+// A done task's blocks: one running now shrinks to end now; one not started yet goes.
+async function settleBlocks(id) {
+  const at = new Date();
+  for (const b of blocksOf(id)) {
+    const r = blockOnComplete(b, at);
+    if (r.action === "delete") {
+      if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
+      await api.deleteBlock(b.id);
+      state.blocks = state.blocks.filter((x) => x.id !== b.id);
+    } else if (r.action === "shrink") {
+      if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: r.ends_at } });
+      Object.assign(b, await api.updateBlock(b.id, { ends_at: r.ends_at }));
+    }
+  }
+}
+
 // Done (or not) shows at once; the promise settles with the save. `lead` goes before "Done: …" in
 // the Undo toast ("Day cleared."), written with it in one go so a screen reader hears it once.
 export function completeTask(id, done = true, lead = null) {
   const t = state.tasks.get(id);
   const ticket = undoTicket();
   return write(id, { done }, async () => {
-    if (done) {
-      const at = new Date();
-      for (const b of blocksOf(id)) {
-        const r = blockOnComplete(b, at);
-        if (r.action === "delete") {
-          if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
-          await api.deleteBlock(b.id);
-          state.blocks = state.blocks.filter((x) => x.id !== b.id);
-        } else if (r.action === "shrink") {
-          if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: r.ends_at } });
-          Object.assign(b, await api.updateBlock(b.id, { ends_at: r.ends_at }));
-        }
-      }
-    }
+    if (done) await settleBlocks(id);
     return updated(id, { done });
   }).then(() => { if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false }), ticket); });
+}
+
+// A move or a check-off with no Undo toast (Shutdown's Finish saves several and says so itself),
+// through the same per-row queue: it shows at once, a move to another day drops the task's blocks
+// and a check-off settles them, and the promise settles with the save (a PATCH that matched no
+// row fails, and the row goes).
+export function saveTask(id, change) {
+  const moving = "day" in change && change.day !== state.tasks.get(id)?.day;
+  return write(id, change, async () => {
+    if (moving) await dropBlocks(id);
+    if (change.done) await settleBlocks(id);
+    return updated(id, change);
+  });
 }
 
 // ✓ on a row (and a swipe or the Now/Next line): flip it at once, and say so if it didn't save.

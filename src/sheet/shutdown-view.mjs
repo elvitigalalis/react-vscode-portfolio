@@ -11,7 +11,7 @@ import css from "../styles/sheet-shutdown.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, byPosition, localNow, positionBetween, weekDays } from "./logic.mjs";
-import { el, state, render, load, completeTask, dropBlocks, failed, progressHooks } from "./planner.mjs";
+import { el, state, render, load, saveTask, failed, progressHooks } from "./planner.mjs";
 import { dayProgress } from "./progress.mjs";
 import { habitDay } from "./habit-rate.mjs";
 import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
@@ -333,21 +333,13 @@ async function saveDecisions() {
   const rolled = open.filter((t) => rollsOnServer(t, decisions.get(t.id)));
   // Every write runs to its end, so one failure doesn't leave the others mid-flight; then any
   // failure stops Finish before the day is shut down, and a second Finish retries what's left.
-  const results = await Promise.allSettled(open.filter((t) => !rolled.includes(t)).map(async (t) => {
+  // Each goes through the row's save queue (planner.mjs, saveTask): it shows at once and saves
+  // after the row's earlier saves, with no Undo toast; one that fails puts its row back. A PATCH
+  // that matched no row (the task gone elsewhere) is a failure too, and its row goes.
+  const results = await Promise.allSettled(open.filter((t) => !rolled.includes(t)).map((t) => {
     const kind = decisions.get(t.id);
-    // A PATCH that matched no row (the task gone, or row-level security) saved nothing: a failure.
-    const gone = () => new Error(`"${t.title}" wasn't found to save`);
-    if (kind === "done") {
-      await completeTask(t.id, true);
-      if (!state.tasks.get(t.id)) { state.tasks.set(t.id, t); throw gone(); }
-      return;
-    }
-    const where = targetOf(kind, today);
-    const change = decisionChange(t, kind, today, end(where));
-    if (where.day !== t.day) await dropBlocks(t.id);
-    const saved = await api.updateTask(t.id, change);
-    if (!saved) throw gone();
-    state.tasks.set(t.id, saved);
+    const change = kind === "done" ? { done: true } : decisionChange(t, kind, today, end(targetOf(kind, today)));
+    return saveTask(t.id, change).catch((e) => { throw e?.gone ? Object.assign(new Error(`"${t.title}" is gone`), { cause: e }) : e; });
   }));
   const refused = results.filter((x) => x.status === "rejected");
   if (refused.length) {
