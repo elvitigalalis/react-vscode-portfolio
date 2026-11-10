@@ -31,14 +31,14 @@ export function setupFocusView(deps) {
     leftOff: el("input", { type: "text", id: "sheet-focus-leftoff", maxLength: NOTE_MAX, autocomplete: "off", placeholder: "Next: …" }),
   };
   parts.actions = el("div", { className: "sheet-focus-actions" },
-    button("Done", "primary", done), button(`+${EXTEND_MIN} min`, "", extend), parts.stuck, button("Stop", "", askStop));
+    button("Done", "primary", done), button(`+${EXTEND_MIN} min`, "", extend), parts.stuck, parts.stopButton = button("Stop", "", askStop));
   // Stop's question, in place of the actions until he saves or keeps going. Enter saves.
   parts.stop = el("form", { className: "sheet-focus-stop", hidden: true },
     el("label", { htmlFor: "sheet-focus-leftoff", textContent: "Where did you leave off?" }),
     parts.leftOff,
     el("div", { className: "sheet-focus-actions" },
       el("button", { type: "submit", className: "sheet-btn primary", textContent: "Save and stop" }),
-      button("Keep going", "", keepGoing)));
+      button("Keep going", "", () => keepGoing(true))));
   parts.stop.addEventListener("submit", (e) => { e.preventDefault(); stop(); });
   dialog = el("dialog", { className: "sheet-focus" },
     button("Back to plan", "sheet-focus-leave", () => dialog.close()),
@@ -50,6 +50,12 @@ export function setupFocusView(deps) {
       parts.note));
   dialog.setAttribute("aria-labelledby", "sheet-focus-title");
   dialog.addEventListener("close", () => { clearInterval(timer); render(); });
+  // Escape while Stop's question is open goes back to the actions, keeping the view and session.
+  dialog.addEventListener("cancel", (e) => {
+    if (parts.stop.hidden) return;
+    e.preventDefault();
+    keepGoing(true);
+  });
   document.body.append(dialog);
 }
 
@@ -154,9 +160,11 @@ function askStop() {
   parts.leftOff.value = "";
   parts.leftOff.focus();
 }
-function keepGoing() {
+// Back to the actions; from Keep going or Escape, with focus on Stop again.
+function keepGoing(refocus = false) {
   parts.stop.hidden = true;
   parts.actions.hidden = false;
+  if (refocus) parts.stopButton.focus();
 }
 
 // Save and stop: the minutes and the note go to focus_log (credited to the task, shown at its next

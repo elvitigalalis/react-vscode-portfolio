@@ -27,7 +27,8 @@ end with the time since Start, and four actions. Terms are as in [GLOSSARY.md](.
   to Claude, each with its Undo (docs/sheet-messages.md). It is the message box's own send, so it
   fires the morning task the same way and nothing new runs on the server.
 - **Stop** ends the session without finishing the task. It asks "Where did you leave off?" (one
-  line, up to 280 characters, may be blank) with **Save and stop** and **Keep going**; see "Stop
+  line, up to 280 characters, may be blank) with **Save and stop** and **Keep going** (Escape does
+  the same as Keep going there, and focus returns to Stop); see "Stop
   and where I left off" below.
 - **Back to plan** (or Escape) leaves the view; the timer keeps running and Resume brings it back.
 - **Deep link:** `/plan/?focus=<block id>` opens the view for that block once the week loads (a
