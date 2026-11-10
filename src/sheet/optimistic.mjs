@@ -80,5 +80,8 @@ export function ledger({ get, set, drop = () => {} }) {
       gone.set(key, ++clock);
     },
     pending: (key) => open.has(key),
+    // The row as the server last confirmed it, without the changes still out (what an Undo
+    // goes back to).
+    confirmed: (key) => open.get(key)?.base ?? get(key),
   };
 }

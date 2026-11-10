@@ -165,7 +165,16 @@ let undoFn = null;
 let toastTimer;
 let toast = null; // kept by reference: it moves into an open dialog (toast-host.mjs)
 
-export function offerUndo(text, fn) {
+// An Undo belongs to the action that made it, not to when its save lands. Each action takes a
+// ticket when it happens (undoTicket) and offers its Undo with it once saved; a save that lands
+// after a newer action's toast has shown offers nothing, so Undo never undoes the older one.
+let tickets = 0;
+let shownTicket = 0;
+export const undoTicket = () => ++tickets;
+
+export function offerUndo(text, fn, ticket = undoTicket()) {
+  if (ticket < shownTicket) return;
+  shownTicket = ticket;
   undoFn = fn;
   toast.querySelector("[data-toast-text]").textContent = text;
   toast.hidden = false;
@@ -279,18 +288,22 @@ export async function addTask(text, where, extra = {}) {
 // a plan for one day.
 export function moveTask(id, where, position) {
   const t = state.tasks.get(id);
+  const ticket = undoTicket();
   const target = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const pos = position ?? positionBetween(lastPosition(target.filter((x) => x.id !== id)), null);
-  const { change, before } = moveChange(t, where, pos);
+  // Undo goes back to where the server has it, not to a move still saving (or one that failed).
+  const { change } = moveChange(t, where, pos);
+  const { before } = moveChange(taskBook.confirmed(id) ?? t, where, pos);
   const moving = where.day !== t.day;
   return write(id, change, async () => { if (moving) await dropBlocks(id); return updated(id, change); })
-    .then(() => offerUndo("Moved.", () => patch(id, before)));
+    .then(() => offerUndo("Moved.", () => patch(id, before), ticket));
 }
 
 // Done (or not) shows at once; the promise settles with the save. `lead` goes before "Done: …" in
 // the Undo toast ("Day cleared."), written with it in one go so a screen reader hears it once.
 export function completeTask(id, done = true, lead = null) {
   const t = state.tasks.get(id);
+  const ticket = undoTicket();
   return write(id, { done }, async () => {
     if (done) {
       const at = new Date();
@@ -307,7 +320,7 @@ export function completeTask(id, done = true, lead = null) {
       }
     }
     return updated(id, { done });
-  }).then(() => { if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false })); });
+  }).then(() => { if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false }), ticket); });
 }
 
 // ✓ on a row (and a swipe or the Now/Next line): flip it at once, and say so if it didn't save.
@@ -402,6 +415,7 @@ function focusAfter(id, sel, list, index) {
 
 async function removeTask(id) {
   const t = state.tasks.get(id);
+  const ticket = undoTicket();
   await firstLoad; // its blocks as loaded, not as stored
   await dropBlocks(id);
   await api.deleteTask(id);
@@ -410,11 +424,13 @@ async function removeTask(id) {
   offerUndo(`Deleted: ${t.title}`, async () => {
     const back = await api.insertTask(copy);
     state.tasks.set(back.id, back);
-  });
+  }, ticket);
 }
 
 async function editTask(id, text) {
   const t = state.tasks.get(id);
+  const ticket = undoTicket();
+  const was = taskBook.confirmed(id) ?? t;
   const parsed = parseEntry(text, t.day ?? state.today);
   if (!parsed.title) return removeTask(id);
   // Details typed while editing apply; ones not typed stay as they were.
@@ -422,10 +438,10 @@ async function editTask(id, text) {
   for (const k of ["est_min", "at_time", "tag", "due"]) if (parsed[k] !== null) change[k] = parsed[k];
   if (!change.due && !t.due) { const due = titleDue(parsed.title, state.today); if (due) change.due = due; }
   if (VIS.test(text)) change.public = parsed.public;
-  const before = { title: t.title, est_min: t.est_min, at_time: t.at_time, tag: t.tag, public: t.public, due: t.due };
+  const before = { title: was.title, est_min: was.est_min, at_time: was.at_time, tag: was.tag, public: was.public, due: was.due };
   await patch(id, change);
   if (change.public !== undefined && change.public !== before.public) await retitleBlocks(id);
-  offerUndo("Edited.", () => patch(id, before));
+  offerUndo("Edited.", () => patch(id, before), ticket);
 }
 
 // A block's Google title follows the task's visibility: its title if public, "Busy" if not.
@@ -437,15 +453,18 @@ export async function retitleBlocks(id) {
 
 async function toggleVisibility(id) {
   const t = state.tasks.get(id);
+  const ticket = undoTicket();
+  const was = (taskBook.confirmed(id) ?? t).public;
   await patch(id, { public: !t.public });
   await retitleBlocks(id);
-  offerUndo(t.public ? "Now private." : "Now public.", async () => { await patch(id, { public: t.public }); await retitleBlocks(id); });
+  offerUndo(t.public ? "Now private." : "Now public.", async () => { await patch(id, { public: was }); await retitleBlocks(id); }, ticket);
 }
 
 async function clearDue(id) {
-  const due = state.tasks.get(id).due;
+  const ticket = undoTicket();
+  const due = (taskBook.confirmed(id) ?? state.tasks.get(id)).due;
   await patch(id, { due: null });
-  offerUndo("Due date cleared.", () => patch(id, { due }));
+  offerUndo("Due date cleared.", () => patch(id, { due }), ticket);
 }
 
 // --- Rendering ---------------------------------------------------------------------------
@@ -604,9 +623,10 @@ export async function toggleEventTodo(target, { quiet = false } = {}) {
   if (!row) return;
   const li = target.closest?.(".sheet-evtodo") ?? root.querySelector(`.sheet-day[data-day="${day}"] .sheet-evtodo[data-key="${CSS.escape(key)}"]`);
   const save = async () => {
+    const ticket = undoTicket();
     try {
       await saveEventTodo(key, day, { done: !row.done });
-      if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
+      if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }), ticket);
     } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
   };
   // As with a task: done shows at once, and the save runs on behind the redraw.
@@ -639,9 +659,10 @@ async function eventMenuAction(act) {
   const { key, day, row } = eventRowOf($("[data-evmenu]"));
   if (!row) return;
   if (act === "evtodo-open") return void window.open(row.link, "_blank", "noopener");
+  const ticket = undoTicket();
   try {
     await saveEventTodo(key, day, { hidden: true });
-    offerUndo(`Hidden: ${row.title}`, () => saveEventTodo(key, day, { hidden: false }));
+    offerUndo(`Hidden: ${row.title}`, () => saveEventTodo(key, day, { hidden: false }), ticket);
   } catch (e) { failed(e, `hide "${row.title}"`, () => saveEventTodo(key, day, { hidden: true })); }
   render();
 }
@@ -1497,8 +1518,9 @@ function wire() {
     // row goes, "Not added" shows by the box and the words go back in it if it's still empty;
     // Retry adds it and empties the box again. Also did… logs it already done, with Undo.
     const log = async () => {
+      const ticket = undoTicket();
       const t = await addTask(text, where, also ? { done: true } : {});
-      if (also && t) offerUndo(`Logged: ${t.title}`, async () => { await api.deleteTask(t.id); forgetTask(t.id); });
+      if (also && t) offerUndo(`Logged: ${t.title}`, async () => { await api.deleteTask(t.id); forgetTask(t.id); }, ticket);
     };
     const add = async () => { await log(); const box = addBox(where); if (box?.value === text) { box.value = ""; fitBox(box); } };
     const going = log();

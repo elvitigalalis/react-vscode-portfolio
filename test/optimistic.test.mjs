@@ -175,3 +175,16 @@ test("a load that read before a delete leaves the row out, and says it changed t
   box.rows = new Map();
   assert.equal(l.keep(next), false);
 });
+
+test("confirmed is the server's copy, without the changes still out", async () => {
+  const { l } = setup();
+  const boom = l.write("t1", { day: "2026-11-04" }, async () => { throw new Error("500"); });
+  const s = later();
+  const next = l.write("t1", { day: "2026-11-05" }, s.save);
+  assert.equal(l.confirmed("t1").day, "2026-11-03");
+  await assert.rejects(boom);
+  assert.equal(l.confirmed("t1").day, "2026-11-03");
+  s.ok({ id: "t1", done: false, day: "2026-11-05" });
+  await next;
+  assert.equal(l.confirmed("t1").day, "2026-11-05");
+});
