@@ -16,12 +16,16 @@ async function refresh(tasks) {
   const rows = await api.listProjects();
   const steps = await api.listSteps(rows.map((p) => p.id));
   if (state.tasks !== tasks) return; // a newer load is on its way
+  const changed = JSON.stringify(rows) !== JSON.stringify(projects);
   projects = rows;
   // Steps on a day outside the week still need to be known for their rows to work.
-  for (const t of steps) if (!state.tasks.has(t.id)) state.tasks.set(t.id, t);
-  // A full redraw, not just this list's, so the other hooks see the steps' rows too (focus
-  // Start on a step's block today). The hook below then only draws: state.tasks is `seen`.
-  render();
+  const added = steps.filter((t) => !state.tasks.has(t.id));
+  for (const t of added) state.tasks.set(t.id, t);
+  // Only this list redraws, unless a step new to the page has a block: then the whole page, so
+  // the other hooks see it too (focus Start on a step's block today). The hook below then only
+  // draws: state.tasks is `seen`.
+  if (added.some((t) => state.blocks.some((b) => b.task_id === t.id))) render();
+  else if (changed || added.length) draw();
 }
 
 function row(p, s) {
