@@ -212,7 +212,26 @@ const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -
 // Saves wait for the first load to land: a change made on the stored copy (snapshot.mjs) shows at
 // once, but what it saves (a block to shorten or delete, say) is worked out from the fresh rows.
 let loaded;
-const firstLoad = new Promise((r) => { loaded = r; });
+let hasLoaded = false;
+const firstLoad = new Promise((r) => { loaded = () => { hasLoaded = true; r(); }; });
+// Shutdown opens on the fresh rows, never the stored copy: it waits for this. Until a load has
+// landed, a failed one (its reads, or settings at start) rejects it, so a waiter can say so and
+// retry: a waiter that comes after the failure, before any new load starts, is rejected at once;
+// a new load clears it, and each failure arms a fresh rejection for the next try.
+let firstFailed;
+let failedWith = null;
+const armFailed = () => { let reject; const p = new Promise((_, r) => { reject = r; }); p.catch(() => {}); firstFailed = { p, reject }; };
+armFailed();
+function failFirst(e) {
+  if (hasLoaded) return;
+  failedWith = e;
+  const f = firstFailed;
+  armFailed();
+  f.reject(e);
+}
+export const afterFirstLoad = () => (hasLoaded ? firstLoad : failedWith ? Promise.reject(failedWith) : Promise.race([firstLoad, firstFailed.p]));
+// Whether a task has a save still out in its row queue (optimistic.mjs).
+export const savePending = (id) => Boolean(taskBook?.pending(id));
 
 // A save that finds its task deleted (`gone`) takes the row away rather than putting it back.
 function saving(book, key, change, save) {
@@ -305,28 +324,44 @@ export function moveTask(id, where, position) {
     .then(() => offerUndo("Moved.", () => patch(id, before), ticket));
 }
 
+// A done task's blocks: one running now shrinks to end now; one not started yet goes.
+async function settleBlocks(id) {
+  const at = new Date();
+  for (const b of blocksOf(id)) {
+    const r = blockOnComplete(b, at);
+    if (r.action === "delete") {
+      if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
+      await api.deleteBlock(b.id);
+      state.blocks = state.blocks.filter((x) => x.id !== b.id);
+    } else if (r.action === "shrink") {
+      if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: r.ends_at } });
+      Object.assign(b, await api.updateBlock(b.id, { ends_at: r.ends_at }));
+    }
+  }
+}
+
 // Done (or not) shows at once; the promise settles with the save. `lead` goes before "Done: …" in
 // the Undo toast ("Day cleared."), written with it in one go so a screen reader hears it once.
 export function completeTask(id, done = true, lead = null) {
   const t = state.tasks.get(id);
   const ticket = undoTicket();
   return write(id, { done }, async () => {
-    if (done) {
-      const at = new Date();
-      for (const b of blocksOf(id)) {
-        const r = blockOnComplete(b, at);
-        if (r.action === "delete") {
-          if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
-          await api.deleteBlock(b.id);
-          state.blocks = state.blocks.filter((x) => x.id !== b.id);
-        } else if (r.action === "shrink") {
-          if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: r.ends_at } });
-          Object.assign(b, await api.updateBlock(b.id, { ends_at: r.ends_at }));
-        }
-      }
-    }
+    if (done) await settleBlocks(id);
     return updated(id, { done });
   }).then(() => { if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false }), ticket); });
+}
+
+// A move or a check-off with no Undo toast (Shutdown's Finish saves several and says so itself),
+// through the same per-row queue: it shows at once, a move to another day drops the task's blocks
+// and a check-off settles them, and the promise settles with the save (a PATCH that matched no
+// row fails, and the row goes).
+export function saveTask(id, change) {
+  const moving = "day" in change && change.day !== state.tasks.get(id)?.day;
+  return write(id, change, async () => {
+    if (moving) await dropBlocks(id);
+    if (change.done) await settleBlocks(id);
+    return updated(id, change);
+  });
 }
 
 // ✓ on a row (and a swipe or the Now/Next line): flip it at once, and say so if it didn't save.
@@ -903,6 +938,7 @@ let lastRead = null;  // the last load's rows, as JSON
 let eventsFor = null; // the Monday of the week state.events are for
 export async function load({ scroll = true, quiet = false, sync = null, afterCopy = false } = {}) {
   const gen = ++loadGen;
+  failedWith = null; // a new try: waiters wait for it (afterFirstLoad)
   const since = [taskBook.now(), todoBook.now()];
   const days = weekDays(state.week);
   const events = Promise.resolve(sync).catch(console.error).then(() => readEvents(days));
@@ -919,7 +955,7 @@ export async function load({ scroll = true, quiet = false, sync = null, afterCop
     api.listHorizon(now().day),
     api.listHorizonStates(),
     api.listActualsOn(now().day),
-  ]);
+  ]).catch((e) => { failFirst(e); throw e; });
   if (gen !== loadGen) return;
   const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = read;
   const json = JSON.stringify([days[0], now().day, read]);
@@ -1626,7 +1662,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     status.replaceChildren("This is Lisul's planner. The public view is at ", el("a", { href: "/now/", textContent: "/now" }), ". ", button);
     return;
   }
-  try { await books(); } catch (e) { return failed(e); }
+  try { await books(); } catch (e) { failFirst(e); return failed(e); }
   wire();
   for (const plugin of plugins) plugin(root);
   // The settings read goes out now; only the draw waits for drawWaits, not the network.
@@ -1652,6 +1688,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   try {
     const settings = await reading;
     if (!settings) {
+      failFirst(new Error("This account cannot open the planner."));
       clearPage();
       setStatus("This account cannot open the planner.");
       $("[data-tools]").hidden = false;
@@ -1668,6 +1705,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     openFromLink();
   } catch (e) {
     held?.putBack();
+    failFirst(e);
     if (!copy) return failed(e);
     console.error(e);
     setStatus(COPY_FAILED);

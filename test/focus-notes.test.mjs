@@ -103,3 +103,10 @@ test("the row's line says the minutes focused, against the estimate when there i
   assert.equal(progressText({ minutes: 0, note: "x" }, 30), null);
   assert.equal(progressText(undefined, 30), null);
 });
+
+test("/plan reads each focus_log row's day, which focused today counts by", async () => {
+  const { readFileSync } = await import("node:fs");
+  const api = readFileSync(new URL("../src/sheet/api.mjs", import.meta.url), "utf8");
+  const select = /focus_log\?select=([^&]+)/.exec(api.match(/listFocusLog = [^\n]+/)[0])[1].split(",");
+  assert.ok(select.includes("day"), select.join());
+});

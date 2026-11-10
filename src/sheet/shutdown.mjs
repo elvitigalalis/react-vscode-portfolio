@@ -1,109 +1,47 @@
-// Shutdown (docs/sheet.md): Done and Tomorrow for today, one reflection box, a look ahead at
-// tomorrow, then Finish. Nothing is saved before Finish; then the rest rolls to tomorrow and the
-// day is stamped. The look back and ahead is lazy (lookback-shutdown.mjs); without it the dialog
-// finishes from its first step.
+// Shutdown (docs/sheet.md): the Shut down button, `O`, and Telegram's ?open=shutdown. The dialog
+// itself is shutdown-view.mjs, loaded on demand. To open it at once, its code and its reads are
+// warmed ahead: when the button shows (at idle), and on hover, focus or a press of the button.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { localNow, byPosition } from "./logic.mjs";
-import { el, state, render, load, completeTask, keyHooks, actHooks, renderHooks, failed } from "./planner.mjs";
-import { burst } from "./celebrate.mjs";
+import { localNow, weekDays } from "./logic.mjs";
+import { state, keyHooks, actHooks, renderHooks, failed, render } from "./planner.mjs";
 import { shutdownAt } from "./plan-today.mjs";
+// shutdown-close.mjs's shutdownDay is habitDay; imported straight from habit-rate.mjs so the
+// first load doesn't carry the rest of shutdown-close.mjs.
+import { habitDay as shutdownDay } from "./habit-rate.mjs";
 
-let dialog;
-let today;
-let done;          // id → done, as edited in the dialog
-let reflection = "";
-let extras = null; // lookback-shutdown.mjs, loaded on open
-let step = "today";
+let root;
+let view = null;
+let warmedOn = null; // the day the idle warm-up ran
+// Whether a day off the week on screen is shut down (state.days holds only that week): read once
+// per day, and set when Shutdown closes one.
+const outside = new Map();
 
-const todays = () => [...state.tasks.values()].filter((t) => t.day === today).sort(byPosition);
+// Before 4 am Shutdown is for the day before (shutdown-close.mjs, shutdownDay).
+const today = () => shutdownDay(new Date(), SHEET.timeZone);
+const closedOn = (day) => Boolean(state.days[day]?.shutdown) || outside.get(day) === true;
+const loadView = () => (view ??= import("./shutdown-view.mjs").then((m) => { m.setupView(root, { closed: (day) => outside.set(day, true) }); return m; }, (e) => { view = null; throw e; }));
+const warm = () => loadView().then((m) => m.prefetch(today())).catch(console.error);
+// Not before settings has answered, nor for an account that can't open the planner (no settings).
+const open = () => (state.settings ? loadView().then((m) => m.open(today()), failed) : null);
+const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 1500));
 
-function column(title, isDone) {
-  const items = todays().filter((t) => done.get(t.id) === isDone);
-  return el("section", { className: "sheet-shut-col" },
-    el("h3", { textContent: `${title} (${items.length})` }),
-    el("ul", {}, ...items.map((t) => {
-      const b = el("button", { type: "button", className: "sheet-shut-item", textContent: t.title });
-      b.dataset.id = t.id;
-      b.setAttribute("aria-label", `${t.title}: move to ${isDone ? "Tomorrow" : "Done"}`);
-      return el("li", {}, b);
-    })));
-}
-
-function draw(finished = false) {
-  if (finished) {
-    dialog.replaceChildren(
-      el("h2", { id: "sheet-shut-title", textContent: "Shutdown complete" }),
-      el("p", { textContent: "The rest is on tomorrow. See you then." }),
-      el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })));
-    return;
-  }
-  if (step === "tomorrow") {
-    dialog.replaceChildren(...[
-      el("h2", { id: "sheet-shut-title", textContent: "Tomorrow" }),
-      ...extras.tomorrowPart(done, todays(), draw),
-      el("div", { className: "sheet-dialog-end" },
-        el("button", { type: "button", className: "sheet-btn", textContent: "Back", onclick: () => { step = "today"; draw(); } }),
-        el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })),
-    ].filter(Boolean));
-    return;
-  }
-  const box = el("textarea", { className: "sheet-reflect", rows: 3, value: reflection, ariaLabel: "What went well, what got in the way?", placeholder: "What went well, what got in the way?" });
-  box.addEventListener("input", () => { reflection = box.value; });
-  dialog.replaceChildren(...[
-    el("h2", { id: "sheet-shut-title", textContent: "Shut down" }),
-    el("p", { className: "small", textContent: "Click a task to move it between Done and Tomorrow." }),
-    el("div", { className: "sheet-shut-cols" }, column("Done", true), column("Tomorrow", false)),
-    ...(extras ? extras.todayPart(done, todays(), draw) : []),
-    box,
-    extras?.pastPart(),
-    el("div", { className: "sheet-dialog-end" },
-      el("button", { type: "button", className: "sheet-btn", textContent: "Cancel", onclick: () => dialog.close() }),
-      extras
-        ? el("button", { type: "button", className: "sheet-btn primary", textContent: "Next: tomorrow", onclick: () => { step = "tomorrow"; draw(); dialog.scrollTop = 0; } })
-        : el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })),
-  ].filter(Boolean));
-}
-
-async function open() {
-  today = localNow(new Date(), SHEET.timeZone).day;
-  step = "today";
-  extras = await import("./lookback-shutdown.mjs").then(async (m) => { await m.prepare(today); return m; }).catch((e) => { console.error(e); return null; });
-  done = new Map(todays().map((t) => [t.id, t.done]));
-  reflection = state.days[today]?.reflection ?? "";
-  draw();
-  dialog.showModal();
-}
-
-// Finish: the day's changes saved, then "Shutdown complete" with a small burst from the button.
-async function finish(e) {
-  const at = e?.currentTarget?.getBoundingClientRect();
-  try {
-    for (const t of todays()) if (done.get(t.id) !== t.done) await completeTask(t.id, done.get(t.id));
-    await api.shutDown(today, reflection.trim() || null);
-    await load();
-    step = "today";
-    draw(true);
-    if (at) burst(at, dialog);
-  } catch (e) { failed(e); }
-}
-
-export function setupShutdown(root) {
-  dialog = root.querySelector("[data-shut]");
+export function setupShutdown(node) {
+  root = node;
   actHooks.shutdown = open;
   keyHooks.push((e) => { if (e.key === "o" || e.key === "O") { open(); return true; } return false; });
-  dialog.addEventListener("click", (e) => {
-    const item = e.target.closest(".sheet-shut-item");
-    if (!item) return;
-    done.set(item.dataset.id, !done.get(item.dataset.id));
-    draw();
-    dialog.querySelector(`.sheet-shut-item[data-id="${item.dataset.id}"]`)?.focus();
-  });
-  dialog.addEventListener("close", () => render());
-  // The button shows from two hours before shutdown until the day is shut down.
+  const button = root.querySelector('[data-act="shutdown"]');
+  for (const type of ["pointerenter", "focus", "pointerdown"]) button.addEventListener(type, warm, { passive: true });
+  // The button shows from two hours before shutdown until the day is shut down; after midnight
+  // (before 4 am) it stays up for the day before until that is shut down.
   renderHooks.push(() => {
     const now = localNow(new Date(), SHEET.timeZone);
-    const button = root.querySelector('[data-act="shutdown"]');
-    button.hidden = Boolean(state.days[now.day]?.shutdown) || now.minutes < shutdownAt(now.day) - 120;
+    const day = today();
+    if (state.week && !weekDays(state.week).includes(day) && !outside.has(day)) {
+      outside.set(day, null);
+      api.rest(`days?select=day,shutdown&day=eq.${day}`).then((rows) => { outside.set(day, Boolean(rows[0]?.shutdown)); render(); }, console.error);
+    }
+    button.hidden = closedOn(day) || (day === now.day && now.minutes < shutdownAt(day) - 120);
+    if (!button.hidden && warmedOn !== day) { warmedOn = day; idle(warm); }
   });
 }

@@ -150,7 +150,7 @@ test("tomorrow's load against its room, with a next move when it runs over", () 
 
 test("nothing says missed, failed, streak, score or productive", async () => {
   const { readFileSync } = await import("node:fs");
-  for (const f of ["lookback.mjs", "lookback-view.mjs", "lookback-shutdown.mjs", "shutdown.mjs"]) {
+  for (const f of ["lookback.mjs", "lookback-view.mjs", "lookback-shutdown.mjs", "shutdown.mjs", "shutdown-view.mjs", "shutdown-close.mjs"]) {
     const code = readFileSync(new URL(`../src/sheet/${f}`, import.meta.url), "utf8");
     const strings = code.match(/"[^"\n]*"|`[^`\n]*`/g) ?? [];
     for (const s of strings) assert.doesNotMatch(s, /\b(missed|failed to|fail(ure)?s?|streak|score|productiv|overdue|behind)\b/i, `${f}: ${s}`);

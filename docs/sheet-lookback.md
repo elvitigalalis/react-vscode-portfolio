@@ -25,7 +25,7 @@ unchanged.
 | Kept moving (I5): "X keeps moving. What would make it easier to start?" with Give it a time, Split it, Move to Someday, Not now (hides it for 7 days on this device) | Plan today for that day's tasks, the Last week dialog, Shutdown's Tomorrow step | 2 rolls, a park in Inbox in the last 14 days, or 2 Tomorrow answers in 14 days |
 | Due dates (I7): "Due in the last 4 weeks: 6 tasks · 4 done by the due date · …" | Last week dialog | 5 tasks due in the last 28 days with a known finish |
 | Did On track hold (I7): "Marked On track about a week out: 9 of 10 finished by that date" | Last week dialog | 10 settled `horizon_calls` rows |
-| Shutdown (U14): today's event to-dos with checks, one line (done, moving to tomorrow, suggestions turned down, pace trend), earlier reflections collapsed, then a Tomorrow step with its events, tasks, load against its room and mover prompts | Shutdown | the pace trend needs 10 estimated actuals of a kind and a change; zeros are left out |
+| Shutdown (U14): today's event to-dos with checks, one line (moving to tomorrow, suggestions turned down, pace trend; the wins list above it says what got done), earlier reflections collapsed, then a Tomorrow step with its events, tasks, load against its room and mover prompts | Shutdown | the pace trend needs 10 estimated actuals of a kind and a change; zeros are left out |
 
 ## Data
 

@@ -1,7 +1,7 @@
 // Shutdown's look back and ahead (docs/sheet-lookback.md, research U14): today's event to-dos and
-// one line from what is logged, the last few reflections, and a Tomorrow step. Loaded when
-// Shutdown opens, so /plan's first-load script stays small; shutdown.mjs falls back to its plain
-// dialog when this can't load.
+// one line from what is logged, the last few reflections, and a Tomorrow step. Loaded with
+// shutdown-view.mjs, so /plan's first-load script stays small. Shutdown opens before these reads
+// land and fills them in; without them it finishes from its first step.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, dayLabel, eventsOnDay, formatClock, freeMinutes, load, weekdayName, zonedIso } from "./logic.mjs";
@@ -11,12 +11,14 @@ import { keepsMoving, paceTrend, shutdownLine, tomorrowLine } from "./lookback.m
 import { history, moverPrompts } from "./lookback-view.mjs";
 
 const tz = SHEET.timeZone;
-const ROLLS_BEFORE_INBOX = 3; // supabase/schema.sql, roll_tasks
 
 let data = null;
+let gen = 0; // the newest prepare; an older one that lands later is dropped
 
-// What Shutdown shows beyond the week on screen. Each read can fail alone.
+// What Shutdown shows beyond the week on screen. Each read can fail alone. Resolves true when its
+// reads became `data`, false when a newer prepare started meanwhile (the latest wins).
 export async function prepare(today) {
+  const mine = ++gen;
   const tomorrow = addDays(today, 1);
   const quiet = (p) => p.catch((e) => { console.error(e); return []; });
   const [hist, tasks, events, todos, turned, past] = await Promise.all([
@@ -27,12 +29,13 @@ export async function prepare(today) {
     quiet(api.rest(`feedback?select=ref&action=eq.turn_down&ref->>day=eq.${today}`)),
     quiet(api.rest(`days?select=day,reflection&day=lt.${today}&reflection=not.is.null&order=day.desc&limit=5`)),
   ]);
+  if (mine !== gen) return false;
   data = { today, tomorrow, hist, tasks, events, todos, turned: new Set(turned.map((f) => f.ref?.task_id)).size, past: past.filter((d) => d.reflection?.trim()) };
+  return true;
 }
 
-// Undone tasks with no time go to tomorrow at Finish, until the third roll sends them to Inbox.
-const rollsOn = (t) => (t.rolls ?? 0) < ROLLS_BEFORE_INBOX;
-const leaving = (doneMap, todays) => todays.filter((t) => !doneMap.get(t.id) && !t.at_time);
+// Tomorrow's tasks as read when Shutdown opened (tomorrow can be outside the week on screen).
+export const tomorrowTasks = () => data?.tasks ?? [];
 
 async function toggleEvent(row, redraw) {
   try {
@@ -44,11 +47,12 @@ async function toggleEvent(row, redraw) {
   } catch (e) { failed(e, `save "${row.title}"`); }
 }
 
-// Above the reflection box: today's events, each with its check, and the day's one line.
-export function todayPart(doneMap, todays, redraw) {
+// Above the reflection box: today's events, each with its check, and the day's one line. The
+// wins list above says what got done, so the line leaves that out. `moving` counts the tasks he
+// has sent to tomorrow so far.
+export function todayPart(moving, redraw) {
   const rows = rowsOn(data.today).filter((r) => r.kind === "event");
-  const moving = leaving(doneMap, todays).filter(rollsOn).length;
-  const line = shutdownLine({ done: todays.filter((t) => doneMap.get(t.id)).length, moving, turned_down: data.turned, trend: paceTrend(data.hist?.actuals ?? []) });
+  const line = shutdownLine({ done: 0, moving, turned_down: data.turned, trend: paceTrend(data.hist?.actuals ?? []) });
   return [
     rows.length ? el("section", { className: "sheet-shut-events" },
       el("h3", { textContent: "Today's events" }),
@@ -70,14 +74,13 @@ export function pastPart() {
       el("strong", { textContent: `${weekdayName(d.day)} ${dayLabel(d.day).date} ` }), d.reflection.trim()))));
 }
 
-// The Tomorrow step: its events, its tasks with those moving from today, the load against the
-// room, and a prompt for any that keep moving. Room is the cap or the free time around tomorrow's
-// events, as planner.mjs's dayCapacity, read here since tomorrow can be outside the week on screen.
-export function tomorrowPart(doneMap, todays, redraw) {
+// The Tomorrow step: its events, its tasks with those he is sending from today (`moving`), the
+// load against the room, and a prompt for any that keep moving. Room is the cap or the free time
+// around tomorrow's events, as planner.mjs's dayCapacity, read here since tomorrow can be outside
+// the week on screen.
+export function tomorrowPart(moving, redraw) {
   const { tomorrow, tasks, events, todos, hist } = data;
   const rows = dayRows({ day: tomorrow, timeZone: tz, tasks: [], events, blocks: state.blocks, todos });
-  const going = leaving(doneMap, todays);
-  const moving = going.filter(rollsOn), parked = going.filter((t) => !rollsOn(t));
   // A task moved out of the dialog since it opened reads from state.
   const staying = tasks.map((t) => state.tasks.get(t.id) ?? t).filter((t) => t.day === tomorrow && !t.done);
   const added = [...state.tasks.values()].filter((t) => t.day === tomorrow && !t.done && !staying.some((x) => x.id === t.id));
@@ -95,7 +98,6 @@ export function tomorrowPart(doneMap, todays, redraw) {
     rows.length ? el("ul", { className: "sheet-shut-list" }, ...rows.map((r) => el("li", {}, r.start == null || r.allDay ? null : el("span", { className: "sheet-meta", textContent: `${formatClock(r.start)} ` }), r.title))) : null,
     el("h3", { textContent: "Tasks" }),
     taskItems.length ? el("ul", { className: "sheet-shut-list" }, ...taskItems) : el("p", { className: "small", textContent: "Nothing on it yet." }),
-    parked.length ? el("p", { className: "small", textContent: `Going to Inbox: ${parked.map((t) => t.title).join(", ")}` }) : null,
     prompts,
   ];
 }
