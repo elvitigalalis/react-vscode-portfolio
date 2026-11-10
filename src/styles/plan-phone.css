@@ -136,3 +136,9 @@
 /* The week's count where phones hide the week title (planner.mjs, weekDoneMark). */
 .sheet-weekdone { display: none; margin: 0.15rem 0 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 @media (max-width: 48rem) { .sheet-weekdone { display: block; } }
+
+/* Saving in the background (planner.mjs), on every screen size; here so the gym page doesn't
+   carry them. A task typed in shows muted until its save lands, and a row whose change didn't
+   save says so under its title. */
+.sheet-adding { color: var(--muted); }
+.sheet-row-err { font-size: 0.75rem; color: var(--danger); }
