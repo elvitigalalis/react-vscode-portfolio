@@ -391,6 +391,8 @@ one tap.
    down, pace trend), and one optional box: *What went well, what got in the way?* (private,
    always). Earlier reflections sit collapsed under it ([sheet-lookback.md](sheet-lookback.md)).
 4. **Tomorrow:** its events, its tasks with those coming from today, and the load against its room.
+   If that look ahead fails, or hasn't landed after 8 seconds, the step says tomorrow's calendar
+   couldn't be read, lists the tasks moving there, and Finish still closes the day.
 5. **Finish:** nothing is saved before this. Each decision is saved (Tomorrow counts as a roll;
    This week and Someday are moves as the task menu makes them, so Someday clears the time and the
    rolls; Done is a check-off), then the day's unapproved proposed blocks are deleted, and the day

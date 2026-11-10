@@ -23,6 +23,7 @@ document.head.append(Object.assign(document.createElement("style"), { textConten
 
 const tz = SHEET.timeZone;
 const FRESH_MS = 2 * 60_000; // a warm look-ahead this recent is used as it is
+const EXTRAS_WAIT_MS = 8_000; // the look ahead counts as failed after this long
 const WINS_FRESH_MS = 5_000; // wins read this recently (the opening tap's own press) aren't read again
 
 let dialog;
@@ -67,6 +68,9 @@ export function prefetch(day) {
   readWins(r);
   // A prepare a newer one overtook leaves its own reads object stale; only `reads` is drawn.
   r.extras = lb.prepare(day).then((latest) => { if (latest) r.extrasOk = true; }, (e) => { console.error(e); r.extrasOk = false; });
+  // A read that hangs counts as failed after EXTRAS_WAIT_MS, so nothing waits on it for good; if it
+  // lands later after all, its parts still fill in.
+  r.extrasLate = new Promise((done) => setTimeout(() => { if (r.extrasOk == null) r.extrasOk = false; done(); }, EXTRAS_WAIT_MS));
   reads = r;
   return r;
 }
@@ -211,9 +215,18 @@ function buildToday() {
   fill(parts.end, endNodes());
 }
 
+// Tomorrow's look ahead; while it reads, a line; if it couldn't be read, what is known here (the
+// tasks he is sending) and that Finish still works.
 function tomorrowNodes() {
-  return reads?.extrasOk === true ? lb.tomorrowPart(sentTomorrow(), () => fill(parts.tomorrow, tomorrowNodes()))
-    : [el("p", { className: "small", textContent: "Reading tomorrow…" })];
+  const status = reads?.extrasOk;
+  if (status === true) return lb.tomorrowPart(sentTomorrow(), () => fill(parts.tomorrow, tomorrowNodes()));
+  if (status == null) return [el("p", { className: "small", textContent: "Reading tomorrow…" })];
+  const going = sentTomorrow();
+  return [
+    el("p", { className: "small", textContent: "Tomorrow's calendar couldn't be read just now. Finish still closes the day." }),
+    going.length ? el("h3", { textContent: "Moving to tomorrow" }) : null,
+    going.length ? el("ul", { className: "sheet-shut-list" }, ...going.map((t) => el("li", { textContent: t.title }))) : null,
+  ];
 }
 
 function buildTomorrow() {
@@ -371,6 +384,7 @@ export function open(day) {
   if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
   r.wins.then(landed(r));
   r.extras.then(landed(r));
+  r.extrasLate.then(landed(r));
   buildToday();
   dialog.showModal();
   dialog.querySelector(".sheet-shut-choice, [data-key='next']")?.focus();
