@@ -388,7 +388,8 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-seg.is-block { background: var(--accent); }
 .sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
 /* Red is for what needs acting on (overdue, over capacity, a failed feed); the time of day isn't. */
-.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); }
+/* A 1px halo in the page colour keeps it visible over a block, which is the same accent. */
+.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); box-shadow: 0 0 0 1px var(--bg); }
 /* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
 .sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
 .sheet-planbar .sheet-meter { height: 6px; border-radius: 3px; }
