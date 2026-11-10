@@ -777,7 +777,7 @@ export function render() {
   if (holds) { owed = true; return; }
   const a = document.activeElement;
   // An edit in place redraws when it ends (startEdit), so a save landing mid-edit can't wipe it.
-  if (a?.classList.contains("sheet-edit") && root.contains(a)) return;
+  if (a?.matches(".sheet-edit:not([data-done])") && root.contains(a)) return;
   // The box being typed in keeps its words and caret: saves now land while he types the next task.
   const keep = a?.classList.contains("sheet-add") ? { day: a.dataset.day, list: a.dataset.list, also: "also" in a.dataset, value: a.value, from: a.selectionStart, to: a.selectionEnd } : null;
   state.today = now().day;
@@ -1126,11 +1126,15 @@ function startEdit(li) {
   input.focus();
   input.select();
   let done = false;
+  // The edit shows at once (patch saves in the background), then redraws again once saved.
   const finish = async (save) => {
     if (done) return;
     done = true;
+    input.dataset.done = "";
     const text = input.value;
-    try { if (save && text.trim() !== t.title) await editTask(t.id, text); } catch (e) { failed(e, `save your edit to ${named(t)}`, () => editTask(t.id, text)); }
+    const going = save && text.trim() !== t.title ? editTask(t.id, text) : null;
+    render();
+    try { await going; } catch (e) { failed(e, `save your edit to ${named(t)}`, () => editTask(t.id, text)); }
     render();
   };
   input.addEventListener("keydown", (e) => {
