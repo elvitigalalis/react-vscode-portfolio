@@ -65,6 +65,10 @@ next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glo
   The note is cut to 280 characters by code point, so an emoji is never split. Any outbox write
   the server refuses with a 4xx (other than 401, 403, 404, 408 and 429, which may pass later) is
   logged and dropped, so it can't block the writes behind it.
+- **Focused today** (/plan's "· 1h40 focused") counts each session's own minutes on the day:
+  every `focus_log` row (a Stop's credit, a Done's session), plus a Done made before `focus_log`
+  was read. Not `actuals`, whose focus Done rows carry earlier Stops from other days. The Done
+  burst's "early" check still weighs the whole time (credit plus session) against the estimate.
 - **Retention:** the `sheet-focus-log` cron job (daily, 08:13 UTC) deletes each closing row older
   than 180 days with the rows it closes. Open rows stay, whatever their age.
 - /plan reads the last 120 days of `focus_log` after the first load, and again on each sync and

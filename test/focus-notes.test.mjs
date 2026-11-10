@@ -2,7 +2,8 @@
 // the credit each task carries and the line its row shows.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stopRow, doneRow, closingRow, closeFinished, progressByTask, progressText, sessionMinutes, creditMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
+import { dayProgress } from "../src/sheet/progress.mjs";
+import { stopRow, doneRow, closingRow, closeFinished, focusedEntries, progressByTask, progressText, sessionMinutes, creditMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
 
 const TZ = "America/New_York";
 // Started 11:50 pm on Nov 4 (EST), so the day is the 4th even when stopped on the 5th.
@@ -79,6 +80,21 @@ test("a task finished outside focus gets a closing row for its open rows; open t
   let i = 0;
   assert.deepEqual(closeFinished(progress, tasks, "2026-11-05", at(0), () => `c${i++}`),
     [{ id: "c0", at: at(0).toISOString(), day: "2026-11-05", task_id: "t1", block_id: null, minutes: 0, note: null, done: true, closes: ["a", "b"] }]);
+});
+
+test("focused today counts each session's own minutes today, never earlier credit", () => {
+  // Yesterday a 40m Stop; today a 20m Stop, then Done after 10 more (its actuals row says 70, the
+  // closing row 10); a task done elsewhere (0); and a 15m Done while focus_log was unread.
+  const rows = [
+    { id: "a", day: "2026-11-04", task_id: "t1", minutes: 40, done: false },
+    { id: "b", day: "2026-11-05", task_id: "t1", minutes: 20, done: false },
+    { id: "c", day: "2026-11-05", task_id: "t1", minutes: 10, done: true, closes: ["a", "b"] },
+    { id: "d", day: "2026-11-05", task_id: "t3", minutes: 0, done: true, closes: [] },
+  ];
+  const entries = focusedEntries(rows, [{ day: "2026-11-05", minutes: 15 }]);
+  assert.equal(dayProgress([], "2026-11-05", entries).focused, 45);
+  assert.equal(dayProgress([], "2026-11-04", entries).focused, 40);
+  assert.equal(dayProgress([], "2026-11-05", focusedEntries([])).focused, 0);
 });
 
 test("the row's line says the minutes focused, against the estimate when there is one", () => {

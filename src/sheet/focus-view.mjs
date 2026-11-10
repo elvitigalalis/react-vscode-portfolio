@@ -7,7 +7,7 @@
 import { SHEET } from "../site.mjs";
 import { focusClock, focusActual, extendFocus, startSession, stuckMessage, EXTEND_MIN } from "./focus.mjs";
 import { stopRow, doneRow, sessionMinutes, creditMinutes, NOTE_MAX } from "./focus-notes.mjs";
-import { formatMinutes } from "./logic.mjs";
+import { formatMinutes, localNow } from "./logic.mjs";
 import { el, state, render, checkOff } from "./planner.mjs";
 
 let io, dialog, parts, timer;
@@ -122,9 +122,11 @@ function done() {
   const closing = known ? doneRow(s, now, SHEET.timeZone, crypto.randomUUID(), earlier?.ids ?? []) : null;
   if (closing) io.addLog(closing);
   io.setSession(null);
-  // Today's progress line counts this session's minutes at once (not the earlier credit in
-  // `row`); the next load reads what was saved.
-  if (row) state.actuals.push({ day: row.d, minutes: sessionMinutes(s, now) });
+  // Today's "focused" counts this session's minutes at once, never the earlier credit in `row`:
+  // through the closing row when there is one, else as an unlogged session (focus-start.mjs).
+  const session = { day: localNow(new Date(s.started_at), SHEET.timeZone).day, minutes: sessionMinutes(s, now) };
+  if (!closing) io.addUnlogged(session);
+  state.actuals.push(session);
   dialog.close();
   const save = () => io.queue(...(row ? [{ op: "actual", row }] : []), ...(closing ? [{ op: "log", row: closing }] : []), { op: "done", task: s.task_id });
   // The early check (celebrate.mjs) weighs the whole time the task took against its estimate.

@@ -84,8 +84,9 @@ tasks jumping days across time zones.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
 - **Progress** (src/sheet/progress.mjs): counts that say what got done, never points, levels,
   streaks or anything a miss takes away. Today's header line reads "3 of 7 done · 1h40 focused"
-  after a small accent ring that closes as today's tasks get done; the focused half (today's actuals,
-  from focus Done and Telegram's Finished) shows only when there is some, and an empty day shows
+  after a small accent ring that closes as today's tasks get done; the focused half (the minutes of
+  today's focus sessions: each `focus_log` row's own minutes, Stops and Dones, plus a Done made
+  before `focus_log` was read; [sheet-focus.md](sheet-focus.md)) shows only when there is some, and an empty day shows
   nothing. No head start is faked. The week title adds the tasks finished that week by done_at
   ("Week of Nov 9 · 14 done", nothing at 0), Someday ones included. Phones hide the title, so
   there the shown day says "14 done this week" under its stamps.

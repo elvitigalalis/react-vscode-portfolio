@@ -55,6 +55,12 @@ export function progressByTask(rows) {
   return out;
 }
 
+// What "· 1h40 focused" counts (progress.mjs dayProgress, which sums a day's entries): each
+// focus_log row's own minutes (a Stop's credit; a Done closing row's session; 0 for a task done
+// elsewhere), plus Done sessions that got no row (`unlogged`: done before focus_log was read).
+// Not actuals: a focus Done's actuals row carries the earlier Stops' minutes too, from other days.
+export const focusedEntries = (rows, unlogged = []) => [...rows, ...unlogged].map((r) => ({ day: r.day, minutes: r.minutes ?? 0 }));
+
 // The row's line: "40m focused of 1h30", or "40m focused" without an estimate. Null under a minute.
 export function progressText(p, est) {
   if (!p?.minutes) return null;

@@ -5,9 +5,9 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { focusTarget, readSession, readOutbox, drainOutbox, focusClock, outboxAfter, serialDrain } from "./focus.mjs";
-import { progressByTask, progressText, closeFinished } from "./focus-notes.mjs";
+import { progressByTask, progressText, closeFinished, focusedEntries } from "./focus-notes.mjs";
 import { addDays } from "./logic.mjs";
-import { el, state, render, renderHooks, actHooks, completeTask } from "./planner.mjs";
+import { el, state, render, renderHooks, actHooks, completeTask, progressHooks } from "./planner.mjs";
 import { saveBlock } from "./plan-today.mjs";
 
 const SESSION_KEY = "sheet.focus";
@@ -34,6 +34,9 @@ let logLoaded = false;
 let reading = null;
 export const progressFor = (taskId) => progress.get(taskId) ?? null;
 export const isLogLoaded = () => logLoaded;
+// Done sessions that wrote no focus_log row (focus_log unread then), for today's focused count.
+let unlogged = [];
+export const addUnlogged = (entry) => { unlogged = [...unlogged, entry]; };
 export function addLog(row) {
   logRows = [...logRows, row];
   progress = progressByTask(logRows);
@@ -84,11 +87,12 @@ export function queue(...ops) {
 }
 
 let view = null;
-const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog, isLogLoaded }); return m; }, (e) => { view = null; throw e; }));
+const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog, isLogLoaded, addUnlogged }); return m; }, (e) => { view = null; throw e; }));
 export const openFocus = (blockId) => loadView().then((m) => m.open(blockId));
 
 export function setupFocus(node) {
   root = node;
+  progressHooks.focused = () => focusedEntries(logRows, unlogged);
   note = el("p", { className: "sheet-notice", role: "status", textContent: "Focus changes are saved on this device and will sync when you're back online." });
   note.hidden = true;
   root.querySelector("[data-status]")?.after(note);
