@@ -611,12 +611,14 @@ function progressMark(day) {
     ring.setAttribute("viewBox", "0 0 16 16");
     ring.setAttribute("aria-hidden", "true");
     ring.setAttribute("class", "sheet-progress-ring");
-    for (const cls of ["sheet-progress-track", "sheet-progress-fill"]) {
+    ring.dataset.left = String(1 - p.done / p.total);
+    // At 0 done only the track: a round-capped empty stroke would still draw a dot.
+    for (const cls of ["sheet-progress-track", p.done ? "sheet-progress-fill" : null].filter(Boolean)) {
       const c = document.createElementNS(SVG, "circle");
       for (const [k, v] of Object.entries({ cx: 8, cy: 8, r: 6, pathLength: 1, class: cls })) c.setAttribute(k, String(v));
       ring.append(c);
     }
-    ring.lastChild.style.strokeDashoffset = String(1 - p.done / p.total);
+    if (p.done) ring.lastChild.style.strokeDashoffset = ring.dataset.left;
   }
   // Each half stays whole ("1 of 4 done ·" / "1h40 focused"); the real space between them is
   // where a narrow column wraps.
@@ -628,8 +630,9 @@ function progressMark(day) {
 // the ring filling a step.
 let leftWas = null;
 function growProgress() {
-  const fill = root.querySelector(".sheet-day.is-today .sheet-progress-fill");
-  const left = fill ? Number(fill.style.strokeDashoffset) : null;
+  const ring = root.querySelector(".sheet-day.is-today .sheet-progress-ring");
+  const fill = ring?.querySelector(".sheet-progress-fill");
+  const left = ring ? Number(ring.dataset.left) : null;
   if (fill && leftWas != null && left !== leftWas && cheer.calm()) {
     fill.animate([{ strokeDashoffset: leftWas }, { strokeDashoffset: left }], { duration: 400, easing: cheer.EASE_OUT });
   }
