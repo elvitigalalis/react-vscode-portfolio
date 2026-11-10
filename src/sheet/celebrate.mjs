@@ -3,7 +3,7 @@
 // - Every ✓: the check springs and draws itself, the title is struck left to right and settles
 //   to the done look. A Someday row then fades out and the rows under it slide up (FLIP).
 // - When it means something: a burst of eight specks from the check (shouldBurst) on the day's
-//   first ✓, a task carried over three times or more, one a focus session finished inside its
+//   first ✓, a task carried over at least twice, one a focus session finished inside its
 //   estimate, or the third ✓ within ten minutes. Never by chance.
 // - Big moments: a course assignment, or the last open task of today. Confetti for 1.2 s (its own
 //   module, loaded only then) and a word in the Undo toast.
@@ -16,7 +16,9 @@ import { localNow } from "./logic.mjs";
 // --- Pure helpers ----------------------------------------------------------------------------
 
 export const STREAK_MS = 10 * 60_000;
-export const STUBBORN_ROLLS = 3;
+// The nightly roll parks a task in Someday at its third roll and resets it, so a task still on
+// the week has rolls 2 at most: carried over at least twice is as stubborn as it gets.
+export const STUBBORN_ROLLS = 2;
 
 // Whether this ✓ gets the small burst. `history` is the times (ms) of earlier ✓s this visit;
 // `first`: nothing else is done today yet; `rolls`: how often the task was carried over;

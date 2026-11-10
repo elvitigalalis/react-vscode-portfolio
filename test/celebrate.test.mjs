@@ -19,8 +19,11 @@ test("the burst comes on the third ✓ within ten minutes", () => {
 test("otherwise only a ✓ that means something bursts, never by chance", () => {
   for (let i = 0; i < 50; i++) assert.equal(shouldBurst([], i), false);
   assert.equal(shouldBurst([], 0, { first: true }), true);
-  assert.equal(shouldBurst([], 0, { rolls: STUBBORN_ROLLS - 1 }), false);
-  assert.equal(shouldBurst([], 0, { rolls: STUBBORN_ROLLS }), true);
+  // Carried over at least twice (the nightly roll parks a task at its third).
+  assert.equal(STUBBORN_ROLLS, 2);
+  assert.equal(shouldBurst([], 0, { rolls: 1 }), false);
+  assert.equal(shouldBurst([], 0, { rolls: 2 }), true);
+  assert.equal(shouldBurst([], 0, { rolls: 3 }), true);
   assert.equal(shouldBurst([], 0, { early: true }), true);
 });
 
