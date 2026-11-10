@@ -26,22 +26,31 @@ async function saveEstimate(id, est_min) {
   state.tasks.set(id, await api.updateTask(id, { est_min }));
 }
 
-// Sets an estimate at once and saves it behind; a failed save puts the old one back and offers
+// The items with a save in flight: a tap on one of them waits for it (ignored), so two quick
+// taps never race two PATCHes.
+const saving = new Map();
+
+// Sets an estimate at once and saves it behind. Undo is offered at once too: it waits for the
+// save in flight, then puts the old estimate back. A failed save puts the old one back and offers
 // Retry (saveEstimate itself, which throws again if it fails again).
 async function setEstimate(id, est_min) {
   const t = state.tasks.get(id);
-  if (!t) return;
+  if (!t || saving.has(id)) return;
   const before = t.est_min;
   state.tasks.set(id, { ...t, est_min });
   render();
+  const save = saveEstimate(id, est_min);
+  saving.set(id, save);
+  offerUndo(`Estimate ${formatMinutes(est_min)}.`, async () => { await save.catch(() => {}); await saveEstimate(id, before); });
   try {
-    await saveEstimate(id, est_min);
-    offerUndo(`Estimate ${formatMinutes(est_min)}.`, () => saveEstimate(id, before));
+    await save;
   } catch (err) {
     const now = state.tasks.get(id);
     if (now) state.tasks.set(id, { ...now, est_min: before });
     failed(err, `save the estimate for "${t.title}"`, () => saveEstimate(id, est_min));
     render();
+  } finally {
+    saving.delete(id);
   }
 }
 
