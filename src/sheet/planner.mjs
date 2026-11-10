@@ -213,6 +213,8 @@ const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -
 // once, but what it saves (a block to shorten or delete, say) is worked out from the fresh rows.
 let loaded;
 const firstLoad = new Promise((r) => { loaded = r; });
+// Shutdown opens on the fresh rows, never the stored copy: it waits for this.
+export const afterFirstLoad = () => firstLoad;
 
 // A save that finds its task deleted (`gone`) takes the row away rather than putting it back.
 function saving(book, key, change, save) {

@@ -11,7 +11,7 @@ import css from "../styles/sheet-shutdown.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, byPosition, localNow, positionBetween, weekDays } from "./logic.mjs";
-import { el, state, render, load, saveTask, failed, progressHooks } from "./planner.mjs";
+import { el, state, render, load, saveTask, afterFirstLoad, failed, progressHooks } from "./planner.mjs";
 import { dayProgress } from "./progress.mjs";
 import { habitDay } from "./habit-rate.mjs";
 import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
@@ -422,12 +422,18 @@ export async function open(day) {
   drawnWins = false;
   const r = prefetch(today);
   if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
-  if (state.week && !weekDays(state.week).includes(day)) {
+  // It opens on fresh rows: before the first load lands (the stored copy on screen, snapshot.mjs)
+  // it waits for it; and a day off the week on screen is read first.
+  const offWeek = () => state.week && !weekDays(state.week).includes(day);
+  if (!loadedOnce || offWeek()) {
     parts = {};
     body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), el("p", { className: "small", textContent: "Reading the day…" }));
     dialog.showModal();
     dialog.querySelector("#sheet-shut-title")?.focus();
-    try { await readDay(day); } catch (e) { if (mine === session) { dialog.close(); failed(e); } return; }
+    try {
+      await afterFirstLoad();
+      if (offWeek()) await readDay(day);
+    } catch (e) { if (mine === session) { dialog.close(); failed(e); } return; }
     if (mine !== session || !dialog.open) return;
   }
   reflection = state.days[today]?.reflection ?? "";
@@ -444,10 +450,12 @@ export async function open(day) {
 }
 
 let hooks = {};
+let loadedOnce = false; // the planner's first real load has landed
 
 // `closed(day)` tells shutdown.mjs a day was shut down (for the button off the week on screen).
 export function setupView(root, given = {}) {
   hooks = given;
+  afterFirstLoad().then(() => { loadedOnce = true; });
   dialog = root.querySelector("[data-shut]");
   body = el("div", {});
   live = el("p", { className: "visually-hidden", role: "status" });
