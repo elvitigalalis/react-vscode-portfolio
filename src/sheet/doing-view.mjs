@@ -52,18 +52,25 @@ function startBlock(taskId) {
 
 const span = (r) => (r.start == null ? null : formatSpan(r.start, r.end));
 
+// How long is left, as a ring share and in words: the focus session's, or the row on now's.
+function timeLeft(pick, minutes, s) {
+  const r = pick.card;
+  if (pick.kind === "focus") {
+    const c = focusClock(s, new Date());
+    return { share: c.share, words: c.over ? "over" : `${minutesLeft(s.ends_at - Date.now())} left` };
+  }
+  if (pick.kind === "now") return { share: (minutes - r.start) / (r.end - r.start), words: `${minutesLeft((r.end - minutes) * 60_000)} left` };
+  return null;
+}
+// Which card is drawn ("now:task:t2"), so the timer can update it in place while it stays the same.
+const cardKey = (pick) => (pick.card ? `${pick.kind}:${pick.card.kind}:${pick.card.task?.id ?? pick.card.key}` : "none");
+let drawnKey = null;
+
 function card(pick, minutes, s) {
   const r = pick.card;
   const title = rowTitle(r);
   const task = r.kind === "task" ? r.task : null;
-  // How long is left, as a ring and in words: the focus session's, or the row on now's.
-  let left = null;
-  if (pick.kind === "focus") {
-    const c = focusClock(s, new Date());
-    left = { share: c.share, words: c.over ? "over" : `${minutesLeft(s.ends_at - Date.now())} left` };
-  } else if (pick.kind === "now") {
-    left = { share: (minutes - r.start) / (r.end - r.start), words: `${minutesLeft((r.end - minutes) * 60_000)} left` };
-  }
+  const left = timeLeft(pick, minutes, s);
   const kicker = { focus: "Focusing", now: `Now · until ${formatClock(r.end)}`, next: `Next · ${span(r)}`, untimed: "Up next" }[pick.kind];
   const b = task ? state.blocks.find((x) => x.id === (s?.task_id === task.id ? s.block_id : startBlock(task.id)?.id)) : null;
   const note = task ? progressFor(task.id)?.note : null;
@@ -100,6 +107,7 @@ function draw() {
   const minutes = localNow(new Date(), tz).minutes;
   const s = getSession();
   const pick = doingPick(rowsOn(state.today), minutes, s?.task_id ?? null);
+  drawnKey = cardKey(pick);
   // Not before the week has loaded: a draw before then has no rows.
   if (mode == null && loaded) {
     mode = doingMode({ stored: read(), today: state.today, minutes, dayStart: windowOn(state.today).from, shutdown: shutdownAt(state.today), shutDown: Boolean(state.days[state.today]?.shutdown), hasCard: Boolean(pick.card) });
@@ -123,6 +131,19 @@ function draw() {
     back.dataset.act = "doing-view";
     root.querySelector(`.sheet-day[data-day="${state.today}"].is-focus .sheet-stamps-row`)?.prepend(back);
   }
+}
+
+function tickCard() {
+  const minutes = localNow(new Date(), tz).minutes;
+  const s = getSession();
+  const pick = doingPick(rowsOn(state.today), minutes, s?.task_id ?? null);
+  if (cardKey(pick) !== drawnKey) return draw();
+  const left = timeLeft(pick, minutes, s);
+  if (!left) return;
+  const arc = box.querySelector(".sheet-doing-arc");
+  const words = box.querySelector(".sheet-doing-left");
+  if (arc) arc.style.strokeDashoffset = left.share.toFixed(4);
+  if (words && words.textContent !== left.words) words.textContent = left.words;
 }
 
 function show(next) {
@@ -152,8 +173,9 @@ export function setupDoing(node) {
   }, true);
   // Each load chooses again (his pick for today still wins), as the time of day may have moved.
   loadHooks.push(() => { loaded = true; mode = null; });
-  // The ring and "25 min left" move on while the card shows.
-  setInterval(() => { if (mode === "doing" && !document.hidden && !document.querySelector("dialog[open]")) draw(); }, 15_000);
+  // The ring and "25 min left" move on while the card shows, in place, so focus and a screen
+  // reader's place stay put; only a change of card draws it again.
+  setInterval(() => { if (mode === "doing" && !document.hidden && !document.querySelector("dialog[open]")) tickCard(); }, 15_000);
   // Wider than a phone (turned sideways, a resized window): the week.
   matchMedia(NARROW).addEventListener("change", () => render());
   // Loaded already, when this module came in late.
