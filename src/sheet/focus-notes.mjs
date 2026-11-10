@@ -13,7 +13,8 @@ export const sessionMinutes = (s, now) => Math.min(960, Math.max(0, Math.round((
 // day the session started. `id` comes from the page so a retried write is a duplicate. Under a
 // minute with no note there is nothing worth keeping: null.
 export function stopRow(s, note, now, timeZone, id) {
-  const text = String(note ?? "").replace(/\s+/g, " ").trim().slice(0, NOTE_MAX) || null;
+  // Cut by code point, so an emoji at the limit is never split into half a pair.
+  const text = Array.from(String(note ?? "").replace(/\s+/g, " ").trim()).slice(0, NOTE_MAX).join("") || null;
   const minutes = sessionMinutes(s, now);
   if (!minutes && !text) return null;
   return { id, at: now.toISOString(), day: localNow(new Date(s.started_at), timeZone).day, task_id: s.task_id, block_id: s.block_id, minutes, note: text, done: false };

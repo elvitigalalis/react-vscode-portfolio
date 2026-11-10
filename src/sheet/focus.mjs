@@ -99,12 +99,24 @@ export function readOutbox(raw) {
   return Array.isArray(q) ? q.filter((o) => o && typeof o === "object" && OPS.has(o.op)) : [];
 }
 
+// A write the server refused for good: a 4xx (api.mjs's errors end in the status), except 401
+// and 403 (a session to refresh), 404 (a table or function not there yet), 408 and 429, which can
+// pass on a later try. Retrying a refused write would block every op behind it forever.
+export function refused(e) {
+  const m = /: (4\d\d)$/.exec(e?.message ?? "");
+  return Boolean(m) && ![401, 403, 404, 408, 429].includes(Number(m[1]));
+}
+
 // Runs the ops in order with `run`; the first that throws stops the drain, so Done's actuals row
-// always lands before its task is marked done. Returns the ops left.
+// always lands before its task is marked done. An op the server refused (refused) is logged and
+// dropped instead, and the drain goes on. Returns the ops left.
 export async function drainOutbox(ops, run) {
   const left = [...ops];
   while (left.length) {
-    try { await run(left[0]); } catch { return left; }
+    try { await run(left[0]); } catch (e) {
+      if (!refused(e)) return left;
+      console.error("Dropped a focus write the server refused:", JSON.stringify(left[0]), e);
+    }
     left.shift();
   }
   return left;

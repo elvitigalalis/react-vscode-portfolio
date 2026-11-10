@@ -23,6 +23,11 @@ test("Stop with no note still credits the minutes; under a minute with no note k
 
 test("a note is cut to its limit and minutes are held to 960", () => {
   assert.equal(stopRow(s, "x".repeat(400), at(5), TZ, "id").note.length, NOTE_MAX);
+  // An emoji at the limit is kept whole or left out, never split into a lone surrogate.
+  const cut = stopRow(s, "x".repeat(279) + "\u{1F600}\u{1F600}", at(5), TZ, "id").note;
+  assert.equal(cut, "x".repeat(279) + "\u{1F600}");
+  assert.equal(Array.from(cut).length, NOTE_MAX);
+  assert.equal(/[\ud800-\udbff]$/.test(cut), false);
   assert.equal(sessionMinutes(s, at(2000)), 960);
 });
 

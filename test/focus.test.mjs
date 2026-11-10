@@ -2,7 +2,7 @@
 // minutes it records into actuals, +15 min, the retried writes and Stuck's message.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { focusTarget, startSession, focusClock, countdown, readSession, focusActual, extendFocus, drainOutbox, readOutbox, stuckMessage, outboxAfter, serialDrain } from "../src/sheet/focus.mjs";
+import { focusTarget, startSession, focusClock, countdown, readSession, focusActual, extendFocus, drainOutbox, refused, readOutbox, stuckMessage, outboxAfter, serialDrain } from "../src/sheet/focus.mjs";
 
 const TZ = "America/New_York";
 const at = (iso) => new Date(iso);
@@ -99,6 +99,20 @@ test("writes run in order and stop at the first that fails, which stays for the 
   assert.deepEqual(left, ops.slice(1));
   assert.deepEqual(await drainOutbox(left, async (o) => { ran.push(o.n); }), []);
   assert.deepEqual(ran, [1, "fail", 2, 3]);
+});
+
+test("a write the server refused (a 4xx) is dropped and the drain goes on; auth, 404 and limits wait", async () => {
+  const err = (status) => new Error(`POST focus_log: ${status}`);
+  const ran = [];
+  const ops = [{ op: "log", n: 1 }, { op: "done", n: 2 }];
+  const quiet = console.error;
+  console.error = () => {};
+  try { assert.deepEqual(await drainOutbox(ops, async (o) => { if (o.n === 1) throw err(400); ran.push(o.n); }), []); } finally { console.error = quiet; }
+  assert.deepEqual(ran, [2]);
+  for (const status of [401, 403, 404, 408, 429, 500]) assert.equal(refused(err(status)), false, status);
+  for (const status of [400, 409, 422]) assert.equal(refused(err(status)), true, status);
+  assert.equal(refused(new Error("Failed to fetch")), false);
+  assert.deepEqual(await drainOutbox(ops, async () => { throw err(401); }), ops);
 });
 
 test("a stored outbox reads back as its whole ops only", () => {

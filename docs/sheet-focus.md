@@ -57,6 +57,9 @@ next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glo
   its credit rows but shows none (it is done); reopened, the old credit would show again.
 - Writes go through the same outbox as Done (`{ op: "log", row }`), each row with an id made in the
   page, so a retry is a duplicate PostgREST skips. The credit shows at once, before the row saves.
+  The note is cut to 280 characters by code point, so an emoji is never split. Any outbox write
+  the server refuses with a 4xx (other than 401, 403, 404, 408 and 429, which may pass later) is
+  logged and dropped, so it can't block the writes behind it.
 - /plan reads the last 120 days of `focus_log` after the first load, and again on each sync and
   return online until a read lands; until the table exists (404) it reads none.
 
