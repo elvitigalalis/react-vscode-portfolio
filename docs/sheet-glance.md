@@ -135,8 +135,10 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
 
 - **School work** is an undone task from the Brightspace feed (`source = 'brightspace'`, pace.mjs's
   "course"), or one tagged with a course code (`#cse316`, `#ams-261`) or `#school`, that has no
-  `at_time` and is not a project step. A timed Brightspace item (an exam, a class meeting) is an
-  event he goes to, so it takes free time instead.
+  `at_time` and is not a project step. From Brightspace only items with a `due` count (the
+  feed's "- Due" items). Its other items are calendar events: a timed one (an exam, a class
+  meeting) is something he goes to, so it takes free time instead; an untimed one (a holiday,
+  Reading Day) is not work.
 - **Due this week:** its `due`, else its `day`, falls in the week on screen. In the current week,
   work overdue by up to 14 days counts too; older overdue work is taken as let go.
 - **Hours due:** each item's `est_min`, or a guess from its title when it has none: project, paper,

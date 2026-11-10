@@ -15,9 +15,12 @@ export const isSchoolTag = (tag) => Boolean(tag) && (COURSE_TAG.test(tag.trim())
 // with a course code or #school.
 export const isSchool = (t) => t.source === "brightspace" || isSchoolTag(t.tag);
 
-// School work is school that is not at a fixed time. A timed Brightspace item (an exam, a class
-// meeting: feeds.mjs, courseEventChanges) is an event he goes to, so it takes free time instead.
-export const isSchoolWork = (t) => isSchool(t) && !t.at_time;
+// School work is school that is not at a fixed time. From Brightspace, only items with a due
+// date count (feeds.mjs, courseTaskChanges: the "- Due" items). The feed's other items are
+// calendar events (courseEventChanges: no due, a day): a timed one (an exam, a class meeting) is
+// something he goes to, so it takes free time instead; an untimed one (a holiday, Reading Day)
+// is no work at all.
+export const isSchoolWork = (t) => !t.at_time && (t.source === "brightspace" ? Boolean(t.due) : isSchool(t));
 
 // --- Estimates ----------------------------------------------------------------------------
 

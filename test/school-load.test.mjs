@@ -14,6 +14,9 @@ test("school is Brightspace's or tagged with a course or #school", () => {
   assert.ok(!isSchool(T("Ship auth", { tag: "workit", source: "github" })));
   // A timed Brightspace event is something he goes to, not work due.
   assert.ok(!isSchoolWork(T("AMS 261 Exam 2", { source: "brightspace", day: "2026-11-10", at_time: "14:00:00", est_min: 80 })));
+  // An untimed feed event (a holiday, Reading Day) has no due date: not work either.
+  assert.ok(!isSchoolWork(T("Reading Day", { source: "brightspace", day: "2026-11-10", list: null })));
+  assert.ok(isSchoolWork(T("Quiz 6", { source: "brightspace", due: "2026-11-10" })));
 });
 
 test("a missing estimate falls back to a guess by kind", () => {
