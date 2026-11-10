@@ -281,6 +281,24 @@ Under 48 rem, one day shows at a time (above). On top of that:
   [ADR 0005](adr/0005-oura-data-never-reaches-claude.md) no Supabase function, read_planner,
   proposal or Telegram path imports it, and test/readiness-note.test.mjs checks that.
 
+## Reflow rest of today (Structured's Replan, Tiimo's reshuffle)
+
+- When today's plan has slipped, today's stamps row (and the phone's Doing card) shows one muted
+  line: "Reflow rest of today · 2 blocks to move". A block has slipped when it ended and its task
+  is still open, or when it starts later but now clashes with a busy event or another block.
+- One tap lays those blocks after now, with no AI (src/sheet/reflow.mjs): each keeps its length
+  and their old order, starts on a 5-minute mark at the first free time after the one before
+  (a later block never moves earlier), and stays clear of busy Google events (not all-day or
+  free ones), every block that stays put and the shutdown line. What stays put: a block running
+  now, the one a focus session is on, habit blocks, done tasks' blocks and blocks of a task with
+  a fixed time (`@3pm`). Proposed blocks take no time, as for +15 min in focus.
+- Each move saves as a drag in Plan today does (`saveBlock`): the block's Google event moves too,
+  and a moved block is his, so no revision moves it again.
+- The Undo toast is the receipt: "Reflowed: OS homework 4:30 pm, Email advisor 6 pm." plus
+  "Didn't fit before shutdown: Essay." for any that stayed where they were. One tap on Undo
+  puts every moved block back.
+- Past shutdown, or once the day is shut down, the line doesn't show.
+
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
 Opens over the week: today's tasks on the left, today's timeline on the right (07:00 to 23:00,
