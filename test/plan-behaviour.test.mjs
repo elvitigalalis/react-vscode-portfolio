@@ -121,6 +121,8 @@ test("plannedLeft: undone estimates plus the rest of blocks no estimate covers",
     { task_id: null, proposed: true, starts_at: "2026-11-09T21:00:00Z", ends_at: "2026-11-09T22:00:00Z" },
   ];
   assert.equal(plannedLeft(tasks, blocks, now), 60 + 30 + 45);
+  // Clipped to shutdown at 8:30 pm UTC: the habit block counts 30 of its 45 minutes.
+  assert.equal(plannedLeft(tasks, blocks, now, Date.parse("2026-11-09T20:30:00Z")), 60 + 30 + 30);
   assert.equal(plannedLeft([], [], now), 0);
 });
 

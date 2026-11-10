@@ -6,7 +6,7 @@
 // the first time Plan today opens.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, weekdayName, addDays } from "./logic.mjs";
+import { localNow, minutesOn, load, snap, formatMinutes, formatClock, formatSpan, byPosition, proposedOn, googleStep, weekdayName, addDays, zonedIso } from "./logic.mjs";
 import { el, icon, state, render, keyHooks, actHooks, renderHooks, eventHooks, failed, dayCapacity, dayStart, workloadCap, shutdownAt, windowOn, spanOf, taskAction } from "./planner.mjs";
 import { loadShare, stripSegments, plannedLeft, overCommit } from "./glance.mjs";
 
@@ -41,7 +41,7 @@ function loadBar(d) {
 // Over-commit (docs/sheet.md, "Over-commit note"): when day `d` holds more than the free time
 // left before its shutdown, one calm line says so, "Planned 9h · about 6h free", with a link that
 // opens (`open`) a list of its undone untimed tasks; a tap moves one to the next day. It warns and
-// never blocks. `toggle` flips `open`; `where` names the note ("week", "dialog") so focus can
+// never blocks. Past the day's shutdown, or once the day is shut down, there is nothing to say. `toggle` flips `open`; `where` names the note ("week", "dialog") so focus can
 // find it again after a redraw. Null when the day isn't over.
 // The toggle keeps focus, as a disclosure button does; after a move, the next task in the list.
 const refocus = (where, pick = false) => {
@@ -49,7 +49,9 @@ const refocus = (where, pick = false) => {
   ((pick && box?.querySelector(".sheet-over-pick button")) || box?.querySelector(".sheet-link"))?.focus();
 };
 export function overNote(d, open, toggle, where) {
-  const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now()), dayCapacity(d).free);
+  const shut = Date.parse(zonedIso(d, shutdownAt(d), SHEET.timeZone));
+  if (state.days[d]?.shutdown || Date.now() >= shut) return null;
+  const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now(), shut), dayCapacity(d).free);
   if (!o) return null;
   import("./calm-styles.mjs").catch(console.error);
   const next = d === state.today ? "tomorrow" : weekdayName(addDays(d, 1));

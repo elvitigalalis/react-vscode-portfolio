@@ -32,13 +32,13 @@ export function loadShare(minutes, capacity) {
 }
 
 // Over-commit (docs/sheet.md, "Over-commit note"): the minutes still planned on a day, its undone
-// tasks' estimates plus what is left after `nowMs` of each block no estimate already counts (a
-// habit block, or a block on a task with no estimate). Proposed blocks don't count.
-export function plannedLeft(tasks, blocks, nowMs) {
+// tasks' estimates plus the part between `nowMs` and `endMs` (shutdown) of each block no estimate
+// already counts (a habit block, or a block on a task with no estimate). Proposed blocks don't count.
+export function plannedLeft(tasks, blocks, nowMs, endMs = Infinity) {
   const counted = new Set(tasks.filter((t) => t.done || t.est_min).map((t) => t.id));
   const est = tasks.filter((t) => !t.done).reduce((s, t) => s + (t.est_min ?? 0), 0);
   return blocks.filter((b) => !b.proposed && !counted.has(b.task_id)).reduce((s, b) =>
-    s + Math.max(0, Math.round((Date.parse(b.ends_at) - Math.max(nowMs, Date.parse(b.starts_at))) / 60_000)), est);
+    s + Math.max(0, Math.round((Math.min(endMs, Date.parse(b.ends_at)) - Math.max(nowMs, Date.parse(b.starts_at))) / 60_000)), est);
 }
 
 // The note's numbers when `planned` is more than the `free` minutes left before shutdown, else

@@ -210,6 +210,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
   fixed time, no block); a tap moves one to tomorrow, with the usual Undo. The line goes away
   once the plan fits.
 - It warns and never blocks: nothing is moved for him, and adding more still works.
+- Past the day's shutdown, or once the day is shut down, it doesn't show. Blocks count only up
+  to shutdown.
 
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
