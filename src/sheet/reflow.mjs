@@ -17,14 +17,28 @@ const up = (m) => Math.ceil(m / STEP) * STEP;
 // now stays. In their old order, each goes at the first free spot from the end of the one before
 // (a later block never earlier than it was), clear of busy events and every block that stays,
 // ending by `shutdown`. One that doesn't fit stays where it was and is named in `unfit`.
+// A later block that can't fit keeps its old time, and the others must stay off it: the plan is
+// laid again with it pinned there, until no new later block comes back unfit, so a reflow never
+// lays one block over another.
 // Returns { moves: [{ id, task_id, from: { start, end }, to: { start, end } }], unfit: [id] }.
 export function reflowPlan({ blocks, tasks, busy, now, shutdown, keep = [] }) {
   const open = (b) => {
     const t = b.task_id && tasks.get(b.task_id);
     return Boolean(t) && !t.done && !t.at_time && !b.proposed && !keep.includes(b.id);
   };
-  const movable = blocks.filter((b) => open(b) && (b.end <= now || b.start >= now) && b.start < shutdown)
+  const candidates = blocks.filter((b) => open(b) && (b.end <= now || b.start >= now) && b.start < shutdown)
     .sort((a, b) => a.start - b.start);
+  const pinned = new Set();
+  for (;;) {
+    const plan = lay(candidates.filter((b) => !pinned.has(b.id)), blocks, busy, now, shutdown);
+    const late = plan.unfit.filter((b) => b.start >= now);
+    if (!late.length) return { moves: plan.moves, unfit: [...plan.unfit.map((b) => b.id), ...candidates.filter((b) => pinned.has(b.id)).map((b) => b.id)] };
+    for (const b of late) pinned.add(b.id);
+  }
+}
+
+// One pass: `movable` in order after now, around everything else in `blocks` and `busy`.
+function lay(movable, blocks, busy, now, shutdown) {
   const ids = new Set(movable.map((b) => b.id));
   // Proposed blocks are Claude's suggestions, not plans: they take no time (as +15 min ignores them).
   const taken = [...busy, ...blocks.filter((b) => !b.proposed && !ids.has(b.id))].map(({ start, end }) => ({ start, end }));
@@ -35,8 +49,7 @@ export function reflowPlan({ blocks, tasks, busy, now, shutdown, keep = [] }) {
     const len = b.end - b.start;
     let at = b.end <= now ? cursor : Math.max(cursor, b.start);
     for (let hit; (hit = taken.find((x) => x.start < at + len && x.end > at));) at = up(hit.end);
-    // A later block that can't move still holds its old time, so nothing lands on it.
-    if (at + len > shutdown) { unfit.push(b.id); if (b.start >= now) taken.push({ start: b.start, end: b.end }); continue; }
+    if (at + len > shutdown) { unfit.push(b); continue; }
     taken.push({ start: at, end: at + len });
     cursor = at + len;
     if (at !== b.start) moves.push({ id: b.id, task_id: b.task_id, from: { start: b.start, end: b.end }, to: { start: at, end: at + len } });

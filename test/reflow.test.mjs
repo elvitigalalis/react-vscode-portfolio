@@ -67,13 +67,16 @@ test("reflowPlan: nothing goes past shutdown; what doesn't fit stays and is name
   assert.deepEqual(plan.unfit, ["b2"]);
 });
 
-test("reflowPlan: a later block that can't fit keeps its time, and nothing lands on it", () => {
+test("reflowPlan: a later block that can't fit keeps its time, and nothing is laid over it", () => {
   const plan = reflowPlan({
-    blocks: [B("b1", "t1", H(9), H(11)), B("b2", "t2", H(20), H(21, 30)), B("b3", "t3", H(21, 30), H(21, 45))],
-    tasks: tasks({ id: "t1" }, { id: "t2" }, { id: "t3" }),
+    blocks: [B("b0", "t0", H(8), H(8, 30)), B("b1", "t1", H(9), H(10, 30)), B("b2", "t2", H(20, 30), H(21, 45))],
+    tasks: tasks({ id: "t0" }, { id: "t1" }, { id: "t2" }),
     busy: [], now: H(19), shutdown: H(22),
   });
-  // b1 takes 7-9 pm, so b2 (1h30) can't fit by 10 pm and keeps 8-9:30; b3 stays at 9:30 pm.
-  assert.deepEqual(to(plan), { b1: [H(19), H(21)] });
-  assert.deepEqual(plan.unfit, ["b2"]);
+  // A first pass puts b1 at 7:30-9 pm, pushing b2 past 10 pm. b2 then stays at 8:30-9:45 pm, and
+  // the plan is laid again around it: b1 (1h30) no longer fits before it or after it.
+  assert.deepEqual(to(plan), { b0: [H(19), H(19, 30)] });
+  assert.deepEqual(plan.unfit.sort(), ["b1", "b2"]);
+  const placed = [...plan.moves.map((m) => m.to), { start: H(20, 30), end: H(21, 45) }];
+  for (const a of placed) for (const b of placed) if (a !== b) assert.ok(a.end <= b.start || b.end <= a.start, "no overlap");
 });
