@@ -73,7 +73,8 @@ export function prefetch(day) {
 
 // --- What it shows ---------------------------------------------------------------------------------
 // The step is built once when it shows; after that each part is filled in place (fill), so a read
-// that lands or a tap never replaces the reflection box or the button that has focus.
+// that lands or a tap never replaces the reflection box or the button that has focus. Everything
+// that can arrive late sits below the open tasks.
 
 const todays = () => [...state.tasks.values()].filter((t) => t.day === today).sort(byPosition);
 const openTasks = () => todays().filter((t) => !t.done);
@@ -96,20 +97,28 @@ function fill(host, nodes) {
   back?.focus();
 }
 
-function winsNodes() {
+// What the week already holds (tasks, focus, GitHub, Jira) shows at the top and never changes
+// while the dialog is open. What a read brings (Hevy, the habits) and the look-back's parts land
+// below the open tasks, so nothing above a choice moves while he taps (lateNodes).
+const isLate = (l) => l.key.startsWith("lift-") || l.key === "habits";
+
+function winLinesNow() {
   const w = reads?.winsData;
   const focused = dayProgress(state.tasks.values(), today, progressHooks.focused?.() ?? state.actuals).focused;
-  const lines = winLines(winsOf({ tasks: state.tasks.values(), today, tz, focused, workouts: w?.workouts ?? [], habits: w?.habits ?? [] }));
-  const items = lines.map((l) => {
-    const li = el("li", { className: drawnWins && !shown.has(l.key) ? "is-new" : "" }, l.text, l.detail ? el("span", { className: "sheet-meta", textContent: l.detail }) : null);
-    shown.add(l.key);
-    return li;
-  });
-  if (!w) items.push(el("li", { className: "is-reading", textContent: "Checking Hevy and habits" }));
-  drawnWins = true;
+  return winLines(winsOf({ tasks: state.tasks.values(), today, tz, focused, workouts: w?.workouts ?? [], habits: w?.habits ?? [] }));
+}
+
+const winItem = (l) => {
+  const li = el("li", { className: drawnWins && !shown.has(l.key) ? "is-new" : "" }, l.text, l.detail ? el("span", { className: "sheet-meta", textContent: l.detail }) : null);
+  shown.add(l.key);
+  return li;
+};
+
+function winsNodes() {
+  const items = winLinesNow().filter((l) => !isLate(l)).map(winItem);
   return [
     el("h3", { textContent: "Today's wins" }),
-    items.length ? el("ul", { className: "sheet-shut-wins", role: "list" }, ...items) : el("p", { className: "sheet-shut-quiet", textContent: "Nothing logged today. Closing the day still counts." }),
+    items.length ? el("ul", { className: "sheet-shut-wins", role: "list" }, ...items) : el("p", { className: "sheet-shut-quiet", textContent: "Nothing ticked off today. Closing the day still counts." }),
   ];
 }
 
@@ -160,8 +169,18 @@ function syncOpen() {
   }
 }
 
-// Late parts: today's events and the day's line, and the earlier reflections.
-const lateNodes = () => (extrasReady() ? lb.todayPart(sentTomorrow().length, () => fill(parts.late, lateNodes())) : []);
+// Late parts, below the open tasks: the wins a read brings, today's events and the day's line;
+// and the earlier reflections under the box.
+function lateNodes() {
+  const items = winLinesNow().filter(isLate).map(winItem);
+  if (!reads?.winsData) items.push(el("li", { className: "is-reading", textContent: "Checking Hevy and habits" }));
+  drawnWins = true;
+  return [
+    items.length ? el("h3", { textContent: "Also today" }) : null,
+    items.length ? el("ul", { className: "sheet-shut-wins", role: "list" }, ...items) : null,
+    ...(extrasReady() ? lb.todayPart(sentTomorrow().length, () => fill(parts.late, lateNodes())) : []),
+  ];
+}
 const pastNodes = () => [extrasReady() ? lb.pastPart() : null];
 
 // Tomorrow comes next unless the look ahead couldn't be read.
@@ -183,10 +202,10 @@ function buildToday() {
     past: el("div", {}),
     end: el("div", { className: "sheet-dialog-end" }),
   };
-  dialog.replaceChildren(el("h2", { id: "sheet-shut-title", textContent: "Shut down" }), parts.wins, parts.late, parts.open, box, parts.past, parts.end);
+  dialog.replaceChildren(el("h2", { id: "sheet-shut-title", textContent: "Shut down" }), parts.wins, parts.open, parts.late, box, parts.past, parts.end);
   fill(parts.wins, winsNodes());
-  fill(parts.late, lateNodes());
   fill(parts.open, openNodes());
+  fill(parts.late, lateNodes());
   syncOpen();
   fill(parts.past, pastNodes());
   fill(parts.end, endNodes());
@@ -225,7 +244,7 @@ function closedScreen() {
 // A read landed: fill what it feeds, in place.
 const landed = (r) => () => {
   if (reads !== r || !dialog.open) return;
-  if (step === "today") { fill(parts.wins, winsNodes()); fill(parts.late, lateNodes()); fill(parts.past, pastNodes()); fill(parts.end, endNodes()); }
+  if (step === "today") { fill(parts.late, lateNodes()); fill(parts.past, pastNodes()); fill(parts.end, endNodes()); }
   if (step === "tomorrow") fill(parts.tomorrow, tomorrowNodes());
 };
 

@@ -403,7 +403,8 @@ one tap.
 (Hevy, the habits, and the look back and ahead) are warmed when the button shows (at idle) and on
 hover, focus or a press of the button; a warm read under two minutes old is used as it is. It
 opens at once from what the week already holds, with a "Checking Hevy and habits" line, and
-fills in as each read lands. Finish updates the week in place and shows "Day closed" without
+fills in as each read lands. What a read brings (the Hevy and habit wins, today's events, the
+line) lands under the open tasks, as "Also today", so no choice moves while he taps. Finish updates the week in place and shows "Day closed" without
 waiting for a reload; the server's copy is read behind it.
 
 A skipped shutdown costs nothing: the nightly rollover moves the day's untimed open tasks to the
