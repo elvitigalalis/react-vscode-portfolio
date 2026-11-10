@@ -130,8 +130,8 @@ the base spec is [sheet.md](sheet.md).
 
 - New colours beyond the site's palette. A colour switch like Todoist's is out: the one
   dimension is source.
-- Animation beyond the existing 0.25 s fades and the check-off in [sheet.md](sheet.md)
-  ("Completion"), and none under `prefers-reduced-motion`.
+- Animation beyond the existing 0.25 s fades, the check-off in [sheet.md](sheet.md)
+  ("Completion") and today's progress ring ("Progress"), and none under `prefers-reduced-motion`.
 - Streaks, totals or rewards on /now.
 
 ## Quality bar

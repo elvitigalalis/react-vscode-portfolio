@@ -79,9 +79,11 @@ function done() {
   const task = state.tasks.get(s.task_id);
   const row = task ? focusActual(s, task, new Date(), SHEET.timeZone) : null;
   io.setSession(null);
+  // Today's progress line counts the minutes at once; the next load reads what was saved.
+  if (row) state.actuals.push({ day: row.d, minutes: row.minutes });
   dialog.close();
   const save = () => io.queue(...(row ? [{ op: "actual", row }] : []), { op: "done", task: s.task_id });
-  if (task) checkOff(s.task_id, { save }).catch(console.error); else save();
+  if (task) checkOff(s.task_id, { save, focusMin: row?.minutes ?? null }).catch(console.error); else save();
 }
 
 // +15 min: the block's end moves when the time is free; the timer follows it.

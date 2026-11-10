@@ -80,13 +80,22 @@ tasks jumping days across time zones.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
+- **Progress** (src/sheet/progress.mjs): counts that say what got done, never points, levels,
+  streaks or anything a miss takes away. Today's header line reads "3 of 7 done · 1h40 focused"
+  after a small accent ring that closes as today's tasks get done; the focused half (today's actuals,
+  from focus Done and Telegram's Finished) shows only when there is some, and an empty day shows
+  nothing. No head start is faked. The week title adds the tasks finished that week by done_at
+  ("Week of Nov 9 · 14 done", nothing at 0), Someday ones included. Phones hide the title, so
+  there the shown day says "14 done this week" under its stamps.
+- **Also did…** under today's "+ Add a task": typing an unplanned win and Enter logs it as a task
+  already done today, so it counts. Undo removes it.
 - **No badges.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)). The only sound
   is the optional completion tick (below), off by default.
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
 - The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
-  fades and the check-off below, all off under `prefers-reduced-motion`.
+  fades, the check-off below and the progress ring closing a step (400 ms), all off under `prefers-reduced-motion`.
 
 ### Completion
 
@@ -100,8 +109,11 @@ Checking something off should feel good every time without getting old (src/shee
   fails puts the row back open and the status line says so, as before. Reopening (↺) has no motion.
 - **A Someday row** then fades out and the rows under it slide up (transform only); the Log's count
   pops.
-- **Sometimes, a burst:** eight specks in the site's greens and amber fly from the ✓ (about
-  550 ms). Always on the third ✓ within ten minutes, otherwise about one in five. Never from a key.
+- **A burst when it means something:** eight specks in the site's greens and amber fly from the ✓
+  (about 550 ms) on the day's first ✓ (no task has a done_at today yet; once a day, however often
+  it is tapped or reopened), a task carried over at least twice, a task focus Done finished
+  before its estimate ran out, or the third ✓ within ten minutes. Never by chance, and never from
+  a key.
 - **Big moments:** a Brightspace task (an assignment), or the last open task of today. Confetti for
   1.2 s on one canvas, loaded only then, and the Undo toast reads "Assignment done." or "Day
   cleared." before "Done: …". Clearing the day also pops the header's ✓.

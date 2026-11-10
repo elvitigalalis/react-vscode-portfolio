@@ -124,3 +124,15 @@
 @media (prefers-reduced-motion: no-preference) {
   .sheet-row.is-checking :is(.sheet-title, .sheet-when, .sheet-details) { transition: color 0.25s ease-out; }
 }
+
+/* Progress (planner.mjs, progressMark): today's "3 of 7 done · 1h40 focused" after a small ring
+   that closes as tasks get done, drawn as one stroke (pathLength 1) from 12 o'clock. Here, not in sheet.css: only /plan draws it. */
+.sheet-progress { display: flex; align-items: center; gap: 0.3rem; margin: 0.15rem 0 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.sheet-progress span span { white-space: nowrap; }
+.sheet-progress-ring { flex: none; width: 0.875rem; height: 0.875rem; transform: rotate(-90deg); }
+.sheet-progress-ring circle { fill: none; stroke-width: 2.5; }
+.sheet-progress-track { stroke: var(--line); }
+.sheet-progress-fill { stroke: var(--accent); stroke-dasharray: 1; stroke-linecap: round; }
+/* The week's count where phones hide the week title (planner.mjs, weekDoneMark). */
+.sheet-weekdone { display: none; margin: 0.15rem 0 0; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 48rem) { .sheet-weekdone { display: block; } }

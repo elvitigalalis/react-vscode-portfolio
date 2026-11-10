@@ -19,6 +19,7 @@ import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
 import * as cheer from "./celebrate.mjs";
+import { dayProgress, progressText, weekDone, weekTitle } from "./progress.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -73,6 +74,7 @@ export const state = {
   todos: [],        // event_todos rows: done, hidden and Claude's titles
   horizon: [],      // horizon_alloc rows from today on, each with its task's title
   states: new Map(), // horizon_state rows by task id
+  actuals: [],      // today's focus minutes (actuals rows: day, minutes), for the progress line
   eventsStale: false,
 };
 
@@ -196,7 +198,8 @@ export async function dropBlocks(id) {
   state.blocks = state.blocks.filter((b) => b.task_id !== id);
 }
 
-export async function addTask(text, where) {
+// `extra` goes into the new row as it is ({ done: true } for Also did…).
+export async function addTask(text, where, extra = {}) {
   // A due date counts from the task's day; a Someday task's counts from today.
   const parsed = parseEntry(text, where.day ?? state.today);
   if (!parsed.title) return;
@@ -204,7 +207,7 @@ export async function addTask(text, where) {
   // A deadline written only in the title ("Nov 14 11:59pm") becomes the due date.
   const task = await api.insertTask(withTitleDue({
     ...parsed, day: where.day ?? null, list: where.day ? null : where.list,
-    position: positionBetween(lastPosition(siblings), null),
+    position: positionBetween(lastPosition(siblings), null), ...extra,
   }, state.today));
   state.tasks.set(task.id, task);
   return task;
@@ -273,8 +276,8 @@ const rowOf = (id) => [...root.querySelectorAll(`.sheet-task[data-id="${CSS.esca
 // or after cheer.SAVE_MS at most: a save that hangs (a slow network) mustn't freeze every redraw.
 // It then redraws again when it lands. A failed save needs nothing undone: state never changed,
 // so the redraw shows the row open again. Returns { saving }, the save itself.
-async function playOff(li, save, { leave = false, moment = null, quiet = false, from = li.querySelector(".sheet-check") } = {}) {
-  cheer.cheer(from, { moment, quiet });
+async function playOff(li, save, { leave = false, moment = null, quiet = false, why = {}, from = li.querySelector(".sheet-check") } = {}) {
+  cheer.cheer(from, { moment, quiet, why });
   const list = li.closest(".sheet-rows");
   const before = leave ? cheer.places(list) : null;
   const drew = nextDraw();
@@ -293,8 +296,9 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
 // task just saves and redraws. `save` defaults to toggleDone (focus mode passes its outbox).
 // A Someday row leaves for the Log once done, so it fades out and the Log's count pops.
 // A second tap while the first still saves does nothing (cheer.once, keyed by task or event).
+// `focusMin`: the minutes of the focus session that finished it (focus Done), for the burst.
 const inFlight = new Set();
-export async function checkOff(id, { li = rowOf(id), save = null, quiet = false, from } = {}) {
+export async function checkOff(id, { li = rowOf(id), save = null, quiet = false, from, focusMin = null } = {}) {
   const t = state.tasks.get(id);
   if (!t) return;
   await cheer.once(inFlight, `task:${id}`, async () => {
@@ -302,7 +306,8 @@ export async function checkOff(id, { li = rowOf(id), save = null, quiet = false,
     save ??= () => toggleDone(id, cheer.MOMENT_WORDS[moment] ?? null);
     if (t.done || !li) { await save(); render(); return; }
     const leave = Boolean(li.closest(".sheet-list"));
-    const { saving } = await playOff(li, save, { leave, moment, quiet, ...(from ? { from } : {}) });
+    const why = { first: cheer.firstOfDay(state.tasks.values(), state.today, SHEET.timeZone), rolls: t.rolls ?? 0, early: cheer.inside(t, focusMin) };
+    const { saving } = await playOff(li, save, { leave, moment, quiet, why, ...(from ? { from } : {}) });
     if (state.tasks.get(id)?.done) {
       if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
       if (leave) cheer.pop($("[data-log-count]"));
@@ -459,6 +464,15 @@ function addRow(where, label, placeholder = "+ Add a task") {
   return el("li", { className: "sheet-row is-empty is-add" }, input);
 }
 
+// Also did… (docs/sheet.md): today's second box, for a win that wasn't planned. Enter logs it as
+// a task already done today, so it counts in the progress line.
+function alsoRow(day) {
+  const input = taskBox({ ariaLabel: "Log something else you did today", placeholder: "Also did…" });
+  input.dataset.day = day;
+  input.dataset.also = "";
+  return el("li", { className: "sheet-row is-empty is-add is-also" }, input);
+}
+
 // --- Event to-dos (docs/sheet-v5.md, "Event to-dos") ---------------------------------------
 
 // A day's list: its calendar events as to-dos merged with its tasks, in time order
@@ -560,9 +574,10 @@ function dayColumn(day, rows, items) {
   const blank = day === state.today && !items.length;
   const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : eventTodoRow(r))),
     blank ? blankRow() : null,
-    addRow({ day }, `Add a task to ${weekday} ${date}`));
+    addRow({ day }, `Add a task to ${weekday} ${date}`),
+    day === state.today ? alsoRow(day) : null);
   ul.dataset.day = day;
-  for (let i = items.length + (blank ? 2 : 1); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
+  for (let i = items.length + (blank ? 2 : 1) + (day === state.today ? 1 : 0); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
   const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
   const section = el("section", { className: `sheet-day${day === state.today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
     el("h2", { className: "sheet-head" },
@@ -575,11 +590,64 @@ function dayColumn(day, rows, items) {
     el("div", { className: "sheet-stamps-row" },
       el("p", { className: "sheet-stamps", textContent: marks }),
       day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
+      day === state.today ? progressMark(day) : null,
+      day === state.focus ? weekDoneMark() : null,
       day === state.today ? windDownMark() : null,
       day > state.today ? horizonDay(day) : null),
     ul);
   section.dataset.day = day;
   return section;
+}
+
+// Progress (progress.mjs): today's "3 of 7 done · 1h40 focused" after a small ring that closes
+// as today's tasks get done (a ring, so it doesn't read as the load meter's bar). Real progress
+// only: an empty day shows nothing.
+function progressMark(day) {
+  const p = dayProgress(state.tasks.values(), day, state.actuals);
+  const text = progressText(p);
+  if (!text) return null;
+  let ring = null;
+  if (p.total) {
+    ring = document.createElementNS(SVG, "svg");
+    ring.setAttribute("viewBox", "0 0 16 16");
+    ring.setAttribute("aria-hidden", "true");
+    ring.setAttribute("class", "sheet-progress-ring");
+    ring.dataset.left = String(1 - p.done / p.total);
+    // At 0 done only the track: a round-capped empty stroke would still draw a dot.
+    for (const cls of ["sheet-progress-track", p.done ? "sheet-progress-fill" : null].filter(Boolean)) {
+      const c = document.createElementNS(SVG, "circle");
+      for (const [k, v] of Object.entries({ cx: 8, cy: 8, r: 6, pathLength: 1, class: cls })) c.setAttribute(k, String(v));
+      ring.append(c);
+    }
+    if (p.done) ring.lastChild.style.strokeDashoffset = ring.dataset.left;
+  }
+  // Each half stays whole ("1 of 4 done ·" / "1h40 focused"); the real space between them is
+  // where a narrow column wraps.
+  const halves = text.split(" · ").flatMap((h, i, all) => [i ? " " : null, el("span", { textContent: i < all.length - 1 ? `${h} ·` : h })]);
+  return el("p", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
+}
+
+// Phones hide the week title (the h1, still read out), so the shown day says the week's count
+// there: "14 done this week", nothing at 0. CSS shows it only on phones (plan-phone.css).
+function weekDoneMark() {
+  const n = weekDone(state.tasks.values(), weekDays(state.week), SHEET.timeZone);
+  if (!n) return null;
+  const p = el("p", { className: "sheet-weekdone", textContent: `${n} done this week` });
+  p.setAttribute("aria-hidden", "true");
+  return p;
+}
+
+// The ring closes from where it was before the redraw (render() replaces it), so a ✓ shows as
+// the ring filling a step.
+let leftWas = null;
+function growProgress() {
+  const ring = root.querySelector(".sheet-day.is-today .sheet-progress-ring");
+  const fill = ring?.querySelector(".sheet-progress-fill");
+  const left = ring ? Number(ring.dataset.left) : null;
+  if (fill && leftWas != null && left !== leftWas && cheer.calm()) {
+    fill.animate([{ strokeDashoffset: leftWas }, { strokeDashoffset: left }], { duration: 400, easing: cheer.EASE_OUT });
+  }
+  leftWas = left;
 }
 
 // Oura (oura-day.mjs): a past day's or today's "☾ 82 · ⚡ 86 · 7h 40m", a button that opens the
@@ -637,16 +705,19 @@ function listColumn(name) {
 
 export function render() {
   if (holds) { owed = true; return; }
-  const keep = document.activeElement?.classList.contains("sheet-add") ? { day: document.activeElement.dataset.day, list: document.activeElement.dataset.list } : null;
+  const a = document.activeElement;
+  const keep = a?.classList.contains("sheet-add") ? { day: a.dataset.day, list: a.dataset.list, also: "also" in a.dataset } : null;
   state.today = now().day;
   const days = weekDays(state.week);
   if (!days.includes(state.focus)) state.focus = days.includes(state.today) ? state.today : days[0];
   const items = Object.fromEntries(days.map((d) => [d, rowsOn(d)]));
-  const rows = rowCount(items);
+  // Today holds one more box (Also did…) under its add row.
+  const rows = Math.max(rowCount(items), items[state.today] ? Math.max(items[state.today].length, 1) + 2 : 0);
   $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])));
   $("[data-week]").style.setProperty("--rows", String(rows));
+  growProgress();
   const first = dayLabel(days[0]);
-  $("[data-week-title]").textContent = `Week of ${first.date}`;
+  $("[data-week-title]").textContent = weekTitle(first.date, weekDone(state.tasks.values(), days, SHEET.timeZone));
 
   for (const t of state.tasks.values()) if (t.day === null) state.lists.add(t.list);
   const newList = el("input", { className: "sheet-add sheet-newlist", type: "text", autocomplete: "off", placeholder: "New list…", ariaLabel: "New Someday list" });
@@ -668,7 +739,7 @@ export function render() {
   for (const hook of renderHooks) hook();
   hostToast(root, toast);
 
-  if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
+  if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]${keep.also ? "[data-also]" : ":not([data-also])"}` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
   for (const r of drawn.splice(0)) r();
 }
 
@@ -679,7 +750,7 @@ export const renderHooks = [];
 // `scroll: false` keeps the week where it is (a reload on coming back, refreshStale).
 export async function load({ scroll = true } = {}) {
   const days = weekDays(state.week);
-  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states] = await Promise.all([
+  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
@@ -691,7 +762,9 @@ export async function load({ scroll = true } = {}) {
     api.listSleepDays(addDays(days[0], -13), days[6]),
     api.listHorizon(now().day),
     api.listHorizonStates(),
+    api.listActualsOn(now().day),
   ]);
+  state.actuals = actuals;
   state.horizon = horizon;
   state.states = new Map(states.map((h) => [h.task_id, h]));
   state.sleepTimes = sleepTimes;
@@ -1162,7 +1235,7 @@ function wire() {
     if (!li) {
       // Any empty row of a day types into that day.
       const ul = e.target.closest(".sheet-rows");
-      if (ul && e.target.closest(".is-empty")) ul.querySelector(".sheet-add")?.focus();
+      if (ul && e.target.closest(".is-empty") && !e.target.closest(".sheet-add")) ul.querySelector(".sheet-add")?.focus();
       return;
     }
     const id = li.dataset.id;
@@ -1202,8 +1275,13 @@ function wire() {
     input.value = "";
     fitBox(input);
     const where = input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list };
+    const also = "also" in input.dataset;
     // On failure the text goes back in the box; Retry adds it and empties the box again.
-    const add = async () => { await addTask(text, where); input.value = ""; };
+    const add = async () => {
+      const t = await addTask(text, where, also ? { done: true } : {});
+      input.value = "";
+      if (also && t) offerUndo(`Logged: ${t.title}`, async () => { await api.deleteTask(t.id); state.tasks.delete(t.id); });
+    };
     try { await add(); } catch (err) { failed(err, `add "${parseEntry(text, state.today).title}"`, add); input.value = text; }
     render();
   });
