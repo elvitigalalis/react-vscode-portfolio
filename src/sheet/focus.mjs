@@ -53,6 +53,20 @@ export function focusClock(s, now) {
   };
 }
 
+// The chimes (docs/sheet-focus.md): one at the session's halfway point and one 2 minutes before
+// the block's end, each when the clock crosses it between two ticks (`prev`, `now`, epoch ms) and
+// at most LATE_MS ago, so coming back to a throttled tab doesn't ring for a mark long gone.
+// Returns the marks crossed, ["half"], ["two"] or both; a session of 4 minutes or less has only
+// the halfway one. After +15 min the 2-minute mark moves with the end and can ring again.
+export const TWO_MIN = 2 * 60_000;
+const LATE_MS = 30_000;
+export function chimesDue(s, prev, now) {
+  const half = s.started_at + (s.ends_at - s.started_at) / 2;
+  const two = s.ends_at - TWO_MIN;
+  const crossed = (at) => prev < at && at <= now && now - at <= LATE_MS;
+  return [crossed(half) && "half", two > half && crossed(two) && "two"].filter(Boolean);
+}
+
 // --- Done and +15 min ------------------------------------------------------------------------
 
 // Done's actuals row, as record_focus takes it (supabase/schema.sql): the minutes from Start to

@@ -1,19 +1,72 @@
 // Focus mode's full-screen view (docs/sheet-focus.md), loaded on the first Start: the task, the
 // block's first step, where he left off last time, a large countdown to the block's end with the
-// time since Start, and Done, +15 min, Stuck and Stop. Leaving (Back to plan, or Escape) keeps
-// the session; /plan shows Resume. Stop ends it without finishing the task: it asks where he left
-// off, credits the minutes to the task, and the next Start shows both (focus-notes.mjs).
-// No sound and no animation beyond the bar's one-second step, which reduced motion turns off.
+// time since Start inside a ring that empties as the time runs out, and Done, +15 min, Stuck and
+// Stop. Leaving (Back to plan, or Escape) keeps the session; /plan shows Resume. Stop ends it
+// without finishing the task: it asks where he left off, credits the minutes to the task, and the
+// next Start shows both (focus-notes.mjs).
+// A soft chime at halfway and with 2 minutes left, when Completion sound is on (Settings).
+// No animation beyond the ring's one-second
+// step, which reduced motion turns off.
 // Its styles come with it, as text added on load (as lookback-view.mjs does), so /plan's first
 // load carries no rules it doesn't use (Lighthouse's unused-css-rules gate).
 import css from "../styles/sheet-focus-view.css?inline";
 import { SHEET } from "../site.mjs";
-import { focusClock, focusActual, extendFocus, startSession, stuckMessage, EXTEND_MIN } from "./focus.mjs";
+import { focusClock, focusActual, extendFocus, startSession, stuckMessage, chimesDue, EXTEND_MIN } from "./focus.mjs";
 import { stopRow, doneRow, sessionMinutes, creditMinutes, NOTE_MAX } from "./focus-notes.mjs";
 import { formatMinutes, localNow } from "./logic.mjs";
 import { el, state, render, checkOff } from "./planner.mjs";
+import { soundOn } from "./celebrate.mjs";
 
 let io, dialog, parts, timer;
+// When the clock last ticked (epoch ms), for the chimes.
+let ticked = 0;
+
+// The ring: a track and, over it, the time left as one stroke from 12 o'clock (pathLength 1),
+// which shortens each second. Decoration: the countdown's text carries the time.
+const SVG = "http://www.w3.org/2000/svg";
+function ring() {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 100 100");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("class", "sheet-focus-ring");
+  const circles = ["sheet-focus-track", "sheet-focus-arc"].map((cls) => {
+    const c = document.createElementNS(SVG, "circle");
+    for (const [k, v] of Object.entries({ cx: 50, cy: 50, r: 46, pathLength: 1, class: cls })) c.setAttribute(k, String(v));
+    return c;
+  });
+  svg.append(...circles);
+  return { svg, arc: circles[1] };
+}
+
+// The chime: two soft falling notes, slower and lower than the ✓'s tick. Web Audio follows the
+// iPhone's silent switch. The context starts (or wakes) on a tap in the view, as autoplay wants.
+let audio = null;
+function wakeAudio() {
+  if (!soundOn()) return;
+  try {
+    audio ??= new AudioContext();
+    if (audio.state !== "running") audio.resume().catch(() => {});
+  } catch (e) { console.error(e); }
+}
+function chime() {
+  if (!soundOn() || !audio) return;
+  try {
+    const t0 = audio.currentTime;
+    for (const [f, at] of [[784, 0], [587.33, 0.18]]) {
+      const o = audio.createOscillator();
+      const g = audio.createGain();
+      o.type = "sine";
+      o.frequency.value = f;
+      const t = t0 + at;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.07, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+      o.connect(g).connect(audio.destination);
+      o.start(t);
+      o.stop(t + 0.95);
+    }
+  } catch (e) { console.error(e); }
+}
 
 export function setupFocusView(deps) {
   document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
@@ -29,7 +82,7 @@ export function setupFocusView(deps) {
     resume: el("p", { className: "sheet-focus-resume" }),
     left: el("p", { className: "sheet-focus-left", role: "timer" }),
     sub: el("p", { className: "sheet-focus-sub" }),
-    fill: el("span", { className: "sheet-focus-fill" }),
+    ring: ring(),
     note: el("p", { className: "sheet-focus-note", role: "status" }),
     stuck: button("Stuck", "", stuck),
     leftOff: el("input", { type: "text", id: "sheet-focus-leftoff", maxLength: NOTE_MAX, autocomplete: "off", placeholder: "Next: …" }),
@@ -55,12 +108,15 @@ export function setupFocusView(deps) {
     button("Back to plan", "sheet-focus-leave", () => dialog.close()),
     el("div", { className: "sheet-focus-body" },
       el("p", { className: "sheet-focus-kicker", textContent: "Focus" }),
-      parts.title, parts.first, parts.resume, parts.left, parts.sub,
-      el("span", { className: "sheet-focus-bar", ariaHidden: "true" }, parts.fill),
+      parts.title, parts.first, parts.resume,
+      el("div", { className: "sheet-focus-dial" }, parts.ring.svg, parts.left),
+      parts.sub,
       parts.actions, parts.stop,
       parts.note));
   dialog.setAttribute("aria-labelledby", "sheet-focus-title");
   dialog.addEventListener("close", () => { clearInterval(timer); render(); });
+  // Any tap in the view (Start's included, through open) lets the chimes play later.
+  dialog.addEventListener("pointerdown", wakeAudio);
   // Escape while Stop's question is open goes back to the actions, keeping the view and session.
   dialog.addEventListener("cancel", (e) => {
     if (parts.stop.hidden) return;
@@ -92,6 +148,8 @@ export function open(blockId) {
   keepGoing();
   parts.note.textContent = "";
   parts.stuck.disabled = false;
+  wakeAudio();
+  ticked = Date.now();
   tick();
   clearInterval(timer);
   timer = setInterval(tick, 1000);
@@ -107,7 +165,11 @@ function tick() {
   const prior = io.progressFor(s.task_id)?.minutes;
   const total = prior ? ` · ${formatMinutes(prior + Math.floor((Date.now() - s.started_at) / 60_000))} on this task` : "";
   parts.sub.textContent = `${c.over ? "past the block's end" : "left"} · ${c.elapsed} in${total}`;
-  parts.fill.style.width = `${(c.share * 100).toFixed(2)}%`;
+  parts.ring.arc.style.strokeDashoffset = c.share.toFixed(4);
+  parts.ring.svg.classList.toggle("is-over", c.over);
+  const now = Date.now();
+  if (chimesDue(s, ticked, now).length) chime();
+  ticked = now;
 }
 
 // Done: the minutes since Start into actuals, then the task done, in that order (the outbox).

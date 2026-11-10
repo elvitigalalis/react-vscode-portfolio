@@ -11,9 +11,16 @@ end with the time since Start, and four actions. Terms are as in [GLOSSARY.md](.
   today (`focusTarget`). Habit blocks, proposed blocks and done tasks get none. While a focus is
   running, that task's row shows **Resume · 12:30 left** (or "over") instead.
 - **The view** shows the title, `First: <first_step>` when the block has one, the time left to the
-  block's end (`+2:05` once past it), "left · 15:30 in", and a 2px bar. No sound, no animation but
-  the bar's one-second step, which `prefers-reduced-motion` turns off. Done plays the task row's
-  check-off in the week ([sheet.md](sheet.md), "Completion").
+  block's end (`+2:05` once past it) inside a ring, and "left · 15:30 in". The ring is the time
+  made visible (Tiimo's and Time Timer's shrinking disc): an accent arc from 12 o'clock that
+  empties clockwise as the block runs out, gone once past the end. No animation but its
+  one-second step, which `prefers-reduced-motion` turns off. Done plays the task row's check-off
+  in the week ([sheet.md](sheet.md), "Completion").
+- **Chimes:** two soft falling notes at the session's halfway point and with 2 minutes left (a
+  session of 4 minutes or less gets only the halfway one), each once as the clock passes it and
+  not when he comes back to a mark over 30 seconds gone (`chimesDue`). They follow Settings, Day,
+  "Completion sound" (off by default) and the iPhone's silent switch, and play only while the
+  view shows.
 - **Done** records the minutes from Start to Done into `actuals` (rounded, 1–960; under a minute
   records nothing), then marks the task done exactly as the week's ✓ does (`completeTask`: the
   block shrinks to now, or goes if it hadn't started; Undo reopens the task).
