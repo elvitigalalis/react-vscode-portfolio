@@ -181,6 +181,28 @@ Checking something off should feel good every time without getting old (src/shee
 
 Under 48 rem, one day shows at a time (above). On top of that:
 
+- **Doing view** (Llama Life's one thing now, Tiimo's visual timer; src/sheet/doing-view.mjs,
+  logic in doing.mjs). During his day (from when it opens after his wake to the shutdown line,
+  not shut down) a phone opens to one card instead of the week, so the crowded today stamps
+  (Now/Next, load bar, strip, Oura, progress, wind-down) and the sections under the week (school
+  load, habits, projects, Someday, the Tell Claude box) are out of sight until he asks for them.
+  - The card is the task a focus session is running on ("Focusing"), else the open row on now
+    ("Now · until 10:45 am", an event too), else the next to start ("Next · 1–2 pm"), else the
+    first untimed task ("Up next"). A row that ended undone isn't shown: Reflow rest of today is
+    for those, and its line shows on the card when there is something to move.
+  - For a session or the row on now, a small ring that empties as its time runs out and "25 min
+    left", redrawn every 15 seconds. Under the title, the block's first step or where he left off.
+  - **Start** (or **Resume**) opens focus mode on the task's block today ([sheet-focus.md](sheet-focus.md):
+    the large shrinking ring, chimes, the screen kept on). **Done** completes it with the usual
+    check-off and Undo, and the card moves on.
+  - Below the card, "Then": the next two (timed rows still to start, then untimed tasks), each
+    with its time. **See the week** shows the week; today's stamps then start with a **Doing view**
+    link back. His pick holds for the rest of the day (kept in this browser), and the top bar's
+    day arrows and day button also go to the week. Each load of the week (opening, coming back,
+    changing week) chooses again, so the default never flips while he is using the page.
+  - Outside his day, with nothing open today, or on a wider screen, the week shows as before.
+    It loads only on a phone, after the first load.
+
 - **To-dos first.** Today's list sits right under the top bar. The Tell Claude box and Recent
   messages come after the day, before Someday, as one line until the box is in use; the
   "characters left" count shows only within 500 of the limit. A laptop keeps the box on top.

@@ -950,6 +950,7 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
     state.parked = parked.length;
     loaded();
     if (eventsFor !== days[0]) { setEvents(cachedEvents(days)); eventsFor = days[0]; }
+    for (const hook of loadHooks) hook();
     render();
     if (scroll) scrollToToday($("[data-week]"));
     saveCopy();
@@ -1016,6 +1017,9 @@ function saveCopy() {
   const user = api.userId();
   snapshot().then(({ pack }) => { try { localStorage.setItem(SNAPSHOT_KEY, pack(state, user)); } catch {} }, console.error);
 }
+
+// Run after each load, before its render (doing-view.mjs picks its view then).
+export const loadHooks = [];
 
 // --- Coming back (research U8/P1) ----------------------------------------------------------
 
