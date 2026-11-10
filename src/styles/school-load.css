@@ -8,8 +8,8 @@
 }
 .sheet-school-sum::-webkit-details-marker { display: none; }
 .sheet-school-label { font-weight: 600; }
-.sheet-school-label::before { content: "▸ "; color: var(--muted); }
-.sheet-school[open] .sheet-school-label::before { content: "▾ "; }
+.sheet-school-label::before { content: "▸ " / ""; color: var(--muted); }
+.sheet-school[open] .sheet-school-label::before { content: "▾ " / ""; }
 .sheet-school-sum .sheet-load-chip { margin-left: 0; font-size: 0.8125rem; }
 .sheet-school-sum .sheet-meter { grid-column: 3; max-width: 20rem; height: 6px; border-radius: 3px; }
 /* A crunch week is a heads-up, not an act-now item, so it is amber, never red: red stays for what

@@ -56,8 +56,10 @@ async function setEstimate(id, est_min) {
 
 function itemRow({ task, due, minutes, guess }) {
   const when = el("span", { className: "sheet-school-due", textContent: due < state.today ? "overdue" : weekdayName(due) });
+  // A guess reads "about 2h" to a screen reader; the eye gets "~2h".
   const est = guess
-    ? el("span", { className: "sheet-school-est is-guess", title: "A guess from the title. Pick one to set it.", textContent: `~${formatMinutes(minutes)}` })
+    ? el("span", { className: "sheet-school-est is-guess", title: "A guess from the title. Pick one to set it." },
+      el("span", { className: "visually-hidden", textContent: "about " }), el("span", { ariaHidden: "true", textContent: "~" }), formatMinutes(minutes))
     : el("span", { className: "sheet-school-est", textContent: formatMinutes(minutes) });
   const li = el("li", { className: "sheet-school-item" }, when, el("span", { className: "sheet-school-title", textContent: task.title }), est);
   li.dataset.id = task.id;
@@ -74,8 +76,19 @@ function itemRow({ task, due, minutes, guess }) {
 
 export function setupSchoolLoad(root) {
   document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
-  // One section that render() doesn't own, so whether it is open survives a redraw.
-  const box = el("details", { className: "sheet-school", hidden: true });
+  // One section that render() doesn't own, so whether it is open survives a redraw. Its summary,
+  // note and list are made once and updated in place, so a redraw never drops the focus on the
+  // summary or makes a screen reader read it as new.
+  const fill = el("span", { className: "sheet-meter-fill" });
+  const chip = el("span", { className: "sheet-load-chip" });
+  // The title carries "Crunch week" for screen readers; phones hide the title, so it shows here.
+  const crunch = el("span", { className: "sheet-school-crunch", ariaHidden: "true", textContent: "Crunch week", hidden: true });
+  const summary = el("summary", { className: "sheet-school-sum" },
+    el("span", { className: "sheet-school-label", textContent: "School this week" }), chip, crunch,
+    el("span", { className: "sheet-meter", ariaHidden: "true" }, fill));
+  const note = el("p", { className: "sheet-school-note" });
+  const list = el("ul", { className: "sheet-school-list" });
+  const box = el("details", { className: "sheet-school", hidden: true }, summary, note, list);
   box.dataset.school = "";
   root.querySelector("[data-week]").before(box);
 
@@ -98,24 +111,26 @@ export function setupSchoolLoad(root) {
     const w = weekLoad(tasks, days, local.day, freeByDay(days, local.day, local.minutes, codes), codes);
     const title = root.querySelector("[data-week-title]");
     title.querySelector(".sheet-crunch")?.remove();
-    if (!w || !w.items.length) { box.hidden = true; box.replaceChildren(); return; }
+    if (!w || !w.items.length) { box.hidden = true; list.replaceChildren(); return; }
     if (w.crunch) title.append(el("span", { className: "sheet-crunch", textContent: " · Crunch week" }));
 
-    const fill = el("span", { className: `sheet-meter-fill is-${w.level}` });
+    fill.className = `sheet-meter-fill is-${w.level}`;
     fill.style.width = `${w.pct}%`;
-    const words = `${formatMinutes(w.need)} due · ${formatMinutes(w.free)} free${w.crunch ? ` · ${formatMinutes(w.short)} short` : ""}`;
-    const summary = el("summary", { className: "sheet-school-sum" },
-      el("span", { className: "sheet-school-label", textContent: "School this week" }),
-      el("span", { className: `sheet-load-chip is-${w.level}`, textContent: words }),
-      // The title carries "Crunch week" for screen readers; phones hide the title, so it shows here.
-      w.crunch ? el("span", { className: "sheet-school-crunch", ariaHidden: "true", textContent: "Crunch week" }) : null,
-      el("span", { className: "sheet-meter", ariaHidden: "true" }, fill));
-    summary.title = `${formatMinutes(w.need)} of school work due by Sunday against ${formatMinutes(w.free)} free around your calendar and fixed-time tasks, from now to each day's shutdown.`;
-    const note = w.guessed
+    chip.className = `sheet-load-chip is-${w.level}`;
+    chip.textContent = `${formatMinutes(w.need)} due · ${formatMinutes(w.free)} free${w.crunch ? ` · ${formatMinutes(w.short)} short` : ""}`;
+    crunch.hidden = !w.crunch;
+    summary.title = `${formatMinutes(w.need)} of school work due by Sunday against ${formatMinutes(w.free)} free around your calendar, fixed-time tasks and other planned work, from now to each day's shutdown.`;
+    note.textContent = w.guessed
       ? `${w.guessed === 1 ? "1 item has" : `${w.guessed} items have`} no estimate; ~ marks a guess from the title. One tap sets it.`
       : "Every item has an estimate.";
-    box.replaceChildren(summary, el("p", { className: "sheet-school-note", textContent: note }),
-      el("ul", { className: "sheet-school-list" }, ...w.items.map(itemRow)));
+    // The list is drawn new; a focused pick or item gets its focus back on the new one.
+    const had = list.contains(document.activeElement) ? document.activeElement : null;
+    const at = had && { id: had.closest("[data-id]")?.dataset.id, est: had.dataset?.est };
+    list.replaceChildren(...w.items.map(itemRow));
+    if (at?.id) {
+      const item = list.querySelector(`[data-id="${CSS.escape(at.id)}"]`);
+      (item?.querySelector(at.est ? `.sheet-school-pick[data-est="${at.est}"]` : ".sheet-school-pick") ?? summary).focus();
+    }
     box.hidden = false;
   }
   // A fault here must not stop the hooks after it or the week: the bar hides instead.
