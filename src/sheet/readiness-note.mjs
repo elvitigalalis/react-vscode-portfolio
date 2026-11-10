@@ -1,5 +1,5 @@
 // Readiness note (docs/sheet.md, "Readiness note"): on a day Oura's readiness is low, today shows
-// one calm line, "Readiness 64 today · consider a lighter day · Push some to tomorrow · Dismiss".
+// one calm line, "Readiness 64 today · consider a lighter day · Move some to tomorrow · Dismiss".
 // A fixed threshold and a fixed sentence, worked out here in the browser from today's sleep_days
 // row. Oura data never reaches Claude (docs/adr/0005): nothing on the server or on an AI path
 // imports this module, and test/readiness-note.test.mjs checks that.
@@ -37,7 +37,7 @@ function note(d) {
   const line = el("p", { className: "sheet-over" }, `${readinessLine(r)} · `);
   // When the over-commit note already offers the same list, this line doesn't repeat it.
   if (!document.querySelector('[data-over="week"]')) {
-    const push = el("button", { type: "button", className: "sheet-link", textContent: "Push some to tomorrow" });
+    const push = el("button", { type: "button", className: "sheet-link", textContent: "Move some to tomorrow" });
     push.setAttribute("aria-expanded", String(open));
     push.onclick = () => { open = !open; render(); document.querySelector('[data-over="ready"] .sheet-link')?.focus(); };
     line.append(push, " · ");
