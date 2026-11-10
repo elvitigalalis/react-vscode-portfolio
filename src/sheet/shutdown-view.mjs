@@ -234,12 +234,19 @@ async function saveDecisions() {
   const rolled = open.filter((t) => rollsOnServer(t, decisions.get(t.id)));
   await Promise.all(open.filter((t) => !rolled.includes(t)).map(async (t) => {
     const kind = decisions.get(t.id);
-    if (kind === "done") return completeTask(t.id, true);
+    // A PATCH that matched no row (the task gone, or row-level security) saved nothing: a failure.
+    const gone = () => new Error(`"${t.title}" wasn't found to save`);
+    if (kind === "done") {
+      await completeTask(t.id, true);
+      if (!state.tasks.get(t.id)) { state.tasks.set(t.id, t); throw gone(); }
+      return;
+    }
     const where = targetOf(kind, today);
     const change = decisionChange(t, kind, today, end(where));
     if (where.day !== t.day) await dropBlocks(t.id);
     const saved = await api.updateTask(t.id, change);
-    state.tasks.set(t.id, saved ?? { ...t, ...change });
+    if (!saved) throw gone();
+    state.tasks.set(t.id, saved);
   }));
   return rolled.map((t) => ({ t, change: decisionChange(t, "tomorrow", today, end({ day: tomorrow })) }));
 }
