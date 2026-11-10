@@ -52,7 +52,8 @@ export function prefetch(day) {
     const ticked = new Set(ticks.map((t) => t.habit_id));
     r.winsData = { workouts, habits: habits.filter((h) => ticked.has(h.id)).map((h) => h.name) };
   });
-  r.extras = lb.prepare(day).then(() => { r.extrasOk = true; }, (e) => { console.error(e); r.extrasOk = false; });
+  // A prepare a newer one overtook leaves its own reads object stale; only `reads` is drawn.
+  r.extras = lb.prepare(day).then((latest) => { if (latest) r.extrasOk = true; }, (e) => { console.error(e); r.extrasOk = false; });
   reads = r;
   return r;
 }

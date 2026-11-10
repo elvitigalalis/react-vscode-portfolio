@@ -13,9 +13,12 @@ import { history, moverPrompts } from "./lookback-view.mjs";
 const tz = SHEET.timeZone;
 
 let data = null;
+let gen = 0; // the newest prepare; an older one that lands later is dropped
 
-// What Shutdown shows beyond the week on screen. Each read can fail alone.
+// What Shutdown shows beyond the week on screen. Each read can fail alone. Resolves true when its
+// reads became `data`, false when a newer prepare started meanwhile (the latest wins).
 export async function prepare(today) {
+  const mine = ++gen;
   const tomorrow = addDays(today, 1);
   const quiet = (p) => p.catch((e) => { console.error(e); return []; });
   const [hist, tasks, events, todos, turned, past] = await Promise.all([
@@ -26,7 +29,9 @@ export async function prepare(today) {
     quiet(api.rest(`feedback?select=ref&action=eq.turn_down&ref->>day=eq.${today}`)),
     quiet(api.rest(`days?select=day,reflection&day=lt.${today}&reflection=not.is.null&order=day.desc&limit=5`)),
   ]);
+  if (mine !== gen) return false;
   data = { today, tomorrow, hist, tasks, events, todos, turned: new Set(turned.map((f) => f.ref?.task_id)).size, past: past.filter((d) => d.reflection?.trim()) };
+  return true;
 }
 
 // Tomorrow's tasks as read when Shutdown opened (tomorrow can be outside the week on screen).
