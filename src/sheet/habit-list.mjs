@@ -22,6 +22,7 @@ let seen = null;      // the state.tasks they were read for (one read per load, 
 // lays these back over what it read; only the newest refresh's answer is used.
 const pending = new Map();
 let reads = 0;
+let drawnDay = null; // the habit day the rows show; at 4 am it moves on (redrawn on a tap or return)
 // Saves run one after another per "id|day", so a quick double tap lands in the order tapped.
 const queues = new Map();
 function queued(key, write) {
@@ -69,6 +70,7 @@ function row(h, day, fresh) {
 
 function draw(fresh = null) {
   const day = today();
+  drawnDay = day;
   root.querySelector("[data-habit-rates]").hidden = !habits.length;
   root.querySelector("[data-habit-list]").replaceChildren(...habits.map((h) => row(h, day, fresh)));
 }
@@ -76,6 +78,8 @@ function draw(fresh = null) {
 async function toggle(e) {
   const id = e.target.closest("[data-id]").dataset.id;
   const day = today();
+  // Past 4 am since the last draw: the tap is for the new day, so the rows move to it first.
+  if (day !== drawnDay) draw();
   const key = `${id}|${day}`;
   const on = !daysOf(id).has(day);
   pending.set(key, on);
@@ -102,6 +106,10 @@ export function setupHabits(node) {
     else draw();
   };
   renderHooks.push(hook);
+  // Back on the page after 4 am (the planner's own reload waits a minute): the rows move on.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && drawnDay && today() !== drawnDay) draw();
+  });
   // Loaded after the first render (index.astro loads this module lazily): catch up now.
   if (state.week) hook();
 }
