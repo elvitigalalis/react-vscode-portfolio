@@ -230,6 +230,8 @@ function failFirst(e) {
   f.reject(e);
 }
 export const afterFirstLoad = () => (hasLoaded ? firstLoad : failedWith ? Promise.reject(failedWith) : Promise.race([firstLoad, firstFailed.p]));
+// Whether a task has a save still out in its row queue (optimistic.mjs).
+export const savePending = (id) => Boolean(taskBook?.pending(id));
 
 // A save that finds its task deleted (`gone`) takes the row away rather than putting it back.
 function saving(book, key, change, save) {

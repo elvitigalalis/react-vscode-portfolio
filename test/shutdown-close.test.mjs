@@ -86,6 +86,9 @@ test("a plain Tomorrow rides on shut_down's roll; a timed one or a third roll is
   assert.equal(rollsOnServer(T("a", "A", { rolls: 3 }), "tomorrow"), false, "the roll would park it in Inbox");
   assert.equal(rollsOnServer(T("a", "A", { at_time: "15:00:00" }), "tomorrow"), false);
   assert.equal(rollsOnServer(T("a", "A"), "week"), false);
+  // A save still out for the row: written through its queue after that save, not rolled.
+  assert.equal(rollsOnServer(T("a", "A"), "tomorrow", true), false);
+  assert.equal(rollsOnServer(T("a", "A"), "tomorrow", false), true);
 });
 
 test("before 4 am, Shutdown closes the day before, and what was done after midnight counts for it", () => {

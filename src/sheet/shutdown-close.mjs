@@ -92,7 +92,9 @@ export function decisionChange(t, kind, today, position) {
 // task under three rolls moves to tomorrow as a roll in the same request, so Finish needs no write
 // of its own for it. A timed task, or one the roll would park in Inbox, is moved by a write.
 export const ROLLS_BEFORE_INBOX = 3;
-export const rollsOnServer = (t, kind) => kind === "tomorrow" && !t.at_time && (t.rolls ?? 0) < ROLLS_BEFORE_INBOX;
+// A task with a save still out in its row queue (`pending`) is written too: a late save of it
+// (a move made just before) could land after the roll and put it back on today.
+export const rollsOnServer = (t, kind, pending = false) => kind === "tomorrow" && !pending && !t.at_time && (t.rolls ?? 0) < ROLLS_BEFORE_INBOX;
 
 // Today's unfinished tasks that still need a decision.
 export const undecided = (open, decisions) => open.filter((t) => !decisions.has(t.id));

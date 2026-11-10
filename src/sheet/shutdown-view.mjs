@@ -11,7 +11,7 @@ import css from "../styles/sheet-shutdown.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, byPosition, localNow, positionBetween, weekDays } from "./logic.mjs";
-import { el, state, render, load, loadHooks, saveTask, afterFirstLoad, failed, progressHooks } from "./planner.mjs";
+import { el, state, render, load, loadHooks, saveTask, savePending, afterFirstLoad, failed, progressHooks } from "./planner.mjs";
 import { dayProgress } from "./progress.mjs";
 import { habitDay } from "./habit-rate.mjs";
 import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
@@ -330,7 +330,7 @@ async function saveDecisions() {
     return p;
   };
   const open = openTasks();
-  const rolled = open.filter((t) => rollsOnServer(t, decisions.get(t.id)));
+  const rolled = open.filter((t) => rollsOnServer(t, decisions.get(t.id), savePending(t.id)));
   // Every write runs to its end, so one failure doesn't leave the others mid-flight; then any
   // failure stops Finish before the day is shut down, and a second Finish retries what's left.
   // Each goes through the row's save queue (planner.mjs, saveTask): it shows at once and saves
