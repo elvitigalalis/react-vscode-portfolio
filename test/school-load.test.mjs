@@ -61,6 +61,9 @@ test("free time is the calendar's gaps less fixed-time tasks", () => {
   assert.equal(freeOn(events, fixed, 540, 1320), 720 - 80 - 30);
   assert.equal(freeOn(events, fixed, 1320, 1320), 0);
   assert.equal(freeOn(events, fixed, 1400, 1320), 0);
+  // Held to the workload cap, as the day chips are.
+  assert.equal(freeOn(events, fixed, 540, 1320, 330), 330);
+  assert.equal(freeOn(events, fixed, 540, 1320, 900), 720 - 80 - 30);
 });
 
 test("the week's load: need against free from today on, crunch when over", () => {

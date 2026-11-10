@@ -144,9 +144,9 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
   discussion, post, reading or survey 30m; anything else 1h. A guess shows as "~2h".
 - **Free hours:** for each day from today on, the calendar's free time from the day's start (now, on
   today) to its shutdown line, less the fixed-time tasks on it (`at_time`, `est_min` long, 30m
-  without one) where no event already covers them. No workload cap applies: this is time, not
-  budget.
-- **The bar** sits above the week: "School this week · 8h45 due · 80h10 free" with a 6px meter in
+  without one) where no event already covers them. Each day is held to the Settings workload cap,
+  as the day chips are, so the week's free hours are hours he would really give to work.
+- **The bar** sits above the week: "School this week · 8h45 due · 33h free" with a 6px meter in
   the day load's colours (`loadShare`: near from 85%, over above 100%). It is hidden when nothing
   is due and for past weeks. It opens to the items, earliest due first; one with no estimate shows
   one-tap picks (30m, 1h, 2h, 4h, 8h) that set `est_min` at once, save behind with Undo, and put

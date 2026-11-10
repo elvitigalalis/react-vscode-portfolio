@@ -7,16 +7,17 @@ import css from "../styles/school-load.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { formatMinutes, localNow, weekDays, weekdayName } from "./logic.mjs";
-import { el, state, render, renderHooks, eventsOn, dayStart, shutdownAt, offerUndo, failed } from "./planner.mjs";
+import { el, state, render, renderHooks, eventsOn, dayStart, shutdownAt, workloadCap, offerUndo, failed } from "./planner.mjs";
 import { freeOn, weekLoad, QUICK_EST } from "./school-load.mjs";
 
 // Free minutes on each day of the week on screen, from the day's start (now, on today) to its
-// shutdown line, less his busy events and fixed-time tasks (school-load.mjs, freeOn).
+// shutdown line, less his busy events and fixed-time tasks, at most the workload cap
+// (school-load.mjs, freeOn).
 function freeByDay(days, today, nowMin) {
   const tasks = [...state.tasks.values()];
   return Object.fromEntries(days.filter((d) => d >= today).map((d) => {
     const from = Math.max(dayStart(d), d === today ? nowMin : 0);
-    return [d, freeOn(eventsOn(d), tasks.filter((t) => t.day === d), from, shutdownAt(d))];
+    return [d, freeOn(eventsOn(d), tasks.filter((t) => t.day === d), from, shutdownAt(d), workloadCap())];
   }));
 }
 

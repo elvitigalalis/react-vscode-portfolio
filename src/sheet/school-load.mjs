@@ -62,14 +62,15 @@ export function schoolDue(tasks, days, today) {
 // A day's free minutes: the gaps between his busy calendar events (`dayEvents`, eventsOnDay's
 // minutes) from `from` to `to` (the day's start, or now on today, to its shutdown line), less the
 // fixed-time tasks on that day (`fixed`: undone tasks with an at_time, their est_min long, 30
-// without one) where no event already covers them.
-export function freeOn(dayEvents, fixed, from, to) {
+// without one) where no event already covers them, held to `cap` (the Settings workload cap,
+// as the day chips are: planner.mjs dayCapacity).
+export function freeOn(dayEvents, fixed, from, to, cap = Infinity) {
   const clock = (hhmm) => { const [h, m] = String(hhmm).split(":").map(Number); return h * 60 + m; };
   const spans = fixed.filter((t) => !t.done && t.at_time).map((t) => {
     const start = clock(t.at_time);
     return { busy: true, allDay: false, start, end: start + (t.est_min > 0 ? t.est_min : 30) };
   });
-  return to > from ? freeMinutes([...dayEvents, ...spans], from, to) : 0;
+  return to > from ? Math.min(cap, freeMinutes([...dayEvents, ...spans], from, to)) : 0;
 }
 
 // The week's load: { need, free, guessed, items, level, pct, short, crunch }, or null for a week
