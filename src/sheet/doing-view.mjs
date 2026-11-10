@@ -93,12 +93,12 @@ function card(pick, minutes, s) {
     el("p", { className: "sheet-doing-kicker", textContent: kicker }),
     el("div", { className: "sheet-doing-head" },
       left ? el("span", { className: "sheet-doing-dial" }, ring(left.share)) : null,
-      el("h2", { id: "sheet-doing-title", className: "sheet-title sheet-doing-title", textContent: title })),
+      el("h2", { id: "sheet-doing-title", className: "sheet-doing-title", textContent: title })),
     left ? el("p", { className: "sheet-doing-left", textContent: left.words }) : null,
     sub ? el("p", { className: "sheet-doing-sub", textContent: sub }) : null,
     actions,
     reflowLine());
-  if (task) node.dataset.id = task.id;
+  if (task) node.dataset.task = task.id;
   return node;
 }
 
@@ -115,6 +115,8 @@ function draw() {
   const doing = mode === "doing" && matchMedia(NARROW).matches;
   root.classList.toggle("is-doing", doing);
   box.hidden = !doing;
+  // Hidden, it holds nothing: no stray title or button for lookups by id or class to find.
+  if (!doing) { box.replaceChildren(); drawnKey = null; }
   if (doing) {
     const then = pick.next.map((r) => el("li", {}, el("span", { className: "sheet-doing-when", textContent: span(r) ?? "" }), el("span", { textContent: rowTitle(r) })));
     const week = el("button", { type: "button", className: "sheet-btn sheet-doing-week", textContent: "See the week" });
