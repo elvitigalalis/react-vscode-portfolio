@@ -126,6 +126,41 @@ the base spec is [sheet.md](sheet.md).
    - Public `#workit` and `#micromouse` tasks get their project's icon.
    - Nothing new is revealed: no times, estimates, totals or streaks.
 
+## School load
+
+Shovel's "time cushion" and Sunsama's workload threshold, for one student: is the school work due
+this week less than the time he has? Logic in `src/sheet/school-load.mjs` (covered by
+`test/school-load.test.mjs`); the view in `school-load-view.mjs` with `src/styles/school-load.css`,
+both loaded after sign-in, so /plan's first load doesn't carry them.
+
+- **School work** is an undone task from the Brightspace feed (`source = 'brightspace'`, pace.mjs's
+  "course"), or one tagged with one of his course codes (`#cse316`, `#ams-261`) or `#school`. His
+  course codes are an allow-list read from the feed: the code that starts a Brightspace task's
+  title ("AMS 261 Exam 2", which the feed takes from the item's location). A course-shaped tag that
+  isn't on it (`#kan-329`, `#ieee101`) is not school. School work is such a task that has no
+  `at_time` is not a project step and is not on the Someday "Dropped" list. From Brightspace only items with a `due` count (the
+  feed's "- Due" items). Its other items are calendar events: a timed one (an exam, a class
+  meeting) is something he goes to, so it takes free time instead; an untimed one (a holiday,
+  Reading Day) is not work.
+- **Due this week:** its `due`, else its `day`, falls in the week on screen. In the current week,
+  work overdue by up to 14 days counts too; older overdue work is taken as let go.
+- **Hours due:** each item's `est_min`, or a guess from its title when it has none: lab (a lab report
+  too) 2h; project, paper, essay or report 4h; exam or midterm 3h; homework, problem set or assignment 2h; quiz 1h;
+  discussion, post, reading or survey 30m; anything else 1h. A guess shows as "~2h".
+- **Free hours:** for each day from today on, the calendar's free time from the day's start (now, on
+  today) to its shutdown line, less the fixed-time tasks on it (`at_time`, `est_min` long, 30m
+  without one) where no event already covers them. Each day is held to the Settings workload cap,
+  as the day chips are, then loses the estimates of that day's other planned work (undone,
+  untimed tasks that aren't school work), never going below 0.
+- **The bar** sits above the week: "School this week · 8h45 due · 33h free" with a 6px meter in
+  amber from 85% (`loadShare`), and still amber when over. It is hidden when nothing
+  is due and for past weeks. It opens to the items, earliest due first; one with no estimate shows
+  one-tap picks (30m, 1h, 2h, 4h, 8h) that set `est_min` at once, save behind with Undo, and put
+  the guess back if the save fails.
+- **Crunch week** (amber, like the bar when over: a heads-up, so red stays for act-now items):
+  when hours due exceed free hours, the week title reads "Week of Nov 2 · Crunch
+  week" and the bar adds "· 16h35 short". Phones hide the title, so the bar shows "Crunch week".
+
 ## Out of scope
 
 - New colours beyond the site's palette. A colour switch like Todoist's is out: the one
