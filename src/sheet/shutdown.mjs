@@ -22,7 +22,8 @@ const today = () => shutdownDay(new Date(), SHEET.timeZone);
 const closedOn = (day) => Boolean(state.days[day]?.shutdown) || outside.get(day) === true;
 const loadView = () => (view ??= import("./shutdown-view.mjs").then((m) => { m.setupView(root, { closed: (day) => outside.set(day, true) }); return m; }, (e) => { view = null; throw e; }));
 const warm = () => loadView().then((m) => m.prefetch(today())).catch(console.error);
-const open = () => loadView().then((m) => m.open(today()), failed);
+// Not before settings has answered, nor for an account that can't open the planner (no settings).
+const open = () => (state.settings ? loadView().then((m) => m.open(today()), failed) : null);
 const idle = (fn) => (window.requestIdleCallback ? requestIdleCallback(fn, { timeout: 5000 }) : setTimeout(fn, 1500));
 
 export function setupShutdown(node) {

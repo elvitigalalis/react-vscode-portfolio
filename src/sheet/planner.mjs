@@ -212,9 +212,24 @@ const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -
 // Saves wait for the first load to land: a change made on the stored copy (snapshot.mjs) shows at
 // once, but what it saves (a block to shorten or delete, say) is worked out from the fresh rows.
 let loaded;
-const firstLoad = new Promise((r) => { loaded = r; });
-// Shutdown opens on the fresh rows, never the stored copy: it waits for this.
-export const afterFirstLoad = () => firstLoad;
+let hasLoaded = false;
+const firstLoad = new Promise((r) => { loaded = () => { hasLoaded = true; r(); }; });
+// Shutdown opens on the fresh rows, never the stored copy: it waits for this. Until a load has
+// landed, a failed one (its reads, or settings at start) rejects it, so a waiter can say so and
+// retry: a waiter that comes after the failure, before any new load starts, is rejected at once;
+// a new load clears it, and each failure arms a fresh rejection for the next try.
+let firstFailed;
+let failedWith = null;
+const armFailed = () => { let reject; const p = new Promise((_, r) => { reject = r; }); p.catch(() => {}); firstFailed = { p, reject }; };
+armFailed();
+function failFirst(e) {
+  if (hasLoaded) return;
+  failedWith = e;
+  const f = firstFailed;
+  armFailed();
+  f.reject(e);
+}
+export const afterFirstLoad = () => (hasLoaded ? firstLoad : failedWith ? Promise.reject(failedWith) : Promise.race([firstLoad, firstFailed.p]));
 
 // A save that finds its task deleted (`gone`) takes the row away rather than putting it back.
 function saving(book, key, change, save) {
@@ -921,6 +936,7 @@ let lastRead = null;  // the last load's rows, as JSON
 let eventsFor = null; // the Monday of the week state.events are for
 export async function load({ scroll = true, quiet = false, sync = null, afterCopy = false } = {}) {
   const gen = ++loadGen;
+  failedWith = null; // a new try: waiters wait for it (afterFirstLoad)
   const since = [taskBook.now(), todoBook.now()];
   const days = weekDays(state.week);
   const events = Promise.resolve(sync).catch(console.error).then(() => readEvents(days));
@@ -937,7 +953,7 @@ export async function load({ scroll = true, quiet = false, sync = null, afterCop
     api.listHorizon(now().day),
     api.listHorizonStates(),
     api.listActualsOn(now().day),
-  ]);
+  ]).catch((e) => { failFirst(e); throw e; });
   if (gen !== loadGen) return;
   const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = read;
   const json = JSON.stringify([days[0], now().day, read]);
@@ -1644,7 +1660,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     status.replaceChildren("This is Lisul's planner. The public view is at ", el("a", { href: "/now/", textContent: "/now" }), ". ", button);
     return;
   }
-  try { await books(); } catch (e) { return failed(e); }
+  try { await books(); } catch (e) { failFirst(e); return failed(e); }
   wire();
   for (const plugin of plugins) plugin(root);
   // The settings read goes out now; only the draw waits for drawWaits, not the network.
@@ -1670,6 +1686,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   try {
     const settings = await reading;
     if (!settings) {
+      failFirst(new Error("This account cannot open the planner."));
       clearPage();
       setStatus("This account cannot open the planner.");
       $("[data-tools]").hidden = false;
@@ -1686,6 +1703,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     openFromLink();
   } catch (e) {
     held?.putBack();
+    failFirst(e);
     if (!copy) return failed(e);
     console.error(e);
     setStatus(COPY_FAILED);

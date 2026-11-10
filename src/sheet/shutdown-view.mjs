@@ -11,7 +11,7 @@ import css from "../styles/sheet-shutdown.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, byPosition, localNow, positionBetween, weekDays } from "./logic.mjs";
-import { el, state, render, load, saveTask, afterFirstLoad, failed, progressHooks } from "./planner.mjs";
+import { el, state, render, load, loadHooks, saveTask, afterFirstLoad, failed, progressHooks } from "./planner.mjs";
 import { dayProgress } from "./progress.mjs";
 import { habitDay } from "./habit-rate.mjs";
 import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
@@ -410,6 +410,54 @@ async function readDay(day) {
   if (days[0]) state.days[day] = days[0];
 }
 
+const offWeek = (day) => state.week && !weekDays(state.week).includes(day);
+
+function showReading() {
+  parts = {};
+  body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), el("p", { className: "small", textContent: "Reading the day…" }));
+}
+
+// A first load that failed (or the day's own read): say so, with Retry. Resolves true on Retry,
+// false when the dialog closes instead.
+function askRetry() {
+  return new Promise((done) => {
+    const retry = el("button", { type: "button", className: "sheet-btn primary", textContent: "Retry", onclick: () => { dialog.removeEventListener("close", gone); done(true); } });
+    const cancel = el("button", { type: "button", className: "sheet-btn", textContent: "Cancel", onclick: () => dialog.close() });
+    const gone = () => done(false);
+    dialog.addEventListener("close", gone, { once: true });
+    parts = {};
+    body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }),
+      el("p", { textContent: "Couldn't load the latest. Shutdown needs today's tasks as they are now." }),
+      el("div", { className: "sheet-dialog-end" }, cancel, retry));
+    retry.focus();
+    announce("Couldn't load the latest. Retry?");
+  });
+}
+
+// Waits for the planner's first real load (planner.mjs, afterFirstLoad, which rejects when that
+// load fails) and reads a day off the week on screen. On a failure it offers Retry, which loads
+// again. True once the rows are fresh; false when he closes it or a newer open took over.
+async function freshRows(day, mine) {
+  let again = false;
+  for (;;) {
+    // A retry's load starts first: starting clears the last failure, so the wait is for it.
+    if (again && !loadedOnce) load({ scroll: false }).catch(console.error);
+    const wait = afterFirstLoad();
+    try {
+      await wait;
+      if (offWeek(day)) await readDay(day);
+      return true;
+    } catch (e) {
+      console.error(e);
+      if (mine !== session || !dialog.open) return false;
+      if (!(await askRetry()) || mine !== session) return false;
+      again = true;
+      showReading();
+      dialog.querySelector("#sheet-shut-title")?.focus();
+    }
+  }
+}
+
 export async function open(day) {
   const mine = ++session;
   busy = false;
@@ -424,17 +472,11 @@ export async function open(day) {
   if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
   // It opens on fresh rows: before the first load lands (the stored copy on screen, snapshot.mjs)
   // it waits for it; and a day off the week on screen is read first.
-  const offWeek = () => state.week && !weekDays(state.week).includes(day);
-  if (!loadedOnce || offWeek()) {
-    parts = {};
-    body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), el("p", { className: "small", textContent: "Reading the day…" }));
+  if (!loadedOnce || offWeek(day)) {
+    showReading();
     dialog.showModal();
     dialog.querySelector("#sheet-shut-title")?.focus();
-    try {
-      await afterFirstLoad();
-      if (offWeek()) await readDay(day);
-    } catch (e) { if (mine === session) { dialog.close(); failed(e); } return; }
-    if (mine !== session || !dialog.open) return;
+    if (!(await freshRows(day, mine)) || mine !== session || !dialog.open) return;
   }
   reflection = state.days[today]?.reflection ?? "";
   box = el("textarea", { className: "sheet-reflect", rows: 2, value: reflection, ariaLabel: "What went well, what got in the way? (optional)", placeholder: "What went well, what got in the way? (optional)" });
@@ -455,7 +497,9 @@ let loadedOnce = false; // the planner's first real load has landed
 // `closed(day)` tells shutdown.mjs a day was shut down (for the button off the week on screen).
 export function setupView(root, given = {}) {
   hooks = given;
-  afterFirstLoad().then(() => { loadedOnce = true; });
+  // Landed already (this module loads late), or later: a fresh load after a failed one counts too.
+  afterFirstLoad().then(() => { loadedOnce = true; }, () => {});
+  loadHooks.push(({ copy }) => { if (!copy) loadedOnce = true; });
   dialog = root.querySelector("[data-shut]");
   body = el("div", {});
   live = el("p", { className: "visually-hidden", role: "status" });
