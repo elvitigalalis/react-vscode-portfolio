@@ -31,6 +31,12 @@ export function withSession(rows, task) {
   return [...rows, { kind: "task", task, start: null, end: null }];
 }
 
+// The view after the week's rows land (planner.mjs loadHooks): kept when they are the load
+// start() makes right after the stored copy drew (`afterCopy`) and the copy chose one, so the
+// view never swaps as the fresh rows come in; else null, to choose again. Any later load, or one
+// after a copy that failed to draw, chooses again.
+export const modeAfter = (mode, { copy = false, afterCopy = false } = {}) => (!copy && afterCopy && mode != null ? mode : null);
+
 // Which view a phone opens to: the one he picked today (`stored`, { day, mode }), else Doing
 // during his day (from its start to the shutdown line, not shut down) when there is a card,
 // else the week. `dayStart` is planner.mjs's dayStart(today): 30 minutes after his wake (9:30 am
