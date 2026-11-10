@@ -21,6 +21,7 @@ import { horizonChip, horizonLine } from "./horizon-view.mjs";
 import * as cheer from "./celebrate.mjs";
 import { dayProgress, progressText, weekDone, weekTitle } from "./progress.mjs";
 import { ledger } from "./optimistic.mjs";
+import { pack, unpack, SNAPSHOT_KEY } from "./snapshot.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -828,15 +829,21 @@ export const renderHooks = [];
 
 // --- Loading -----------------------------------------------------------------------------
 
-// `scroll: false` keeps the week where it is (a reload on coming back, refreshStale).
-// A load started later wins: an older one that returns after it changes nothing. Rows with saves
-// out keep their changes (optimistic.mjs).
+// The week draws as soon as the tables are read; Google's events are read beside them and redraw
+// the week when they arrive, if they changed (until then it shows the copy kept in this browser).
+// `scroll: false` keeps the week where it is (a reload on coming back, refreshStale). `quiet`
+// skips the redraw when nothing read has changed since the last load. `sync` is Google work to
+// finish before the events are read (syncGoogle on opening). A load started later wins: an older
+// one that returns after it changes nothing. Rows with saves out keep their changes (optimistic.mjs).
 let loadGen = 0;
-export async function load({ scroll = true } = {}) {
+let lastRead = null;  // the last load's rows, as JSON
+let eventsFor = null; // the Monday of the week state.events are for
+export async function load({ scroll = true, quiet = false, sync = null } = {}) {
   const gen = ++loadGen;
   const since = [taskBook.now(), todoBook.now()];
   const days = weekDays(state.week);
-  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = await Promise.all([
+  const events = Promise.resolve(sync).catch(console.error).then(() => readEvents(days));
+  const read = await Promise.all([
     api.listTasks(days[0], days[6]),
     api.listBlocks(new Date(`${addDays(days[0], -1)}T00:00:00Z`).toISOString(), new Date(`${addDays(days[6], 2)}T00:00:00Z`).toISOString()),
     api.listDays(days[0], days[6]),
@@ -851,27 +858,68 @@ export async function load({ scroll = true } = {}) {
     api.listActualsOn(now().day),
   ]);
   if (gen !== loadGen) return;
-  state.actuals = actuals;
-  state.horizon = horizon;
-  state.states = new Map(states.map((h) => [h.task_id, h]));
-  state.sleepTimes = sleepTimes;
-  state.sleepDays = sleepDays;
-  state.todos = todos;
-  todoBook.keep(since[1]);
-  state.settings = settings;
-  state.sleep = sleep;
-  state.calendars = settings?.calendars ?? [];
-  await loadEvents(days);
-  if (gen !== loadGen) return;
-  state.tasks = new Map(tasks.map((t) => [t.id, t]));
-  taskBook.keep(since[0]);
-  state.blocks = blocks;
-  state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
-  state.parked = parked.length;
+  const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = read;
+  const json = JSON.stringify([days[0], now().day, read]);
+  const same = quiet && json === lastRead;
+  lastRead = json;
   loadedAt = Date.now();
   loadedDay = now().day;
+  if (!same) {
+    state.actuals = actuals;
+    state.horizon = horizon;
+    state.states = new Map(states.map((h) => [h.task_id, h]));
+    state.sleepTimes = sleepTimes;
+    state.sleepDays = sleepDays;
+    state.todos = todos;
+    todoBook.keep(since[1]);
+    state.settings = settings;
+    state.sleep = sleep;
+    state.calendars = settings?.calendars ?? [];
+    state.tasks = new Map(tasks.map((t) => [t.id, t]));
+    taskBook.keep(since[0]);
+    state.blocks = blocks;
+    state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
+    state.parked = parked.length;
+    if (eventsFor !== days[0]) { setEvents(cachedEvents(days)); eventsFor = days[0]; }
+    render();
+    if (scroll) scrollToToday($("[data-week]"));
+    saveCopy();
+  }
+  if (copy) {
+    copy = false;
+    if ($("[data-status]").textContent === UPDATING) setStatus(null);
+  }
+  const got = await events;
+  if (gen !== loadGen) return;
+  const changed = got.stale !== state.eventsStale || JSON.stringify(got.all) !== JSON.stringify(state.todoEvents);
+  useEvents(days, got);
+  if (changed) render();
+}
+
+// --- Opening from the copy kept in this browser (snapshot.mjs) ---------------------------------
+
+const UPDATING = "Updating…";
+let copy = false; // the week on screen is the stored copy, until the first load draws
+
+// Draws this week's stored copy, if there is one, marked "Updating…". True when it did.
+function showCopy() {
+  let got = null;
+  try { got = unpack(localStorage.getItem(SNAPSHOT_KEY), state.week); } catch {}
+  if (!got) return false;
+  Object.assign(state, got);
+  setEvents(cachedEvents(weekDays(state.week)));
+  eventsFor = state.week;
+  copy = true;
   render();
-  if (scroll) scrollToToday($("[data-week]"));
+  scrollToToday($("[data-week]"));
+  setStatus(UPDATING);
+  return true;
+}
+
+// Stores the week as just loaded; only this week's, the one /plan opens on.
+function saveCopy() {
+  if (state.week !== weekStart(now().day)) return;
+  try { localStorage.setItem(SNAPSHOT_KEY, pack(state)); } catch {}
 }
 
 // --- Coming back (research U8/P1) ----------------------------------------------------------
@@ -897,7 +945,7 @@ async function refreshStale() {
   // Back the next day: today's view moves to the new today (glance.mjs, followToday).
   const moved = followToday({ week: state.week, focus: state.focus }, loadedDay, now().day);
   if (moved) Object.assign(state, moved);
-  try { await load({ scroll: Boolean(moved) }); } catch (e) { console.error(e); }
+  try { await load({ scroll: Boolean(moved), quiet: !moved }); } catch (e) { console.error(e); }
   for (const hook of reloadHooks) Promise.resolve().then(hook).catch(console.error);
 }
 
@@ -906,7 +954,7 @@ async function refreshOura() {
   if (document.visibilityState !== "visible" || !state.week) return;
   const days = weekDays(state.week);
   const [sleepDays, sleep] = await Promise.all([api.listSleepDays(addDays(days[0], -13), days[6]), api.listSleep()]);
-  if (JSON.stringify(sleepDays) === JSON.stringify(state.sleepDays) && sleep.length === state.sleep.length) return;
+  if (JSON.stringify([sleepDays, sleep]) === JSON.stringify([state.sleepDays, state.sleep])) return;
   state.sleepDays = sleepDays;
   state.sleep = sleep;
   render();
@@ -926,28 +974,34 @@ function setEvents(all) {
   state.events = tb && !state.calendars.includes(tb) ? all.filter((e) => e.calendar !== tb) : all;
 }
 
-async function loadEvents(days) {
-  const key = EVENTS_KEY + days[0];
+const cachedEvents = (days) => { try { return JSON.parse(localStorage.getItem(EVENTS_KEY + days[0])) ?? []; } catch { return []; } };
+
+// The week's events from Google, and a copy kept; without Google, the kept copy, marked stale.
+async function readEvents(days) {
   const tb = state.settings?.gcal_calendar_id;
-  if (await api.ensureGoogle()) {
-    try {
-      setEvents(await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone),
-        tb && !state.calendars.includes(tb) ? [...state.calendars, tb] : state.calendars));
-      state.eventsStale = false;
-      try { localStorage.setItem(key, JSON.stringify(state.todoEvents)); } catch {}
-      // Work that needs Google and runs after each load, in the background (busy times, events
-      // for blocks approved off the page). A hook that fails never stops the page.
-      // Pending deletes and moves first (syncGoogle), so a replan's old events go before its new
-      // ones are added, on a refresh as well as on opening.
-      syncGoogle().then(() => { for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error); });
-      return;
-    } catch (e) { console.error(e); }
-  }
-  let cached = [];
-  try { cached = JSON.parse(localStorage.getItem(key)) ?? []; } catch {}
-  setEvents(cached);
-  state.eventsStale = true;
+  try {
+    if (await api.ensureGoogle()) {
+      const all = await api.calendarEvents(zonedIso(days[0], 0, SHEET.timeZone), zonedIso(addDays(days[6], 1), 0, SHEET.timeZone),
+        tb && !state.calendars.includes(tb) ? [...state.calendars, tb] : state.calendars);
+      try { localStorage.setItem(EVENTS_KEY + days[0], JSON.stringify(all)); } catch {}
+      return { all, stale: false, fresh: true };
+    }
+  } catch (e) { console.error(e); }
+  return { all: cachedEvents(days), stale: true, fresh: false };
 }
+
+function useEvents(days, got) {
+  setEvents(got.all);
+  state.eventsStale = got.stale;
+  eventsFor = days[0];
+  // Work that needs Google and runs after each load, in the background (busy times, events
+  // for blocks approved off the page). A hook that fails never stops the page.
+  // Pending deletes and moves first (syncGoogle), so a replan's old events go before its new
+  // ones are added, on a refresh as well as on opening.
+  if (got.fresh) syncGoogle().then(() => { for (const hook of eventHooks) Promise.resolve().then(hook).catch(console.error); });
+}
+
+async function loadEvents(days) { useEvents(days, await readEvents(days)); }
 
 // A Done tap in Telegram shortens or deletes a block while the browser may be closed, and only
 // the browser can edit Google: bring those events in line on opening. Without Google, they wait.
@@ -1052,8 +1106,9 @@ async function toggleTelegram() {
   } catch (e) { failed(e); }
 }
 
+// Signing out leaves no copy of the week or its events in this browser.
 function forgetEvents() {
-  try { for (const k of Object.keys(localStorage)) if (k.startsWith(EVENTS_KEY)) localStorage.removeItem(k); } catch {}
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith(EVENTS_KEY) || k === SNAPSHOT_KEY) localStorage.removeItem(k); } catch {}
 }
 
 async function showWeek(monday) {
@@ -1458,20 +1513,31 @@ export async function start(node, plugins = [], settings = settingsModule) {
   for (const plugin of plugins) plugin(root);
   // Back from connecting mail or the calendar: those sections say how it went (mail-settings.mjs).
   if (/[?&](mail|calendar)=/.test(location.search)) loadSettings().catch(failed);
+  state.today = now().day;
+  state.week = weekStart(state.today);
+  // The week as last seen, at once, while the first load runs (snapshot.mjs).
+  const early = showCopy();
+  if (early) $("[data-tools]").hidden = false;
   try {
-    if (!(await api.settings())) {
+    const settings = await api.settings();
+    if (!settings) {
+      if (early) { forgetEvents(); $("[data-week]").replaceChildren(); $("[data-someday]").replaceChildren(); }
       setStatus("This account cannot open the planner.");
       $("[data-tools]").hidden = false;
       return;
     }
-    state.today = now().day;
-    state.week = weekStart(state.today);
+    // The events' read starts with the tables', so it needs the calendars now.
+    state.settings = settings;
+    state.calendars = settings.calendars ?? [];
     $("[data-tools]").hidden = false;
-    setStatus(null);
-    await syncGoogle();
-    await load();
+    if (!early) setStatus(null);
+    await load({ scroll: !early, sync: syncGoogle() });
     openFromLink();
-  } catch (e) { failed(e); }
+  } catch (e) {
+    if (!copy) return failed(e);
+    console.error(e);
+    setStatus("Couldn't load the latest. This is the week as you last saw it.");
+  }
 }
 
 // A Telegram button's link opens its view (?open=plan|shutdown|needs, glance.mjs openView), once:
