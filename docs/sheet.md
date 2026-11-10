@@ -106,29 +106,42 @@ A tap changes the page at once; the network never stands between a tap and what 
 (src/sheet/optimistic.mjs). Measured on a slow mocked API (writes 800 ms, CPU 4×), a ✓ settles
 in about 0.4 s instead of 3.6 s, and a move, reopen or new task shows in under 0.1 s.
 
-- **What:** ✓ and ↺ (tasks and event to-dos), moves (the menu, keys, swipes, drag) and edits show
-  the new row at once and save behind it. A typed task shows as a muted row at once and becomes
+- **What:** ✓ and ↺ (tasks and event to-dos), moves (the menu, keys, swipes, drag), edits and
+  deletes show at once and save behind it. A typed task shows as a muted row at once and becomes
   a normal row when its save lands; the box is free for the next one meanwhile, and its words
   survive the redraw.
 - **Order:** a row's saves run one after another, in the order they were made, so ✓ then ↺
   leaves it open on the server too.
 - **Failure:** the row goes back to what the server holds and says "Not saved" under its title
-  (a failed new task: "Not added" by its box, and the words go back in the box if it's empty),
-  and the status line names it with Retry, as before. The note stays until the row's next
-  change.
+  ("Not deleted" for a delete, which also reloads the week; a failed new task: "Not added" by its
+  box, and the words go back in the box if it's empty), and the status line names it with Retry,
+  as before. The note stays until the row's next change. A save that finds its task deleted
+  elsewhere takes the row away instead, with no message.
+- **Deletes stay deleted:** a save still out for a deleted task lands without bringing it back,
+  and a reload that read before the delete leaves it out.
 - **Reloads:** a reload that read before a save landed keeps what the save wrote, and one that
   reads while a save is out shows the change on top, so the page never flips back.
+- **Undo** belongs to the action that made it: a save that lands after a newer action's toast has
+  shown offers no Undo, and Undo goes back to the row as the server last confirmed it, not to a
+  change still saving or one that failed.
 - An edit in place is never redrawn under the cursor: a save that lands meanwhile redraws when
   the edit ends.
 
 ### Opening
 
-- **The last copy first:** after each load of this week, /plan keeps a copy of what the week
-  draws in this browser (`sheet.snapshot.v1`): tasks, blocks, days, event to-dos, horizon rows,
-  the settings the week reads, today's focus minutes and each day's Oura scores. No Oura nights or bedtime windows, no
-  keys or Telegram IDs. Signing out deletes it. On opening, signed in, the copy draws at once with
-  "Updating…" in the status line, then the normal load replaces it. If the load fails, the
-  status line says the page is the week as last seen.
+- **The last copy first:** after each load of this week, /plan keeps a short-lived copy of the
+  week in this browser (`sheet.snapshot.v1`), with the signed-in user's id: tasks, blocks, days,
+  event to-dos, horizon rows, today's focus minutes and the settings the week reads. No Oura data
+  at all, no calendar IDs, no keys or Telegram IDs. On opening, the copy draws at once with
+  "Updating…" in the status line, only for the user who stored it (when the token doesn't say
+  who is signed in, only once settings shows the account can open the planner, and it is out of
+  storage meanwhile). Then the normal load replaces it. A copy that can't be drawn is thrown
+  away and the page loads as usual.
+- **Changes made on the copy** show at once and save after the first load, so what they save
+  (a block to shorten or delete) comes from the fresh rows.
+- If the load fails, the status line says the page is the week as last seen, until a load works.
+- **It goes** on signing out, when the session has run out, and for an account that can't open
+  the planner (which sees nothing of the page).
 - **Google's events load beside the tables,** never before the first draw: the week draws with
   the events kept from last time and redraws when Google answers, only if they changed.
 - **Coming back** (a reload after a minute away) redraws only when something read has changed;
