@@ -442,6 +442,7 @@ async function removeTask(id) {
   offerUndo(`Deleted: ${t.title}`, async () => {
     const back = await api.insertTask(copy);
     state.tasks.set(back.id, back);
+    taskBook.note(back.id, back); // a load already reading keeps it
   }, ticket);
 }
 
