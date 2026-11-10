@@ -147,7 +147,16 @@ test("routine-fire function: refuses without the cron secret, and fires only the
 });
 
 test("the routine token is only ever an Edge Function secret: never in the schema, a db call or a pg_net header", () => {
-  assert.doesNotMatch(read("supabase/schema.sql"), /routine|claude_code|sk-ant/i);
+  const schema = read("supabase/schema.sql");
+  // The token, the routine's trig_ id and any Claude key never appear in the schema. The bare word
+  // "routine" now does, for Hevy's workout routines (hevy_workouts.routine_id, since the Hevy
+  // section of Nov 8), so the check names the token and its carriers instead of the word.
+  assert.doesNotMatch(schema, /claude_code|sk-ant|\btrig_|sheet_routine|routine[_ -]?(token|fire|secret)/i);
+  // No Vault secret is named for the routine, and no pg_net call (its URL, headers or body) mentions it.
+  for (const [, name] of schema.matchAll(/vault\.decrypted_secrets where name = '([a-z_]+)'/g)) assert.doesNotMatch(name, /routine/i, name);
+  const posts = schema.match(/net\.http_post\([\s\S]*?\)\s*(?:where|;|\$job\$)/g) ?? [];
+  assert.ok(posts.length > 5, "found the pg_net calls");
+  for (const post of posts) assert.doesNotMatch(post, /routine/i, post);
   for (const dir of readdirSync(new URL("../supabase/functions/", import.meta.url))) {
     let src;
     try { src = read(`supabase/functions/${dir}/index.ts`); } catch { continue; }
