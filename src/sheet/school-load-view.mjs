@@ -11,8 +11,8 @@ import { el, state, render, renderHooks, eventsOn, dayStart, shutdownAt, workloa
 import { freeOn, weekLoad, QUICK_EST } from "./school-load.mjs";
 
 // Free minutes on each day of the week on screen, from the day's start (now, on today) to its
-// shutdown line, less his busy events and fixed-time tasks, at most the workload cap
-// (school-load.mjs, freeOn).
+// shutdown line, less his busy events and fixed-time tasks, at most the workload cap, less the
+// day's other planned work (school-load.mjs, freeOn).
 function freeByDay(days, today, nowMin) {
   const tasks = [...state.tasks.values()];
   return Object.fromEntries(days.filter((d) => d >= today).map((d) => {

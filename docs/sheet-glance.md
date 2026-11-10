@@ -147,7 +147,8 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
 - **Free hours:** for each day from today on, the calendar's free time from the day's start (now, on
   today) to its shutdown line, less the fixed-time tasks on it (`at_time`, `est_min` long, 30m
   without one) where no event already covers them. Each day is held to the Settings workload cap,
-  as the day chips are, so the week's free hours are hours he would really give to work.
+  as the day chips are, then loses the estimates of that day's other planned work (undone,
+  untimed tasks that aren't school work), never going below 0.
 - **The bar** sits above the week: "School this week · 8h45 due · 33h free" with a 6px meter in
   the day load's colours (`loadShare`: near from 85%, over above 100%). It is hidden when nothing
   is due and for past weeks. It opens to the items, earliest due first; one with no estimate shows

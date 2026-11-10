@@ -64,12 +64,17 @@ test("free time is the calendar's gaps less fixed-time tasks", () => {
     T("Done", { at_time: "19:00", est_min: 60, done: true }),
     T("Untimed", { est_min: 60 }),
   ];
-  assert.equal(freeOn(events, fixed, 540, 1320), 720 - 80 - 30);
+  // "Untimed" is other planned work: its 60 minutes come off too (below).
+  assert.equal(freeOn(events, fixed, 540, 1320), 720 - 80 - 30 - 60);
   assert.equal(freeOn(events, fixed, 1320, 1320), 0);
   assert.equal(freeOn(events, fixed, 1400, 1320), 0);
   // Held to the workload cap, as the day chips are.
-  assert.equal(freeOn(events, fixed, 540, 1320, 330), 330);
-  assert.equal(freeOn(events, fixed, 540, 1320, 900), 720 - 80 - 30);
+  assert.equal(freeOn(events, fixed, 540, 1320, 330), 330 - 60);
+  assert.equal(freeOn(events, fixed, 540, 1320, 900), 720 - 80 - 30 - 60);
+  // Other planned work comes off the capped time; school work, done and timed tasks don't.
+  const day = [...fixed, T("Ship auth", { tag: "workit", est_min: 90 }), T("No est", { tag: "workit" }), T("HW", { source: "brightspace", due: "2026-11-10", est_min: 120 }), T("Old", { est_min: 60, done: true })];
+  assert.equal(freeOn(events, day, 540, 1320, 330), 330 - 90 - 60); // "Untimed" (60) is other work too
+  assert.equal(freeOn(events, [T("Big", { est_min: 600 })], 540, 1320, 330), 0);
 });
 
 test("the week's load: need against free from today on, crunch when over", () => {
