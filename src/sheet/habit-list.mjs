@@ -7,7 +7,7 @@
 // carries no rules it doesn't use.
 import css from "../styles/plan-habits.css?inline";
 import * as api from "./api.mjs";
-import { actHooks, el, failed, icon, renderHooks, state } from "./planner.mjs";
+import { actHooks, el, failed, icon, renderHooks, reloadHooks, state } from "./planner.mjs";
 import { SHEET } from "../site.mjs";
 import { habitDay, habitView, rateText } from "./habit-rate.mjs";
 import { addDays } from "./logic.mjs";
@@ -108,11 +108,16 @@ export function setupHabits(node) {
   actHooks["habit-done"] = toggle;
   // Habits added or removed in Settings show when it closes.
   root.querySelector("[data-settings]")?.addEventListener("close", () => refresh().catch(console.error));
-  const hook = () => {
-    if (state.tasks !== seen) { seen = state.tasks; refresh().catch(console.error); }
-    else draw();
+  const read = () => {
+    if (state.tasks === seen) return false;
+    seen = state.tasks;
+    refresh().catch(console.error);
+    return true;
   };
+  const hook = () => { if (!read()) draw(); };
   renderHooks.push(hook);
+  // Coming back to a page with nothing new skips the redraw (planner.mjs, load): read them anyway.
+  reloadHooks.push(read);
   // Back on the page after 4 am (the planner's own reload waits a minute): the rows move on.
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && drawnDay && today() !== drawnDay) draw();

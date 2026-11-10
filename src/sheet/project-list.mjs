@@ -4,7 +4,7 @@
 // anywhere else; steps stay out of the Someday lists. The rows are drawn on each render from
 // state; the projects and their steps are read again when the planner loads.
 import * as api from "./api.mjs";
-import { el, state, render, renderHooks, taskRow } from "./planner.mjs";
+import { el, state, render, renderHooks, reloadHooks, taskRow } from "./planner.mjs";
 import { projectSummary } from "./project-view.mjs";
 
 let root;
@@ -49,8 +49,8 @@ function draw() {
 
 export function setupProjects(node) {
   root = node;
-  renderHooks.push(() => {
-    if (state.tasks !== seen) { seen = state.tasks; refresh(seen).catch(console.error); }
-    draw();
-  });
+  const read = () => { if (state.tasks !== seen) { seen = state.tasks; refresh(seen).catch(console.error); } };
+  renderHooks.push(() => { read(); draw(); });
+  // Coming back to a page with nothing new skips the redraw (planner.mjs, load): read them anyway.
+  reloadHooks.push(read);
 }

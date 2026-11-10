@@ -862,6 +862,9 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
   const json = JSON.stringify([days[0], now().day, read]);
   const same = quiet && json === lastRead;
   lastRead = json;
+  // Nothing new: no redraw, but a new state.tasks all the same, so the modules that read their own
+  // data once per load (projects, habits) read it again from reloadHooks.
+  if (same) state.tasks = new Map(state.tasks);
   loadedAt = Date.now();
   loadedDay = now().day;
   if (!same) {
