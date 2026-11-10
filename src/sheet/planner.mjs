@@ -950,6 +950,7 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
     state.parked = parked.length;
     loaded();
     if (eventsFor !== days[0]) { setEvents(cachedEvents(days)); eventsFor = days[0]; }
+    for (const hook of loadHooks) hook({ copy: false });
     render();
     if (scroll) scrollToToday($("[data-week]"));
     saveCopy();
@@ -971,6 +972,7 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
 const UPDATING = "Updating…";
 const COPY_FAILED = "Couldn't load the latest. This is the week as you last saw it.";
 let copy = false; // the week on screen is the stored copy, until the first load draws
+export const showingCopy = () => copy;
 
 // The week's data as before anything is read: what a copy that can't be drawn leaves behind.
 const blankWeek = () => ({ tasks: new Map(), blocks: [], days: {}, parked: 0, todos: [], horizon: [], states: new Map(),
@@ -993,6 +995,7 @@ async function showCopy(user, text = readCopy()) {
     setEvents(cachedEvents(weekDays(state.week)));
     eventsFor = state.week;
     copy = true;
+    for (const hook of loadHooks) hook({ copy: true });
     render();
     scrollToToday($("[data-week]"));
     setStatus(UPDATING);
@@ -1016,6 +1019,14 @@ function saveCopy() {
   const user = api.userId();
   snapshot().then(({ pack }) => { try { localStorage.setItem(SNAPSHOT_KEY, pack(state, user)); } catch {} }, console.error);
 }
+
+// Run when the week's rows land, from the stored copy ({ copy: true }) or a load, just before
+// the draw they make (doing-view.mjs picks its view then).
+export const loadHooks = [];
+// Modules the first draw waits for, up to DRAW_WAIT_MS (the phone's Doing view, so the stored
+// copy never draws the week first and then swaps it out).
+export const drawWaits = [];
+const DRAW_WAIT_MS = 1000;
 
 // --- Coming back (research U8/P1) ----------------------------------------------------------
 
@@ -1617,6 +1628,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   try { await books(); } catch (e) { return failed(e); }
   wire();
   for (const plugin of plugins) plugin(root);
+  await Promise.race([Promise.all(drawWaits.map((w) => w.catch(console.error))), cheer.wait(DRAW_WAIT_MS)]);
   // Back from connecting mail or the calendar: those sections say how it went (mail-settings.mjs).
   if (/[?&](mail|calendar)=/.test(location.search)) loadSettings().catch(failed);
   state.today = now().day;

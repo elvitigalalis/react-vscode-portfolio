@@ -457,7 +457,7 @@ import "../../styles/plan-settings.css";
 </Base>
 
 <script>
-  import { start } from "../../sheet/planner.mjs";
+  import { start, drawWaits } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
   import { setupFeedStatus } from "../../sheet/feed-status.mjs";
@@ -476,10 +476,23 @@ import "../../styles/plan-settings.css";
   const setupHabits = (root) => import("../../sheet/habit-list.mjs").then((m) => m.setupHabits(root));
   // School load (docs/sheet-glance.md) loads after sign-in, off the first load.
   const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root)).catch(console.error);
+  // Reflow rest of today (docs/sheet.md) loads after sign-in, off the first load.
+  const setupReflow = (root) => import("../../sheet/reflow-view.mjs").then((m) => m.setupReflow(root)).catch(console.error);
+  // The Doing view (docs/sheet.md, "On the phone") loads on a phone, after sign-in, or when the
+  // window first narrows to one.
+  // On a phone it loads once signed in (plugins run only then), and the first draw (the stored
+  // copy's too) waits for it (planner.mjs, drawWaits), so the week never shows first and then
+  // gives way to the card. Signed out, /plan carries none of it.
+  const setupDoing = (root) => {
+    const narrow = matchMedia("(max-width: 48rem)");
+    const load = () => import("../../sheet/doing-view.mjs").then((m) => m.setupDoing(root));
+    if (narrow.matches) drawWaits.push(load());
+    else narrow.addEventListener("change", () => load().catch(console.error), { once: true });
+  };
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote], settings);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);
 </script>

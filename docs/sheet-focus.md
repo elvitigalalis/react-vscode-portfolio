@@ -11,9 +11,23 @@ end with the time since Start, and four actions. Terms are as in [GLOSSARY.md](.
   today (`focusTarget`). Habit blocks, proposed blocks and done tasks get none. While a focus is
   running, that task's row shows **Resume · 12:30 left** (or "over") instead.
 - **The view** shows the title, `First: <first_step>` when the block has one, the time left to the
-  block's end (`+2:05` once past it), "left · 15:30 in", and a 2px bar. No sound, no animation but
-  the bar's one-second step, which `prefers-reduced-motion` turns off. Done plays the task row's
-  check-off in the week ([sheet.md](sheet.md), "Completion").
+  block's end (`+2:05` once past it) inside a ring with "left" (or "past the end") under it,
+  and under the ring "15:30 in" from the first whole minute on. The ring is the time
+  made visible (Tiimo's and Time Timer's shrinking disc): an accent arc from 12 o'clock that
+  empties clockwise as the block runs out, gone once past the end. No animation but its
+  one-second step, which `prefers-reduced-motion` turns off. Done plays the task row's check-off
+  in the week ([sheet.md](sheet.md), "Completion").
+- **Chimes:** two soft falling notes at the session's halfway point and with 2 minutes left (a
+  session of 4 minutes or less gets only the halfway one), each once as the clock passes it and
+  not when he comes back to a mark over 30 seconds gone (`chimesDue`). They follow Settings, Day,
+  "Completion sound" (off by default) and the iPhone's silent switch, and play only while the
+  view shows.
+- **Screen stays on** while the view shows (wake.mjs), so the ring stays in sight (Tiimo users'
+  complaint is a screen that dims mid-timer): the Screen Wake Lock API where the browser has it,
+  else, or when it is refused, a one-second black video playing muted on a loop. It lets go when
+  the view closes, or 10 minutes past the block's end (a view left open doesn't keep the phone
+  awake for hours; +15 min asks again), and asks again each time the page comes back into view
+  before then.
 - **Done** records the minutes from Start to Done into `actuals` (rounded, 1–960; under a minute
   records nothing), then marks the task done exactly as the week's ✓ does (`completeTask`: the
   block shrinks to now, or goes if it hadn't started; Undo reopens the task).
@@ -50,7 +64,7 @@ next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glo
   row in the week, Someday or a project, and in Plan today's list, reads "40m focused of 1h30"
   ("40m focused" without an estimate). The note isn't shown there.
 - **The next Start** on the task shows "Where you left off: …" (the newest note among its open
-  rows) under the title, and the line under the clock adds "· 1h05 on this task" (credit plus
+  rows) under the title, and the line under the ring adds "1h05 on this task" (credit plus
   this session).
 - **Done** in focus records the credit plus this session into `actuals` (still 1–960), so pace
   and estimate learning see the whole time the task took, and adds a `focus_log` row with

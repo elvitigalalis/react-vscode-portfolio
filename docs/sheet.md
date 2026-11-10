@@ -181,6 +181,32 @@ Checking something off should feel good every time without getting old (src/shee
 
 Under 48 rem, one day shows at a time (above). On top of that:
 
+- **Doing view** (Llama Life's one thing now, Tiimo's visual timer; src/sheet/doing-view.mjs,
+  logic in doing.mjs). During his day (from the day's start, 30 minutes after his wake or 9:30 am
+  without Oura, to the shutdown line, not shut down) a phone opens to one card instead of the week, so the crowded today stamps
+  (Now/Next, load bar, strip, Oura, progress, wind-down) and the sections under the week (school
+  load, habits, projects, Someday, the Tell Claude box) are out of sight until he asks for them.
+  - The card is the task a focus session is running on ("Focusing"), else the open row on now
+    ("Now · until 10:45 am", an event too), else the next to start ("Next · 1–2 pm"), else the
+    first untimed task ("Up next"). A row that ended undone isn't shown: Reflow rest of today is
+    for those, and its line shows on the card when there is something to move.
+  - For a session or the row on now, a small ring that empties as its time runs out and "25 min
+    left", redrawn every 15 seconds. Under the title, the block's first step or where he left off.
+  - **Start** (or **Resume**) opens focus mode on the task's block today ([sheet-focus.md](sheet-focus.md):
+    the large shrinking ring, chimes, the screen kept on). **Done** completes it with the usual
+    check-off and Undo, and the card moves on.
+  - Below the card, "Then": the next two (timed rows still to start, then untimed tasks), each
+    with its time. **See the week** shows the week; today's stamps then start with a **Doing view**
+    link back. His pick holds for the rest of the day (kept in this browser), and the top bar's
+    day arrows and day button also go to the week. Each load of the week (opening, coming back,
+    changing week) chooses again, so the default never flips while he is using the page. The
+    stored copy of the week chooses too, before it draws (the first draw waits up to a second for
+    the module on a phone), and the load that follows keeps that choice; until a choice is made
+    the week stays hidden on a phone, so neither view flashes before the other. Reflow waits for
+    fresh rows: it never moves blocks worked out from the stored copy.
+  - Outside his day, with nothing open today, or on a wider screen, the week shows as before.
+    It loads only on a phone, after the first load.
+
 - **To-dos first.** Today's list sits right under the top bar. The Tell Claude box and Recent
   messages come after the day, before Someday, as one line until the box is in use; the
   "characters left" count shows only within 500 of the limit. A laptop keeps the box on top.
@@ -280,6 +306,25 @@ Under 48 rem, one day shows at a time (above). On top of that:
 - It is worked out in the browser only (src/sheet/readiness-note.mjs). Per
   [ADR 0005](adr/0005-oura-data-never-reaches-claude.md) no Supabase function, read_planner,
   proposal or Telegram path imports it, and test/readiness-note.test.mjs checks that.
+
+## Reflow rest of today (Structured's Replan, Tiimo's reshuffle)
+
+- When today's plan has slipped, today's stamps row (and the phone's Doing card) shows one muted
+  line: "Reflow rest of today · 2 blocks to move". A block has slipped when it ended and its task
+  is still open, or when it starts later but now clashes with a busy event or another block.
+- One tap lays those blocks after now, with no AI (src/sheet/reflow.mjs): each keeps its length
+  and their old order, starts on a 5-minute mark at the first free time after the one before
+  (a later block never moves earlier), and stays clear of busy Google events (not all-day or
+  free ones), every block that stays put and the shutdown line. What stays put: a block running
+  now, the one a focus session is on, habit blocks, done tasks' blocks, blocks of a task with
+  a fixed time (`@3pm`) and a later block already planned past shutdown (it isn't reported as
+  one that didn't fit). Proposed blocks take no time, as for +15 min in focus.
+- Each move saves as a drag in Plan today does (`saveBlock`): the block's Google event moves too,
+  and a moved block is his, so no revision moves it again.
+- The Undo toast is the receipt: "Reflowed: OS homework 4:30 pm, Email advisor 6 pm." plus
+  "Didn't fit before shutdown: Essay." for any that stayed where they were. One tap on Undo
+  puts every moved block back.
+- Past shutdown, or once the day is shut down, the line doesn't show.
 
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 

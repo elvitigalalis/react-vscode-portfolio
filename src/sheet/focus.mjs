@@ -19,15 +19,23 @@ export function focusTarget(blocks, tasks, now, timeZone) {
 
 // A session is what Start keeps in this browser (focus-start.mjs, localStorage), so leaving focus
 // or reloading keeps the timer: the block and task, when Start was tapped and when the block ends,
-// in epoch ms. The clock runs from these alone, so it keeps time offline.
-export const startSession = (b, now) => ({ block_id: b.id, task_id: b.task_id, started_at: now.getTime(), ends_at: Date.parse(b.ends_at) });
+// in epoch ms. The clock runs from these alone, so it keeps time offline. `half_at` is the
+// halfway chime's mark, fixed at Start so +15 min doesn't move it (chimesDue).
+export function startSession(b, now) {
+  const started_at = now.getTime();
+  const ends_at = Date.parse(b.ends_at);
+  return { block_id: b.id, task_id: b.task_id, started_at, ends_at, half_at: started_at + (ends_at - started_at) / 2 };
+}
 
 export function readSession(raw) {
   let s;
   try { s = JSON.parse(raw); } catch { return null; }
   const whole = s && typeof s === "object" && typeof s.block_id === "string" && typeof s.task_id === "string"
     && Number.isFinite(s.started_at) && Number.isFinite(s.ends_at);
-  return whole ? { block_id: s.block_id, task_id: s.task_id, started_at: s.started_at, ends_at: s.ends_at } : null;
+  if (!whole) return null;
+  // A session kept before half_at existed gets it from its times.
+  const half_at = Number.isFinite(s.half_at) ? s.half_at : s.started_at + (s.ends_at - s.started_at) / 2;
+  return { block_id: s.block_id, task_id: s.task_id, started_at: s.started_at, ends_at: s.ends_at, half_at };
 }
 
 // "24:30", or "1:02:03" from an hour on; whole seconds, rounded down.
@@ -51,6 +59,21 @@ export function focusClock(s, now) {
     over,
     share: over || span <= 0 ? 1 : Math.max(0, (t - s.started_at) / span),
   };
+}
+
+// The chimes (docs/sheet-focus.md): one at the session's halfway point and one 2 minutes before
+// the block's end, each when the clock crosses it between two ticks (`prev`, `now`, epoch ms) and
+// at most LATE_MS ago, so coming back to a throttled tab doesn't ring for a mark long gone.
+// Returns the marks crossed, ["half"], ["two"] or both; a session of 4 minutes or less has only
+// the halfway one. The halfway mark is the session's half_at, fixed at Start, so +15 min never
+// rings it again; the 2-minute mark moves with the end and can.
+export const TWO_MIN = 2 * 60_000;
+const LATE_MS = 30_000;
+export function chimesDue(s, prev, now) {
+  const half = s.half_at ?? s.started_at + (s.ends_at - s.started_at) / 2;
+  const two = s.ends_at - TWO_MIN;
+  const crossed = (at) => prev < at && at <= now && now - at <= LATE_MS;
+  return [crossed(half) && "half", two > half && crossed(two) && "two"].filter(Boolean);
 }
 
 // --- Done and +15 min ------------------------------------------------------------------------
