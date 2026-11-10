@@ -194,10 +194,15 @@ const todoBook = ledger({
 });
 const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -> the row's note
 
+// Saves wait for the first load to land: a change made on the stored copy (snapshot.mjs) shows at
+// once, but what it saves (a block to shorten or delete, say) is worked out from the fresh rows.
+let loaded;
+const firstLoad = new Promise((r) => { loaded = r; });
+
 // A save that finds its task deleted (`gone`) takes the row away rather than putting it back.
 function saving(book, key, change, save) {
   errors.delete(key);
-  return book.write(key.slice(key.indexOf(":") + 1), change, save).then(
+  return book.write(key.slice(key.indexOf(":") + 1), change, () => firstLoad.then(save)).then(
     (saved) => { render(); return saved; },
     (e) => {
       if (e?.gone) forgetTask(key.slice(key.indexOf(":") + 1));
@@ -255,6 +260,7 @@ export async function addTask(text, where, extra = {}) {
   adding.push(row);
   errors.delete(whereKey(where));
   try {
+    await firstLoad;
     // A deadline written only in the title ("Nov 14 11:59pm") becomes the due date.
     const task = await api.insertTask(withTitleDue({ ...parsed, day: where.day ?? null, list: where.day ? null : where.list, position, ...extra }, state.today));
     state.tasks.set(task.id, task);
@@ -396,6 +402,7 @@ function focusAfter(id, sel, list, index) {
 
 async function removeTask(id) {
   const t = state.tasks.get(id);
+  await firstLoad; // its blocks as loaded, not as stored
   await dropBlocks(id);
   await api.deleteTask(id);
   forgetTask(id);
@@ -901,6 +908,7 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
     state.blocks = blocks;
     state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
     state.parked = parked.length;
+    loaded();
     if (eventsFor !== days[0]) { setEvents(cachedEvents(days)); eventsFor = days[0]; }
     render();
     if (scroll) scrollToToday($("[data-week]"));
