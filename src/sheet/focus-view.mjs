@@ -40,15 +40,10 @@ function ring() {
 }
 
 // The chime: two soft falling notes, slower and lower than the ✓'s tick. Web Audio follows the
-// iPhone's silent switch. The context starts (or wakes) on a tap in the view, as autoplay wants.
+// iPhone's silent switch. The context comes from focus-start.mjs, made or woken inside the Start
+// tap (and again on any tap in the view), as iOS wants for sound from a timer.
 let audio = null;
-function wakeAudio() {
-  if (!soundOn()) return;
-  try {
-    audio ??= new AudioContext();
-    if (audio.state !== "running") audio.resume().catch(() => {});
-  } catch (e) { console.error(e); }
-}
+const wakeAudio = () => { audio = io.audioContext() ?? audio; };
 function chime() {
   if (!soundOn() || !audio) return;
   try {

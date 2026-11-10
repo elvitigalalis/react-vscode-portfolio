@@ -11,7 +11,7 @@ import { doingPick, doingMode, minutesLeft } from "./doing.mjs";
 import { focusClock } from "./focus.mjs";
 import { rowTitle } from "./now-next.mjs";
 import { el, icon, state, render, renderHooks, loadHooks, actHooks, rowsOn, checkOff, toggleEventTodo, windowOn, shutdownAt, NARROW } from "./planner.mjs";
-import { getSession, openFocus, progressFor } from "./focus-start.mjs";
+import { getSession, openFocus, progressFor, audioContext } from "./focus-start.mjs";
 import { reflowLine } from "./reflow-view.mjs";
 import "./doing-styles.mjs";
 
@@ -164,7 +164,11 @@ export function setupDoing(node) {
   renderHooks.push(draw);
   actHooks["doing-week"] = () => show("week");
   actHooks["doing-view"] = () => show("doing");
-  actHooks["doing-start"] = (e) => openFocus(e.target.closest("[data-block]").dataset.block).catch(console.error);
+  actHooks["doing-start"] = (e) => {
+    // Inside the tap, so the focus view's chimes can play on iOS (focus-start.mjs).
+    audioContext();
+    return openFocus(e.target.closest("[data-block]").dataset.block).catch(console.error);
+  };
   actHooks["doing-done"] = (e) => {
     const b = e.target.closest("[data-act]");
     return b.dataset.key ? toggleEventTodo(b) : checkOff(b.dataset.task, { li: b.closest(".sheet-doing-card"), from: b });

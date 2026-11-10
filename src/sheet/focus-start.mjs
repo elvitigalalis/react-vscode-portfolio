@@ -9,6 +9,7 @@ import { progressByTask, progressText, closeFinished, focusedEntries } from "./f
 import { addDays } from "./logic.mjs";
 import { el, state, render, renderHooks, actHooks, completeTask, progressHooks } from "./planner.mjs";
 import { saveBlock } from "./plan-today.mjs";
+import { soundOn } from "./celebrate.mjs";
 
 const SESSION_KEY = "sheet.focus";
 const OUTBOX_KEY = "sheet.focus.outbox";
@@ -86,8 +87,20 @@ export function queue(...ops) {
   return drain.after();
 }
 
+// The focus view's chimes play from a timer, which iOS lets Web Audio do only once a context was
+// made or resumed inside a tap. So each Start tap does it here, before the view's module loads.
+let audio = null;
+export function audioContext() {
+  if (!soundOn()) return null;
+  try {
+    audio ??= new AudioContext();
+    if (audio.state !== "running") audio.resume().catch(() => {});
+  } catch (e) { console.error(e); }
+  return audio;
+}
+
 let view = null;
-const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog, isLogLoaded, addUnlogged }); return m; }, (e) => { view = null; throw e; }));
+const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog, isLogLoaded, addUnlogged, audioContext }); return m; }, (e) => { view = null; throw e; }));
 export const openFocus = (blockId) => loadView().then((m) => m.open(blockId));
 
 export function setupFocus(node) {
@@ -96,7 +109,10 @@ export function setupFocus(node) {
   note = el("p", { className: "sheet-notice", role: "status", textContent: "Focus changes are saved on this device and will sync when you're back online." });
   note.hidden = true;
   root.querySelector("[data-status]")?.after(note);
-  actHooks["focus-start"] = (e) => openFocus(e.target.closest("[data-block]").dataset.block).catch(console.error);
+  actHooks["focus-start"] = (e) => {
+    audioContext();
+    return openFocus(e.target.closest("[data-block]").dataset.block).catch(console.error);
+  };
   let first = true;
   // Writes wait for the planner's first draw (signed in, the week loaded), then for each return
   // online.
