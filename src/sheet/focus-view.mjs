@@ -6,7 +6,7 @@
 // No sound and no animation beyond the bar's one-second step, which reduced motion turns off.
 import { SHEET } from "../site.mjs";
 import { focusClock, focusActual, extendFocus, startSession, stuckMessage, EXTEND_MIN } from "./focus.mjs";
-import { stopRow, doneRow, sessionMinutes, NOTE_MAX } from "./focus-notes.mjs";
+import { stopRow, doneRow, sessionMinutes, creditMinutes, NOTE_MAX } from "./focus-notes.mjs";
 import { formatMinutes } from "./logic.mjs";
 import { el, state, render, checkOff } from "./planner.mjs";
 
@@ -29,6 +29,8 @@ export function setupFocusView(deps) {
     note: el("p", { className: "sheet-focus-note", role: "status" }),
     stuck: button("Stuck", "", stuck),
     leftOff: el("input", { type: "text", id: "sheet-focus-leftoff", maxLength: NOTE_MAX, autocomplete: "off", placeholder: "Next: …" }),
+    credit: el("input", { type: "number", id: "sheet-focus-credit", min: "0", max: "960", step: "1", inputMode: "numeric" }),
+    creditWords: el("span", { className: "sheet-focus-credit-words" }),
   };
   parts.actions = el("div", { className: "sheet-focus-actions" },
     button("Done", "primary", done), button(`+${EXTEND_MIN} min`, "", extend), parts.stuck, parts.stopButton = button("Stop", "", askStop));
@@ -36,10 +38,15 @@ export function setupFocusView(deps) {
   parts.stop = el("form", { className: "sheet-focus-stop", hidden: true },
     el("label", { htmlFor: "sheet-focus-leftoff", textContent: "Where did you leave off?" }),
     parts.leftOff,
+    // The minutes to credit, held to the block's end; he can change them.
+    el("p", { className: "sheet-focus-credit" },
+      el("label", { htmlFor: "sheet-focus-credit", textContent: "Credit" }), parts.credit,
+      el("span", { textContent: "min" }), parts.creditWords),
     el("div", { className: "sheet-focus-actions" },
       el("button", { type: "submit", className: "sheet-btn primary", textContent: "Save and stop" }),
       button("Keep going", "", () => keepGoing(true))));
   parts.stop.addEventListener("submit", (e) => { e.preventDefault(); stop(); });
+  parts.credit.addEventListener("input", creditWords);
   dialog = el("dialog", { className: "sheet-focus" },
     button("Back to plan", "sheet-focus-leave", () => dialog.close()),
     el("div", { className: "sheet-focus-body" },
@@ -158,7 +165,15 @@ function askStop() {
   parts.actions.hidden = true;
   parts.stop.hidden = false;
   parts.leftOff.value = "";
+  const s = io.getSession();
+  parts.credit.value = s ? String(creditMinutes(s, new Date())) : "0";
+  creditWords();
   parts.leftOff.focus();
+}
+// "(2h10)" beside the minutes, from an hour on.
+function creditWords() {
+  const m = Math.round(Number(parts.credit.value));
+  parts.creditWords.textContent = Number.isFinite(m) && m >= 60 ? `(${formatMinutes(Math.min(m, 960))})` : "";
 }
 // Back to the actions; from Keep going or Escape, with focus on Stop again.
 function keepGoing(refocus = false) {
@@ -172,7 +187,7 @@ function keepGoing(refocus = false) {
 function stop() {
   const s = io.getSession();
   if (!s) return dialog.close();
-  const row = stopRow(s, parts.leftOff.value, new Date(), SHEET.timeZone, crypto.randomUUID());
+  const row = stopRow(s, parts.leftOff.value, new Date(), SHEET.timeZone, crypto.randomUUID(), parts.credit.value);
   io.setSession(null);
   if (row) { io.addLog(row); io.queue({ op: "log", row }); }
   dialog.close();

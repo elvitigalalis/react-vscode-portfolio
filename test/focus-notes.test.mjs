@@ -2,7 +2,7 @@
 // the credit each task carries and the line its row shows.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stopRow, doneRow, closingRow, closeFinished, progressByTask, progressText, sessionMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
+import { stopRow, doneRow, closingRow, closeFinished, progressByTask, progressText, sessionMinutes, creditMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
 
 const TZ = "America/New_York";
 // Started 11:50 pm on Nov 4 (EST), so the day is the 4th even when stopped on the 5th.
@@ -19,6 +19,21 @@ test("Stop with no note still credits the minutes; under a minute with no note k
   assert.equal(stopRow(s, "", at(10), TZ, "id").minutes, 10);
   assert.equal(stopRow(s, "", at(0.4), TZ, "id"), null);
   assert.equal(stopRow(s, "next: the proof", at(0.4), TZ, "id").minutes, 0);
+});
+
+test("Stop's credit stops at the block's end (with its +15s) unless he types one", () => {
+  // The block ends 45 min after Start; a session left running 10 hours suggests 45.
+  assert.equal(creditMinutes(s, at(600)), 45);
+  assert.equal(creditMinutes({ ...s, ends_at: s.ends_at + 15 * 60_000 }, at(600)), 60);
+  assert.equal(creditMinutes(s, at(30)), 30);
+  assert.equal(creditMinutes({ ...s, ends_at: s.started_at - 60_000 }, at(30)), 30);
+  assert.equal(stopRow(s, "", at(600), TZ, "id").minutes, 45);
+  // What he types wins, held to 0–960 and whole; a blank or junk field falls back.
+  assert.equal(stopRow(s, "", at(600), TZ, "id", "130").minutes, 130);
+  assert.equal(stopRow(s, "", at(600), TZ, "id", "2000").minutes, 960);
+  assert.equal(stopRow(s, "", at(600), TZ, "id", "").minutes, 45);
+  assert.equal(stopRow(s, "", at(600), TZ, "id", "abc").minutes, 45);
+  assert.equal(stopRow(s, "", at(600), TZ, "id", "0"), null);
 });
 
 test("a note is cut to its limit and minutes are held to 960", () => {

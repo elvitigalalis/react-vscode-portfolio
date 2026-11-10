@@ -9,13 +9,20 @@ export const NOTE_MAX = 280;
 // Whole minutes from Start to now, held to focus_log's 0–960.
 export const sessionMinutes = (s, now) => Math.min(960, Math.max(0, Math.round((now.getTime() - s.started_at) / 60_000)));
 
-// Stop's row: the session's minutes and the note (trimmed, one line, cut to NOTE_MAX), on the
-// day the session started. `id` comes from the page so a retried write is a duplicate. Under a
-// minute with no note there is nothing worth keeping: null.
-export function stopRow(s, note, now, timeZone, id) {
+// Stop's suggested credit: minutes from Start to now, but no further than the block's end with its
+// +15s (the session's ends_at), so a session left running overnight doesn't credit the night.
+// The Stop form shows it and he can change it.
+// A session started after its block ended (a late deep link) has no end to hold it to.
+export const creditMinutes = (s, now) => sessionMinutes(s, new Date(s.ends_at > s.started_at ? Math.min(now.getTime(), s.ends_at) : now.getTime()));
+
+// Stop's row: the credit (creditMinutes unless he typed one; whole, 0–960) and the note (trimmed,
+// one line, cut to NOTE_MAX), on the day the session started. `id` comes from the page so a
+// retried write is a duplicate. No minutes and no note is nothing worth keeping: null.
+export function stopRow(s, note, now, timeZone, id, credit = null) {
   // Cut by code point, so an emoji at the limit is never split into half a pair.
   const text = Array.from(String(note ?? "").replace(/\s+/g, " ").trim()).slice(0, NOTE_MAX).join("") || null;
-  const minutes = sessionMinutes(s, now);
+  const typed = Number(credit);
+  const minutes = credit != null && credit !== "" && Number.isFinite(typed) ? Math.min(960, Math.max(0, Math.round(typed))) : creditMinutes(s, now);
   if (!minutes && !text) return null;
   return { id, at: now.toISOString(), day: localNow(new Date(s.started_at), timeZone).day, task_id: s.task_id, block_id: s.block_id, minutes, note: text, done: false };
 }

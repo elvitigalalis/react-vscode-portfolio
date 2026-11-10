@@ -40,9 +40,11 @@ Ending a session on an unfinished task leaves attention on it; writing where you
 next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glomb 2018, the
 "ready-to-resume plan"). So Stop asks for that one line, and the next Start gives it back.
 
-- **Save and stop** writes a `focus_log` row: the minutes from Start (rounded, 0–960), the note
-  (trimmed to one line), the day the session started. Under a minute with a blank note writes
-  nothing. The session ends; the task stays open.
+- **Save and stop** writes a `focus_log` row: the credit, the note (trimmed to one line), the day
+  the session started. The form shows the credit as "Credit [45] min" ("(2h10)" beside it from an
+  hour on), which he can change: by default the minutes from Start to now, but no further than the block's
+  end with its +15s, so a session left running doesn't credit hours he wasn't there (whole,
+  0–960). No minutes and a blank note writes nothing. The session ends; the task stays open.
 - **Credit:** a task's credit is the minutes of its open `focus_log` rows: rows no closing row
   (`done = true`) lists in its `closes`. Its
   row in the week, Someday or a project, and in Plan today's list, reads "40m focused of 1h30"
