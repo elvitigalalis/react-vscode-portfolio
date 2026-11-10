@@ -138,7 +138,7 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
   course codes are an allow-list read from the feed: the code that starts a Brightspace task's
   title ("AMS 261 Exam 2", which the feed takes from the item's location). A course-shaped tag that
   isn't on it (`#kan-329`, `#ieee101`) is not school. School work is such a task that has no
-  `at_time` and is not a project step. From Brightspace only items with a `due` count (the
+  `at_time` is not a project step and is not on the Someday "Dropped" list. From Brightspace only items with a `due` count (the
   feed's "- Due" items). Its other items are calendar events: a timed one (an exam, a class
   meeting) is something he goes to, so it takes free time instead; an untimed one (a holiday,
   Reading Day) is not work.
@@ -153,11 +153,12 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
   as the day chips are, then loses the estimates of that day's other planned work (undone,
   untimed tasks that aren't school work), never going below 0.
 - **The bar** sits above the week: "School this week · 8h45 due · 33h free" with a 6px meter in
-  the day load's colours (`loadShare`: near from 85%, over above 100%). It is hidden when nothing
+  amber from 85% (`loadShare`), and still amber when over. It is hidden when nothing
   is due and for past weeks. It opens to the items, earliest due first; one with no estimate shows
   one-tap picks (30m, 1h, 2h, 4h, 8h) that set `est_min` at once, save behind with Undo, and put
   the guess back if the save fails.
-- **Crunch week:** when hours due exceed free hours, the week title reads "Week of Nov 2 · Crunch
+- **Crunch week** (amber, like the bar when over: a heads-up, so red stays for act-now items):
+  when hours due exceed free hours, the week title reads "Week of Nov 2 · Crunch
   week" and the bar adds "· 16h35 short". Phones hide the title, so the bar shows "Crunch week".
 
 ## Out of scope

@@ -48,6 +48,7 @@ test("the week's school work: due in the week, overdue on the current week, earl
     T("Done HW", { source: "brightspace", due: "2026-11-11", done: true }),
     T("Read ch. 7", { tag: "cse320", day: "2026-11-13", list: null }),
     T("CSE 320 Lecture", { source: "brightspace", day: "2026-11-11", at_time: "09:00:00", est_min: 50, list: null }),
+    T("Let go", { source: "brightspace", due: "2026-11-12", list: "Dropped" }),
     T("Sprint ticket", { tag: "kan-329", day: "2026-11-12", list: null, est_min: 60 }),
     T("Ship auth", { tag: "workit", day: "2026-11-11", list: null, est_min: 60 }),
     T("Exam", { source: "brightspace", day: "2026-11-11", at_time: "10:00:00", est_min: 80, list: null }),

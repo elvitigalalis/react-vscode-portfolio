@@ -12,8 +12,12 @@
 .sheet-school[open] .sheet-school-label::before { content: "▾ "; }
 .sheet-school-sum .sheet-load-chip { margin-left: 0; font-size: 0.8125rem; }
 .sheet-school-sum .sheet-meter { grid-column: 3; max-width: 20rem; height: 6px; border-radius: 3px; }
-.sheet-school-crunch { justify-self: end; font-size: 0.75rem; font-weight: 600; color: var(--danger); }
-.sheet-crunch { font-size: 0.6em; font-weight: 600; color: var(--danger); white-space: nowrap; }
+/* A crunch week is a heads-up, not an act-now item, so it is amber, never red: red stays for what
+   needs acting on now (overdue, a failed feed). */
+.sheet-school-crunch { justify-self: end; font-size: 0.75rem; font-weight: 600; color: var(--warn); }
+.sheet-crunch { font-size: 0.6em; font-weight: 600; color: var(--warn); white-space: nowrap; }
+.sheet-school .sheet-load-chip.is-over { color: var(--warn); }
+.sheet-school .sheet-meter-fill.is-over { background: var(--warn); }
 .sheet-school-note { margin: 0.5rem 0 0.25rem; color: var(--muted); font-size: 0.8125rem; }
 .sheet-school-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.15rem; max-width: 48rem; }
 .sheet-school-item {

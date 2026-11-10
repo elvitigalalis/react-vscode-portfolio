@@ -67,12 +67,14 @@ const dueOf = (t) => t.due ?? t.day ?? null;
 // this week. Older overdue work is taken as let go, so it doesn't weigh on every week after.
 // Earliest due first.
 export const OVERDUE_DAYS = 14;
+// The Someday list of work he has let go (docs/sheet.md, Someday "Dropped"): not due any more.
+const DROPPED = "Dropped";
 export function schoolDue(tasks, days, today, codes = courseCodes(tasks)) {
   const [first, last] = [days[0], days[days.length - 1]];
   const thisWeek = first <= today && today <= last;
   const since = addDays(today, -OVERDUE_DAYS);
   return [...tasks]
-    .filter((t) => !t.done && isSchoolWork(t, codes) && !t.project_id)
+    .filter((t) => !t.done && t.list !== DROPPED && isSchoolWork(t, codes) && !t.project_id)
     .map((t) => ({ task: t, due: dueOf(t), ...schoolMinutes(t) }))
     .filter(({ due }) => due && due <= last && (due >= first || (thisWeek && due < today && due >= since)))
     .sort((a, b) => a.due.localeCompare(b.due) || String(a.task.title).localeCompare(String(b.task.title), "en", { numeric: true }));
