@@ -142,6 +142,8 @@ function setStatus(text) {
 // only the error (a promise's catch), it says what it always did.
 export function failed(err, what = null, retry = null) {
   console.error(err);
+  // A task deleted elsewhere: its row has gone (saving), and there is nothing to retry.
+  if (err?.gone) return;
   if (!what) return setStatus("Something did not save. Reload to see what's stored.");
   const s = $("[data-status]");
   s.hidden = false;
@@ -192,18 +194,32 @@ const todoBook = ledger({
 });
 const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -> the row's note
 
+// A save that finds its task deleted (`gone`) takes the row away rather than putting it back.
 function saving(book, key, change, save) {
   errors.delete(key);
   return book.write(key.slice(key.indexOf(":") + 1), change, save).then(
     (saved) => { render(); return saved; },
-    (e) => { errors.set(key, "Not saved"); render(); throw e; });
+    (e) => {
+      if (e?.gone) forgetTask(key.slice(key.indexOf(":") + 1));
+      else errors.set(key, "Not saved");
+      render();
+      throw e;
+    });
 }
 
 // A task PATCH that matched no row (deleted elsewhere) saved nothing: that is a failure too.
 async function updated(id, change) {
   const saved = await api.updateTask(id, change);
-  if (!saved) throw new Error(`task ${id} is gone`);
+  if (!saved) throw Object.assign(new Error(`task ${id} is gone`), { gone: true });
   return saved;
+}
+
+// A task deleted (here, elsewhere, or an Undo of an add): off the page, and its saves still out
+// can't bring it back (optimistic.mjs, forget).
+export function forgetTask(id) {
+  taskBook.forget(id);
+  state.tasks.delete(id);
+  errors.delete(`task:${id}`);
 }
 const write = (id, change, save = () => updated(id, change)) => saving(taskBook, `task:${id}`, change, save);
 const patch = (id, change) => write(id, change);
@@ -382,7 +398,7 @@ async function removeTask(id) {
   const t = state.tasks.get(id);
   await dropBlocks(id);
   await api.deleteTask(id);
-  state.tasks.delete(id);
+  forgetTask(id);
   const { id: _, created_at, updated_at, ...copy } = t;
   offerUndo(`Deleted: ${t.title}`, async () => {
     const back = await api.insertTask(copy);
@@ -1454,7 +1470,7 @@ function wire() {
     // Retry adds it and empties the box again. Also did… logs it already done, with Undo.
     const log = async () => {
       const t = await addTask(text, where, also ? { done: true } : {});
-      if (also && t) offerUndo(`Logged: ${t.title}`, async () => { await api.deleteTask(t.id); state.tasks.delete(t.id); });
+      if (also && t) offerUndo(`Logged: ${t.title}`, async () => { await api.deleteTask(t.id); forgetTask(t.id); });
     };
     const add = async () => { await log(); const box = addBox(where); if (box?.value === text) { box.value = ""; fitBox(box); } };
     const going = log();

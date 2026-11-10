@@ -137,3 +137,26 @@ test("a row it doesn't have just saves", async () => {
   assert.equal(await l.write("zz", { done: true }, async () => "saved"), "saved");
   assert.equal(box.rows.has("zz"), false);
 });
+
+test("a row forgotten while its save is out isn't put back when the save lands", async () => {
+  const { box, l } = setup();
+  const s = later();
+  const done = l.write("t1", { done: true }, s.save);
+  l.forget("t1");
+  box.rows.delete("t1");
+  s.ok({ id: "t1", done: true, day: "2026-11-03" });
+  await done;
+  assert.equal(box.rows.has("t1"), false);
+  assert.equal(l.pending("t1"), false);
+});
+
+test("nor when it fails", async () => {
+  const { box, l } = setup();
+  const s = later();
+  const done = l.write("t1", { done: true }, s.save);
+  l.forget("t1");
+  box.rows.delete("t1");
+  s.no(new Error("gone"));
+  await assert.rejects(done);
+  assert.equal(box.rows.has("t1"), false);
+});

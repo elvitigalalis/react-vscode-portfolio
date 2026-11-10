@@ -4,7 +4,8 @@
 // last copy the server confirmed with the changes still out laid on top: a save that works makes
 // its answer the confirmed copy, and one that fails drops only its own change, so the row falls
 // back to what the server holds. A load whose read may have missed a save (it read while the save
-// was out) keeps what the saves wrote (keep). Pure: the rows live wherever get and set put them.
+// was out) keeps what the saves wrote (keep). A row deleted here is forgotten (forget): a save of it
+// still out lands without putting it back. Pure: the rows live wherever get and set put them.
 
 export function ledger({ get, set }) {
   const open = new Map();  // key -> { base, ops, tail }: the confirmed copy, changes out, save queue
@@ -14,6 +15,7 @@ export function ledger({ get, set }) {
 
   function settle(key, e, op, saved, ok) {
     e.ops.splice(e.ops.indexOf(op), 1);
+    if (e.gone) return;
     if (ok) {
       e.base = saved ?? { ...e.base, ...op.change };
       wrote.set(key, { at: ++clock, row: e.base });
@@ -58,6 +60,13 @@ export function ledger({ get, set }) {
         if (w.at <= since) wrote.delete(key);
         else if (!open.has(key)) set(key, w.row);
       }
+    },
+    // The row was deleted: saves of it still out change nothing when they land.
+    forget(key) {
+      const e = open.get(key);
+      if (e) e.gone = true;
+      open.delete(key);
+      wrote.delete(key);
     },
     pending: (key) => open.has(key),
   };
