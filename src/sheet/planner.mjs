@@ -901,7 +901,7 @@ export const renderHooks = [];
 let loadGen = 0;
 let lastRead = null;  // the last load's rows, as JSON
 let eventsFor = null; // the Monday of the week state.events are for
-export async function load({ scroll = true, quiet = false, sync = null } = {}) {
+export async function load({ scroll = true, quiet = false, sync = null, afterCopy = false } = {}) {
   const gen = ++loadGen;
   const since = [taskBook.now(), todoBook.now()];
   const days = weekDays(state.week);
@@ -950,7 +950,7 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
     state.parked = parked.length;
     loaded();
     if (eventsFor !== days[0]) { setEvents(cachedEvents(days)); eventsFor = days[0]; }
-    for (const hook of loadHooks) hook({ copy: false });
+    for (const hook of loadHooks) hook({ copy: false, afterCopy });
     render();
     if (scroll) scrollToToday($("[data-week]"));
     saveCopy();
@@ -1021,7 +1021,8 @@ function saveCopy() {
 }
 
 // Run when the week's rows land, from the stored copy ({ copy: true }) or a load, just before
-// the draw they make (doing-view.mjs picks its view then).
+// the draw they make (doing-view.mjs picks its view then). `afterCopy` marks only the load
+// start() makes right after drawing the copy, never a later one.
 export const loadHooks = [];
 // Modules the first draw waits for, up to DRAW_WAIT_MS (the phone's Doing view, so the stored
 // copy never draws the week first and then swaps it out).
@@ -1663,7 +1664,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     state.calendars = settings.calendars ?? [];
     $("[data-tools]").hidden = false;
     if (!early) setStatus(null);
-    await load({ scroll: !early, sync: syncGoogle() });
+    await load({ scroll: !early, sync: syncGoogle(), afterCopy: early });
     openFromLink();
   } catch (e) {
     held?.putBack();

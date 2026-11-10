@@ -7,7 +7,7 @@
 // the first load. Logic is in doing.mjs. Text goes in through textContent only.
 import { SHEET } from "../site.mjs";
 import { formatClock, formatSpan, localNow } from "./logic.mjs";
-import { doingPick, doingMode, minutesLeft, withSession } from "./doing.mjs";
+import { doingPick, doingMode, minutesLeft, withSession, modeAfter } from "./doing.mjs";
 import { focusClock } from "./focus.mjs";
 import { rowTitle } from "./now-next.mjs";
 import { el, icon, state, render, renderHooks, loadHooks, actHooks, rowsOn, checkOff, toggleEventTodo, dayStart, shutdownAt, NARROW } from "./planner.mjs";
@@ -26,7 +26,6 @@ let root, box;
 // him mid-use. His day runs from planner.mjs's dayStart (after his wake) to the shutdown line.
 let mode = null;
 let loaded = false;
-let fromCopy = false; // the view was chosen on the stored copy
 
 const SVG = "http://www.w3.org/2000/svg";
 function ring(share) {
@@ -191,13 +190,10 @@ export function setupDoing(node) {
     if (mode === "doing" && e.target.closest('[data-act="prev"], [data-act="next"], [data-act="this-week"]')) { mode = "week"; keep("week"); }
   }, true);
   // Each load chooses again (his pick for today still wins), as the time of day may have moved;
-  // the stored copy's draw chooses too. The load that follows the copy keeps the copy's choice,
-  // so the view never swaps as the fresh rows come in.
-  loadHooks.push(({ copy = false } = {}) => {
+  // the stored copy's draw chooses too, and start()'s load right after it keeps that (modeAfter).
+  loadHooks.push((at) => {
     loaded = true;
-    if (fromCopy && !copy) { fromCopy = false; return; }
-    mode = null;
-    fromCopy = copy;
+    mode = modeAfter(mode, at);
   });
   // The ring and "25 min left" move on while the card shows, in place, so focus and a screen
   // reader's place stay put; only a change of card draws it again.

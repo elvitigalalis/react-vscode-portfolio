@@ -2,7 +2,7 @@
 // are written out by hand.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { doingPick, doingMode, minutesLeft, withSession } from "../src/sheet/doing.mjs";
+import { doingPick, doingMode, minutesLeft, withSession, modeAfter } from "../src/sheet/doing.mjs";
 
 const H = (h, m = 0) => h * 60 + m;
 const task = (id, start = null, end = null, done = false) => ({ kind: "task", task: { id, title: id, done }, start, end });
@@ -83,4 +83,14 @@ test("minutesLeft: rounded up, hours from 60", () => {
   assert.equal(minutesLeft(24 * 60_000 + 1), "25 min");
   assert.equal(minutesLeft(0), "0 min");
   assert.equal(minutesLeft(65 * 60_000), "1h05");
+});
+
+test("modeAfter: only start()'s load right after the copy keeps the copy's choice", () => {
+  assert.equal(modeAfter(null, { copy: true }), null);
+  assert.equal(modeAfter("doing", { copy: false, afterCopy: true }), "doing");
+  // A later load (refreshStale after start()'s load failed offline) chooses again.
+  assert.equal(modeAfter("doing", { copy: false }), null);
+  assert.equal(modeAfter("week", {}), null);
+  // A copy that threw while drawing: start()'s load isn't afterCopy, and nothing was chosen.
+  assert.equal(modeAfter(null, { copy: false, afterCopy: true }), null);
 });
