@@ -33,6 +33,7 @@ let reflection = "";
 let decisions = new Map(); // task id → done | tomorrow | week | someday
 let asked = false;    // Next or Finish was pressed with tasks still to place
 let busy = false;
+let session = 0;      // one per open, so a stale Finish can't draw over a new open
 let reads = null;     // { day, at, wins, extras }, with { winsData, extrasOk } once each lands
 let shown = new Set(); // wins line keys already drawn, so only ones that land later fade in
 let drawnWins = false;
@@ -256,7 +257,7 @@ function closedScreen() {
 
 // A read landed: fill what it feeds, in place.
 const landed = (r) => () => {
-  if (reads !== r || !dialog.open) return;
+  if (reads !== r || !dialog.open || busy) return; // while Finish saves, nothing redraws
   if (step === "today") { fill(parts.late, lateNodes()); fill(parts.past, pastNodes()); fill(parts.end, endNodes()); }
   if (step === "tomorrow") fill(parts.tomorrow, tomorrowNodes());
 };
@@ -345,13 +346,29 @@ async function saveDecisions() {
   return rolled.map((t) => ({ t, change: decisionChange(t, "tomorrow", today, end({ day: tomorrow })) }));
 }
 
+// While Finish saves: every control is off (the box read-only), the dialog is aria-busy and Escape
+// doesn't close it. Focus comes back to Finish if it fails.
+function setBusy(on, label = null) {
+  busy = on;
+  if (on) dialog.setAttribute("aria-busy", "true"); else dialog.removeAttribute("aria-busy");
+  for (const b of dialog.querySelectorAll("button")) b.disabled = on;
+  if (box) box.readOnly = on;
+  const go = dialog.querySelector('[data-key="finish"], [data-key="next"]');
+  if (go && label) go.textContent = label;
+}
+
 // Finish: the decisions, then the day (rpc shut_down: the stamp, the reflection, today's
 // unapproved proposals), then "Day closed" with a small burst from the button. The week is
-// updated in place, so nothing waits on a reload; the server's copy follows behind.
+// updated in place, so nothing waits on a reload; the server's copy follows behind. `session`
+// ties it to this open: a Finish that lands after the dialog was closed and opened again changes
+// the week but never draws over the new one.
 async function finish(e) {
   if (busy || !placed()) return;
-  const at = e?.currentTarget?.getBoundingClientRect();
-  busy = true;
+  const mine = session;
+  const button = e?.currentTarget;
+  const at = button?.getBoundingClientRect();
+  const label = button?.textContent;
+  setBusy(true, "Saving…");
   try {
     const rolled = await saveDecisions();
     const note = reflection.trim() || null;
@@ -360,16 +377,26 @@ async function finish(e) {
     for (const { t, change } of rolled) state.tasks.set(t.id, { ...t, ...change });
     state.days[today] = { ...(state.days[today] ?? { day: today, planned: false }), shutdown: true, reflection: note };
     state.blocks = state.blocks.filter((b) => !(b.proposed && localNow(new Date(b.starts_at), tz).day === today));
+    load({ scroll: false }).catch(console.error);
+    if (mine !== session) return;
+    setBusy(false);
     step = "closed";
     parts = {};
     dialog.replaceChildren(closedScreen());
     dialog.querySelector(".sheet-shut-closed .sheet-btn")?.focus();
     if (at) burst(at, dialog);
-    load({ scroll: false }).catch(console.error);
-  } catch (err) { failed(err); } finally { busy = false; }
+  } catch (err) {
+    if (mine !== session) return;
+    setBusy(false, label);
+    button?.focus();
+    failed(err);
+  }
 }
 
 export function open(day) {
+  session++;
+  busy = false;
+  dialog.removeAttribute("aria-busy");
   today = day;
   step = "today";
   reflection = state.days[today]?.reflection ?? "";
@@ -396,5 +423,6 @@ export function setupView(root) {
     const b = e.target.closest(".sheet-shut-choice");
     if (b) choose(b.dataset.id, b.dataset.kind);
   });
-  dialog.addEventListener("close", () => render());
+  dialog.addEventListener("cancel", (e) => { if (busy) e.preventDefault(); });
+  dialog.addEventListener("close", () => { session++; render(); });
 }
