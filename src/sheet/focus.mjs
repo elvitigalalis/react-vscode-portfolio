@@ -60,8 +60,10 @@ export function focusClock(s, now) {
 // kind and estimate, as Telegram's Finished writes them (nudges.mjs). Under a minute: none.
 // `since` is Start: record_focus writes nothing when the task is done or already has a row from
 // then on (a Finished? answer in Telegram), so focus time and Telegram never both count.
-export function focusActual(s, task, now, timeZone) {
-  const minutes = Math.min(Math.round((now.getTime() - s.started_at) / 60_000), 960);
+// `prior` is the minutes earlier sessions Stopped on this task credited it (focus-notes.mjs), so
+// the row holds the whole time the task took.
+export function focusActual(s, task, now, timeZone, prior = 0) {
+  const minutes = Math.min(Math.round((now.getTime() - s.started_at) / 60_000) + prior, 960);
   if (minutes < 1) return null;
   return { task: s.task_id, block: s.block_id, d: localNow(new Date(s.started_at), timeZone).day, kind: paceKind(task), est: task.est_min ?? null, minutes, since: new Date(s.started_at).toISOString() };
 }
@@ -88,20 +90,33 @@ export function extendFocus(s, b, taken, timeZone) {
 
 // Done and +15 min save through an outbox kept beside the session, so a write made offline (or
 // that failed) is tried again on the next load or when the browser is back online. The ops are
-// { op: "actual", row } (record_focus), { op: "done", task } and { op: "extend", block, ends_at }.
-const OPS = new Set(["actual", "done", "extend"]);
+// { op: "actual", row } (record_focus), { op: "done", task }, { op: "extend", block, ends_at } and
+// { op: "log", row } (a focus_log row: Stop's, or Done's closing one; focus-notes.mjs).
+const OPS = new Set(["actual", "done", "extend", "log"]);
 export function readOutbox(raw) {
   let q;
   try { q = JSON.parse(raw); } catch { return []; }
   return Array.isArray(q) ? q.filter((o) => o && typeof o === "object" && OPS.has(o.op)) : [];
 }
 
+// A write the server refused for good: a 4xx (api.mjs's errors end in the status), except 401
+// and 403 (a session to refresh), 404 (a table or function not there yet), 408 and 429, which can
+// pass on a later try. Retrying a refused write would block every op behind it forever.
+export function refused(e) {
+  const m = /: (4\d\d)$/.exec(e?.message ?? "");
+  return Boolean(m) && ![401, 403, 404, 408, 429].includes(Number(m[1]));
+}
+
 // Runs the ops in order with `run`; the first that throws stops the drain, so Done's actuals row
-// always lands before its task is marked done. Returns the ops left.
+// always lands before its task is marked done. An op the server refused (refused) is logged and
+// dropped instead, and the drain goes on. Returns the ops left.
 export async function drainOutbox(ops, run) {
   const left = [...ops];
   while (left.length) {
-    try { await run(left[0]); } catch { return left; }
+    try { await run(left[0]); } catch (e) {
+      if (!refused(e)) return left;
+      console.error("Dropped a focus write the server refused:", JSON.stringify(left[0]), e);
+    }
     left.shift();
   }
   return left;

@@ -5,7 +5,9 @@
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { focusTarget, readSession, readOutbox, drainOutbox, focusClock, outboxAfter, serialDrain } from "./focus.mjs";
-import { el, state, render, renderHooks, actHooks, completeTask } from "./planner.mjs";
+import { progressByTask, progressText, closeFinished, focusedEntries } from "./focus-notes.mjs";
+import { addDays } from "./logic.mjs";
+import { el, state, render, renderHooks, actHooks, completeTask, progressHooks } from "./planner.mjs";
 import { saveBlock } from "./plan-today.mjs";
 
 const SESSION_KEY = "sheet.focus";
@@ -21,10 +23,41 @@ export const setSession = (s) => put(SESSION_KEY, s ? JSON.stringify(s) : null);
 
 let root, note;
 
+// focus_log's rows (focus-notes.mjs) from the last LOG_DAYS, read after the first draw and read
+// again on each sync until a read lands (logLoaded). A row Stop or Done adds goes in here at once,
+// so the credit shows before it saves. Until the read lands, Done counts no earlier credit and
+// closes nothing, since it can't know which rows there are.
+const LOG_DAYS = 120;
+let logRows = [];
+let progress = new Map();
+let logLoaded = false;
+let reading = null;
+export const progressFor = (taskId) => progress.get(taskId) ?? null;
+export const isLogLoaded = () => logLoaded;
+// Done sessions that wrote no focus_log row (focus_log unread then), for today's focused count.
+let unlogged = [];
+export const addUnlogged = (entry) => { unlogged = [...unlogged, entry]; };
+export function addLog(row) {
+  logRows = [...logRows, row];
+  progress = progressByTask(logRows);
+}
+function readLog() {
+  if (logLoaded || reading) return;
+  reading = api.listFocusLog(addDays(state.today, -LOG_DAYS)).then((rows) => {
+    // Rows added here while the read was out are kept, once each.
+    const seen = new Set(rows.map((r) => r.id));
+    logRows = [...rows, ...logRows.filter((r) => !seen.has(r.id))];
+    progress = progressByTask(logRows);
+    logLoaded = true;
+    render();
+  }, console.error).finally(() => { reading = null; });
+}
+
 // One write, as Done or +15 min queued it. Each can run again safely: record_focus counts a task
 // once, done stays done, and an end is set, not added to.
 async function run(op) {
   if (op.op === "actual") return api.recordFocus(op.row);
+  if (op.op === "log") return api.logFocus(op.row);
   if (op.op === "done") {
     if (state.tasks.has(op.task)) { if (!state.tasks.get(op.task).done) await completeTask(op.task); return; }
     return api.updateTask(op.task, { done: true });
@@ -43,7 +76,7 @@ const drain = serialDrain(async () => {
   note.hidden = !left.length;
   render();
 });
-export const sync = drain.sync;
+export const sync = () => { readLog(); return drain.sync(); };
 
 // Queues writes behind any still waiting, then tries them all: in a fresh drain after one already
 // running, so the promise settles once these ops have been tried (focus Done's check-off waits
@@ -54,11 +87,12 @@ export function queue(...ops) {
 }
 
 let view = null;
-const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue }); return m; }, (e) => { view = null; throw e; }));
+const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog, isLogLoaded, addUnlogged }); return m; }, (e) => { view = null; throw e; }));
 export const openFocus = (blockId) => loadView().then((m) => m.open(blockId));
 
 export function setupFocus(node) {
   root = node;
+  progressHooks.focused = () => focusedEntries(logRows, unlogged);
   note = el("p", { className: "sheet-notice", role: "status", textContent: "Focus changes are saved on this device and will sync when you're back online." });
   note.hidden = true;
   root.querySelector("[data-status]")?.after(note);
@@ -78,12 +112,35 @@ export function setupFocus(node) {
     let s = getSession();
     // A session whose task was finished elsewhere (the week's ✓, Telegram) ends.
     if (s && state.tasks.get(s.task_id)?.done) { setSession(null); s = null; }
+    // So does its credit: a closing row for each done task with open rows (once they're read).
+    if (logLoaded) {
+      const rows = closeFinished(progress, state.tasks, state.today, new Date(), () => crypto.randomUUID());
+      for (const row of rows) addLog(row);
+      if (rows.length) queue(...rows.map((row) => ({ op: "log", row }))).catch(console.error);
+    }
     const target = s ? { id: s.block_id, task_id: s.task_id } : focusTarget(state.blocks, state.tasks, new Date(), SHEET.timeZone);
     // A Someday task or a project's step can hold a block today without being on today's list
     // (the horizon gives it minutes, the morning plan times them); its Start goes on its row in
     // Someday or under its project. Projects draw after this hook, so the lookup waits a tick.
-    if (target) queueMicrotask(() => placeStart(s, target));
+    queueMicrotask(() => {
+      if (target) placeStart(s, target);
+      placeProgress();
+    });
   });
+}
+
+// "40m focused of 1h30" under each open task that Stopped sessions have credited.
+function placeProgress() {
+  for (const [id, p] of progress) {
+    const t = state.tasks.get(id);
+    const text = t && !t.done && progressText(p, t.est_min);
+    if (!text) continue;
+    for (const row of root.querySelectorAll(`.sheet-task[data-id="${id}"]`)) {
+      if (row.querySelector(".sheet-focus-progress")) continue;
+      const line = row.querySelector(".sheet-focus-line") ?? row.appendChild(el("span", { className: "sheet-focus-line" }));
+      line.append(el("span", { className: "sheet-focus-progress", textContent: text }));
+    }
+  }
 }
 
 function placeStart(s, target) {

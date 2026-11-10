@@ -10,6 +10,9 @@ import { approveAllCall, planNotes } from "./morning.mjs";
 import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock, setWindow } from "./plan-today.mjs";
 import { estimateHint, keepsMoving } from "./lookback.mjs";
 import { history as readHistory, lookbackEntry, moverPrompts } from "./lookback-view.mjs";
+import { estimateLearning, learningLine } from "./estimate-learning.mjs";
+import { progressText } from "./focus-notes.mjs";
+import { progressFor } from "./focus-start.mjs";
 
 let dialog;
 let day;          // the day being planned
@@ -111,6 +114,8 @@ export function draw() {
     if (t.id === picked) row.classList.add("is-picked");
     const hint = estimateHint(t, history?.paces);
     if (hint) row.append(el("span", { className: "sheet-hint", textContent: hint }));
+    const credit = progressText(progressFor(t.id), t.est_min);
+    if (credit) row.append(el("span", { className: "sheet-hint", textContent: credit }));
     return row;
   }));
   list.dataset.day = day;
@@ -128,6 +133,8 @@ export function draw() {
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
     planBar(m),
+    // Estimates against actuals (estimate-learning.mjs), once there are enough finished tasks.
+    learnLine(m.total),
     el("p", { className: "small", textContent: picked
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag tasks onto the timeline · ? for keys" }),
@@ -145,6 +152,11 @@ export function draw() {
       el("button", { type: "submit", className: "sheet-btn primary", value: "done", textContent: "Done" })),
   ].filter(Boolean));
   if (scroll != null) dialog.querySelector(".sheet-timeline-wrap").scrollTop = scroll;
+}
+
+function learnLine(planned) {
+  const text = learningLine(estimateLearning(history?.actuals), planned);
+  return text ? el("p", { className: "small sheet-learn", textContent: text }) : null;
 }
 
 async function fetchEvents() {

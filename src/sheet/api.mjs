@@ -219,7 +219,9 @@ export const listFeedState = () => rest("feed_state?select=source,fetched_at,ok,
 // and every task's state. None until the horizon schema has run.
 export const listHorizon = (from) => rest(`horizon_alloc?select=task_id,day,minutes,over_min,task:tasks(title)&day=gte.${from}&order=day`).catch(() => []);
 export const listHorizonStates = () => rest("horizon_state?select=task_id,state,slack_min,short_min,remaining_min,finish_day").catch(() => []);
-export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at");
+// Newest first and capped below Supabase's 1000-row response limit, so the newest rows (the only
+// ones pace's windows and estimate learning read) are never the ones cut. Callers sort by `at`.
+export const listActuals = () => rest("actuals?select=at,kind,est_min,minutes&order=at.desc&limit=1000");
 // Progress (docs/sheet.md): the focus minutes logged on `day`. None before the table exists.
 export const listActualsOn = (day) => rest(`actuals?select=day,minutes&day=eq.${day}`).catch(() => []);
 
@@ -422,6 +424,12 @@ export const saveEventTodo = (row) => rest("event_todos?on_conflict=cal_event_ke
 // Done's minutes into actuals: true when recorded, false when the task is done or Telegram's
 // Finished? already counted it (supabase/schema.sql, record_focus).
 export const recordFocus = (row) => rest("rpc/record_focus", { method: "POST", body: row });
+// focus_log (focus-notes.mjs): a row whose id is already there is skipped, so a retry is safe.
+export const logFocus = (row) => rest("focus_log?on_conflict=id", { method: "POST", body: row, prefer: "resolution=ignore-duplicates,return=minimal" });
+// Its rows from `since` on, newest first and capped below Supabase's 1000-row response limit
+// (progressByTask sorts them). Until the table exists PostgREST answers 404: none.
+export const listFocusLog = (since) => rest(`focus_log?select=id,task_id,at,minutes,note,done,closes&at=gte.${since}&order=at.desc&limit=1000`)
+  .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
 
 // --- Projects (docs/sheet-projects.md) -------------------------------------------------------
 // Open projects, soonest due first, and the steps (tasks) of the given projects in order. A

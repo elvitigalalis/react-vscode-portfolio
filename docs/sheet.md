@@ -84,8 +84,9 @@ tasks jumping days across time zones.
 - **Done:** struck through and faded to 20 % opacity; it stays in place.
 - **Progress** (src/sheet/progress.mjs): counts that say what got done, never points, levels,
   streaks or anything a miss takes away. Today's header line reads "3 of 7 done · 1h40 focused"
-  after a small accent ring that closes as today's tasks get done; the focused half (today's actuals,
-  from focus Done and Telegram's Finished) shows only when there is some, and an empty day shows
+  after a small accent ring that closes as today's tasks get done; the focused half (the minutes of
+  today's focus sessions: each `focus_log` row's own minutes, Stops and Dones, plus a Done made
+  before `focus_log` was read; [sheet-focus.md](sheet-focus.md)) shows only when there is some, and an empty day shows
   nothing. No head start is faked. The week title adds the tasks finished that week by done_at
   ("Week of Nov 9 · 14 done", nothing at 0), Someday ones included. Phones hide the title, so
   there the shown day says "14 done this week" under its stamps.
@@ -199,6 +200,11 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
 - **Load meter** in the header: `3h20 / 5h30`, the sum of today's undone estimates against the
   day's budget (5 h 30, or the free time around his events, as in the week). Amber within 15 %
   of it, red over it.
+- **Estimates against actuals:** once 8 finished tasks have an estimate and an actual time,
+  one line under the meter: "You usually take 1.4× your estimates (median of your last 12
+  finished tasks). Today's 4h of estimates is about 5h35." Below 8 it shows nothing
+  ([sheet-focus.md](sheet-focus.md), "Estimates against actuals"). A task Stopped sessions have
+  credited reads "40m focused of 1h30" in the list.
 - **Finish line:** "Done ≈ 4:40 pm · shutdown 5:00 pm". The shutdown line on the timeline can be
   dragged; it is saved per day. Undragged, it sits where wind-down starts (5 pm to 11 pm), else at
   5 pm ([sheet-v5.md](sheet-v5.md), "Shutdown follows wind-down").

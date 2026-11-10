@@ -602,8 +602,11 @@ function dayColumn(day, rows, items) {
 // Progress (progress.mjs): today's "3 of 7 done · 1h40 focused" after a small ring that closes
 // as today's tasks get done (a ring, so it doesn't read as the load meter's bar). Real progress
 // only: an empty day shows nothing.
+// `progressHooks.focused`, when set (focus-start.mjs), gives the { day, minutes } entries the
+// focused half counts, in place of state.actuals.
+export const progressHooks = { focused: null };
 function progressMark(day) {
-  const p = dayProgress(state.tasks.values(), day, state.actuals);
+  const p = dayProgress(state.tasks.values(), day, progressHooks.focused?.() ?? state.actuals);
   const text = progressText(p);
   if (!text) return null;
   let ring = null;
