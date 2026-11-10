@@ -58,21 +58,27 @@ function row(h, day, fresh) {
   check.setAttribute("aria-pressed", String(on));
   check.dataset.act = "habit-done";
   check.dataset.id = h.id;
+  // The rate is the ✓'s description, so a screen reader hears "5 of last 7 sessions" with it.
+  const rateId = `sheet-habit-rate-${h.id}`;
+  check.setAttribute("aria-describedby", rateId);
   const label = v.dots.map((d) => `${WEEKDAY.format(new Date(`${d.day}T12:00:00Z`))} ${WORDS[d.state]}`).join(", ");
   const dots = el("span", { className: "sheet-habit-dots", role: "img", ariaLabel: `Last 7 days: ${label}`, title: label },
     ...v.dots.map((d) => el("span", { className: `is-${d.state}` })));
   return el("li", { className: `sheet-habit${on ? " is-done" : ""}${on && h.id === fresh ? " is-fresh" : ""}` }, check,
     el("span", { className: "sheet-habit-name", textContent: h.name }),
     dots,
-    el("span", { className: "sheet-habit-rate", textContent: rateText(v) }),
+    el("span", { className: "sheet-habit-rate", id: rateId, textContent: rateText(v) }),
     v.back ? el("span", { className: "sheet-habit-back", textContent: "Back on it today?" }) : null);
 }
 
 function draw(fresh = null) {
   const day = today();
   drawnDay = day;
+  // A redraw (a reload, the planner's render) replaces the rows: focus stays on the same ✓.
+  const focused = document.activeElement?.closest?.(".sheet-habit-check")?.dataset.id;
   root.querySelector("[data-habit-rates]").hidden = !habits.length;
   root.querySelector("[data-habit-list]").replaceChildren(...habits.map((h) => row(h, day, fresh)));
+  if (focused) root.querySelector(`.sheet-habit-check[data-id="${CSS.escape(focused)}"]`)?.focus();
 }
 
 async function toggle(e) {
@@ -85,7 +91,8 @@ async function toggle(e) {
   pending.set(key, on);
   setDone(id, day, on);
   draw(id);
-  root.querySelector(`.sheet-habit-check[data-id="${id}"]`)?.focus();
+  // Safari doesn't focus a clicked button, so the tapped ✓ is focused by hand.
+  root.querySelector(`.sheet-habit-check[data-id="${CSS.escape(id)}"]`)?.focus();
   try {
     await queued(key, () => (on ? api.markHabitDone(id, day) : api.unmarkHabitDone(id, day)));
     if (pending.get(key) === on) pending.delete(key);
