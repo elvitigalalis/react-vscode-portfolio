@@ -914,9 +914,10 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
     if (scroll) scrollToToday($("[data-week]"));
     saveCopy();
   }
+  // The stored copy is gone from the page: so is what the status line said about it.
   if (copy) {
     copy = false;
-    if ($("[data-status]").textContent === UPDATING) setStatus(null);
+    if ([UPDATING, COPY_FAILED].includes($("[data-status]").textContent)) setStatus(null);
   }
   const got = await events;
   if (gen !== loadGen) return;
@@ -928,6 +929,7 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
 // --- Opening from the copy kept in this browser (snapshot.mjs) ---------------------------------
 
 const UPDATING = "Updating…";
+const COPY_FAILED = "Couldn't load the latest. This is the week as you last saw it.";
 let copy = false; // the week on screen is the stored copy, until the first load draws
 
 // The week's data as before anything is read: what a copy that can't be drawn leaves behind.
@@ -1591,7 +1593,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   } catch (e) {
     if (!copy) return failed(e);
     console.error(e);
-    setStatus("Couldn't load the latest. This is the week as you last saw it.");
+    setStatus(COPY_FAILED);
   }
 }
 
