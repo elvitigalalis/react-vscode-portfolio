@@ -1,0 +1,46 @@
+/* Shutdown that closes loops (docs/sheet.md, "Shutdown"). Added as text when shutdown-view.mjs
+   loads (Vite's ?inline), so /plan's first load carries none of it. Same tokens as global.css. */
+.sheet-shut-wins { list-style: none; padding: 0; margin: 0.25rem 0 0.5rem; font-size: 0.875rem; }
+.sheet-shut-wins li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.sheet-shut-wins li::before { content: "✓ "; color: var(--accent); }
+.sheet-shut-wins .sheet-meta { display: block; padding-left: 1.1em; color: var(--muted); font-size: 0.8125rem; }
+.sheet-shut-wins li.is-reading { color: var(--muted); border-bottom: 0; }
+.sheet-shut-wins li.is-reading::before { content: "… "; color: var(--muted); }
+.sheet-shut-quiet { color: var(--muted); font-size: 0.875rem; margin: 0.25rem 0 0.5rem; }
+
+/* Every unfinished task: its title, then one tap for where it goes. */
+.sheet-shut-open { list-style: none; padding: 0; margin: 0.25rem 0 0.5rem; }
+.sheet-shut-task { padding: 0.4rem 0; border-bottom: 1px solid var(--line); }
+.sheet-shut-task > p { margin: 0 0 0.3rem; font-size: 0.875rem; overflow-wrap: anywhere; }
+.sheet-shut-choices { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sheet-shut-choice {
+  font: inherit; font-size: 0.8125rem; color: var(--fg); background: var(--bg); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.65rem; min-height: 1.9rem;
+}
+.sheet-shut-choice:hover { border-color: var(--muted); }
+.sheet-shut-choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); font-weight: 600; }
+.sheet-shut-task.is-asked > p { font-weight: 600; }
+.sheet-shut-ask { margin: 0.4rem 0; font-size: 0.875rem; }
+.sheet-shut-rest { margin-left: 0.5rem; font-size: 0.8125rem; }
+/* On a phone the choices share one row, each a 44px-tall target. */
+@media (pointer: coarse) {
+  .sheet-shut-choices { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  .sheet-shut-choice { min-height: 2.75rem; padding: 0.3rem 0.25rem; }
+}
+
+/* Day closed: the next step, then the wind-down line as the week shows it. */
+.sheet-shut-closed p { margin: 0.4rem 0; }
+.sheet-shut-next { font-size: 1rem; }
+.sheet-shut-closed .sheet-winddown { font-size: 0.875rem; margin: 0.75rem 0; }
+
+/* Motion (docs/sheet.md, "Motion"): only with no reduced-motion preference, opacity and transform
+   only, strong ease-out, under half a second, never in the way of a tap. */
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-shut-wins li.is-new { animation: sheet-shut-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+  .sheet-shut-closed > * { animation: sheet-shut-rise 320ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+  .sheet-shut-closed > :nth-child(2) { animation-delay: 60ms; }
+  .sheet-shut-closed > :nth-child(3) { animation-delay: 120ms; }
+  .sheet-shut-closed > :nth-child(n + 4) { animation-delay: 180ms; }
+}
+@keyframes sheet-shut-in { from { opacity: 0; } }
+@keyframes sheet-shut-rise { from { opacity: 0; transform: translateY(6px); } }
