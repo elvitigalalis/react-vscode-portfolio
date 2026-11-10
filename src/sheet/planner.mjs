@@ -430,9 +430,10 @@ async function removeTask(id) {
     await firstLoad; // its blocks as loaded, not as stored
     await dropBlocks(id);
     await api.deleteTask(id);
+    taskBook.release(id);
   } catch (e) {
-    taskBook.restore(id);
-    state.tasks.set(id, t);
+    // Back as its saves left it: one that landed meanwhile counts (optimistic.mjs, restore).
+    state.tasks.set(id, taskBook.restore(id) ?? t);
     errors.set(`task:${id}`, "Not deleted");
     load({ scroll: false }).catch(console.error);
     throw e;

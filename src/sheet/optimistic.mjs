@@ -12,12 +12,18 @@ export function ledger({ get, set, drop = () => {} }) {
   const open = new Map();  // key -> { base, ops, tail }: the confirmed copy, changes out, save queue
   const wrote = new Map(); // key -> { at, row }: copies a save confirmed, by the clock then
   const gone = new Map();  // key -> at: rows deleted here, by the clock then
+  const held = new Map();  // key -> entry: a deleted row's saves, kept until the delete is known
   let clock = 0;
   const shown = (e) => e.ops.reduce((row, op) => ({ ...row, ...op.change }), e.base);
 
   function settle(key, e, op, saved, ok) {
     e.ops.splice(e.ops.indexOf(op), 1);
-    if (e.gone) return;
+    // Deleted meanwhile: nothing shows, but the confirmed copy follows the save, in case the
+    // delete fails and the row comes back (restore).
+    if (e.gone) {
+      if (ok) { e.base = saved ?? { ...e.base, ...op.change }; e.landed = true; }
+      return;
+    }
     if (ok) {
       e.base = saved ?? { ...e.base, ...op.change };
       wrote.set(key, { at: ++clock, row: e.base });
@@ -74,13 +80,27 @@ export function ledger({ get, set, drop = () => {} }) {
     // The row was deleted: saves of it still out change nothing when they land.
     forget(key) {
       const e = open.get(key);
-      if (e) e.gone = true;
+      if (e) { e.gone = true; held.set(key, e); }
       open.delete(key);
       wrote.delete(key);
       gone.set(key, ++clock);
     },
-    // A delete that failed: the row is back, and loads keep it again.
-    restore(key) { gone.delete(key); },
+    // A delete that failed: loads keep the row again, and its saves pick up where they were.
+    // Returns the row to show (the confirmed copy with the changes still out), or null when
+    // none were out.
+    restore(key) {
+      gone.delete(key);
+      const e = held.get(key);
+      held.delete(key);
+      if (!e) return null;
+      e.gone = false;
+      if (e.ops.length) open.set(key, e);
+      // A save that landed while it was deleted: a load already reading keeps what it wrote.
+      if (e.landed) wrote.set(key, { at: ++clock, row: e.base });
+      return shown(e);
+    },
+    // The delete went through: its saves are of no more use.
+    release(key) { held.delete(key); },
     pending: (key) => open.has(key),
     // The row as the server last confirmed it, without the changes still out (what an Undo
     // goes back to).

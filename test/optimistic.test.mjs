@@ -197,3 +197,50 @@ test("a restored row (its delete failed) is kept by a load again", () => {
   l.keep(since);
   assert.equal(box.rows.has("t1"), true);
 });
+
+test("a failed delete with a save still out: the row follows that save", async () => {
+  const { box, l } = setup();
+  const s = later();
+  const done = l.write("t1", { done: true }, s.save);
+  const shown = box.rows.get("t1");
+  l.forget("t1"); box.rows.delete("t1");
+  box.rows.set("t1", l.restore("t1") ?? shown);
+  assert.equal(box.rows.get("t1").done, true);
+  // A reload reads before the save lands.
+  const since = l.now();
+  box.rows.set("t1", { id: "t1", done: false, day: "2026-11-03" });
+  l.keep(since);
+  assert.equal(box.rows.get("t1").done, true);
+  s.ok({ id: "t1", done: true, day: "2026-11-03" });
+  await done;
+  assert.equal(box.rows.get("t1").done, true);
+  assert.equal(l.pending("t1"), false);
+});
+
+test("a failed delete after the save landed shows what the save wrote", async () => {
+  const { box, l } = setup();
+  const s = later();
+  const done = l.write("t1", { done: true }, s.save);
+  l.forget("t1"); box.rows.delete("t1");
+  s.ok({ id: "t1", done: true, day: "2026-11-03", done_at: "x" });
+  await done;
+  assert.equal(box.rows.has("t1"), false);
+  const since = l.now();
+  const back = l.restore("t1");
+  assert.equal(back.done_at, "x");
+  box.rows.set("t1", back);
+  // A load that read before the save keeps the saved copy.
+  box.rows.set("t1", { id: "t1", done: false, day: "2026-11-03" });
+  l.keep(since);
+  assert.equal(box.rows.get("t1").done_at, "x");
+});
+
+test("restore with no saves out gives nothing, and release forgets the held saves", () => {
+  const { l } = setup();
+  l.forget("t1");
+  assert.equal(l.restore("t1"), null);
+  l.write("t1", { done: true }, () => new Promise(() => {}));
+  l.forget("t1");
+  l.release("t1");
+  assert.equal(l.restore("t1"), null);
+});
