@@ -113,7 +113,7 @@ function closedScreen() {
   const tomorrow = addDays(today, 1);
   const byId = new Map(lb.tomorrowTasks().map((t) => [t.id, t]));
   for (const t of state.tasks.values()) byId.set(t.id, t);
-  const next = firstUp([...byId.values()].filter((t) => t.day === tomorrow).sort(byPosition));
+  const next = firstUp([...byId.values()].filter((t) => t.day === tomorrow));
   const b = bedtimeFor(tonight(new Date(), tz), { settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
   const line = closedLine(decisions);
   return el("div", { className: "sheet-shut-closed" },

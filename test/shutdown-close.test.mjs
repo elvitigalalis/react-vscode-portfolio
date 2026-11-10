@@ -74,6 +74,10 @@ test("every open task needs a place; the closed line says where they went", () =
   assert.equal(closedLine(new Map()), null);
   assert.equal(firstUp([T("a", "Done one", { done: true }), T("b", "Lab 5")]), "Lab 5");
   assert.equal(firstUp([]), null);
+  // By time, then position, whatever order they come in.
+  const later = [T("p", "Second", { position: 2 }), T("q", "Gym", { position: 5, at_time: "18:00:00" }), T("r", "Standup", { position: 9, at_time: "09:30:00" }), T("s", "First", { position: 1 })];
+  assert.equal(firstUp(later), "Standup");
+  assert.equal(firstUp(later.filter((t) => !t.at_time)), "First");
 });
 
 test("a plain Tomorrow rides on shut_down's roll; a timed one or a third roll is written", () => {

@@ -103,5 +103,11 @@ export function closedLine(decisions) {
   return parts.length ? `${parts.join(" · ")}.` : null;
 }
 
-// What the "Day closed" screen hands him: tomorrow's first task, the specific next step.
-export const firstUp = (tomorrowTasks) => tomorrowTasks.find((t) => !t.done)?.title ?? null;
+// What the "Day closed" screen hands him: tomorrow's first task, the specific next step. A task
+// with a fixed time comes first, earliest first; then the rest by position.
+export function firstUp(tomorrowTasks) {
+  const open = tomorrowTasks.filter((t) => !t.done);
+  const time = (t) => t.at_time ?? "99"; // untimed after every "HH:MM:SS"
+  open.sort((a, b) => (time(a) < time(b) ? -1 : time(a) > time(b) ? 1 : a.position - b.position));
+  return open[0]?.title ?? null;
+}
