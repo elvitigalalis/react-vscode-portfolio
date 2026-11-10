@@ -24,16 +24,20 @@ function workoutFor(b, workouts, tz) {
   });
 }
 
-// The Gym habit ticks the same workouts earn (docs/sheet-habits.md): [{ habit_id, ends_at }], one
-// per approved Gym block a workout finished, whether or not the block still had time to end.
-// gym-tick.ts turns ends_at into its habit day (habit-rate.mjs, habitDay) for habit_done.
+// The Gym habit ticks workouts earn (docs/sheet-habits.md): [{ habit_id, ends_at }], one per
+// approved Gym block a workout finished (whether or not the block still had time to end), and one
+// per Gym habit for every lifting workout (a Hevy workout, an Oura strength one), block or not.
+// Each pair once; gym-tick.ts turns ends_at into its habit day (habit-rate.mjs, habitDay).
 export function gymDone(workouts, blocks, habits, tz) {
   const gym = new Set((habits ?? []).filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => h.id));
-  return (blocks ?? []).flatMap((b) => {
+  const byBlock = (blocks ?? []).flatMap((b) => {
     if (!gym.has(b.habit_id) || b.proposed) return [];
     const w = workoutFor(b, workouts, tz);
     return w ? [{ habit_id: b.habit_id, ends_at: w.ends_at }] : [];
   });
+  const lifts = (workouts ?? []).filter((w) => LIFTING.test(w.activity ?? ""))
+    .flatMap((w) => [...gym].map((habit_id) => ({ habit_id, ends_at: w.ends_at })));
+  return [...new Map([...byBlock, ...lifts].map((d) => [`${d.habit_id}|${d.ends_at}`, d])).values()];
 }
 
 export function gymMatches(workouts, blocks, habits, tz) {
