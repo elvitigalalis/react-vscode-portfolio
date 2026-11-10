@@ -618,8 +618,9 @@ function progressMark(day) {
     }
     ring.lastChild.style.strokeDashoffset = String(1 - p.done / p.total);
   }
-  // Each half stays whole ("1 of 4 done ·" / "1h40 focused") when a narrow column wraps it.
-  const halves = text.split(" · ").map((h, i, all) => el("span", { textContent: i < all.length - 1 ? `${h} · ` : h }));
+  // Each half stays whole ("1 of 4 done ·" / "1h40 focused"); the real space between them is
+  // where a narrow column wraps.
+  const halves = text.split(" · ").flatMap((h, i, all) => [i ? " " : null, el("span", { textContent: i < all.length - 1 ? `${h} ·` : h })]);
   return el("p", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
 }
 
