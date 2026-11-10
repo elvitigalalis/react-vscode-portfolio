@@ -44,3 +44,10 @@ test("another week, another version or junk gives nothing", () => {
 });
 
 test("the key is versioned", () => assert.match(SNAPSHOT_KEY, /\.v\d+$/));
+
+test("it is kept per user: another user's copy gives nothing", () => {
+  const text = pack(state(), "user-a");
+  assert.equal(unpack(text, "2026-11-02", "user-a").parked, 2);
+  assert.equal(unpack(text, "2026-11-02", "user-b"), null);
+  assert.equal(unpack(text, "2026-11-02", null), null);
+});

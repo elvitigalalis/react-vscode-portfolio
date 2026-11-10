@@ -14,11 +14,13 @@ const SLEEP_DAY = ["day", "sleep_score", "readiness", "sleep_s", "contributors"]
 
 const pick = (row, keys) => Object.fromEntries(keys.filter((k) => row?.[k] !== undefined).map((k) => [k, row[k]]));
 
-// The JSON to store for `state` (planner.mjs) as drawn for week `state.week`.
-export function pack(state, savedAt = Date.now()) {
+// The JSON to store for `state` (planner.mjs) as drawn for week `state.week`, for `user` (the
+// signed-in user's id, api.mjs userId; null when it can't be read).
+export function pack(state, user = null, savedAt = Date.now()) {
   return JSON.stringify({
     v: VERSION,
     savedAt,
+    user,
     week: state.week,
     tasks: [...state.tasks.values()],
     blocks: state.blocks,
@@ -33,12 +35,12 @@ export function pack(state, savedAt = Date.now()) {
   });
 }
 
-// The state to draw from stored `text` for `week`, or null when there is none, it is for another
-// week, or it was written by another version.
-export function unpack(text, week) {
+// The state to draw from stored `text` for `week` and `user`, or null when there is none, it is
+// for another week or another user, or it was written by another version.
+export function unpack(text, week, user = null) {
   let s;
   try { s = JSON.parse(text); } catch { return null; }
-  if (!s || s.v !== VERSION || s.week !== week || !Array.isArray(s.tasks)) return null;
+  if (!s || s.v !== VERSION || s.week !== week || (s.user ?? null) !== user || !Array.isArray(s.tasks)) return null;
   return {
     tasks: new Map(s.tasks.map((t) => [t.id, t])),
     blocks: s.blocks ?? [],

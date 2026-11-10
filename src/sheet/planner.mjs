@@ -926,12 +926,12 @@ let copy = false; // the week on screen is the stored copy, until the first load
 const blankWeek = () => ({ tasks: new Map(), blocks: [], days: {}, parked: 0, todos: [], horizon: [], states: new Map(),
   settings: null, calendars: [], sleep: [], sleepTimes: [], sleepDays: [], actuals: [], events: [], todoEvents: [] });
 
-// Draws this week's stored copy, if there is one, marked "Updating…". True when it did. A copy
+// Draws this week's stored copy for `user`, if there is one, marked "Updating…". True when it did. A copy
 // that can't be drawn (a shape this code doesn't expect) is thrown away and the page loads as if
 // there were none: the copy is only ever a placeholder.
-function showCopy() {
+function showCopy(user) {
   let got = null;
-  try { got = unpack(localStorage.getItem(SNAPSHOT_KEY), state.week); } catch {}
+  try { got = unpack(localStorage.getItem(SNAPSHOT_KEY), state.week, user); } catch {}
   if (!got) return false;
   try {
     Object.assign(state, got);
@@ -956,7 +956,7 @@ function showCopy() {
 // Stores the week as just loaded; only this week's, the one /plan opens on.
 function saveCopy() {
   if (state.week !== weekStart(now().day)) return;
-  try { localStorage.setItem(SNAPSHOT_KEY, pack(state)); } catch {}
+  try { localStorage.setItem(SNAPSHOT_KEY, pack(state, api.userId())); } catch {}
 }
 
 // --- Coming back (research U8/P1) ----------------------------------------------------------
@@ -1556,17 +1556,21 @@ export async function start(node, plugins = [], settings = settingsModule) {
   if (/[?&](mail|calendar)=/.test(location.search)) loadSettings().catch(failed);
   state.today = now().day;
   state.week = weekStart(state.today);
-  // The week as last seen, at once, while the first load runs (snapshot.mjs).
-  const early = showCopy();
+  // The week as last seen, at once, while the first load runs (snapshot.mjs): only for the user
+  // who stored it. When the token doesn't say who is signed in, not until settings has shown this
+  // account can open the planner.
+  const user = api.userId();
+  let early = user ? showCopy(user) : false;
   if (early) $("[data-tools]").hidden = false;
   try {
     const settings = await api.settings();
     if (!settings) {
-      if (early) { forgetEvents(); $("[data-week]").replaceChildren(); $("[data-someday]").replaceChildren(); }
+      clearPage();
       setStatus("This account cannot open the planner.");
       $("[data-tools]").hidden = false;
       return;
     }
+    if (!user && !early) early = showCopy(null);
     // The events' read starts with the tables', so it needs the calendars now.
     state.settings = settings;
     state.calendars = settings.calendars ?? [];
@@ -1579,6 +1583,16 @@ export async function start(node, plugins = [], settings = settingsModule) {
     console.error(e);
     setStatus("Couldn't load the latest. This is the week as you last saw it.");
   }
+}
+
+// An account that can't open the planner sees none of it: no stored week, nothing drawn.
+function clearPage() {
+  forgetEvents();
+  Object.assign(state, blankWeek());
+  copy = false;
+  for (const sel of ["[data-week]", "[data-someday]", "[data-log-list]", "[data-project-list]", "[data-habit-list]"]) root.querySelector(sel)?.replaceChildren();
+  for (const sel of ["[data-log]", "[data-someday-title]", "[data-projects]", "[data-habit-rates]", "[data-notice]"]) { const n = root.querySelector(sel); if (n) n.hidden = true; }
+  $("[data-week-title]").textContent = "Plan";
 }
 
 // A Telegram button's link opens its view (?open=plan|shutdown|needs, glance.mjs openView), once:

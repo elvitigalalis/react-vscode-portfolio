@@ -61,6 +61,16 @@ async function session() {
 }
 
 export const signedIn = async () => Boolean(await session());
+// Who is signed in: the access token's subject (a JWT's `sub`), or null when it can't be read.
+// The stored week (snapshot.mjs) is kept per user with it.
+export function userId() {
+  try {
+    const part = read()?.access_token?.split(".")[1];
+    if (!part) return null;
+    const sub = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(part.length / 4) * 4, "="))).sub;
+    return typeof sub === "string" && sub ? sub : null;
+  } catch { return null; }
+}
 // The signed-in user's Supabase access token, refreshed when stale; null when signed out. Pages
 // the browser opens itself (mail-connect/start) and the OAuth consent page use it.
 export const accessToken = async () => (await session())?.access_token ?? null;
