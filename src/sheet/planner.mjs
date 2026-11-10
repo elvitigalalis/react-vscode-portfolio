@@ -6,7 +6,7 @@ import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
   positionBetween, byPosition, carriedNote, laterThisWeek, moveChange, DROPPED, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
-  somedayLog,
+  somedayLog, lazy,
 } from "./logic.mjs";
 import { sourceOf, dueLevel, dayWindow, openView, followToday } from "./glance.mjs";
 import { hostToast } from "./toast-host.mjs";
@@ -981,8 +981,8 @@ const blankWeek = () => ({ tasks: new Map(), blocks: [], days: {}, parked: 0, to
 // there were none: the copy is only ever a placeholder.
 // snapshot.mjs loads only once signed in (signed out, /plan carries none of it); start() asks for
 // it first thing, so it is there by the time it is needed.
-let snapshotModule = null;
-const snapshot = () => (snapshotModule ??= import("./snapshot.mjs"));
+// A failed load (offline) is tried again next time (lazy).
+const snapshot = lazy(() => import("./snapshot.mjs"));
 
 async function showCopy(user, text = readCopy()) {
   let got = null;

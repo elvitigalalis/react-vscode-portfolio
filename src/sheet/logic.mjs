@@ -399,3 +399,10 @@ export function rightNow(row) {
   return row.public ? row.title : "Heads down";
 }
 
+
+// A load run once and kept (a module loaded on demand), unless it fails: then the next call
+// tries again rather than handing back the same failure for good.
+export function lazy(load) {
+  let p = null;
+  return () => (p ??= Promise.resolve().then(load).catch((e) => { p = null; throw e; }));
+}
