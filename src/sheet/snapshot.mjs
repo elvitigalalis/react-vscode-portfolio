@@ -1,16 +1,15 @@
 // The week as last loaded, kept in this browser so /plan draws at once on opening (docs/sheet.md,
 // "Opening"): the planner stores it after each load and draws it before the first read returns,
-// marked "Updating…", then loads as usual. Only what the week draws goes in: no Oura nights or
-// bedtime windows (raw sleep data), and only the settings the week reads, never keys or IDs it
-// doesn't draw. Calendar events have their own copy (planner.mjs, sheet.events.<week>). Pure.
+// marked "Updating…", then loads as usual. It is a short-lived placeholder, so it keeps less than
+// the week draws: no Oura data at all (nights, bedtime windows, sleep and readiness scores), no
+// calendar IDs, and only the settings the week reads, never keys or IDs. Calendar events have
+// their own copy (planner.mjs, sheet.events.<week>). Pure.
 
 export const SNAPSHOT_KEY = "sheet.snapshot.v1";
 const VERSION = 1;
 
-// The settings the week reads (capacity, wind-down, which calendars, Telegram's switch).
-const SETTINGS = ["workload_cap_min", "calendars", "gcal_calendar_id", "wind_down_on", "bedtime_target", "bedtime_ease", "bedtime_set_on", "nudges_on", "time_zone"];
-// What an Oura chip and today's tips read from a sleep_days row.
-const SLEEP_DAY = ["day", "sleep_score", "readiness", "sleep_s", "contributors"];
+// The settings the week reads (capacity, wind-down, Telegram's switch), less the calendar IDs.
+const SETTINGS = ["workload_cap_min", "wind_down_on", "bedtime_target", "bedtime_ease", "bedtime_set_on", "nudges_on", "time_zone"];
 
 const pick = (row, keys) => Object.fromEntries(keys.filter((k) => row?.[k] !== undefined).map((k) => [k, row[k]]));
 
@@ -31,7 +30,6 @@ export function pack(state, user = null, savedAt = Date.now()) {
     states: [...state.states.values()],
     actuals: state.actuals ?? [],
     settings: state.settings ? pick(state.settings, SETTINGS) : null,
-    sleepDays: state.sleepDays.map((r) => pick(r, SLEEP_DAY)),
   });
 }
 
@@ -51,7 +49,5 @@ export function unpack(text, week, user = null) {
     states: new Map((s.states ?? []).map((h) => [h.task_id, h])),
     actuals: s.actuals ?? [], // today's focus minutes (day, minutes); the progress line keeps today's
     settings: s.settings ?? null,
-    calendars: s.settings?.calendars ?? [],
-    sleepDays: s.sleepDays ?? [],
   };
 }
