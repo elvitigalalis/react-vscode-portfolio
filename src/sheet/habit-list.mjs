@@ -22,6 +22,14 @@ let seen = null;      // the state.tasks they were read for (one read per load, 
 // lays these back over what it read; only the newest refresh's answer is used.
 const pending = new Map();
 let reads = 0;
+// Saves run one after another per "id|day", so a quick double tap lands in the order tapped.
+const queues = new Map();
+function queued(key, write) {
+  const run = (queues.get(key) ?? Promise.resolve()).catch(() => {}).then(write);
+  queues.set(key, run);
+  run.finally(() => { if (queues.get(key) === run) queues.delete(key); }).catch(() => {});
+  return run;
+}
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
 const WORDS = { done: "done", missed: "not done", due: "today, open", off: "off" };
 
@@ -75,7 +83,7 @@ async function toggle(e) {
   draw(id);
   root.querySelector(`.sheet-habit-check[data-id="${id}"]`)?.focus();
   try {
-    await (on ? api.markHabitDone(id, day) : api.unmarkHabitDone(id, day));
+    await queued(key, () => (on ? api.markHabitDone(id, day) : api.unmarkHabitDone(id, day)));
     if (pending.get(key) === on) pending.delete(key);
   } catch (err) {
     // Back to what it was before this tap, unless a newer tap has already set it.
