@@ -144,8 +144,8 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
   Reading Day) is not work.
 - **Due this week:** its `due`, else its `day`, falls in the week on screen. In the current week,
   work overdue by up to 14 days counts too; older overdue work is taken as let go.
-- **Hours due:** each item's `est_min`, or a guess from its title when it has none: project, paper,
-  essay or report 4h; exam or midterm 3h; homework, problem set, assignment or lab 2h; quiz 1h;
+- **Hours due:** each item's `est_min`, or a guess from its title when it has none: lab (a lab report
+  too) 2h; project, paper, essay or report 4h; exam or midterm 3h; homework, problem set or assignment 2h; quiz 1h;
   discussion, post, reading or survey 30m; anything else 1h. A guess shows as "~2h".
 - **Free hours:** for each day from today on, the calendar's free time from the day's start (now, on
   today) to its shutdown line, less the fixed-time tasks on it (`at_time`, `est_min` long, 30m

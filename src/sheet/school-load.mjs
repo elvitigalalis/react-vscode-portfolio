@@ -40,11 +40,13 @@ export const isSchoolWork = (t, codes) => !t.at_time && (t.source === "brightspa
 // The one-tap choices for an item with no estimate, in minutes (30m, 1h, 2h, 4h, 8h).
 export const QUICK_EST = [30, 60, 120, 240, 480];
 
-// A guess by kind of item, from its title, for one with no est_min. First match wins.
+// A guess by kind of item, from its title, for one with no est_min. First match wins, so a lab
+// comes before reports and projects: "Lab report" is a lab's write-up, 2h, not a 4h report.
 const GUESSES = [
+  [/\blabs?\b/i, 120],
   [/\b(final\s+(project|paper|report)|project|paper|essay|report|presentation)\b/i, 240],
   [/\b(midterm|exam|final|test)s?\b/i, 180],
-  [/\b(homework|hw|problem\s+set|pset|assignment|lab|programming|program)\b/i, 120],
+  [/\b(homework|hw|problem\s+set|pset|assignment|programming|program)\b/i, 120],
   [/\b(quiz|quizzes)\b/i, 60],
   [/\b(discussion|post|reply|reading|read|survey|poll|attendance|check-?in|reflection)\b/i, 30],
 ];

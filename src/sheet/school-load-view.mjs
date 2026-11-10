@@ -134,8 +134,12 @@ export function setupSchoolLoad(root) {
     box.hidden = false;
   }
   // A fault here must not stop the hooks after it or the week: the bar hides instead.
-  renderHooks.push(() => {
-    try { draw(); } catch (err) { console.error(err); box.hidden = true; }
+  const safeDraw = () => { try { draw(); } catch (err) { console.error(err); box.hidden = true; } };
+  renderHooks.push(safeDraw);
+  // "Now" moves while the tab is hidden: today's free time runs from now, and the day may have
+  // turned. Coming back redraws the bar (only the bar: the week has its own refresh, refreshStale).
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.settings) safeDraw();
   });
   // The hook may go on after the first draw (this module loads beside the first load).
   if (state.settings) render();

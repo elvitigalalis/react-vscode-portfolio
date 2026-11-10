@@ -29,6 +29,8 @@ test("a missing estimate falls back to a guess by kind", () => {
   assert.equal(guessMinutes(T("Midterm 2")), 180);
   assert.equal(guessMinutes(T("Homework 5")), 120);
   assert.equal(guessMinutes(T("Lab 7")), 120);
+  assert.equal(guessMinutes(T("Lab report 4")), 120);
+  assert.equal(guessMinutes(T("Post-lab report")), 120);
   assert.equal(guessMinutes(T("Quiz 6")), 60);
   assert.equal(guessMinutes(T("Discussion week 10")), 30);
   assert.equal(guessMinutes(T("Unit 4 thing")), DEFAULT_SCHOOL_EST);
