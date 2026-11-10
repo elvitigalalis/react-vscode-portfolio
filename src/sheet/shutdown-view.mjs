@@ -212,7 +212,7 @@ function restToTomorrow() {
   dialog.querySelector('[data-key="next"]')?.focus();
 }
 
-// Each decision saved, all at once, except a plain Tomorrow, which shut_down's roll makes in the
+// Each decision saved, side by side, except a plain Tomorrow, which shut_down's roll makes in the
 // same request as the day (rollsOnServer). Moves land at the end of where they go. Returns the
 // tasks left for the roll.
 async function saveDecisions() {
@@ -232,7 +232,9 @@ async function saveDecisions() {
   };
   const open = openTasks();
   const rolled = open.filter((t) => rollsOnServer(t, decisions.get(t.id)));
-  await Promise.all(open.filter((t) => !rolled.includes(t)).map(async (t) => {
+  // Every write runs to its end, so one failure doesn't leave the others mid-flight; then any
+  // failure stops Finish before the day is shut down, and a second Finish retries what's left.
+  const results = await Promise.allSettled(open.filter((t) => !rolled.includes(t)).map(async (t) => {
     const kind = decisions.get(t.id);
     // A PATCH that matched no row (the task gone, or row-level security) saved nothing: a failure.
     const gone = () => new Error(`"${t.title}" wasn't found to save`);
@@ -248,6 +250,13 @@ async function saveDecisions() {
     if (!saved) throw gone();
     state.tasks.set(t.id, saved);
   }));
+  const refused = results.filter((x) => x.status === "rejected");
+  if (refused.length) {
+    for (const f of refused) console.error(f.reason);
+    const err = new Error(`${refused.length} of ${results.length} changes didn't save: ${refused[0].reason?.message ?? refused[0].reason}`);
+    err.cause = refused[0].reason;
+    throw err;
+  }
   return rolled.map((t) => ({ t, change: decisionChange(t, "tomorrow", today, end({ day: tomorrow })) }));
 }
 
