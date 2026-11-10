@@ -4,6 +4,9 @@
 // the session; /plan shows Resume. Stop ends it without finishing the task: it asks where he left
 // off, credits the minutes to the task, and the next Start shows both (focus-notes.mjs).
 // No sound and no animation beyond the bar's one-second step, which reduced motion turns off.
+// Its styles come with it, as text added on load (as lookback-view.mjs does), so /plan's first
+// load carries no rules it doesn't use (Lighthouse's unused-css-rules gate).
+import css from "../styles/sheet-focus-view.css?inline";
 import { SHEET } from "../site.mjs";
 import { focusClock, focusActual, extendFocus, startSession, stuckMessage, EXTEND_MIN } from "./focus.mjs";
 import { stopRow, doneRow, sessionMinutes, creditMinutes, NOTE_MAX } from "./focus-notes.mjs";
@@ -13,6 +16,7 @@ import { el, state, render, checkOff } from "./planner.mjs";
 let io, dialog, parts, timer;
 
 export function setupFocusView(deps) {
+  document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
   io = deps;
   const button = (text, cls, onClick) => {
     const b = el("button", { type: "button", className: `sheet-btn ${cls}`.trim(), textContent: text });

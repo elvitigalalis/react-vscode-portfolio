@@ -131,7 +131,8 @@ on /plan until they land. Each write is safe to repeat.
   `test/focus-notes.test.mjs`.
 - `src/sheet/estimate-learning.mjs`: Plan today's estimates-against-actuals line, tested in
   `test/estimate-learning.test.mjs`.
-- `src/styles/sheet-focus.css`.
+- `src/styles/sheet-focus.css`: the Start button and credit line, on /plan from the first load;
+  `src/styles/sheet-focus-view.css`: the view, added as text when `focus-view.mjs` loads.
 
 ## Schema
 
