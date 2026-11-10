@@ -438,7 +438,7 @@ export const recordFocus = (row) => rest("rpc/record_focus", { method: "POST", b
 export const logFocus = (row) => rest("focus_log?on_conflict=id", { method: "POST", body: row, prefer: "resolution=ignore-duplicates,return=minimal" });
 // Its rows from `since` on, newest first and capped below Supabase's 1000-row response limit
 // (progressByTask sorts them). Until the table exists PostgREST answers 404: none.
-export const listFocusLog = (since) => rest(`focus_log?select=id,task_id,at,minutes,note,done,closes&at=gte.${since}&order=at.desc&limit=1000`)
+export const listFocusLog = (since) => rest(`focus_log?select=id,task_id,at,day,minutes,note,done,closes&at=gte.${since}&order=at.desc&limit=1000`)
   .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
 
 // --- Projects (docs/sheet-projects.md) -------------------------------------------------------
