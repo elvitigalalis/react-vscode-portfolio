@@ -31,6 +31,17 @@ test("dismiss: hides it for that day only; storage errors read as not dismissed"
   assert.equal(dismissedOn("2026-11-09", broken), false);
 });
 
+test("dismiss: a blocked localStorage (its getter throws) reads as not dismissed", () => {
+  const had = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("SecurityError"); } });
+  try {
+    assert.doesNotThrow(() => dismiss("2026-11-09"));
+    assert.equal(dismissedOn("2026-11-09"), false);
+  } finally {
+    if (had) Object.defineProperty(globalThis, "localStorage", had); else delete globalThis.localStorage;
+  }
+});
+
 // Every module reachable by relative static or dynamic import from `entries`.
 const root = resolve(import.meta.dirname, "..");
 function reach(entries) {

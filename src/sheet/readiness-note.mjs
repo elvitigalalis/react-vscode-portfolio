@@ -22,8 +22,9 @@ export const readinessLine = (r) => `Readiness ${r} today · consider a lighter 
 
 // Dismissing it hides it for the rest of that day, in this browser.
 const KEY = "sheet.readiness-dismissed";
-export const dismissedOn = (day, store = globalThis.localStorage) => { try { return store.getItem(KEY) === day; } catch { return false; } };
-export const dismiss = (day, store = globalThis.localStorage) => { try { store.setItem(KEY, day); } catch {} };
+// Reading localStorage itself throws when storage is blocked, so it is read inside the try.
+export const dismissedOn = (day, store) => { try { return (store ?? globalThis.localStorage).getItem(KEY) === day; } catch { return false; } };
+export const dismiss = (day, store) => { try { (store ?? globalThis.localStorage).setItem(KEY, day); } catch {} };
 
 let open = false;
 let gone = null; // the day dismissed, if storage is unavailable
