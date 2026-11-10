@@ -29,7 +29,9 @@
 }
 /* The countdown sits inside a ring that empties clockwise to 12 o'clock as the block runs out
    (Tiimo's and Time Timer's shrinking disc: time made visible). */
-.sheet-focus-dial { position: relative; display: grid; place-items: center; width: min(72vw, 18rem); aspect-ratio: 1; margin-top: 0.5rem; }
+.sheet-focus-dial { position: relative; display: grid; place-items: center; align-content: center; gap: 0.35rem; width: min(72vw, 18rem); aspect-ratio: 1; margin-top: 0.5rem; }
+.sheet-focus-leftword { position: relative; margin: 0; color: var(--muted); font-size: 0.875rem; }
+.sheet-focus-sub:empty { display: none; }
 .sheet-focus-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .sheet-focus-ring circle { fill: none; stroke-width: 3; }
 .sheet-focus-track { stroke: var(--line); }

@@ -79,6 +79,8 @@ export function setupFocusView(deps) {
     first: el("p", { className: "sheet-focus-first" }),
     resume: el("p", { className: "sheet-focus-resume" }),
     left: el("p", { className: "sheet-focus-left", role: "timer" }),
+    // Under the number, inside the ring: "left", or "past the end" once over.
+    leftWord: el("p", { className: "sheet-focus-leftword", ariaHidden: "true" }),
     sub: el("p", { className: "sheet-focus-sub" }),
     ring: ring(),
     note: el("p", { className: "sheet-focus-note", role: "status" }),
@@ -107,7 +109,7 @@ export function setupFocusView(deps) {
     el("div", { className: "sheet-focus-body" },
       el("p", { className: "sheet-focus-kicker", textContent: "Focus" }),
       parts.title, parts.first, parts.resume,
-      el("div", { className: "sheet-focus-dial" }, parts.ring.svg, parts.left),
+      el("div", { className: "sheet-focus-dial" }, parts.ring.svg, parts.left, parts.leftWord),
       parts.sub,
       parts.actions, parts.stop,
       parts.note));
@@ -161,9 +163,13 @@ function tick() {
   const c = focusClock(s, new Date());
   parts.left.textContent = c.left;
   parts.left.setAttribute("aria-label", `${c.over ? `${c.left.slice(1)} past the block's end` : `${c.left} left`}`);
+  parts.leftWord.textContent = c.over ? "past the end" : "left";
+  // "12:39 in" from the first whole minute (before it, "0:00 in" says nothing), and the task's
+  // total with earlier credit.
+  const gone = Date.now() - s.started_at;
   const prior = io.progressFor(s.task_id)?.minutes;
-  const total = prior ? ` · ${formatMinutes(prior + Math.floor((Date.now() - s.started_at) / 60_000))} on this task` : "";
-  parts.sub.textContent = `${c.over ? "past the block's end" : "left"} · ${c.elapsed} in${total}`;
+  parts.sub.textContent = [gone >= 60_000 ? `${c.elapsed} in` : null,
+    prior ? `${formatMinutes(prior + Math.floor(gone / 60_000))} on this task` : null].filter(Boolean).join(" · ");
   parts.ring.arc.style.strokeDashoffset = c.share.toFixed(4);
   parts.ring.svg.classList.toggle("is-over", c.over);
   const now = Date.now();
