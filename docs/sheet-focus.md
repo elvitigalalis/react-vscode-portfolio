@@ -24,7 +24,9 @@ end with the time since Start, and four actions. Terms are as in [GLOSSARY.md](.
 - **Screen stays on** while the view shows (wake.mjs), so the ring stays in sight (Tiimo users'
   complaint is a screen that dims mid-timer): the Screen Wake Lock API where the browser has it,
   else, or when it is refused, a one-second black video playing muted on a loop. It lets go when
-  the view closes and asks again each time the page comes back into view.
+  the view closes, or 10 minutes past the block's end (a view left open doesn't keep the phone
+  awake for hours; +15 min asks again), and asks again each time the page comes back into view
+  before then.
 - **Done** records the minutes from Start to Done into `actuals` (rounded, 1–960; under a minute
   records nothing), then marks the task done exactly as the week's ✓ does (`completeTask`: the
   block shrinks to now, or goes if it hadn't started; Undo reopens the task).

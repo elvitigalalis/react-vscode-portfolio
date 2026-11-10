@@ -5,7 +5,7 @@
 // without finishing the task: it asks where he left off, credits the minutes to the task, and the
 // next Start shows both (focus-notes.mjs).
 // A soft chime at halfway and with 2 minutes left, when Completion sound is on (Settings); the
-// screen stays on while the view shows (wake.mjs). No animation beyond the ring's one-second
+// screen stays on while the view shows, until 10 minutes past the block's end (wake.mjs). No animation beyond the ring's one-second
 // step, which reduced motion turns off.
 // Its styles come with it, as text added on load (as lookback-view.mjs does), so /plan's first
 // load carries no rules it doesn't use (Lighthouse's unused-css-rules gate).
@@ -21,6 +21,8 @@ import * as wake from "./wake.mjs";
 let io, dialog, parts, timer;
 // When the clock last ticked (epoch ms), for the chimes.
 let ticked = 0;
+// A view left open long past the block's end lets the screen sleep again.
+const WAKE_PAST_END = 10 * 60_000;
 
 // The ring: a track and, over it, the time left as one stroke from 12 o'clock (pathLength 1),
 // which shortens each second. Decoration: the countdown's text carries the time.
@@ -145,8 +147,8 @@ export function open(blockId) {
   parts.note.textContent = "";
   parts.stuck.disabled = false;
   wakeAudio();
-  wake.keep();
   ticked = Date.now();
+  if (ticked < s.ends_at + WAKE_PAST_END) wake.keep();
   tick();
   clearInterval(timer);
   timer = setInterval(tick, 1000);
@@ -166,6 +168,7 @@ function tick() {
   parts.ring.svg.classList.toggle("is-over", c.over);
   const now = Date.now();
   if (chimesDue(s, ticked, now).length) chime();
+  if (now >= s.ends_at + WAKE_PAST_END) wake.release();
   ticked = now;
 }
 
@@ -205,6 +208,7 @@ function extend() {
   const out = extendFocus(s, b, [...state.blocks, ...busy], SHEET.timeZone);
   if (out.why) { parts.note.textContent = `${out.why}.`; return; }
   io.setSession(out.session);
+  if (Date.now() < out.session.ends_at + WAKE_PAST_END) wake.keep();
   if (out.ends_at) { b.ends_at = out.ends_at; io.queue({ op: "extend", block: b.id, ends_at: out.ends_at }); }
   parts.note.textContent = `+${EXTEND_MIN} min.`;
   tick();

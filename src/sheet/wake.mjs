@@ -35,6 +35,7 @@ export async function keep() {
   if (want) await viaVideo();
 }
 
+// Lets the screen sleep again: on leaving the view, or 10 minutes past the block's end.
 export function release() {
   want = false;
   lock?.release().catch(() => {});
