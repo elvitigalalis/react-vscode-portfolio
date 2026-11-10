@@ -66,7 +66,8 @@ const calmStyles = () => (styling ??= import("./calm-styles.mjs").catch(console.
 export function overNote(d, open, toggle, where) {
   const shut = Date.parse(zonedIso(d, shutdownAt(d), SHEET.timeZone));
   if (state.days[d]?.shutdown || Date.now() >= shut) return null;
-  const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now(), shut), dayCapacity(d).free);
+  const { free, capacity } = dayCapacity(d);
+  const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now(), shut), capacity);
   if (!o) return null;
   // Its styles load the first time it shows (calm-styles.mjs); it draws once they are in, so it
   // never shows unstyled.
@@ -75,8 +76,9 @@ export function overNote(d, open, toggle, where) {
   const link = el("button", { type: "button", className: "sheet-link", textContent: `Move some to ${next}` });
   link.setAttribute("aria-expanded", String(open));
   link.onclick = () => { toggle(); refocus(where); };
-  const free = o.free ? `about ${formatMinutes(o.free)} free` : "no free time left before shutdown";
-  const line = el("p", { className: "sheet-over" }, `Planned ${formatMinutes(o.planned)} · ${free} · `, link);
+  // The room is the free time, or the workload cap when that is less ("room for about 8h").
+  const room = !o.room ? "no free time left before shutdown" : capacity < free ? `room for about ${formatMinutes(o.room)}` : `about ${formatMinutes(o.room)} free`;
+  const line = el("p", { className: "sheet-over" }, `Planned ${formatMinutes(o.planned)} · ${room} · `, link);
   const out = open ? el("div", { className: "sheet-over-wrap" }, line) : line;
   out.dataset.over = where;
   if (!open) return out;

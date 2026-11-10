@@ -41,9 +41,14 @@ export function plannedLeft(tasks, blocks, nowMs, endMs = Infinity) {
     s + Math.max(0, Math.round((Math.min(endMs, Date.parse(b.ends_at)) - Math.max(nowMs, Date.parse(b.starts_at))) / 60_000)), est);
 }
 
-// The note's numbers when `planned` is more than the `free` minutes left before shutdown, else
-// null. Free time is rounded to a quarter hour: the note says "about".
-export const overCommit = (planned, free) => (planned > free ? { planned, free: Math.round(free / 15) * 15 } : null);
+// The note's numbers when `planned` is more than `room`, the day's capacity (planner.mjs
+// dayCapacity: the free time left before shutdown, held to the workload cap, as Plan today's
+// header reads it), else null. Room is rounded to a quarter hour first, since the note says
+// "about", so it never reads "Planned 6h · about 6h free".
+export function overCommit(planned, room) {
+  const about = Math.round(room / 15) * 15;
+  return planned > about ? { planned, room: about } : null;
+}
 
 // A day's strip: busy events and blocks as percentages of the window `from`–`to` (minutes past
 // midnight), rounded to 0.1 and sorted by start. Parts outside the window are clipped and

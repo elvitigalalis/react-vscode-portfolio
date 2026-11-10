@@ -203,9 +203,11 @@ Under 48 rem, one day shows at a time (above). On top of that:
 ## Over-commit note (Sunsama, Akiflow)
 
 - When today's planned minutes (undone estimates, plus what is left of blocks no estimate
-  counts, such as habit blocks) are more than the free time left before shutdown, today shows
-  one calm line under its strip in muted ink: "Planned 9h · about 6h free · Move some to
-  tomorrow". Free time is rounded to a quarter hour.
+  counts, such as habit blocks) are more than the day's capacity (the free time left before
+  shutdown, held to the workload cap: the same number as Plan today's header), today shows one
+  calm line under its strip in muted ink: "Planned 9h · about 6h free · Move some to tomorrow",
+  or "room for about 8h" when the cap is the smaller. The capacity is rounded to a quarter hour
+  before comparing, so the line never reads "Planned 6h · about 6h free".
 - "Move some to tomorrow" opens a list of today's undone untimed tasks under the line (no
   fixed time, no block); a tap moves one to tomorrow, with the usual Undo. The line goes away
   once the plan fits: the Undo toast then reads "Moved. Plan fits now." and takes focus.

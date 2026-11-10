@@ -126,9 +126,13 @@ test("plannedLeft: undone estimates plus the rest of blocks no estimate covers",
   assert.equal(plannedLeft([], [], now), 0);
 });
 
-test("overCommit: only when planned is past the free time, which reads to a quarter hour", () => {
+test("overCommit: only when planned is past the room, as rounded to a quarter hour", () => {
   assert.equal(overCommit(300, 360), null);
   assert.equal(overCommit(360, 360), null);
-  assert.deepEqual(overCommit(540, 367), { planned: 540, free: 360 });
-  assert.deepEqual(overCommit(30, 0), { planned: 30, free: 0 });
+  assert.deepEqual(overCommit(540, 367), { planned: 540, room: 360 });
+  assert.deepEqual(overCommit(30, 0), { planned: 30, room: 0 });
+  // 6h planned against 6h05 of room: the note would read "about 6h", so it doesn't show...
+  assert.equal(overCommit(360, 365), null);
+  // ...and 6h05 against 5h55 reads "about 6h" too, but planned is past it.
+  assert.deepEqual(overCommit(365, 355), { planned: 365, room: 360 });
 });
