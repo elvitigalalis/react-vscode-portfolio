@@ -208,7 +208,7 @@ Under 48 rem, one day shows at a time (above). On top of that:
   tomorrow". Free time is rounded to a quarter hour.
 - "Move some to tomorrow" opens a list of today's undone untimed tasks under the line (no
   fixed time, no block); a tap moves one to tomorrow, with the usual Undo. The line goes away
-  once the plan fits.
+  once the plan fits: the Undo toast then reads "Moved. Plan fits now." and takes focus.
 - It warns and never blocks: nothing is moved for him, and adding more still works.
 - Past the day's shutdown, or once the day is shut down, it doesn't show. Blocks count only up
   to shutdown.

@@ -44,9 +44,21 @@ function loadBar(d) {
 // never blocks. Past the day's shutdown, or once the day is shut down, there is nothing to say. `toggle` flips `open`; `where` names the note ("week", "dialog") so focus can
 // find it again after a redraw. Null when the day isn't over.
 // The toggle keeps focus, as a disclosure button does; after a move, the next task in the list.
+// A move that makes the plan fit takes the note away: the Undo toast says "Plan fits now." and
+// takes focus, else (the move failed) the day's heading does.
 const refocus = (where, pick = false) => {
   const box = document.querySelector(`[data-over="${where}"]`);
-  ((pick && box?.querySelector(".sheet-over-pick button")) || box?.querySelector(".sheet-link"))?.focus();
+  if (box) return ((pick && box.querySelector(".sheet-over-pick button")) || box.querySelector(".sheet-link"))?.focus();
+  if (!pick) return;
+  const toast = document.querySelector("[data-toast]");
+  if (toast && !toast.hidden) {
+    const text = toast.querySelector("[data-toast-text]");
+    text.textContent = `${text.textContent} Plan fits now.`;
+    return toast.querySelector('[data-act="undo"]')?.focus();
+  }
+  const head = document.querySelector(where === "dialog" ? "#sheet-plan-title" : ".sheet-day.is-today .sheet-head");
+  head?.setAttribute("tabindex", "-1");
+  head?.focus();
 };
 export function overNote(d, open, toggle, where) {
   const shut = Date.parse(zonedIso(d, shutdownAt(d), SHEET.timeZone));
