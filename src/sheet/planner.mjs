@@ -187,7 +187,7 @@ async function undo() {
 // Saving in the background (optimistic.mjs): a task's or an event to-do's change shows at once and
 // saves after the row's earlier saves. One that fails puts the row back, says "Not saved" on it
 // (`errors`, until its next change) and redraws; the caller's catch names it in the status line.
-const taskBook = ledger({ get: (id) => state.tasks.get(id), set: (id, row) => state.tasks.set(id, row) });
+const taskBook = ledger({ get: (id) => state.tasks.get(id), set: (id, row) => state.tasks.set(id, row), drop: (id) => state.tasks.delete(id) });
 const todoBook = ledger({
   get: (key) => state.todos.find((t) => t.cal_event_key === key),
   set: (key, row) => { const i = state.todos.findIndex((t) => t.cal_event_key === key); if (i < 0) state.todos.push(row); else state.todos[i] = row; },
@@ -890,12 +890,14 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
     state.sleepTimes = sleepTimes;
     state.sleepDays = sleepDays;
     state.todos = todos;
-    todoBook.keep(since[1]);
+    // What the page shows isn't just this read when saves or deletes were laid over it: the next
+    // quiet reload compares against nothing, so it redraws.
+    if (todoBook.keep(since[1])) lastRead = null;
     state.settings = settings;
     state.sleep = sleep;
     state.calendars = settings?.calendars ?? [];
     state.tasks = new Map(tasks.map((t) => [t.id, t]));
-    taskBook.keep(since[0]);
+    if (taskBook.keep(since[0])) lastRead = null;
     state.blocks = blocks;
     state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
     state.parked = parked.length;

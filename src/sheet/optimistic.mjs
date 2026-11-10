@@ -5,11 +5,13 @@
 // its answer the confirmed copy, and one that fails drops only its own change, so the row falls
 // back to what the server holds. A load whose read may have missed a save (it read while the save
 // was out) keeps what the saves wrote (keep). A row deleted here is forgotten (forget): a save of it
-// still out lands without putting it back. Pure: the rows live wherever get and set put them.
+// still out lands without putting it back, and a load that read before the delete leaves it out.
+// Pure: the rows live wherever get, set and drop put them.
 
-export function ledger({ get, set }) {
+export function ledger({ get, set, drop = () => {} }) {
   const open = new Map();  // key -> { base, ops, tail }: the confirmed copy, changes out, save queue
   const wrote = new Map(); // key -> { at, row }: copies a save confirmed, by the clock then
+  const gone = new Map();  // key -> at: rows deleted here, by the clock then
   let clock = 0;
   const shown = (e) => e.ops.reduce((row, op) => ({ ...row, ...op.change }), e.base);
 
@@ -49,17 +51,25 @@ export function ledger({ get, set }) {
     now: () => clock,
     // After a load put its rows in: rows a save confirmed after `since` (the load's read may
     // predate it) show what the save wrote, and rows with changes out show them again, on top of
-    // the row just read unless a save confirmed a newer copy.
+    // the row just read unless a save confirmed a newer copy; rows deleted after `since` go.
+    // True when it changed a row the load read (so the read isn't the page's state).
     keep(since) {
+      let changed = false;
       for (const [key, e] of open) {
         const fresh = get(key);
         if (fresh && !(wrote.get(key)?.at > since)) e.base = fresh;
         set(key, shown(e));
+        changed = true;
       }
       for (const [key, w] of wrote) {
         if (w.at <= since) wrote.delete(key);
-        else if (!open.has(key)) set(key, w.row);
+        else if (!open.has(key)) { set(key, w.row); changed = true; }
       }
+      for (const [key, at] of gone) {
+        if (at <= since) gone.delete(key);
+        else if (get(key)) { drop(key); changed = true; }
+      }
+      return changed;
     },
     // The row was deleted: saves of it still out change nothing when they land.
     forget(key) {
@@ -67,6 +77,7 @@ export function ledger({ get, set }) {
       if (e) e.gone = true;
       open.delete(key);
       wrote.delete(key);
+      gone.set(key, ++clock);
     },
     pending: (key) => open.has(key),
   };

@@ -7,7 +7,7 @@ import { ledger } from "../src/sheet/optimistic.mjs";
 // A table of rows and a ledger over it; `rows` can be swapped wholesale, as a load does.
 function setup(seed = { t1: { id: "t1", done: false, day: "2026-11-03" } }) {
   const box = { rows: new Map(Object.entries(seed)) };
-  const l = ledger({ get: (k) => box.rows.get(k), set: (k, r) => box.rows.set(k, r) });
+  const l = ledger({ get: (k) => box.rows.get(k), set: (k, r) => box.rows.set(k, r), drop: (k) => box.rows.delete(k) });
   return { box, l };
 }
 // A save the test settles by hand.
@@ -159,4 +159,19 @@ test("nor when it fails", async () => {
   s.no(new Error("gone"));
   await assert.rejects(done);
   assert.equal(box.rows.has("t1"), false);
+});
+
+test("a load that read before a delete leaves the row out, and says it changed the read", async () => {
+  const { box, l } = setup();
+  const since = l.now();
+  await l.write("t1", { done: true }, async () => ({ id: "t1", done: true, day: "2026-11-03" }));
+  l.forget("t1");
+  box.rows.delete("t1");
+  box.rows = new Map([["t1", { id: "t1", done: false, day: "2026-11-03" }]]); // read before the delete
+  assert.equal(l.keep(since), true);
+  assert.equal(box.rows.has("t1"), false);
+  // The next load reads after it: nothing to change.
+  const next = l.now();
+  box.rows = new Map();
+  assert.equal(l.keep(next), false);
 });
