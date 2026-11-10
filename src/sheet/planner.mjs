@@ -591,6 +591,7 @@ function dayColumn(day, rows, items) {
       el("p", { className: "sheet-stamps", textContent: marks }),
       day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
       day === state.today ? progressMark(day) : null,
+      day === state.focus ? weekDoneMark() : null,
       day === state.today ? windDownMark() : null,
       day > state.today ? horizonDay(day) : null),
     ul);
@@ -624,6 +625,16 @@ function progressMark(day) {
   // where a narrow column wraps.
   const halves = text.split(" · ").flatMap((h, i, all) => [i ? " " : null, el("span", { textContent: i < all.length - 1 ? `${h} ·` : h })]);
   return el("p", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
+}
+
+// Phones hide the week title (the h1, still read out), so the shown day says the week's count
+// there: "14 done this week", nothing at 0. CSS shows it only on phones (plan-phone.css).
+function weekDoneMark() {
+  const n = weekDone(state.tasks.values(), weekDays(state.week), SHEET.timeZone);
+  if (!n) return null;
+  const p = el("p", { className: "sheet-weekdone", textContent: `${n} done this week` });
+  p.setAttribute("aria-hidden", "true");
+  return p;
 }
 
 // The ring closes from where it was before the redraw (render() replaces it), so a ✓ shows as

@@ -85,7 +85,8 @@ tasks jumping days across time zones.
   after a small accent ring that closes as today's tasks get done; the focused half (today's actuals,
   from focus Done and Telegram's Finished) shows only when there is some, and an empty day shows
   nothing. No head start is faked. The week title adds the tasks finished that week by done_at
-  ("Week of Nov 9 · 14 done", nothing at 0), Someday ones included.
+  ("Week of Nov 9 · 14 done", nothing at 0), Someday ones included. Phones hide the title, so
+  there the shown day says "14 done this week" under its stamps.
 - **Also did…** under today's "+ Add a task": typing an unplanned win and Enter logs it as a task
   already done today, so it counts. Undo removes it.
 - **No badges.** Reminders come from Telegram ([sheet-nudges.md](sheet-nudges.md)). The only sound
