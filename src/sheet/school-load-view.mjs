@@ -81,7 +81,7 @@ export function setupSchoolLoad(root) {
     (next ? box.querySelector(`[data-id="${CSS.escape(next)}"] .sheet-school-pick`) : box.querySelector("summary"))?.focus();
   });
 
-  renderHooks.push(() => {
+  function draw() {
     const local = localNow(new Date(), SHEET.timeZone);
     const days = weekDays(state.week);
     const tasks = [...state.tasks.values()];
@@ -108,6 +108,10 @@ export function setupSchoolLoad(root) {
     box.replaceChildren(summary, el("p", { className: "sheet-school-note", textContent: note }),
       el("ul", { className: "sheet-school-list" }, ...w.items.map(itemRow)));
     box.hidden = false;
+  }
+  // A fault here must not stop the hooks after it or the week: the bar hides instead.
+  renderHooks.push(() => {
+    try { draw(); } catch (err) { console.error(err); box.hidden = true; }
   });
   // The hook may go on after the first draw (this module loads beside the first load).
   if (state.settings) render();

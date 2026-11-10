@@ -466,7 +466,7 @@ import "../../styles/plan-settings.css";
   // Habits (docs/sheet-habits.md) load after first paint; the row draws once they arrive.
   const setupHabits = (root) => import("../../sheet/habit-list.mjs").then((m) => m.setupHabits(root));
   // School load (docs/sheet-glance.md) loads after sign-in, off the first load.
-  const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root), console.error);
+  const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root)).catch(console.error);
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
