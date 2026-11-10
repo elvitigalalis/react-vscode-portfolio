@@ -98,7 +98,8 @@ tasks jumping days across time zones.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
 - The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
-  fades, the check-off below and the progress ring closing a step (400 ms), all off under `prefers-reduced-motion`.
+  fades, the check-off below, the progress ring closing a step (400 ms) and Shutdown's "Day closed"
+  rising in (320 ms, 6 px), all off under `prefers-reduced-motion`.
 
 ### Saving in the background
 
@@ -170,7 +171,7 @@ Checking something off should feel good every time without getting old (src/shee
 - **Big moments:** a Brightspace task (an assignment), or the last open task of today. Confetti for
   1.2 s on one canvas, loaded only then, and the Undo toast reads "Assignment done." or "Day
   cleared." before "Done: …". Clearing the day also pops the header's ✓.
-- **Shutdown complete** and **Approve / Approve all** in Plan today get the small burst.
+- Shutdown's **Finish** ("Day closed") and **Approve / Approve all** in Plan today get the small burst.
 - **Sound:** Settings, Day, "Completion sound": two quiet rising notes per ✓, a soft chord for a
   big moment. Off by default, kept in this browser, silent under the iPhone's silent switch.
 - **Reduced motion:** no spring, strike, specks, confetti or slide; the row fades to done in
@@ -372,15 +373,41 @@ block never deletes the task. Changing one block never moves another.
 ## Shutdown: `O` (Newport, Ellie, Sunsama)
 
 The "Shut down" button appears on today's header from two hours before shutdown time (`O` works
-any time).
+any time). The ritual is meant to take under two minutes: it fills itself in, and each choice is
+one tap.
 
-1. Two columns, **Done** and **Tomorrow**. Clicking a task moves it to the other column.
-2. One box: *What went well, what got in the way?* (private, always).
-3. **Finish:** nothing is saved before this. Tasks left in Tomorrow move to tomorrow (counted as a roll),
-   the day's unapproved proposed blocks are deleted, and the day is marked shut down and gets a
-   "Shutdown complete" stamp.
+1. **Today's wins**, filled in from what is already logged (src/sheet/shutdown-close.mjs): tasks
+   done today (by `done_at` on his clock, wherever they sit), the minutes focused (the same count as
+   the progress line), GitHub and Jira items finished today (tasks with that `source` done today),
+   today's Hevy workout (`hevy_workouts`) and the habits ticked today (`habit_done`). Counts and
+   names only, never points. A part with nothing in it is left out.
+2. **Still open:** every unfinished task on today gets a place, one tap each: **Done**,
+   **Tomorrow**, **This week** (the week's last day, shown while that is past tomorrow, as the
+   carried-over menu) or **Someday** (Inbox). "Rest to tomorrow" places the rest at once. Next
+   doesn't go on while a task has no place; it says how many are left and moves focus to the first.
+   A specific plan for an open task stops it nagging (Masicampo & Baumeister 2011), and a specific
+   to-do list before bed sped sleep onset (Scullin et al. 2018).
+3. Today's event to-dos with their checks, one line (moving to tomorrow, suggestions turned
+   down, pace trend), and one optional box: *What went well, what got in the way?* (private,
+   always). Earlier reflections sit collapsed under it ([sheet-lookback.md](sheet-lookback.md)).
+4. **Tomorrow:** its events, its tasks with those coming from today, and the load against its room.
+5. **Finish:** nothing is saved before this. Each decision is saved (Tomorrow counts as a roll;
+   This week and Someday are moves as the task menu makes them, so Someday clears the time and the
+   rolls; Done is a check-off), then the day's unapproved proposed blocks are deleted, and the day
+   is marked shut down and gets a "Shut down ✓" stamp.
+6. **Day closed:** where the open tasks went, tomorrow's first task ("Tomorrow starts with …"),
+   and the wind-down line as the week shows it ("Next: Wind down 11:30 pm · Bed 12:30 am"). Close
+   ends it.
 
-A skipped shutdown costs nothing: the nightly rollover does the same move.
+**Speed.** The dialog's code (shutdown-view.mjs) is loaded on demand. Its code and its reads
+(Hevy, the habits, and the look back and ahead) are warmed when the button shows (at idle) and on
+hover, focus or a press of the button; a warm read under two minutes old is used as it is. It
+opens at once from what the week already holds, with a "Checking Hevy and habits" line, and
+fills in as each read lands. Finish updates the week in place and shows "Day closed" without
+waiting for a reload; the server's copy is read behind it.
+
+A skipped shutdown costs nothing: the nightly rollover moves the day's untimed open tasks to the
+next day.
 
 ## The public view: `/now`
 
