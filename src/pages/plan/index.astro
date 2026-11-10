@@ -7,7 +7,6 @@ import "../../styles/sheet.css";
 import "../../styles/plan-phone.css";
 import "../../styles/sheet-focus.css";
 import "../../styles/plan-settings.css";
-import "../../styles/plan-habits.css";
 ---
 
 <Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
@@ -72,10 +71,10 @@ import "../../styles/plan-habits.css";
     <div class="sheet-week" data-week aria-label="Week" role="group"></div>
     <!-- Habits (docs/sheet-habits.md): src/sheet/habit-list.mjs draws a row per habit with its
          last seven days and "5 of last 7". Hidden while there are none. -->
-    <section class="sheet-habits" data-habit-rates hidden aria-labelledby="sheet-habit-rates-title">
-      <h2 class="sheet-someday-title" id="sheet-habit-rates-title">Habits</h2>
-      <ul class="sheet-habit-list" data-habit-list></ul>
-    </section>
+    <div class="sheet-habits" data-habit-rates hidden>
+      <h2 class="sheet-someday-title">Habits</h2>
+      <ul class="sheet-habit-list" data-habit-list aria-label="Habits, last 7 days"></ul>
+    </div>
     <!-- Projects (docs/sheet-projects.md): src/sheet/project-list.mjs draws each open project,
          which opens to its steps. Hidden while there are none. -->
     <section class="sheet-projects" data-projects hidden aria-labelledby="sheet-projects-title">

@@ -2,12 +2,17 @@
 // today, its last seven days as dots and "5 of last 7" (habit-rate.mjs). After a missed day the
 // row asks "Back on it today?" and says nothing else about the miss. The habits and their
 // habit_done rows are read when the planner loads and when Settings closes; a ✓ shows at once and
-// is saved behind it, and goes back if the save fails.
+// is saved behind it, and goes back if the save fails. The module loads after first paint, and
+// its styles come with it as text (Vite's ?inline, as lookback-view.mjs), so /plan's first load
+// carries no rules it doesn't use.
+import css from "../styles/plan-habits.css?inline";
 import * as api from "./api.mjs";
 import { actHooks, el, failed, icon, renderHooks, state } from "./planner.mjs";
 import { SHEET } from "../site.mjs";
 import { habitDay, habitView, rateText } from "./habit-rate.mjs";
 import { addDays } from "./logic.mjs";
+
+document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
 let root;
 let habits = [];
