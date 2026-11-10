@@ -45,8 +45,8 @@ test("wins: an empty day has no lines, and long lists name three", () => {
 });
 
 test("choices: This week only while the week's last day is past tomorrow", () => {
-  assert.deepEqual(choicesFor(today).map((c) => c.label), ["Done", "Tomorrow", "This week", "Someday"]);
-  assert.deepEqual(choicesFor("2026-11-07").map((c) => c.kind), ["done", "tomorrow", "someday"], "Saturday: Sunday is tomorrow");
+  assert.deepEqual(choicesFor(today).map((c) => c.label), ["Tomorrow", "This week", "Someday", "Done"]);
+  assert.deepEqual(choicesFor("2026-11-07").map((c) => c.kind), ["tomorrow", "someday", "done"], "Saturday: Sunday is tomorrow");
   assert.deepEqual(targetOf("week", today), { day: "2026-11-08" });
   assert.deepEqual(targetOf("tomorrow", today), { day: "2026-11-04" });
   assert.deepEqual(targetOf("someday", today), { list: "Inbox" });

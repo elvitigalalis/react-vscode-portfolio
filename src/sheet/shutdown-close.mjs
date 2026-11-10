@@ -54,14 +54,14 @@ export function winLines(w) {
 // --- Decisions ----------------------------------------------------------------------------------
 
 // The places an unfinished task can go, in order. This week is the week's last day (logic.mjs,
-// laterThisWeek, as the carried-over menu), hidden when that is not past tomorrow. Done is for a
-// task finished but not ticked.
+// laterThisWeek, as the carried-over menu), hidden when that is not past tomorrow. Done, for a
+// task finished but not ticked, comes last, so the first choice a screen reader meets is a plan.
 export function choicesFor(today) {
   return [
-    { kind: "done", label: "Done" },
     { kind: "tomorrow", label: "Tomorrow" },
     laterThisWeek(today) ? { kind: "week", label: "This week" } : null,
     { kind: "someday", label: "Someday" },
+    { kind: "done", label: "Done" },
   ].filter(Boolean);
 }
 

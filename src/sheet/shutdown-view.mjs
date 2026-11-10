@@ -87,6 +87,14 @@ const sentTomorrow = () => openTasks().filter((t) => decisions.get(t.id) === "to
 const extrasReady = () => reads?.extrasOk === true;
 
 let parts = {}; // the step's hosts: wins, open, late, past, end, tomorrow
+let body;        // the dialog's content, replaced per step
+let live;        // one live region for the whole dialog, never replaced: what changes is said there
+
+// Said once through the live region (cleared first, so the same words are said again).
+function announce(text) {
+  live.textContent = "";
+  setTimeout(() => { live.textContent = text; }, 50);
+}
 let box = null;  // the reflection box, one per open
 
 // A host's content replaced; focus inside it comes back to the same place (by key, else by order).
@@ -207,7 +215,7 @@ function buildToday() {
     past: el("div", {}),
     end: el("div", { className: "sheet-dialog-end" }),
   };
-  dialog.replaceChildren(el("h2", { id: "sheet-shut-title", textContent: "Shut down" }), parts.wins, parts.open, parts.late, box, parts.past, parts.end);
+  body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), parts.wins, parts.open, parts.late, box, parts.past, parts.end);
   fill(parts.wins, winsNodes());
   fill(parts.open, openNodes());
   fill(parts.late, lateNodes());
@@ -235,7 +243,7 @@ function buildTomorrow() {
   const back = el("button", { type: "button", className: "sheet-btn", textContent: "Back", onclick: () => { step = "today"; buildToday(); dialog.querySelector('[data-key="next"]')?.focus(); } });
   const done = el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish });
   done.dataset.key = "finish";
-  dialog.replaceChildren(el("h2", { id: "sheet-shut-title", textContent: "Tomorrow" }), parts.tomorrow, el("div", { className: "sheet-dialog-end" }, back, done));
+  body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Tomorrow" }), parts.tomorrow, el("div", { className: "sheet-dialog-end" }, back, done));
   fill(parts.tomorrow, tomorrowNodes());
 }
 
@@ -259,7 +267,10 @@ function closedScreen() {
 const landed = (r) => () => {
   if (reads !== r || !dialog.open || busy) return; // while Finish saves, nothing redraws
   if (step === "today") { fill(parts.late, lateNodes()); fill(parts.past, pastNodes()); fill(parts.end, endNodes()); }
-  if (step === "tomorrow") fill(parts.tomorrow, tomorrowNodes());
+  if (step === "tomorrow") {
+    fill(parts.tomorrow, tomorrowNodes());
+    if (reads.extrasOk === false) announce("Tomorrow's calendar couldn't be read just now. Finish still closes the day.");
+  }
 };
 
 // --- Acting -----------------------------------------------------------------------------------------
@@ -271,6 +282,8 @@ function placed() {
   asked = true;
   if (step !== "today") { step = "today"; buildToday(); }
   syncOpen();
+  const left = undecided(openTasks(), decisions).length;
+  announce(`${left === 1 ? "1 task still needs" : `${left} tasks still need`} a place.`);
   const first = dialog.querySelector(".sheet-shut-task.is-asked .sheet-shut-choice");
   first?.focus();
   first?.scrollIntoView({ block: "center" });
@@ -369,6 +382,7 @@ async function finish(e) {
   const at = button?.getBoundingClientRect();
   const label = button?.textContent;
   setBusy(true, "Saving…");
+  announce("Saving…");
   try {
     const rolled = await saveDecisions();
     const note = reflection.trim() || null;
@@ -382,13 +396,15 @@ async function finish(e) {
     setBusy(false);
     step = "closed";
     parts = {};
-    dialog.replaceChildren(closedScreen());
+    body.replaceChildren(closedScreen());
     dialog.querySelector(".sheet-shut-closed .sheet-btn")?.focus();
+    announce([...body.querySelectorAll(".sheet-shut-closed p")].map((p) => p.textContent).join(" "));
     if (at) burst(at, dialog);
   } catch (err) {
     if (mine !== session) return;
     setBusy(false, label);
     button?.focus();
+    announce(`Not saved yet: ${err.message}. Finish tries again.`);
     failed(err);
   }
 }
@@ -414,11 +430,15 @@ export function open(day) {
   r.extrasLate.then(landed(r));
   buildToday();
   dialog.showModal();
-  dialog.querySelector(".sheet-shut-choice, [data-key='next']")?.focus();
+  // The heading, not a choice: a screen reader starts at the top, and no answer is preselected.
+  dialog.querySelector("#sheet-shut-title")?.focus();
 }
 
 export function setupView(root) {
   dialog = root.querySelector("[data-shut]");
+  body = el("div", {});
+  live = el("p", { className: "visually-hidden", role: "status" });
+  dialog.replaceChildren(body, live);
   dialog.addEventListener("click", (e) => {
     const b = e.target.closest(".sheet-shut-choice");
     if (b) choose(b.dataset.id, b.dataset.kind);

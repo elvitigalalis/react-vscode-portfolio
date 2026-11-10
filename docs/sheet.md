@@ -381,11 +381,12 @@ one tap.
    the progress line), GitHub and Jira items finished today (tasks with that `source` done today),
    today's Hevy workout (`hevy_workouts`) and the habits ticked today (`habit_done`). Counts and
    names only, never points. A part with nothing in it is left out.
-2. **Still open:** every unfinished task on today gets a place, one tap each: **Done**,
-   **Tomorrow**, **This week** (the week's last day, shown while that is past tomorrow, as the
-   carried-over menu) or **Someday** (Inbox). "Rest to tomorrow" places the rest at once. Next
+2. **Still open:** every unfinished task on today gets a place, one tap each: **Tomorrow**,
+   **This week** (the week's last day, shown while that is past tomorrow, as the carried-over
+   menu), **Someday** (Inbox) or **Done** (last, so the first choice met is a plan). "Rest to tomorrow" places the rest at once. Next
    doesn't go on while a task has no place; it says how many are left and moves focus to the first.
-   A specific plan for an open task stops it nagging (Masicampo & Baumeister 2011), and a specific
+   Shutdown opens with focus on its heading, nothing preselected; one
+   live region says what changes (how many still need a place, Saving…, the day closed). A specific plan for an open task stops it nagging (Masicampo & Baumeister 2011), and a specific
    to-do list before bed sped sleep onset (Scullin et al. 2018).
 3. Today's event to-dos with their checks, one line (moving to tomorrow, suggestions turned
    down, pace trend), and one optional box: *What went well, what got in the way?* (private,
