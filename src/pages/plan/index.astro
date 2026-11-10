@@ -469,6 +469,7 @@ import "../../styles/plan-settings.css";
   import { setupFocus } from "../../sheet/focus-start.mjs";
   import { setupProjects } from "../../sheet/project-list.mjs";
   import { setupNowNext } from "../../sheet/now-next-line.mjs";
+  import { setupReadinessNote } from "../../sheet/readiness-note.mjs";
   // Swipes load only on a touch screen, so the Mac's first load doesn't carry them.
   const setupSwipe = (root) => { if (matchMedia("(pointer: coarse)").matches) import("../../sheet/swipe-ui.mjs").then((m) => m.setupSwipe(root)); };
   // Habits (docs/sheet-habits.md) load after first paint; the row draws once they arrive.
@@ -480,5 +481,5 @@ import "../../styles/plan-settings.css";
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad], settings);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote], settings);
 </script>

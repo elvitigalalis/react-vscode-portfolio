@@ -71,7 +71,7 @@ export function overNote(d, open, toggle, where) {
   if (!o) return null;
   // Its styles load the first time it shows (calm-styles.mjs); it draws once they are in, so it
   // never shows unstyled.
-  if (!styled) { calmStyles().then(render); return null; }
+  if (!calmReady()) return null;
   const next = d === state.today ? "tomorrow" : weekdayName(addDays(d, 1));
   const link = el("button", { type: "button", className: "sheet-link", textContent: `Move some to ${next}` });
   link.setAttribute("aria-expanded", String(open));
@@ -81,15 +81,29 @@ export function overNote(d, open, toggle, where) {
   const line = el("p", { className: "sheet-over" }, `Planned ${formatMinutes(o.planned)} · ${room} · `, link);
   const out = open ? el("div", { className: "sheet-over-wrap" }, line) : line;
   out.dataset.over = where;
-  if (!open) return out;
+  if (open) out.append(movePicker(d, where));
+  return out;
+}
+
+// The list under a note: day `d`'s undone untimed tasks, each a button that moves it a day on.
+// `where` is the note's data-over name, for focus after a move. Also used by the readiness
+// note (readiness-note.mjs).
+export function movePicker(d, where) {
+  const next = d === state.today ? "tomorrow" : weekdayName(addDays(d, 1));
   const picks = tasksOn(d).filter((t) => !t.done && !spanOf(t)).map((t) => {
     const b = el("button", { type: "button", ariaLabel: `Move ${t.title} to ${next}` },
       el("span", { textContent: t.title }), t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null);
     b.onclick = () => taskAction(t.id, "day-after").then(() => refocus(where, true));
     return el("li", {}, b);
   });
-  out.append(picks.length ? el("ul", { className: "sheet-over-pick" }, ...picks) : el("p", { className: "sheet-over", textContent: "Nothing untimed left to move." }));
-  return out;
+  return picks.length ? el("ul", { className: "sheet-over-pick" }, ...picks) : el("p", { className: "sheet-over", textContent: "Nothing untimed left to move." });
+}
+
+// True once the calm styles (sheet-calm.css) are in; until then it loads them, redraws, and
+// says false, so a note never shows unstyled.
+export function calmReady() {
+  if (!styled) calmStyles().then(render);
+  return styled;
 }
 let picking = false; // the week's list is open
 
@@ -151,6 +165,14 @@ export function setupPlanToday(root) {
   dialog = root.querySelector("[data-plan]");
   eventHooks.push(createMissedOnce);
   renderHooks.push(() => { if (dialog.open) planDialog?.draw(); });
+  // One timer redraws at today's shutdown, so the over-commit and readiness notes go away while
+  // the page sits idle. Each render resets it.
+  let atShutdown = null;
+  renderHooks.push(() => {
+    clearTimeout(atShutdown);
+    const wait = Date.parse(zonedIso(state.today, shutdownAt(state.today), SHEET.timeZone)) - Date.now();
+    if (wait > 0) atShutdown = setTimeout(render, wait + 1000);
+  });
   // Today's over-commit note, under its glance strip.
   renderHooks.push(() => {
     const note = overNote(state.today, picking, () => { picking = !picking; render(); }, "week");

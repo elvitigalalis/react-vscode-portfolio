@@ -216,6 +216,21 @@ Under 48 rem, one day shows at a time (above). On top of that:
 - Past the day's shutdown, or once the day is shut down, it doesn't show. Blocks count only up
   to shutdown.
 
+## Readiness note (RISE, Oura guidance)
+
+- When today's Oura readiness (its sleep_days row) is under 70, below Oura's "good" band and
+  the same line the lighter-day cap uses, today shows one calm line under its strip in muted
+  ink, never red: "Readiness 64 today · consider a lighter day · Move some to tomorrow ·
+  Dismiss". The threshold and the sentence are fixed.
+- "Move some to tomorrow" (the over-commit note's words) opens that note's list of today's
+  undone untimed tasks; a tap moves one to tomorrow, with the usual Undo. When the over-commit note shows, it already
+  offers that list, so this line leaves its link out.
+- "Dismiss" hides it for the rest of the day in this browser (localStorage). It comes back only
+  on another low day. Past shutdown, or once the day is shut down, it doesn't show.
+- It is worked out in the browser only (src/sheet/readiness-note.mjs). Per
+  [ADR 0005](adr/0005-oura-data-never-reaches-claude.md) no Supabase function, read_planner,
+  proposal or Telegram path imports it, and test/readiness-note.test.mjs checks that.
+
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
 Opens over the week: today's tasks on the left, today's timeline on the right (07:00 to 23:00,
