@@ -17,18 +17,20 @@ export const scheduledOn = (habit, day) => habit.days.includes(isoDay(day));
 export const RATE_OF = 7;
 
 // One habit's row: `done` is the Set of days it was done, `today` the habit day now, `since` the
-// habit day it was made (days before it are never counted as misses).
+// habit day it was made. Counting starts the day after it was made (it was likely made partway
+// through that day), or on that day if it was ticked then; days before are never misses.
 // - dots: the seven days ending today, each "done", "missed" (a scheduled day gone by), "due"
 //   (scheduled today, not yet done) or "off".
 // - done / of: done on how many of its last seven scheduled days; today counts only once done,
 //   so a day still under way is never a miss. `of` is 0 for a habit too new to have any.
 // - back: the last scheduled day before today was missed and today is scheduled and open, so the
 //   row asks "Back on it today?" instead of saying anything about the miss.
-export function habitView(habit, done, today, since = null) {
+export function habitView(habit, done, today, made = null) {
+  const since = made && !done.has(made) ? addDays(made, 1) : made;
   const counts = (d) => scheduledOn(habit, d) && (!since || d >= since);
   const dots = Array.from({ length: 7 }, (_, i) => {
     const day = addDays(today, i - 6);
-    const state = done.has(day) ? "done" : !counts(day) ? "off" : day === today ? "due" : "missed";
+    const state = done.has(day) ? "done" : day === today ? (scheduledOn(habit, day) ? "due" : "off") : !counts(day) ? "off" : "missed";
     return { day, state };
   });
   let of = 0;
@@ -42,7 +44,7 @@ export function habitView(habit, done, today, since = null) {
     of++;
     if (done.has(day)) n++;
   }
-  const back = last !== null && !done.has(last) && counts(today) && !done.has(today);
+  const back = last !== null && !done.has(last) && scheduledOn(habit, today) && !done.has(today);
   return { dots, done: n, of, back };
 }
 

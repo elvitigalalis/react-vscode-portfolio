@@ -32,8 +32,9 @@ The telegram function reads it so the Gym start nudge skips a habit already tick
   without it (an empty ring in the line colour, never red), today if scheduled and still open
   (an accent ring), and an off day (a small dot). A tick on an off day still shows as done.
 - **Rate:** done on how many of the last seven scheduled days. Today counts only once done, so
-  a day under way is never a miss. Days before the habit was made never count ("1 of last 2"
-  for a two-day-old habit; nothing at all before its first scheduled day). A once-a-week habit
+  a day under way is never a miss. Counting starts the day after the habit was made (it was
+  likely made partway through that day), or on that day if it was ticked then; days before
+  never count, and nothing shows before its first counted day. A once-a-week habit
   looks back seven weeks.
 - **"Back on it today?"** shows when the last scheduled day before today was missed and today is
   scheduled and still open. That is the only thing a miss changes; no "missed", "broke" or

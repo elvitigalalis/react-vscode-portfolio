@@ -55,11 +55,22 @@ test("habitView: today counts only once done, so an open day is never a miss", (
   assert.equal(rateText(habitView(daily, after, TODAY)), "6 of last 7"); // 11-03..11-09
 });
 
-test("habitView: a new habit counts only from the day it was made", () => {
+test("habitView: a new habit counts from the day after it was made", () => {
+  // Made Saturday and not ticked that day: Saturday is off, Sunday is the first that counts.
+  const v = habitView(daily, set(), TODAY, "2026-11-07");
+  assert.deepEqual(v.dots.map((d) => d.state), ["off", "off", "off", "off", "off", "missed", "due"]);
+  assert.equal(rateText(v), "0 of last 1");
+  // Made today: today is still open to tick, and nothing counts yet.
+  const fresh = habitView(daily, set(), TODAY, TODAY);
+  assert.equal(fresh.dots[6].state, "due");
+  assert.equal(rateText(fresh), "");
+  assert.equal(fresh.back, false);
+});
+
+test("habitView: a habit ticked on the day it was made counts that day", () => {
   const v = habitView(daily, set("2026-11-07"), TODAY, "2026-11-07");
   assert.deepEqual(v.dots.map((d) => d.state), ["off", "off", "off", "off", "done", "missed", "due"]);
   assert.equal(rateText(v), "1 of last 2");
-  assert.equal(rateText(habitView(daily, set(), TODAY, TODAY)), "");
   assert.equal(rateText(habitView(daily, set(TODAY), TODAY, TODAY)), "1 of last 1");
 });
 
