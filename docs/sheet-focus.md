@@ -65,6 +65,8 @@ next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glo
   The note is cut to 280 characters by code point, so an emoji is never split. Any outbox write
   the server refuses with a 4xx (other than 401, 403, 404, 408 and 429, which may pass later) is
   logged and dropped, so it can't block the writes behind it.
+- **Retention:** the `sheet-focus-log` cron job (daily, 08:13 UTC) deletes each closing row older
+  than 180 days with the rows it closes. Open rows stay, whatever their age.
 - /plan reads the last 120 days of `focus_log` after the first load, and again on each sync and
   return online until a read lands; until the table exists (404) it reads none.
 
@@ -167,6 +169,12 @@ alter table focus_log enable row level security;
 drop policy if exists owner_all on focus_log;
 create policy owner_all on focus_log for all using (is_owner()) with check (is_owner());
 revoke all on focus_log from anon;
+
+select cron.schedule('sheet-focus-log', '13 8 * * *', $job$
+  with old as (select id, closes from focus_log where done and at < now() - interval '180 days')
+  delete from focus_log
+  where id in (select id from old) or id in (select unnest(closes) from old)
+$job$);
 ```
 
 ## Deploy

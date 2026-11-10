@@ -2433,3 +2433,13 @@ alter table focus_log enable row level security;
 drop policy if exists owner_all on focus_log;
 create policy owner_all on focus_log for all using (is_owner()) with check (is_owner());
 revoke all on focus_log from anon;
+
+-- --- Focus notes retention (docs/sheet-focus.md, "Stop and where I left off") -------------------
+-- Daily at 08:13 UTC (night in New York, clear of the 6:07 am run), a closed run of focus_log
+-- older than 180 days goes: each closing row (done) from before then, with the rows it lists in
+-- `closes`. Open rows, the credit a task still carries, are kept whatever their age.
+select cron.schedule('sheet-focus-log', '13 8 * * *', $job$
+  with old as (select id, closes from focus_log where done and at < now() - interval '180 days')
+  delete from focus_log
+  where id in (select id from old) or id in (select unnest(closes) from old)
+$job$);
