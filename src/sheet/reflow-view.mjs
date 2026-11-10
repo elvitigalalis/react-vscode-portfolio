@@ -7,17 +7,20 @@
 import { SHEET } from "../site.mjs";
 import { formatClock, localNow, minutesOn, plural, zonedIso } from "./logic.mjs";
 import { reflowPlan } from "./reflow.mjs";
-import { el, state, render, renderHooks, actHooks, eventsOn, shutdownAt, offerUndo, failed } from "./planner.mjs";
+import { el, state, render, renderHooks, actHooks, eventsOn, shutdownAt, offerUndo, failed, showingCopy, loadHooks } from "./planner.mjs";
 import { saveBlock } from "./plan-today.mjs";
 import { getSession } from "./focus-start.mjs";
 import "./doing-styles.mjs";
 
 const tz = SHEET.timeZone;
+// The rows on the page came from a load, not the stored copy.
+let fresh = false;
 
-// Today's plan as reflow.mjs takes it, or null once the day is shut down or past its line.
+// Today's plan as reflow.mjs takes it, or null once the day is shut down or past its line, and
+// while the page shows the stored copy (planner.mjs): moves are worked out from fresh blocks only.
 export function planToday() {
   const day = state.today;
-  if (!day || state.days[day]?.shutdown) return null;
+  if (!day || !fresh || state.days[day]?.shutdown) return null;
   const now = localNow(new Date(), tz).minutes;
   const shutdown = shutdownAt(day);
   if (now >= shutdown) return null;
@@ -79,6 +82,8 @@ async function reflow() {
 }
 
 export function setupReflow(root) {
+  fresh = Boolean(state.settings) && !showingCopy();
+  loadHooks.push(({ copy = false } = {}) => { fresh = !copy; });
   actHooks.reflow = () => reflow().catch(console.error);
   renderHooks.push(() => {
     const line = reflowLine();

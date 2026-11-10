@@ -457,7 +457,7 @@ import "../../styles/plan-settings.css";
 </Base>
 
 <script>
-  import { start } from "../../sheet/planner.mjs";
+  import { start, drawWaits } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
   import { setupFeedStatus } from "../../sheet/feed-status.mjs";
@@ -480,10 +480,14 @@ import "../../styles/plan-settings.css";
   const setupReflow = (root) => import("../../sheet/reflow-view.mjs").then((m) => m.setupReflow(root)).catch(console.error);
   // The Doing view (docs/sheet.md, "On the phone") loads on a phone, after sign-in, or when the
   // window first narrows to one.
+  // On a phone it loads once signed in (plugins run only then), and the first draw (the stored
+  // copy's too) waits for it (planner.mjs, drawWaits), so the week never shows first and then
+  // gives way to the card. Signed out, /plan carries none of it.
   const setupDoing = (root) => {
     const narrow = matchMedia("(max-width: 48rem)");
-    const load = () => import("../../sheet/doing-view.mjs").then((m) => m.setupDoing(root)).catch(console.error);
-    if (narrow.matches) load(); else narrow.addEventListener("change", load, { once: true });
+    const load = () => import("../../sheet/doing-view.mjs").then((m) => m.setupDoing(root));
+    if (narrow.matches) drawWaits.push(load());
+    else narrow.addEventListener("change", () => load().catch(console.error), { once: true });
   };
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.

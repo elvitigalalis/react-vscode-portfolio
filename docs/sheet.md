@@ -199,7 +199,11 @@ Under 48 rem, one day shows at a time (above). On top of that:
     with its time. **See the week** shows the week; today's stamps then start with a **Doing view**
     link back. His pick holds for the rest of the day (kept in this browser), and the top bar's
     day arrows and day button also go to the week. Each load of the week (opening, coming back,
-    changing week) chooses again, so the default never flips while he is using the page.
+    changing week) chooses again, so the default never flips while he is using the page. The
+    stored copy of the week chooses too, before it draws (the first draw waits up to a second for
+    the module on a phone), and the load that follows keeps that choice; until a choice is made
+    the week stays hidden on a phone, so neither view flashes before the other. Reflow waits for
+    fresh rows: it never moves blocks worked out from the stored copy.
   - Outside his day, with nothing open today, or on a wider screen, the week shows as before.
     It loads only on a phone, after the first load.
 

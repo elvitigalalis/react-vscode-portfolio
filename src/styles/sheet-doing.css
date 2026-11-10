@@ -10,6 +10,7 @@
 @media (max-width: 48rem) {
   .sheet-planner.is-doing > :is(.sheet-week, .sheet-school, .sheet-habits, .sheet-projects, .sheet-someday-title, .sheet-someday, .sheet-log, .sheet-message, .sheet-message-recent) { display: none; }
   .sheet-planner.is-doing > .sheet-doing:not([hidden]) { display: block; }
+  .sheet-planner.is-choosing > .sheet-week { visibility: hidden; }
 }
 .sheet-doing { margin: 0.25rem 0 1rem; }
 .sheet-doing-card {

@@ -26,6 +26,7 @@ let root, box;
 // him mid-use. His day runs from planner.mjs's dayStart (after his wake) to the shutdown line.
 let mode = null;
 let loaded = false;
+let fromCopy = false; // the view was chosen on the stored copy
 
 const SVG = "http://www.w3.org/2000/svg";
 function ring(share) {
@@ -117,6 +118,9 @@ function draw() {
     mode = doingMode({ stored: read(), today: state.today, minutes, dayStart: dayStart(state.today), shutdown: shutdownAt(state.today), shutDown: Boolean(state.days[state.today]?.shutdown), hasCard: Boolean(pick.card) });
   }
   const doing = mode === "doing" && matchMedia(NARROW).matches;
+  // Until the view is chosen (no rows yet: a draw before the stored copy or the first load), a
+  // phone shows neither the card nor the week, so neither shows and then gives way to the other.
+  root.classList.toggle("is-choosing", mode == null);
   root.classList.toggle("is-doing", doing);
   box.hidden = !doing;
   // Hidden, it holds nothing: no stray title or button for lookups by id or class to find.
@@ -186,8 +190,15 @@ export function setupDoing(node) {
   root.addEventListener("click", (e) => {
     if (mode === "doing" && e.target.closest('[data-act="prev"], [data-act="next"], [data-act="this-week"]')) { mode = "week"; keep("week"); }
   }, true);
-  // Each load chooses again (his pick for today still wins), as the time of day may have moved.
-  loadHooks.push(() => { loaded = true; mode = null; });
+  // Each load chooses again (his pick for today still wins), as the time of day may have moved;
+  // the stored copy's draw chooses too. The load that follows the copy keeps the copy's choice,
+  // so the view never swaps as the fresh rows come in.
+  loadHooks.push(({ copy = false } = {}) => {
+    loaded = true;
+    if (fromCopy && !copy) { fromCopy = false; return; }
+    mode = null;
+    fromCopy = copy;
+  });
   // The ring and "25 min left" move on while the card shows, in place, so focus and a screen
   // reader's place stay put; only a change of card draws it again.
   setInterval(() => { if (mode === "doing" && !document.hidden && !document.querySelector("dialog[open]")) tickCard(); }, 15_000);
