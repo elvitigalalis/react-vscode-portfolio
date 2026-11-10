@@ -2,7 +2,7 @@
 
 The habits in Settings (gym, reading, a lunch walk; [sheet-v5.md](sheet-v5.md), H1) show under
 the week on /plan, one row each: a ✓ for today, the last seven days as dots, and how many of its
-last seven scheduled days it was done ("5 of last 7"). It is a rate, never a streak: one missed
+last seven scheduled days it was done ("5 of last 7 sessions"). It is a rate, never a streak: one missed
 day moves the number by one and nothing resets (research: broken streaks lower re-engagement,
 rates degrade gracefully, and one miss doesn't derail a habit). Terms are as in
 [GLOSSARY.md](../GLOSSARY.md).
@@ -31,7 +31,8 @@ The telegram function reads it so the Gym start nudge skips a habit already tick
 - **Dots:** the seven days ending today, oldest first: done (filled), a scheduled day gone by
   without it (an empty ring in the line colour, never red), today if scheduled and still open
   (an accent ring), and an off day (a small dot). A tick on an off day still shows as done.
-- **Rate:** done on how many of the last seven scheduled days. Today counts only once done, so
+- **Rate:** done on how many of the last seven scheduled days, "N of last 7 sessions": sessions,
+  because the window is scheduled days while the dots are calendar days. Today counts only once done, so
   a day under way is never a miss. Counting starts the day after the habit was made (it was
   likely made partway through that day), or on that day if it was ticked then; days before
   never count, and nothing shows before its first counted day. A once-a-week habit

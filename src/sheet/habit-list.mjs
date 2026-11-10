@@ -1,5 +1,5 @@
 // Habits as rates on /plan (docs/sheet-habits.md): under the week, one row per habit with a ✓ for
-// today, its last seven days as dots and "5 of last 7" (habit-rate.mjs). After a missed day the
+// today, its last seven days as dots and "5 of last 7 sessions" (habit-rate.mjs). After a missed day the
 // row asks "Back on it today?" and says nothing else about the miss. The habits and their
 // habit_done rows are read when the planner loads and when Settings closes; a ✓ shows at once and
 // is saved behind it, and goes back if the save fails. The module loads after first paint, and

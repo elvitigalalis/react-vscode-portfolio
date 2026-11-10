@@ -186,7 +186,7 @@ The day a habit tick counts for, running 4 am to 4 am local, so a 1 am tick belo
 _Avoid_: Calendar day, streak day
 
 **Habit rate**:
-How many of a habit's last seven scheduled days it was done, shown as "5 of last 7"; never a streak.
+How many of a habit's last seven scheduled days it was done, shown as "5 of last 7 sessions"; never a streak.
 _Avoid_: Streak, score, chain
 
 **Morning plan**:

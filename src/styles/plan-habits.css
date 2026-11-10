@@ -1,5 +1,5 @@
 /* Habits as rates (docs/sheet-habits.md, src/sheet/habit-list.mjs): a ✓ for today, the last seven
-   days as dots and "5 of last 7". A day not done is an empty ring in the line colour, never red. */
+   days as dots and "5 of last 7 sessions". A day not done is an empty ring in the line colour, never red. */
 .sheet-habit-list { list-style: none; display: grid; gap: 0.25rem; max-width: 40rem; padding: 0; }
 .sheet-habit { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; min-height: 2rem; }
 .sheet-habit-check {

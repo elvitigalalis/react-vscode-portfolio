@@ -48,5 +48,5 @@ export function habitView(habit, done, today, made = null) {
   return { dots, done: n, of, back };
 }
 
-// "5 of last 7"; nothing until the habit has a scheduled day behind it.
-export const rateText = ({ done, of }) => (of ? `${done} of last ${of}` : "");
+// "5 of last 7 sessions"; nothing until the habit has a scheduled day behind it.
+export const rateText = ({ done, of }) => (of ? `${done} of last ${of} ${of === 1 ? "session" : "sessions"}` : "");
