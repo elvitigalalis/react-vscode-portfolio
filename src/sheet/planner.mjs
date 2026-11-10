@@ -1002,7 +1002,7 @@ function startEdit(li) {
 
 let menuFor = null;
 
-function openMenu(id, anchor) {
+async function openMenu(id, anchor) {
   const menu = $("[data-menu]");
   menuFor = id;
   const t = state.tasks.get(id);
@@ -1012,7 +1012,8 @@ function openMenu(id, anchor) {
   // Someday and Drop; the plain "To tomorrow" and "To Someday" step aside meanwhile.
   const triage = Boolean(t.day && !t.done && t.rolls >= 2);
   menu.querySelector("[data-triage]").hidden = !triage;
-  if (triage) import("./calm-styles.mjs").catch(console.error);
+  // Its styles (calm-styles.mjs) are in before it shows, so it never flashes unstyled.
+  if (triage) await import("./calm-styles.mjs").catch(console.error);
   menu.querySelector('[data-triage] [data-move="this-week"]').hidden = !laterThisWeek(now().day);
   for (const kind of ["tomorrow", "someday"]) menu.querySelector(`:scope > [data-move="${kind}"]`).hidden = triage;
   const r = anchor.getBoundingClientRect();

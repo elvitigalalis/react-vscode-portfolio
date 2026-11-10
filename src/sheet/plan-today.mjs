@@ -60,12 +60,17 @@ const refocus = (where, pick = false) => {
   head?.setAttribute("tabindex", "-1");
   head?.focus();
 };
+let styled = false;
+let styling = null;
+const calmStyles = () => (styling ??= import("./calm-styles.mjs").catch(console.error).then(() => { styled = true; }));
 export function overNote(d, open, toggle, where) {
   const shut = Date.parse(zonedIso(d, shutdownAt(d), SHEET.timeZone));
   if (state.days[d]?.shutdown || Date.now() >= shut) return null;
   const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now(), shut), dayCapacity(d).free);
   if (!o) return null;
-  import("./calm-styles.mjs").catch(console.error);
+  // Its styles load the first time it shows (calm-styles.mjs); it draws once they are in, so it
+  // never shows unstyled.
+  if (!styled) { calmStyles().then(render); return null; }
   const next = d === state.today ? "tomorrow" : weekdayName(addDays(d, 1));
   const link = el("button", { type: "button", className: "sheet-link", textContent: `Move some to ${next}` });
   link.setAttribute("aria-expanded", String(open));
