@@ -34,6 +34,8 @@ test("the week's school work: due in the week, overdue on the current week, earl
     T("HW 5", { source: "brightspace", due: "2026-11-12", est_min: 90 }),
     T("Quiz 6", { source: "brightspace", due: "2026-11-10" }),
     T("Late lab", { source: "brightspace", due: "2026-11-06" }),
+    T("Long gone", { source: "brightspace", due: "2026-10-26" }),
+    T("Two weeks late", { source: "brightspace", due: "2026-10-27" }),
     T("Next week's paper", { source: "brightspace", due: "2026-11-17" }),
     T("Done HW", { source: "brightspace", due: "2026-11-11", done: true }),
     T("Read ch. 7", { tag: "cse320", day: "2026-11-13", list: null }),
@@ -42,8 +44,9 @@ test("the week's school work: due in the week, overdue on the current week, earl
     T("Step", { tag: "cse416", due: "2026-11-12", project_id: "p1" }),
   ];
   const now = schoolDue(tasks, days, "2026-11-10");
-  assert.deepEqual(now.map((i) => i.task.title), ["Late lab", "Quiz 6", "HW 5", "Read ch. 7"]);
-  assert.deepEqual(now.map((i) => [i.minutes, i.guess]), [[120, true], [60, true], [90, false], [30, true]]);
+  // Overdue counts for 14 days: Oct 27 is in, Oct 26 is let go.
+  assert.deepEqual(now.map((i) => i.task.title), ["Two weeks late", "Late lab", "Quiz 6", "HW 5", "Read ch. 7"]);
+  assert.deepEqual(now.slice(1).map((i) => [i.minutes, i.guess]), [[120, true], [60, true], [90, false], [30, true]]);
   // Viewing a later week, the overdue lab belongs to the week it's in, not this one.
   assert.deepEqual(schoolDue(tasks, weekDays("2026-11-16"), "2026-11-10").map((i) => i.task.title), ["Next week's paper"]);
 });

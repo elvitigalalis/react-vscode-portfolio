@@ -1,7 +1,7 @@
 // Student load (docs/sheet-glance.md, "School load"): the week's school hours due next to the
 // free hours left before each day's shutdown, so a crunch week shows before it lands (Shovel's
 // "time cushion", Sunsama's workload threshold). Pure: no DOM, no network, so node --test covers it.
-import { freeMinutes } from "./logic.mjs";
+import { addDays, freeMinutes } from "./logic.mjs";
 import { loadShare } from "./glance.mjs";
 
 // --- Which tasks are school work -----------------------------------------------------------
@@ -47,15 +47,18 @@ export const schoolMinutes = (t) => (t.est_min > 0 ? { minutes: t.est_min, guess
 const dueOf = (t) => t.due ?? t.day ?? null;
 
 // The undone school work due in the week of `days` (Monday first), with each one's minutes.
-// In the week holding `today`, work already overdue counts too: it still needs doing this week.
+// In the week holding `today`, work overdue by up to OVERDUE_DAYS counts too: it still needs doing
+// this week. Older overdue work is taken as let go, so it doesn't weigh on every week after.
 // Earliest due first.
+export const OVERDUE_DAYS = 14;
 export function schoolDue(tasks, days, today) {
   const [first, last] = [days[0], days[days.length - 1]];
   const thisWeek = first <= today && today <= last;
+  const since = addDays(today, -OVERDUE_DAYS);
   return [...tasks]
     .filter((t) => !t.done && isSchoolWork(t) && !t.project_id)
     .map((t) => ({ task: t, due: dueOf(t), ...schoolMinutes(t) }))
-    .filter(({ due }) => due && due <= last && (due >= first || (thisWeek && due < today)))
+    .filter(({ due }) => due && due <= last && (due >= first || (thisWeek && due < today && due >= since)))
     .sort((a, b) => a.due.localeCompare(b.due) || String(a.task.title).localeCompare(String(b.task.title), "en", { numeric: true }));
 }
 
