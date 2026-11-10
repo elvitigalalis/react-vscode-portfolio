@@ -6,7 +6,7 @@
 // No sound and no animation beyond the bar's one-second step, which reduced motion turns off.
 import { SHEET } from "../site.mjs";
 import { focusClock, focusActual, extendFocus, startSession, stuckMessage, EXTEND_MIN } from "./focus.mjs";
-import { stopRow, doneRow, NOTE_MAX } from "./focus-notes.mjs";
+import { stopRow, doneRow, sessionMinutes, NOTE_MAX } from "./focus-notes.mjs";
 import { formatMinutes } from "./logic.mjs";
 import { el, state, render, checkOff } from "./planner.mjs";
 
@@ -100,16 +100,20 @@ function done() {
   if (!s) return dialog.close();
   const task = state.tasks.get(s.task_id);
   const now = new Date();
-  const row = task ? focusActual(s, task, now, SHEET.timeZone, io.progressFor(s.task_id)?.minutes ?? 0) : null;
-  // Done's focus_log row closes the task's earlier ones, whose minutes are in `row`.
-  const closing = doneRow(s, now, SHEET.timeZone, crypto.randomUUID());
-  io.addLog(closing);
+  // With focus_log read, the task's open rows' credit goes into the actuals row and Done's
+  // focus_log row closes exactly those. Unread (offline since load), neither: a closing row then
+  // could hide credit this page never counted.
+  const known = io.isLogLoaded();
+  const earlier = known ? io.progressFor(s.task_id) : null;
+  const row = task ? focusActual(s, task, now, SHEET.timeZone, earlier?.minutes ?? 0) : null;
+  const closing = known ? doneRow(s, now, SHEET.timeZone, crypto.randomUUID(), earlier?.ids ?? []) : null;
+  if (closing) io.addLog(closing);
   io.setSession(null);
   // Today's progress line counts this session's minutes at once (not the earlier credit in
   // `row`); the next load reads what was saved.
-  if (row) state.actuals.push({ day: closing.day, minutes: closing.minutes });
+  if (row) state.actuals.push({ day: row.d, minutes: sessionMinutes(s, now) });
   dialog.close();
-  const save = () => io.queue(...(row ? [{ op: "actual", row }] : []), { op: "log", row: closing }, { op: "done", task: s.task_id });
+  const save = () => io.queue(...(row ? [{ op: "actual", row }] : []), ...(closing ? [{ op: "log", row: closing }] : []), { op: "done", task: s.task_id });
   // The early check (celebrate.mjs) weighs the whole time the task took against its estimate.
   if (task) checkOff(s.task_id, { save, focusMin: row?.minutes ?? null }).catch(console.error); else save();
 }

@@ -19,20 +19,25 @@ export function stopRow(s, note, now, timeZone, id) {
   return { id, at: now.toISOString(), day: localNow(new Date(s.started_at), timeZone).day, task_id: s.task_id, block_id: s.block_id, minutes, note: text, done: false };
 }
 
-// Done's closing row: the session's own minutes, done = true. Its actuals row carries these plus
-// the task's earlier credit, so the rows before it no longer count.
-export const doneRow = (s, now, timeZone, id) => ({ id, at: now.toISOString(), day: localNow(new Date(s.started_at), timeZone).day, task_id: s.task_id, block_id: s.block_id, minutes: sessionMinutes(s, now), note: null, done: true });
+// A closing row (done = true): it closes exactly the rows in `closes`, the ones whose minutes the
+// page counted, so a Stop written on another device that this page never read stays open.
+export const closingRow = ({ task_id, block_id = null, day, minutes = 0, closes }, now, id) =>
+  ({ id, at: now.toISOString(), day, task_id, block_id, minutes, note: null, done: true, closes: [...closes] });
 
-// Per task, what its rows since its last done row add up to: { minutes, note } with the newest
-// note in that run (or null). A task whose newest row is a done row has none.
+// Done's closing row: the session's own minutes, closing `closes` (none by default). Its actuals
+// row carries these plus those rows' credit.
+export const doneRow = (s, now, timeZone, id, closes = []) => closingRow({ task_id: s.task_id, block_id: s.block_id, day: localNow(new Date(s.started_at), timeZone).day, minutes: sessionMinutes(s, now), closes }, now, id);
+
+// Per task, its open rows (not done, closed by no closing row): { minutes, note, ids }, with the
+// newest note among them (or null) and their ids, which a closing row lists.
 export function progressByTask(rows) {
+  const closed = new Set(rows.flatMap((r) => (r.done ? r.closes ?? [] : [])));
   const out = new Map();
   for (const r of [...rows].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
-    if (r.done) { out.delete(r.task_id); continue; }
-    const p = out.get(r.task_id) ?? { minutes: 0, note: null };
-    out.set(r.task_id, { minutes: p.minutes + r.minutes, note: r.note ?? p.note });
+    if (r.done || closed.has(r.id)) continue;
+    const p = out.get(r.task_id) ?? { minutes: 0, note: null, ids: [] };
+    out.set(r.task_id, { minutes: p.minutes + r.minutes, note: r.note ?? p.note, ids: [...p.ids, r.id] });
   }
-  for (const [id, p] of out) if (!p.minutes && !p.note) out.delete(id);
   return out;
 }
 

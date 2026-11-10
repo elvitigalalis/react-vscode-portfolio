@@ -2,7 +2,7 @@
 // the credit each task carries and the line its row shows.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { stopRow, doneRow, progressByTask, progressText, sessionMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
+import { stopRow, doneRow, closingRow, progressByTask, progressText, sessionMinutes, NOTE_MAX } from "../src/sheet/focus-notes.mjs";
 
 const TZ = "America/New_York";
 // Started 11:50 pm on Nov 4 (EST), so the day is the 4th even when stopped on the 5th.
@@ -26,24 +26,31 @@ test("a note is cut to its limit and minutes are held to 960", () => {
   assert.equal(sessionMinutes(s, at(2000)), 960);
 });
 
-test("Done's row closes the run with the session's own minutes", () => {
-  assert.deepEqual(doneRow(s, at(0.2), TZ, "d1"), { id: "d1", at: at(0.2).toISOString(), day: "2026-11-04", task_id: "t1", block_id: "b1", minutes: 0, note: null, done: true });
+test("Done's row has the session's own minutes and closes the rows it counted", () => {
+  assert.deepEqual(doneRow(s, at(0.2), TZ, "d1", ["r1"]), { id: "d1", at: at(0.2).toISOString(), day: "2026-11-04", task_id: "t1", block_id: "b1", minutes: 0, note: null, done: true, closes: ["r1"] });
 });
 
-const row = (task_id, iso, minutes, note = null, done = false) => ({ task_id, at: iso, minutes, note, done });
+let n = 0;
+const row = (task_id, iso, minutes, note = null, extra = {}) => ({ id: `r${n++}`, task_id, at: iso, minutes, note, done: false, ...extra });
 
-test("a task's credit is its minutes since its last done row, with the newest note", () => {
-  const p = progressByTask([
-    row("t1", "2026-11-03T15:00:00Z", 30, "old"),
-    row("t1", "2026-11-03T16:00:00Z", 20, null, true),
-    row("t1", "2026-11-04T16:00:00Z", 25, "next: methods"),
-    row("t1", "2026-11-04T15:00:00Z", 15, "first"),
-    row("t1", "2026-11-04T17:00:00Z", 10),
-    row("t2", "2026-11-04T15:00:00Z", 40, "next: tests"),
-    row("t2", "2026-11-04T18:00:00Z", 5, null, true),
-  ]);
-  assert.deepEqual(p.get("t1"), { minutes: 50, note: "next: methods" });
+test("a task's credit is its open rows' minutes, with the newest note and their ids", () => {
+  const old = row("t1", "2026-11-03T15:00:00Z", 30, "old");
+  const a = row("t1", "2026-11-04T16:00:00Z", 25, "next: methods"), b = row("t1", "2026-11-04T15:00:00Z", 15, "first"), c = row("t1", "2026-11-04T17:00:00Z", 10);
+  const t2 = row("t2", "2026-11-04T15:00:00Z", 40, "next: tests");
+  const p = progressByTask([old, row("t1", "2026-11-03T16:00:00Z", 20, null, { done: true, closes: [old.id] }), a, b, c, t2,
+    row("t2", "2026-11-04T18:00:00Z", 5, null, { done: true, closes: [t2.id] })]);
+  assert.deepEqual(p.get("t1"), { minutes: 50, note: "next: methods", ids: [b.id, a.id, c.id] });
   assert.equal(p.has("t2"), false);
+});
+
+test("a closing row closes only the rows it lists, so credit this page never read survives", () => {
+  // The repro: a Stop from yesterday this page never loaded, then Done today with nothing known.
+  const stop = stopRow(s, "next: tests", at(40), TZ, "r-stop");
+  const done = doneRow({ ...s, started_at: s.started_at + 86_400_000 }, new Date(s.started_at + 86_400_000 + 20 * 60_000), TZ, "d1", []);
+  assert.deepEqual(progressByTask([stop, done]).get("t1"), { minutes: 40, note: "next: tests", ids: ["r-stop"] });
+  // A closing row with no session (the task done elsewhere) has no minutes of its own.
+  assert.deepEqual(closingRow({ task_id: "t1", day: "2026-11-05", closes: ["r-stop"] }, at(60), "c1"), { id: "c1", at: at(60).toISOString(), day: "2026-11-05", task_id: "t1", block_id: null, minutes: 0, note: null, done: true, closes: ["r-stop"] });
+  assert.equal(progressByTask([stop, closingRow({ task_id: "t1", day: "2026-11-05", closes: ["r-stop"] }, at(60), "c1")]).has("t1"), false);
 });
 
 test("the row's line says the minutes focused, against the estimate when there is one", () => {

@@ -42,20 +42,23 @@ next before switching cuts that and helps the next task (Leroy 2009; Leroy & Glo
 - **Save and stop** writes a `focus_log` row: the minutes from Start (rounded, 0–960), the note
   (trimmed to one line), the day the session started. Under a minute with a blank note writes
   nothing. The session ends; the task stays open.
-- **Credit:** a task's credit is the minutes of its `focus_log` rows since its last done row. Its
+- **Credit:** a task's credit is the minutes of its open `focus_log` rows: rows no closing row
+  (`done = true`) lists in its `closes`. Its
   row in the week, Someday or a project, and in Plan today's list, reads "40m focused of 1h30"
   ("40m focused" without an estimate). The note isn't shown there.
-- **The next Start** on the task shows "Where you left off: …" (the newest note since its last
-  done row) under the title, and the line under the clock adds "· 1h05 on this task" (credit plus
+- **The next Start** on the task shows "Where you left off: …" (the newest note among its open
+  rows) under the title, and the line under the clock adds "· 1h05 on this task" (credit plus
   this session).
 - **Done** in focus records the credit plus this session into `actuals` (still 1–960), so pace
   and estimate learning see the whole time the task took, and adds a `focus_log` row with
-  `done = true` that closes the earlier ones. A task finished with the week's ✓ or Telegram keeps
+  `done = true` whose `closes` lists exactly the rows it counted; a row this page never read (a
+  Stop on another device) stays open. If `focus_log` hasn't been read yet (offline since load),
+  Done counts no earlier credit and writes no closing row. A task finished with the week's ✓ or Telegram keeps
   its credit rows but shows none (it is done); reopened, the old credit would show again.
 - Writes go through the same outbox as Done (`{ op: "log", row }`), each row with an id made in the
   page, so a retry is a duplicate PostgREST skips. The credit shows at once, before the row saves.
-- /plan reads the last 120 days of `focus_log` once after the first load; until the table exists
-  (404) it reads none.
+- /plan reads the last 120 days of `focus_log` after the first load, and again on each sync and
+  return online until a read lands; until the table exists (404) it reads none.
 
 ## Estimates against actuals
 
@@ -146,8 +149,10 @@ create table if not exists focus_log (
   block_id uuid,
   minutes int not null check (minutes between 0 and 960),
   note text check (char_length(note) between 1 and 280),
-  done boolean not null default false
+  done boolean not null default false,
+  closes uuid[]
 );
+alter table focus_log add column if not exists closes uuid[];
 create index if not exists focus_log_task_at on focus_log (task_id, at desc);
 alter table focus_log enable row level security;
 drop policy if exists owner_all on focus_log;

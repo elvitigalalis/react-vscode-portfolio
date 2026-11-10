@@ -425,7 +425,7 @@ export const recordFocus = (row) => rest("rpc/record_focus", { method: "POST", b
 // focus_log (focus-notes.mjs): a row whose id is already there is skipped, so a retry is safe.
 export const logFocus = (row) => rest("focus_log?on_conflict=id", { method: "POST", body: row, prefer: "resolution=ignore-duplicates,return=minimal" });
 // Its rows from `since` on, oldest first. Until the table exists PostgREST answers 404: none.
-export const listFocusLog = (since) => rest(`focus_log?select=task_id,at,minutes,note,done&at=gte.${since}&order=at`)
+export const listFocusLog = (since) => rest(`focus_log?select=id,task_id,at,minutes,note,done,closes&at=gte.${since}&order=at`)
   .catch((e) => { if (/: 404$/.test(e.message)) return []; throw e; });
 
 // --- Projects (docs/sheet-projects.md) -------------------------------------------------------

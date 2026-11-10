@@ -23,15 +23,31 @@ export const setSession = (s) => put(SESSION_KEY, s ? JSON.stringify(s) : null);
 
 let root, note;
 
-// focus_log's rows (focus-notes.mjs) from the last LOG_DAYS, read once after the first draw; a
-// row Stop or Done adds goes in here at once, so the credit shows before it saves.
+// focus_log's rows (focus-notes.mjs) from the last LOG_DAYS, read after the first draw and read
+// again on each sync until a read lands (logLoaded). A row Stop or Done adds goes in here at once,
+// so the credit shows before it saves. Until the read lands, Done counts no earlier credit and
+// closes nothing, since it can't know which rows there are.
 const LOG_DAYS = 120;
 let logRows = [];
 let progress = new Map();
+let logLoaded = false;
+let reading = null;
 export const progressFor = (taskId) => progress.get(taskId) ?? null;
+export const isLogLoaded = () => logLoaded;
 export function addLog(row) {
   logRows = [...logRows, row];
   progress = progressByTask(logRows);
+}
+function readLog() {
+  if (logLoaded || reading) return;
+  reading = api.listFocusLog(addDays(state.today, -LOG_DAYS)).then((rows) => {
+    // Rows added here while the read was out are kept, once each.
+    const seen = new Set(rows.map((r) => r.id));
+    logRows = [...rows, ...logRows.filter((r) => !seen.has(r.id))];
+    progress = progressByTask(logRows);
+    logLoaded = true;
+    render();
+  }, console.error).finally(() => { reading = null; });
 }
 
 // One write, as Done or +15 min queued it. Each can run again safely: record_focus counts a task
@@ -57,7 +73,7 @@ const drain = serialDrain(async () => {
   note.hidden = !left.length;
   render();
 });
-export const sync = drain.sync;
+export const sync = () => { readLog(); return drain.sync(); };
 
 // Queues writes behind any still waiting, then tries them all: in a fresh drain after one already
 // running, so the promise settles once these ops have been tried (focus Done's check-off waits
@@ -68,7 +84,7 @@ export function queue(...ops) {
 }
 
 let view = null;
-const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog }); return m; }, (e) => { view = null; throw e; }));
+const loadView = () => (view ??= import("./focus-view.mjs").then((m) => { m.setupFocusView({ getSession, setSession, queue, progressFor, addLog, isLogLoaded }); return m; }, (e) => { view = null; throw e; }));
 export const openFocus = (blockId) => loadView().then((m) => m.open(blockId));
 
 export function setupFocus(node) {
@@ -85,12 +101,6 @@ export function setupFocus(node) {
     if (first) {
       first = false;
       sync();
-      api.listFocusLog(addDays(state.today, -LOG_DAYS)).then((rows) => {
-        // Rows added here while the read was out are kept.
-        logRows = [...rows, ...logRows];
-        progress = progressByTask(logRows);
-        if (progress.size) render();
-      }, console.error);
       // The deep link from Telegram's start nudge or a bookmark: /plan/?focus=<block id>.
       const id = new URLSearchParams(location.search).get("focus");
       if (id) { history.replaceState(null, "", location.pathname); openFocus(id).catch(console.error); }
