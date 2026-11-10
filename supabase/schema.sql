@@ -2393,3 +2393,18 @@ select cron.schedule('sheet-hevy', '9-59/15 * * * *', $job$
   where exists (select 1 from vault.decrypted_secrets where name = 'sheet_cron_secret')
     and exists (select 1 from vault.decrypted_secrets where name = 'sheet_hevy_url')
 $job$);
+
+-- --- Habits as rates (docs/sheet-habits.md) ----------------------------------------------------
+-- One row per habit per habit day (4 am to 4 am, src/sheet/habit-rate.mjs habitDay) he ticked it
+-- on /plan. /plan reads the last seven weeks to show "5 of last 7"; nothing else reads it, and no
+-- public view joins it. Removing a habit removes its rows.
+create table if not exists habit_done (
+  habit_id uuid not null references habits on delete cascade,
+  day date not null,
+  created_at timestamptz not null default now(),
+  primary key (habit_id, day)
+);
+alter table habit_done enable row level security;
+drop policy if exists owner_all on habit_done;
+create policy owner_all on habit_done for all using (is_owner()) with check (is_owner());
+revoke all on habit_done from anon;

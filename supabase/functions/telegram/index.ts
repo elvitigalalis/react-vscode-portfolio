@@ -127,6 +127,8 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
   // was low at the last sync. The words are composed here (nudges.mjs), never by the routine.
   const tipDays = await db(`sleep_days?select=day,contributors&day=gte.${addDays(today, -14)}&contributors=not.is.null`).catch(() => []);
   const gymHabits = await db("habits?select=id,name,ideal").catch(() => []);
+  // Habits ticked since yesterday (habit_done), so the Gym nudge skips one already done today.
+  const habitDone = await db(`habit_done?select=habit_id,day&day=gte.${addDays(today, -1)}`).catch(() => []);
   const [ringLow = null] = await db("oura_account?select=ring_low,ring_checked_at").catch(() => []);
   // Horizon planning: each task's state and the last one he was told of. None until its schema has run.
   const horizon = await db("horizon_state?select=task_id,state,short_min,slack_min,finish_day,notified").catch(() => []);
@@ -136,7 +138,7 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
   // The Sheet's health (health.mjs). A failed read leaves it out: the brief then has no Sheet
   // line, and nothing is alerted, rather than the messages stopping.
   const sheetHealth = await healthOf(today, now, settings.time_zone, facts).catch((e) => (console.error("health:", e instanceof Error ? e.message : e), undefined));
-  return { health: sheetHealth, lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, ringLow, horizon, hevy };
+  return { health: sheetHealth, lastWeek, settings, day, tasks, blocks, log, proposal, previous, replanSent, replanChanges, needsOpen, campus: await picked(proposal), weather, busy, academic: academicDay?.entries ?? [], awaiting, sleep, sleepDay, sleepTimes, nightLog, tipDays, gymHabits, habits: gymHabits, habitDone, ringLow, horizon, hevy };
 }
 
 // snapshot.hevy (nudges.mjs, "Hevy"): the account; the workouts that ended in the last

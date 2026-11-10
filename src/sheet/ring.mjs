@@ -15,16 +15,33 @@ const LIFTING = /strength|weight|lift|resistance|crossfit|bodybuilding|gym/i;
 // (blockOnComplete at the workout's end): [{ block_id, action: "shrink", ends_at } or
 // { block_id, action: "delete" }], with the block's gcal_id (for gcal_pending), at most one per block. `blocks` carry habit_id, `habits` id and
 // name, `workouts` are ring_workouts rows.
+// The workout that finishes a habit block: one overlapping it, or a lifting one that day.
+function workoutFor(b, workouts, tz) {
+  const day = localNow(new Date(b.starts_at), tz).day;
+  return (workouts ?? []).find((x) => {
+    const overlaps = Date.parse(x.starts_at) < Date.parse(b.ends_at) && Date.parse(b.starts_at) < Date.parse(x.ends_at);
+    return overlaps || (x.day === day && LIFTING.test(x.activity ?? ""));
+  });
+}
+
+// The Gym habit ticks the same workouts earn (docs/sheet-habits.md): [{ habit_id, ends_at }], one
+// per approved Gym block a workout finished, whether or not the block still had time to end.
+// gym-tick.ts turns ends_at into its habit day (habit-rate.mjs, habitDay) for habit_done.
+export function gymDone(workouts, blocks, habits, tz) {
+  const gym = new Set((habits ?? []).filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => h.id));
+  return (blocks ?? []).flatMap((b) => {
+    if (!gym.has(b.habit_id) || b.proposed) return [];
+    const w = workoutFor(b, workouts, tz);
+    return w ? [{ habit_id: b.habit_id, ends_at: w.ends_at }] : [];
+  });
+}
+
 export function gymMatches(workouts, blocks, habits, tz) {
   const gym = new Set((habits ?? []).filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => h.id));
   const out = new Map();
   for (const b of blocks ?? []) {
     if (!gym.has(b.habit_id) || b.proposed || out.has(b.id)) continue;
-    const day = localNow(new Date(b.starts_at), tz).day;
-    const w = (workouts ?? []).find((x) => {
-      const overlaps = Date.parse(x.starts_at) < Date.parse(b.ends_at) && Date.parse(b.starts_at) < Date.parse(x.ends_at);
-      return overlaps || (x.day === day && LIFTING.test(x.activity ?? ""));
-    });
+    const w = workoutFor(b, workouts, tz);
     if (!w) continue;
     const r = blockOnComplete(b, new Date(w.ends_at));
     if (r.action !== "keep") out.set(b.id, { block_id: b.id, gcal_id: b.gcal_id ?? null, ...r });

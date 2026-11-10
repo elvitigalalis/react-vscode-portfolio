@@ -69,6 +69,12 @@ import "../../styles/plan-settings.css";
     <p class="sheet-notice" role="status" data-mail-notice hidden></p>
     <p class="sheet-notice" data-events-stale hidden>Google Calendar needs reconnecting to show new events. <button type="button" class="sheet-link" data-act="connect">Reconnect Google Calendar in Settings</button></p>
     <div class="sheet-week" data-week aria-label="Week" role="group"></div>
+    <!-- Habits (docs/sheet-habits.md): src/sheet/habit-list.mjs draws a row per habit with its
+         last seven days and "5 of last 7 sessions". Hidden while there are none. -->
+    <div class="sheet-habits" data-habit-rates hidden>
+      <h2 class="sheet-someday-title">Habits</h2>
+      <ul class="sheet-habit-list" data-habit-list aria-label="Habits, last 7 days"></ul>
+    </div>
     <!-- Projects (docs/sheet-projects.md): src/sheet/project-list.mjs draws each open project,
          which opens to its steps. Hidden while there are none. -->
     <section class="sheet-projects" data-projects hidden aria-labelledby="sheet-projects-title">
@@ -457,10 +463,12 @@ import "../../styles/plan-settings.css";
   import { setupNowNext } from "../../sheet/now-next-line.mjs";
   // Swipes load only on a touch screen, so the Mac's first load doesn't carry them.
   const setupSwipe = (root) => { if (matchMedia("(pointer: coarse)").matches) import("../../sheet/swipe-ui.mjs").then((m) => m.setupSwipe(root)); };
+  // Habits (docs/sheet-habits.md) load after first paint; the row draws once they arrive.
+  const setupHabits = (root) => import("../../sheet/habit-list.mjs").then((m) => m.setupHabits(root));
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupNowNext, setupSwipe], settings);
+  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe], settings);
 </script>
