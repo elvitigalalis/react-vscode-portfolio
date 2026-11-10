@@ -21,7 +21,13 @@ function freeByDay(days, today, nowMin) {
   }));
 }
 
-// Sets an estimate at once and saves it behind; a failed save puts the old one back.
+// Saves an estimate and keeps the stored row. Throws on failure, so failed()'s Retry can say so.
+async function saveEstimate(id, est_min) {
+  state.tasks.set(id, await api.updateTask(id, { est_min }));
+}
+
+// Sets an estimate at once and saves it behind; a failed save puts the old one back and offers
+// Retry (saveEstimate itself, which throws again if it fails again).
 async function setEstimate(id, est_min) {
   const t = state.tasks.get(id);
   if (!t) return;
@@ -29,12 +35,12 @@ async function setEstimate(id, est_min) {
   state.tasks.set(id, { ...t, est_min });
   render();
   try {
-    state.tasks.set(id, await api.updateTask(id, { est_min }));
-    offerUndo(`Estimate ${formatMinutes(est_min)}.`, async () => { state.tasks.set(id, await api.updateTask(id, { est_min: before })); });
+    await saveEstimate(id, est_min);
+    offerUndo(`Estimate ${formatMinutes(est_min)}.`, () => saveEstimate(id, before));
   } catch (err) {
     const now = state.tasks.get(id);
     if (now) state.tasks.set(id, { ...now, est_min: before });
-    failed(err, `save the estimate for "${t.title}"`, () => setEstimate(id, est_min));
+    failed(err, `save the estimate for "${t.title}"`, () => saveEstimate(id, est_min));
     render();
   }
 }
@@ -71,7 +77,7 @@ export function setupSchoolLoad(root) {
     // Focus goes on to the next item still to estimate, else back to the summary.
     const next = [...box.querySelectorAll(".sheet-school-item")].slice([...box.querySelectorAll(".sheet-school-item")].indexOf(li) + 1)
       .find((x) => x.querySelector(".sheet-school-pick"))?.dataset.id;
-    setEstimate(li.dataset.id, Number(b.dataset.est)).catch(failed);
+    setEstimate(li.dataset.id, Number(b.dataset.est));
     (next ? box.querySelector(`[data-id="${CSS.escape(next)}"] .sheet-school-pick`) : box.querySelector("summary"))?.focus();
   });
 
