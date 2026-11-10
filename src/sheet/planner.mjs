@@ -1543,6 +1543,8 @@ export async function start(node, plugins = [], settings = settingsModule) {
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
   if (!(await api.signedIn())) {
+    // Signed out (the button, or a session that ran out): no copy of the week stays behind.
+    forgetEvents();
     const button = el("button", { type: "button", className: "sheet-btn primary", textContent: "Sign in with Google" });
     button.addEventListener("click", api.signIn);
     const status = $("[data-status]");
