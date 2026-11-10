@@ -2,7 +2,7 @@
 // are written out by hand.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { doingPick, doingMode, minutesLeft } from "../src/sheet/doing.mjs";
+import { doingPick, doingMode, minutesLeft, withSession } from "../src/sheet/doing.mjs";
 
 const H = (h, m = 0) => h * 60 + m;
 const task = (id, start = null, end = null, done = false) => ({ kind: "task", task: { id, title: id, done }, start, end });
@@ -47,6 +47,16 @@ test("doingPick: a running focus session's task is the card, whatever is on now"
   assert.equal(p.kind, "focus");
   assert.equal(p.card.task.id, "gym");
   assert.deepEqual(ids(p.next), ["essay", "laundry"]);
+});
+
+test("withSession: a session on a task off today's list still makes it the card", () => {
+  const step = { id: "s1", title: "Write the schema", done: false };
+  const p = doingPick(withSession(rows, step), H(11, 10), "s1");
+  assert.equal(p.kind, "focus");
+  assert.equal(p.card.task.id, "s1");
+  assert.deepEqual(ids(p.next), ["essay", "gym"]);
+  assert.equal(withSession(rows, { ...step, done: true }), rows);
+  assert.equal(withSession(rows, rows[3].task), rows);
 });
 
 test("doingPick: nothing open, no card", () => {

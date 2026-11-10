@@ -23,6 +23,14 @@ export function doingPick(rows, minutes, sessionTask = null) {
   return { card, kind, next };
 }
 
+// Today's rows with a running focus session's task among them: a Someday task or a project's
+// step can hold a block today without being on today's list, and the card must still show the
+// task the session is on, so Resume never opens a different one. It joins as an untimed row.
+export function withSession(rows, task) {
+  if (!task || task.done || rows.some((r) => r.kind === "task" && r.task.id === task.id)) return rows;
+  return [...rows, { kind: "task", task, start: null, end: null }];
+}
+
 // Which view a phone opens to: the one he picked today (`stored`, { day, mode }), else Doing
 // during his day (from its start to the shutdown line, not shut down) when there is a card,
 // else the week. `dayStart` is planner.mjs's dayStart(today): 30 minutes after his wake (9:30 am

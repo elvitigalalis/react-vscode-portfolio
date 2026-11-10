@@ -7,7 +7,7 @@
 // the first load. Logic is in doing.mjs. Text goes in through textContent only.
 import { SHEET } from "../site.mjs";
 import { formatClock, formatSpan, localNow } from "./logic.mjs";
-import { doingPick, doingMode, minutesLeft } from "./doing.mjs";
+import { doingPick, doingMode, minutesLeft, withSession } from "./doing.mjs";
 import { focusClock } from "./focus.mjs";
 import { rowTitle } from "./now-next.mjs";
 import { el, icon, state, render, renderHooks, loadHooks, actHooks, rowsOn, checkOff, toggleEventTodo, dayStart, shutdownAt, NARROW } from "./planner.mjs";
@@ -51,6 +51,9 @@ function startBlock(taskId) {
 
 const span = (r) => (r.start == null ? null : formatSpan(r.start, r.end));
 
+// What the card picks from: today's rows, with a running session's task always among them.
+const pickNow = (minutes, s) => doingPick(withSession(rowsOn(state.today), s ? state.tasks.get(s.task_id) : null), minutes, s?.task_id ?? null);
+
 // How long is left, as a ring share and in words: the focus session's, or the row on now's.
 function timeLeft(pick, minutes, s) {
   const r = pick.card;
@@ -71,7 +74,9 @@ function card(pick, minutes, s) {
   const task = r.kind === "task" ? r.task : null;
   const left = timeLeft(pick, minutes, s);
   const kicker = { focus: "Focusing", now: `Now · until ${formatClock(r.end)}`, next: `Next · ${span(r)}`, untimed: "Up next" }[pick.kind];
-  const b = task ? state.blocks.find((x) => x.id === (s?.task_id === task.id ? s.block_id : startBlock(task.id)?.id)) : null;
+  // The session's own block for its task (Resume opens the running session, whatever the block).
+  const mine = s?.task_id === task?.id;
+  const b = task ? (mine ? state.blocks.find((x) => x.id === s.block_id) ?? { id: s.block_id } : startBlock(task.id)) : null;
   const note = task ? progressFor(task.id)?.note : null;
   const sub = b?.first_step ? `First: ${b.first_step}` : note ? `Where you left off: ${note}` : task?.est_min && !span(r) ? `About ${task.est_min} min` : null;
 
@@ -105,7 +110,7 @@ function draw() {
   if (!state.week || !box) return;
   const minutes = localNow(new Date(), tz).minutes;
   const s = getSession();
-  const pick = doingPick(rowsOn(state.today), minutes, s?.task_id ?? null);
+  const pick = pickNow(minutes, s);
   drawnKey = cardKey(pick);
   // Not before the week has loaded: a draw before then has no rows.
   if (mode == null && loaded) {
@@ -137,7 +142,7 @@ function draw() {
 function tickCard() {
   const minutes = localNow(new Date(), tz).minutes;
   const s = getSession();
-  const pick = doingPick(rowsOn(state.today), minutes, s?.task_id ?? null);
+  const pick = pickNow(minutes, s);
   if (cardKey(pick) !== drawnKey) return draw();
   const left = timeLeft(pick, minutes, s);
   if (!left) return;
