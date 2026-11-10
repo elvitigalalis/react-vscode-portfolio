@@ -3,6 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { pack, unpack, SNAPSHOT_KEY } from "../src/sheet/snapshot.mjs";
+import { holdCopy } from "../src/sheet/snapshot-key.mjs";
 
 const state = () => ({
   week: "2026-11-02",
@@ -50,4 +51,28 @@ test("it is kept per user: another user's copy gives nothing", () => {
   assert.equal(unpack(text, "2026-11-02", "user-a").parked, 2);
   assert.equal(unpack(text, "2026-11-02", "user-b"), null);
   assert.equal(unpack(text, "2026-11-02", null), null);
+});
+
+// A Storage stand-in: a Map with the three calls the planner makes.
+const storage = (init = {}) => { const m = new Map(Object.entries(init)); return { m, getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+
+test("a held copy is out of storage until put back", () => {
+  const st = storage({ [SNAPSHOT_KEY]: "copy" });
+  const held = holdCopy(st);
+  assert.equal(held.text, "copy");
+  assert.equal(st.m.has(SNAPSHOT_KEY), false);
+  held.putBack();
+  assert.equal(st.m.get(SNAPSHOT_KEY), "copy");
+});
+
+test("putting it back never replaces a newer copy, and nothing held puts nothing back", () => {
+  const st = storage({ [SNAPSHOT_KEY]: "old" });
+  const held = holdCopy(st);
+  st.setItem(SNAPSHOT_KEY, "new");
+  held.putBack();
+  assert.equal(st.m.get(SNAPSHOT_KEY), "new");
+  const empty = storage();
+  holdCopy(empty).putBack();
+  assert.equal(empty.m.size, 0);
+  assert.equal(holdCopy(null).text, null);
 });

@@ -20,7 +20,7 @@ import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
 import * as cheer from "./celebrate.mjs";
 import { dayProgress, progressText, weekDone, weekTitle } from "./progress.mjs";
-import { SNAPSHOT_KEY } from "./snapshot-key.mjs";
+import { SNAPSHOT_KEY, holdCopy } from "./snapshot-key.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -1010,14 +1010,6 @@ async function showCopy(user, text = readCopy()) {
 
 const readCopy = () => { try { return localStorage.getItem(SNAPSHOT_KEY); } catch { return null; } };
 
-// A copy whose token doesn't say who stored it, taken out of storage: it is drawn only once
-// settings shows this account can open the planner, and the load stores it again.
-function takeCopy() {
-  const text = readCopy();
-  try { localStorage.removeItem(SNAPSHOT_KEY); } catch {}
-  return text;
-}
-
 // Stores the week as just loaded; only this week's, the one /plan opens on.
 function saveCopy() {
   if (state.week !== weekStart(now().day)) return;
@@ -1633,7 +1625,12 @@ export async function start(node, plugins = [], settings = settingsModule) {
   // who stored it. When the token doesn't say who is signed in, not until settings has shown this
   // account can open the planner.
   const user = api.userId();
-  const held = user ? null : takeCopy();
+  // A copy whose token doesn't say who stored it is out of storage until settings answers
+  // (holdCopy): drawn once it shows this account can open the planner, and put back unless it
+  // shows it can't.
+  let store = null;
+  try { store = localStorage; } catch {}
+  const held = user ? null : holdCopy(store);
   let early = user ? await showCopy(user) : false;
   if (early) $("[data-tools]").hidden = false;
   try {
@@ -1644,7 +1641,8 @@ export async function start(node, plugins = [], settings = settingsModule) {
       $("[data-tools]").hidden = false;
       return;
     }
-    if (!user) early = await showCopy(null, held);
+    held?.putBack();
+    if (!user) early = await showCopy(null, held?.text ?? null);
     // The events' read starts with the tables', so it needs the calendars now.
     state.settings = settings;
     state.calendars = settings.calendars ?? [];
@@ -1653,6 +1651,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     await load({ scroll: !early, sync: syncGoogle() });
     openFromLink();
   } catch (e) {
+    held?.putBack();
     if (!copy) return failed(e);
     console.error(e);
     setStatus(COPY_FAILED);
