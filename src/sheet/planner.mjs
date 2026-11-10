@@ -971,9 +971,9 @@ const blankWeek = () => ({ tasks: new Map(), blocks: [], days: {}, parked: 0, to
 // Draws this week's stored copy for `user`, if there is one, marked "Updating…". True when it did. A copy
 // that can't be drawn (a shape this code doesn't expect) is thrown away and the page loads as if
 // there were none: the copy is only ever a placeholder.
-function showCopy(user) {
+function showCopy(user, text = readCopy()) {
   let got = null;
-  try { got = unpack(localStorage.getItem(SNAPSHOT_KEY), state.week, user); } catch {}
+  try { got = unpack(text, state.week, user); } catch {}
   if (!got) return false;
   try {
     Object.assign(state, got);
@@ -993,6 +993,16 @@ function showCopy(user) {
     setStatus(null);
     return false;
   }
+}
+
+const readCopy = () => { try { return localStorage.getItem(SNAPSHOT_KEY); } catch { return null; } };
+
+// A copy whose token doesn't say who stored it, taken out of storage: it is drawn only once
+// settings shows this account can open the planner, and the load stores it again.
+function takeCopy() {
+  const text = readCopy();
+  try { localStorage.removeItem(SNAPSHOT_KEY); } catch {}
+  return text;
 }
 
 // Stores the week as just loaded; only this week's, the one /plan opens on.
@@ -1605,6 +1615,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   // who stored it. When the token doesn't say who is signed in, not until settings has shown this
   // account can open the planner.
   const user = api.userId();
+  const held = user ? null : takeCopy();
   let early = user ? showCopy(user) : false;
   if (early) $("[data-tools]").hidden = false;
   try {
@@ -1615,7 +1626,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
       $("[data-tools]").hidden = false;
       return;
     }
-    if (!user && !early) early = showCopy(null);
+    if (!user) early = showCopy(null, held);
     // The events' read starts with the tables', so it needs the calendars now.
     state.settings = settings;
     state.calendars = settings.calendars ?? [];
