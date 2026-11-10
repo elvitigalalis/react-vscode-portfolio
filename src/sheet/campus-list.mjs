@@ -6,7 +6,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, weekDays, zonedIso, minutesOn, formatSpan, dayLabel, positionBetween, byPosition, plural } from "./logic.mjs";
 import { campusDay, campusTags, eventToTask, freeFood, isAdded, activeTags, tagsOf } from "./campus.mjs";
-import { el, icon, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
+import { el, icon, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed, forgetTask } from "./planner.mjs";
 import { campusSummary } from "./glance.mjs";
 
 const tz = SHEET.timeZone;
@@ -132,7 +132,7 @@ async function add(uid) {
     const task = await api.insertTask({ ...t, position: positionBetween(last?.position ?? null, null) });
     state.tasks.set(task.id, task);
     note = `Added: ${task.title}.`;
-    offerUndo(`Added: ${task.title}`, async () => { note = null; await api.deleteTask(task.id); state.tasks.delete(task.id); });
+    offerUndo(`Added: ${task.title}`, async () => { note = null; await api.deleteTask(task.id); forgetTask(task.id); });
     clearTimeout(noteTimer);
     noteTimer = setTimeout(() => { note = null; if (dialog.open) draw(); }, 6000);
   } catch (e) { failed(e); }

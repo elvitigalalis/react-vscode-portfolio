@@ -76,6 +76,8 @@ export function specks(n, rand = Math.random) {
 export const ANIM_MS = 1000;
 export const SAVE_MS = 4000;
 export const LATE = Symbol("late");
+// A ✓ with no animation (reopening) ignores taps on the same row for this long: a double tap.
+export const TAP_MS = 300;
 export const wait = (ms, value) => new Promise((r) => setTimeout(r, ms, value));
 export const capped = (work, ms) => Promise.race([work, wait(ms, LATE)]);
 

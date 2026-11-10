@@ -100,6 +100,54 @@ tasks jumping days across time zones.
 - The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
   fades, the check-off below and the progress ring closing a step (400 ms), all off under `prefers-reduced-motion`.
 
+### Saving in the background
+
+A tap changes the page at once; the network never stands between a tap and what it does
+(src/sheet/optimistic.mjs). Measured on a slow mocked API (writes 800 ms, CPU 4×), a ✓ settles
+in about 0.4 s instead of 3.6 s, and a move, reopen or new task shows in under 0.1 s.
+
+- **What:** ✓ and ↺ (tasks and event to-dos), moves (the menu, keys, swipes, drag), edits and
+  deletes show at once and save behind it. A typed task shows as a muted row at once and becomes
+  a normal row when its save lands; the box is free for the next one meanwhile, and its words
+  survive the redraw.
+- **Order:** a row's saves run one after another, in the order they were made, so ✓ then ↺
+  leaves it open on the server too.
+- **Failure:** the row goes back to what the server holds and says "Not saved" under its title
+  ("Not deleted" for a delete, which also reloads the week; a failed new task: "Not added" by its
+  box, and the words go back in the box if it's empty), and the status line names it with Retry,
+  as before. The note stays until the row's next change. A save that finds its task deleted
+  elsewhere takes the row away instead, with no message.
+- **Deletes stay deleted:** a save still out for a deleted task lands without bringing it back,
+  and a reload that read before the delete leaves it out.
+- **Reloads:** a reload that read before a save landed keeps what the save wrote, and one that
+  reads while a save is out shows the change on top, so the page never flips back.
+- **Undo** belongs to the action that made it: a save that lands after a newer action's toast has
+  shown offers no Undo, and Undo goes back to the row as the server last confirmed it, not to a
+  change still saving or one that failed.
+- An edit in place is never redrawn under the cursor: a save that lands meanwhile redraws when
+  the edit ends.
+
+### Opening
+
+- **The last copy first:** after each load of this week, /plan keeps a short-lived copy of the
+  week in this browser (`sheet.snapshot.v1`), with the signed-in user's id: tasks, blocks, days,
+  event to-dos, horizon rows, today's focus minutes and the settings the week reads. No Oura data
+  at all, no calendar IDs, no keys or Telegram IDs. On opening, the copy draws at once with
+  "Updating…" in the status line, only for the user who stored it (when the token doesn't say
+  who is signed in, only once settings shows the account can open the planner, and it is out of
+  storage meanwhile). Then the normal load replaces it. A copy that can't be drawn is thrown
+  away and the page loads as usual.
+- **Changes made on the copy** show at once and save after the first load, so what they save
+  (a block to shorten or delete) comes from the fresh rows.
+- If the load fails, the status line says the page is the week as last seen, until a load works.
+- **It goes** on signing out, when the session has run out, and for an account that can't open
+  the planner (which sees nothing of the page).
+- **Google's events load beside the tables,** never before the first draw: the week draws with
+  the events kept from last time and redraws when Google answers, only if they changed.
+- **Coming back** (a reload after a minute away) redraws only when something read has changed;
+  the Oura poll already did. Projects and habits still read their own rows again then. A refresh
+  of the projects list redraws only that list.
+
 ### Completion
 
 Checking something off should feel good every time without getting old (src/sheet/celebrate.mjs).
@@ -107,9 +155,11 @@ Checking something off should feel good every time without getting old (src/shee
 - **Every ✓** (a row's ✓, X or Space, a swipe, Now/Next ✓, focus Done, an event to-do): the old row
   shows done at once, before the save ends. The ✓ springs (1 → 1.18 → 1, 350 ms) and draws itself
   (250 ms), a strike runs through the title left to right (250 ms, line by line when it wraps) and
-  the words go muted. The page redraws only when both the save and the animation are over; any
-  other redraw meanwhile (a reload on coming back, say) waits and runs once after. A save that
-  fails puts the row back open and the status line says so, as before. Reopening (↺) has no motion.
+  the words go muted. The page redraws when the animation is over, whether or not the save has
+  landed (below, "Saving in the background"); any other redraw meanwhile (a reload on coming back,
+  say) waits and runs once after. Focus mode's Done still waits for its own save (at most 4 s).
+  Reopening (↺) has no motion; taps on the same row within 0.3 s of a ✓ are a double tap and do
+  nothing.
 - **A Someday row** then fades out and the rows under it slide up (transform only); the Log's count
   pops.
 - **A burst when it means something:** eight specks in the site's greens and amber fly from the ✓
@@ -158,8 +208,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
 
 ## Adding and editing (Tweek, Ellie, TeuxDeux)
 
-- **Click an empty row, type, press Enter.** The task goes to the bottom of that day and the next
-  row is ready. There is never a form. The box grows as a long title wraps, while adding and
+- **Click an empty row, type, press Enter.** The task goes to the bottom of that day at once and
+  the next row is ready (above, "Saving in the background"). There is never a form. The box grows as a long title wraps, while adding and
   editing. Enter (with or without Shift) saves and Escape cancels an edit. A title is one line
   of text: line breaks in pasted text become spaces, and it is cut at 500 characters, so Google
   events, Telegram nudges and /now's bars never see a break.
