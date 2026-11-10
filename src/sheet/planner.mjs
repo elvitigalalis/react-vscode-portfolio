@@ -1628,6 +1628,9 @@ export async function start(node, plugins = [], settings = settingsModule) {
   try { await books(); } catch (e) { return failed(e); }
   wire();
   for (const plugin of plugins) plugin(root);
+  // The settings read goes out now; only the draw waits for drawWaits, not the network.
+  const reading = api.settings();
+  reading.catch(() => {});
   await Promise.race([Promise.all(drawWaits.map((w) => w.catch(console.error))), cheer.wait(DRAW_WAIT_MS)]);
   // Back from connecting mail or the calendar: those sections say how it went (mail-settings.mjs).
   if (/[?&](mail|calendar)=/.test(location.search)) loadSettings().catch(failed);
@@ -1646,7 +1649,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   let early = user ? await showCopy(user) : false;
   if (early) $("[data-tools]").hidden = false;
   try {
-    const settings = await api.settings();
+    const settings = await reading;
     if (!settings) {
       clearPage();
       setStatus("This account cannot open the planner.");
