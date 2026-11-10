@@ -72,13 +72,31 @@ export function prefetch(day) {
 }
 
 // --- What it shows ---------------------------------------------------------------------------------
+// The step is built once when it shows; after that each part is filled in place (fill), so a read
+// that lands or a tap never replaces the reflection box or the button that has focus.
 
 const todays = () => [...state.tasks.values()].filter((t) => t.day === today).sort(byPosition);
 const openTasks = () => todays().filter((t) => !t.done);
 const sentTomorrow = () => openTasks().filter((t) => decisions.get(t.id) === "tomorrow");
 const extrasReady = () => reads?.extrasOk === true;
 
-function winsSection() {
+let parts = {}; // the step's hosts: wins, open, late, past, end, tomorrow
+let box = null;  // the reflection box, one per open
+
+// A host's content replaced; focus inside it comes back to the same place (by key, else by order).
+function fill(host, nodes) {
+  if (!host) return;
+  const a = document.activeElement;
+  const inside = host.contains(a) ? a : null;
+  const key = inside?.dataset?.key;
+  const index = inside ? [...host.querySelectorAll("button, a, input, summary")].indexOf(inside) : -1;
+  host.replaceChildren(...nodes.filter(Boolean));
+  if (!inside) return;
+  const back = (key && host.querySelector(`[data-key="${CSS.escape(key)}"]`)) || host.querySelectorAll("button, a, input, summary")[index];
+  back?.focus();
+}
+
+function winsNodes() {
   const w = reads?.winsData;
   const focused = dayProgress(state.tasks.values(), today, progressHooks.focused?.() ?? state.actuals).focused;
   const lines = winLines(winsOf({ tasks: state.tasks.values(), today, tz, focused, workouts: w?.workouts ?? [], habits: w?.habits ?? [] }));
@@ -89,18 +107,17 @@ function winsSection() {
   });
   if (!w) items.push(el("li", { className: "is-reading", textContent: "Checking Hevy and habits" }));
   drawnWins = true;
-  return el("section", { className: "sheet-shut-wins-part" },
+  return [
     el("h3", { textContent: "Today's wins" }),
-    items.length ? el("ul", { className: "sheet-shut-wins", role: "list" }, ...items) : el("p", { className: "sheet-shut-quiet", textContent: "Nothing logged today. Closing the day still counts." }));
+    items.length ? el("ul", { className: "sheet-shut-wins", role: "list" }, ...items) : el("p", { className: "sheet-shut-quiet", textContent: "Nothing logged today. Closing the day still counts." }),
+  ];
 }
 
 function taskRow(t, choices) {
-  const pick = decisions.get(t.id);
-  return el("li", { className: `sheet-shut-task${asked && !pick ? " is-asked" : ""}` },
+  return el("li", { className: "sheet-shut-task" },
     el("p", { textContent: t.title }),
     el("div", { className: "sheet-shut-choices", role: "group", ariaLabel: `Where ${t.title} goes` }, ...choices.map((c) => {
       const b = el("button", { type: "button", className: "sheet-shut-choice", textContent: c.label });
-      b.setAttribute("aria-pressed", String(pick === c.kind));
       b.dataset.key = `${t.id}|${c.kind}`;
       b.dataset.id = t.id;
       b.dataset.kind = c.kind;
@@ -108,19 +125,85 @@ function taskRow(t, choices) {
     })));
 }
 
-function openSection() {
+// The open tasks are drawn once; a tap only changes what is pressed (syncOpen).
+function openNodes() {
   const open = openTasks();
-  if (!open.length) return el("p", { className: "sheet-shut-quiet", textContent: "Nothing left open today." });
-  const left = undecided(open, decisions).length;
+  if (!open.length) return [el("p", { className: "sheet-shut-quiet", textContent: "Nothing left open today." })];
   const choices = choicesFor(today);
   // Two or more still to place: one more tap sends the rest to tomorrow.
-  const rest = left >= 2 ? el("button", { type: "button", className: "sheet-link sheet-shut-rest", textContent: "Rest to tomorrow", onclick: restToTomorrow }) : null;
-  if (rest) rest.dataset.key = "rest";
-  return el("section", {},
+  const rest = el("button", { type: "button", className: "sheet-link sheet-shut-rest", textContent: "Rest to tomorrow", onclick: restToTomorrow });
+  rest.dataset.key = "rest";
+  return [
     el("h3", { textContent: `Still open (${open.length})` }),
     el("p", { className: "small" }, "One tap each: where does it go?", rest),
     el("ul", { className: "sheet-shut-open" }, ...open.map((t) => taskRow(t, choices))),
-    asked && left ? el("p", { className: "sheet-shut-ask", role: "status", textContent: `${left === 1 ? "1 task still needs" : `${left} tasks still need`} a place.` }) : null);
+    el("p", { className: "sheet-shut-ask", hidden: true }),
+  ];
+}
+
+function syncOpen() {
+  const host = parts.open;
+  if (!host) return;
+  const left = undecided(openTasks(), decisions).length;
+  for (const li of host.querySelectorAll(".sheet-shut-task")) {
+    const id = li.querySelector(".sheet-shut-choice")?.dataset.id;
+    const pick = decisions.get(id);
+    li.classList.toggle("is-asked", asked && !pick);
+    for (const b of li.querySelectorAll(".sheet-shut-choice")) b.setAttribute("aria-pressed", String(pick === b.dataset.kind));
+  }
+  const rest = host.querySelector(".sheet-shut-rest");
+  if (rest) rest.hidden = left < 2;
+  const ask = host.querySelector(".sheet-shut-ask");
+  if (ask) {
+    ask.hidden = !(asked && left);
+    ask.textContent = asked && left ? `${left === 1 ? "1 task still needs" : `${left} tasks still need`} a place.` : "";
+  }
+}
+
+// Late parts: today's events and the day's line, and the earlier reflections.
+const lateNodes = () => (extrasReady() ? lb.todayPart(sentTomorrow().length, () => fill(parts.late, lateNodes())) : []);
+const pastNodes = () => [extrasReady() ? lb.pastPart() : null];
+
+// Tomorrow comes next unless the look ahead couldn't be read.
+function endNodes() {
+  const next = reads?.extrasOk === false
+    ? el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })
+    : el("button", { type: "button", className: "sheet-btn primary", textContent: "Next: tomorrow", onclick: toTomorrow });
+  next.dataset.key = "next";
+  const cancel = el("button", { type: "button", className: "sheet-btn", textContent: "Cancel", onclick: () => dialog.close() });
+  cancel.dataset.key = "cancel";
+  return [cancel, next];
+}
+
+function buildToday() {
+  parts = {
+    wins: el("section", { className: "sheet-shut-wins-part" }),
+    late: el("div", {}),
+    open: el("section", {}),
+    past: el("div", {}),
+    end: el("div", { className: "sheet-dialog-end" }),
+  };
+  dialog.replaceChildren(el("h2", { id: "sheet-shut-title", textContent: "Shut down" }), parts.wins, parts.late, parts.open, box, parts.past, parts.end);
+  fill(parts.wins, winsNodes());
+  fill(parts.late, lateNodes());
+  fill(parts.open, openNodes());
+  syncOpen();
+  fill(parts.past, pastNodes());
+  fill(parts.end, endNodes());
+}
+
+function tomorrowNodes() {
+  return reads?.extrasOk === true ? lb.tomorrowPart(sentTomorrow(), () => fill(parts.tomorrow, tomorrowNodes()))
+    : [el("p", { className: "small", textContent: "Reading tomorrow…" })];
+}
+
+function buildTomorrow() {
+  parts = { tomorrow: el("div", {}) };
+  const back = el("button", { type: "button", className: "sheet-btn", textContent: "Back", onclick: () => { step = "today"; buildToday(); dialog.querySelector('[data-key="next"]')?.focus(); } });
+  const done = el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish });
+  done.dataset.key = "finish";
+  dialog.replaceChildren(el("h2", { id: "sheet-shut-title", textContent: "Tomorrow" }), parts.tomorrow, el("div", { className: "sheet-dialog-end" }, back, done));
+  fill(parts.tomorrow, tomorrowNodes());
 }
 
 function closedScreen() {
@@ -136,53 +219,15 @@ function closedScreen() {
     el("p", { className: "sheet-shut-next", textContent: next ? `Tomorrow starts with ${next}.` : "Tomorrow is open." }),
     // The week's wind-down line (planner.mjs, windDownMark), as what comes next tonight.
     b ? el("p", { className: "sheet-winddown", textContent: `Next: ${bedtimeMarker(b)}` }) : el("p", { className: "small", textContent: "Nothing else tonight." }),
-    el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close", autofocus: true })));
+    el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })));
 }
 
-// Every redraw replaces the dialog; focus and the reflection's caret come back to the same place.
-function draw() {
-  const a = document.activeElement;
-  const key = dialog.contains(a) ? a?.dataset?.key : null;
-  const caret = key === "reflect" ? [a.selectionStart, a.selectionEnd] : null;
-  if (step === "closed") dialog.replaceChildren(closedScreen());
-  else if (step === "tomorrow") {
-    const status = reads?.extrasOk;
-    dialog.replaceChildren(...[
-      el("h2", { id: "sheet-shut-title", textContent: "Tomorrow" }),
-      ...(status === true ? lb.tomorrowPart(sentTomorrow(), draw) : [el("p", { className: "small", role: "status", textContent: "Reading tomorrow…" })]),
-      el("div", { className: "sheet-dialog-end" },
-        el("button", { type: "button", className: "sheet-btn", textContent: "Back", onclick: () => { step = "today"; draw(); } }),
-        el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })),
-    ].filter(Boolean));
-  } else {
-    const box = el("textarea", { className: "sheet-reflect", rows: 2, value: reflection, ariaLabel: "What went well, what got in the way? (optional)", placeholder: "What went well, what got in the way? (optional)" });
-    box.dataset.key = "reflect";
-    box.addEventListener("input", () => { reflection = box.value; });
-    // Tomorrow comes next unless the look ahead couldn't be read.
-    const next = reads?.extrasOk === false
-      ? el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish })
-      : el("button", { type: "button", className: "sheet-btn primary", textContent: "Next: tomorrow", onclick: toTomorrow });
-    next.dataset.key = "next";
-    dialog.replaceChildren(...[
-      el("h2", { id: "sheet-shut-title", textContent: "Shut down" }),
-      winsSection(),
-      ...(extrasReady() ? lb.todayPart(sentTomorrow().length, draw) : []),
-      openSection(),
-      box,
-      extrasReady() ? lb.pastPart() : null,
-      el("div", { className: "sheet-dialog-end" },
-        el("button", { type: "button", className: "sheet-btn", textContent: "Cancel", onclick: () => dialog.close() }),
-        next),
-    ].filter(Boolean));
-  }
-  const back = key ? dialog.querySelector(`[data-key="${CSS.escape(key)}"]`) : null;
-  if (back) {
-    back.focus();
-    if (caret) back.setSelectionRange(...caret);
-  }
-}
-
-const redraw = (r) => () => { if (reads === r && dialog.open && step !== "closed") draw(); };
+// A read landed: fill what it feeds, in place.
+const landed = (r) => () => {
+  if (reads !== r || !dialog.open) return;
+  if (step === "today") { fill(parts.wins, winsNodes()); fill(parts.late, lateNodes()); fill(parts.past, pastNodes()); fill(parts.end, endNodes()); }
+  if (step === "tomorrow") fill(parts.tomorrow, tomorrowNodes());
+};
 
 // --- Acting -----------------------------------------------------------------------------------------
 
@@ -191,8 +236,8 @@ const redraw = (r) => () => { if (reads === r && dialog.open && step !== "closed
 function placed() {
   if (!undecided(openTasks(), decisions).length) return true;
   asked = true;
-  step = "today";
-  draw();
+  if (step !== "today") { step = "today"; buildToday(); }
+  syncOpen();
   const first = dialog.querySelector(".sheet-shut-task.is-asked .sheet-shut-choice");
   first?.focus();
   first?.scrollIntoView({ block: "center" });
@@ -202,13 +247,21 @@ function placed() {
 function toTomorrow() {
   if (!placed()) return;
   step = "tomorrow";
-  draw();
+  buildTomorrow();
   dialog.scrollTop = 0;
+  dialog.querySelector('[data-key="finish"]')?.focus();
+}
+
+function choose(id, kind) {
+  decisions.set(id, kind);
+  syncOpen();
+  fill(parts.late, lateNodes()); // the line counts what moves to tomorrow
 }
 
 function restToTomorrow() {
   for (const t of undecided(openTasks(), decisions)) decisions.set(t.id, "tomorrow");
-  draw();
+  syncOpen();
+  fill(parts.late, lateNodes());
   dialog.querySelector('[data-key="next"]')?.focus();
 }
 
@@ -276,7 +329,8 @@ async function finish(e) {
     state.days[today] = { ...(state.days[today] ?? { day: today, planned: false }), shutdown: true, reflection: note };
     state.blocks = state.blocks.filter((b) => !(b.proposed && localNow(new Date(b.starts_at), tz).day === today));
     step = "closed";
-    draw();
+    parts = {};
+    dialog.replaceChildren(closedScreen());
     dialog.querySelector(".sheet-shut-closed .sheet-btn")?.focus();
     if (at) burst(at, dialog);
     load({ scroll: false }).catch(console.error);
@@ -291,11 +345,14 @@ export function open(day) {
   asked = false;
   shown = new Set();
   drawnWins = false;
+  box = el("textarea", { className: "sheet-reflect", rows: 2, value: reflection, ariaLabel: "What went well, what got in the way? (optional)", placeholder: "What went well, what got in the way? (optional)" });
+  box.dataset.key = "reflect";
+  box.addEventListener("input", () => { reflection = box.value; });
   const r = prefetch(today);
   if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
-  r.wins.then(redraw(r));
-  r.extras.then(redraw(r));
-  draw();
+  r.wins.then(landed(r));
+  r.extras.then(landed(r));
+  buildToday();
   dialog.showModal();
   dialog.querySelector(".sheet-shut-choice, [data-key='next']")?.focus();
 }
@@ -304,9 +361,7 @@ export function setupView(root) {
   dialog = root.querySelector("[data-shut]");
   dialog.addEventListener("click", (e) => {
     const b = e.target.closest(".sheet-shut-choice");
-    if (!b) return;
-    decisions.set(b.dataset.id, b.dataset.kind);
-    draw();
+    if (b) choose(b.dataset.id, b.dataset.kind);
   });
   dialog.addEventListener("close", () => render());
 }
