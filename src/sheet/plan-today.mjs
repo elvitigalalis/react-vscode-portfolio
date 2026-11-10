@@ -165,6 +165,14 @@ export function setupPlanToday(root) {
   dialog = root.querySelector("[data-plan]");
   eventHooks.push(createMissedOnce);
   renderHooks.push(() => { if (dialog.open) planDialog?.draw(); });
+  // One timer redraws at today's shutdown, so the over-commit and readiness notes go away while
+  // the page sits idle. Each render resets it.
+  let atShutdown = null;
+  renderHooks.push(() => {
+    clearTimeout(atShutdown);
+    const wait = Date.parse(zonedIso(state.today, shutdownAt(state.today), SHEET.timeZone)) - Date.now();
+    if (wait > 0) atShutdown = setTimeout(render, wait + 1000);
+  });
   // Today's over-commit note, under its glance strip.
   renderHooks.push(() => {
     const note = overNote(state.today, picking, () => { picking = !picking; render(); }, "week");
