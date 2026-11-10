@@ -306,7 +306,7 @@ export async function checkOff(id, { li = rowOf(id), save = null, quiet = false,
     save ??= () => toggleDone(id, cheer.MOMENT_WORDS[moment] ?? null);
     if (t.done || !li) { await save(); render(); return; }
     const leave = Boolean(li.closest(".sheet-list"));
-    const why = { first: cheer.firstToday(state.tasks.values(), state.today, SHEET.timeZone), rolls: t.rolls ?? 0, early: cheer.inside(t, focusMin) };
+    const why = { first: cheer.firstOfDay(state.tasks.values(), state.today, SHEET.timeZone), rolls: t.rolls ?? 0, early: cheer.inside(t, focusMin) };
     const { saving } = await playOff(li, save, { leave, moment, quiet, why, ...(from ? { from } : {}) });
     if (state.tasks.get(id)?.done) {
       if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));

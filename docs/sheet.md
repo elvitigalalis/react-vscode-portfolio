@@ -109,9 +109,10 @@ Checking something off should feel good every time without getting old (src/shee
 - **A Someday row** then fades out and the rows under it slide up (transform only); the Log's count
   pops.
 - **A burst when it means something:** eight specks in the site's greens and amber fly from the ✓
-  (about 550 ms) on the day's first ✓ (no task has a done_at today yet), a task carried over three
-  times or more, a task focus Done finished before its estimate ran out, or the third ✓ within ten
-  minutes. Never by chance, and never from a key.
+  (about 550 ms) on the day's first ✓ (no task has a done_at today yet; once a day, however often
+  it is tapped or reopened), a task carried over three times or more, a task focus Done finished
+  before its estimate ran out, or the third ✓ within ten minutes. Never by chance, and never from
+  a key.
 - **Big moments:** a Brightspace task (an assignment), or the last open task of today. Confetti for
   1.2 s on one canvas, loaded only then, and the Undo toast reads "Assignment done." or "Day
   cleared." before "Done: …". Clearing the day also pops the header's ✓.

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shouldBurst, firstToday, inside, STUBBORN_ROLLS, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS, once } from "../src/sheet/celebrate.mjs";
+import { shouldBurst, firstToday, firstOfDay, inside, STUBBORN_ROLLS, isAssignment, isDayCleared, momentOf, specks, STREAK_MS, MOMENT_WORDS, capped, LATE, wait, ANIM_MS, SAVE_MS, once } from "../src/sheet/celebrate.mjs";
 
 const T = (id, day, extra = {}) => ({ id, day, done: false, source: null, ...extra });
 
@@ -33,6 +33,17 @@ test("the day's first ✓ is the first with a done_at today on his clock", () =>
   assert.equal(firstToday([T("a", today, { done: true, done_at: "2026-11-03T15:00:00Z" })], today, tz), false);
   // Done before done_at existed (null) tells nothing.
   assert.equal(firstToday([T("a", today, { done: true, done_at: null })], today, tz), true);
+});
+
+test("the day's first ✓ fires once a day, however often nothing looks done", () => {
+  const tz = "America/New_York";
+  // Quick taps, an uncheck and recheck, another week on screen: no done_at today each time.
+  assert.equal(firstOfDay([], "2026-11-10", tz), true);
+  assert.equal(firstOfDay([], "2026-11-10", tz), false);
+  assert.equal(firstOfDay([T("a", "2026-11-10")], "2026-11-10", tz), false);
+  // The next day it can fire again, but not when something is already done that day.
+  assert.equal(firstOfDay([T("a", "2026-11-11", { done: true, done_at: "2026-11-11T15:00:00Z" })], "2026-11-11", tz), false);
+  assert.equal(firstOfDay([], "2026-11-11", tz), true);
 });
 
 test("a focus session finished it inside its estimate", () => {

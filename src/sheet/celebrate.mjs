@@ -30,6 +30,16 @@ export function shouldBurst(history, now, { first = false, rolls = 0, early = fa
 export const firstToday = (tasks, today, timeZone) =>
   ![...tasks].some((t) => t.done && t.done_at && localNow(new Date(t.done_at), timeZone).day === today);
 
+// The day's first ✓ bursts once a day: quick taps (before a save brings done_at back), an
+// uncheck and recheck, or another week on screen (today's done tasks not loaded) can't fire it
+// again. `firstFiredOn` is the day it last fired.
+let firstFiredOn = null;
+export function firstOfDay(tasks, today, timeZone) {
+  if (firstFiredOn === today || !firstToday(tasks, today, timeZone)) return false;
+  firstFiredOn = today;
+  return true;
+}
+
 // A focus session of `minutes` ended the task before its estimate ran out.
 export const inside = (task, minutes) => minutes != null && task?.est_min > 0 && minutes < task.est_min;
 
