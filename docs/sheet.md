@@ -407,7 +407,7 @@ one tap.
 
 **Speed.** The dialog's code (shutdown-view.mjs) is loaded on demand. Its code and its reads
 (Hevy, the habits, and the look back and ahead) are warmed when the button shows (at idle) and on
-hover, focus or a press of the button; a warm read under two minutes old is used as it is. It
+hover, focus or a press of the button; a warm look ahead under two minutes old is used as it is, while Hevy and the habits are read again on every open (a workout or a habit can land any minute). While Finish saves, the dialog is busy: its buttons are off and Escape waits. A write that fails, or matches no row, stops Finish before the day is shut down; Finish again retries what is left. It
 opens at once from what the week already holds, with a "Checking Hevy and habits" line, and
 fills in as each read lands. What a read brings (the Hevy and habit wins, today's events, the
 line) lands under the open tasks, as "Also today", so no choice moves while he taps. Finish updates the week in place and shows "Day closed" without
