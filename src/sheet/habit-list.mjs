@@ -18,18 +18,26 @@ let root;
 let habits = [];
 let done = new Map(); // habit id → Set of habit days
 let seen = null;      // the state.tasks they were read for (one read per load, as project-list.mjs)
+// Ticks not yet saved, "id|day" → on. A reload during a save would read the old row, so refresh
+// lays these back over what it read; only the newest refresh's answer is used.
+const pending = new Map();
+let reads = 0;
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "UTC" });
 const WORDS = { done: "done", missed: "not done", due: "today, open", off: "off" };
 
 const today = () => habitDay(new Date(), SHEET.timeZone);
 const daysOf = (id) => done.get(id) ?? done.set(id, new Set()).get(id);
+const setDone = (id, day, on) => (on ? daysOf(id).add(day) : daysOf(id).delete(day));
 
 async function refresh() {
   const from = addDays(today(), -55); // seven scheduled days back for a once-a-week habit
+  const n = ++reads;
   const [rows, ticks] = await Promise.all([api.listHabits(), api.listHabitDone(from)]);
+  if (n !== reads) return; // a newer read is on its way
   habits = rows;
   done = new Map();
   for (const t of ticks) daysOf(t.habit_id).add(t.day);
+  for (const [key, on] of pending) { const [id, day] = key.split("|"); setDone(id, day, on); }
   draw();
 }
 
@@ -60,17 +68,18 @@ function draw(fresh = null) {
 async function toggle(e) {
   const id = e.target.closest("[data-id]").dataset.id;
   const day = today();
-  const days = daysOf(id);
-  const on = !days.has(day);
-  const flip = () => (days.has(day) ? days.delete(day) : days.add(day));
-  flip();
+  const key = `${id}|${day}`;
+  const on = !daysOf(id).has(day);
+  pending.set(key, on);
+  setDone(id, day, on);
   draw(id);
   root.querySelector(`.sheet-habit-check[data-id="${id}"]`)?.focus();
   try {
     await (on ? api.markHabitDone(id, day) : api.unmarkHabitDone(id, day));
+    if (pending.get(key) === on) pending.delete(key);
   } catch (err) {
-    flip();
-    draw();
+    // Back to what it was before this tap, unless a newer tap has already set it.
+    if (pending.get(key) === on) { pending.delete(key); setDone(id, day, !on); draw(); }
     failed(err);
   }
 }
