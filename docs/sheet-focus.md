@@ -78,7 +78,8 @@ the sense that the list is out of control. Plan today shows his own history, nev
 - The line: "You usually take 1.4× your estimates (median of your last 12 finished tasks).
   Today's 4h of estimates is about 5h35." (the day's undone estimates, times the pace, to 5
   minutes). At 1.0× it reads "Your estimates have been about right (median of …)." and drops the
-  day's part.
+  day's part. When the 0.5–3× limit holds the median, it says so: "at least 3.0×" and "is at
+  least 12h" (or "at most 0.5×").
 - It is informational only: blocks keep using per-kind pace (`pace.mjs`, gated at 5 per kind),
   and nothing changes an estimate for him.
 
