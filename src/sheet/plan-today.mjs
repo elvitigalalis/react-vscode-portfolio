@@ -51,6 +51,7 @@ const refocus = (where, pick = false) => {
 export function overNote(d, open, toggle, where) {
   const o = overCommit(plannedLeft(tasksOn(d), blocksOn(d), Date.now()), dayCapacity(d).free);
   if (!o) return null;
+  import("./calm-styles.mjs").catch(console.error);
   const next = d === state.today ? "tomorrow" : weekdayName(addDays(d, 1));
   const link = el("button", { type: "button", className: "sheet-link", textContent: `Move some to ${next}` });
   link.setAttribute("aria-expanded", String(open));

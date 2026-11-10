@@ -1012,6 +1012,7 @@ function openMenu(id, anchor) {
   // Someday and Drop; the plain "To tomorrow" and "To Someday" step aside meanwhile.
   const triage = Boolean(t.day && !t.done && t.rolls >= 2);
   menu.querySelector("[data-triage]").hidden = !triage;
+  if (triage) import("./calm-styles.mjs").catch(console.error);
   menu.querySelector('[data-triage] [data-move="this-week"]').hidden = !laterThisWeek(now().day);
   for (const kind of ["tomorrow", "someday"]) menu.querySelector(`:scope > [data-move="${kind}"]`).hidden = triage;
   const r = anchor.getBoundingClientRect();
