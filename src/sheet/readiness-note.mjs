@@ -42,7 +42,7 @@ function note(d) {
     push.onclick = () => { open = !open; render(); document.querySelector('[data-over="ready"] .sheet-link')?.focus(); };
     line.append(push, " · ");
   } else open = false;
-  const x = el("button", { type: "button", className: "sheet-link", textContent: "Dismiss" });
+  const x = el("button", { type: "button", className: "sheet-link", textContent: "Dismiss", ariaLabel: "Dismiss readiness note" });
   x.onclick = () => {
     gone = d; dismiss(d); open = false; render();
     const head = document.querySelector(".sheet-day.is-today .sheet-head");
