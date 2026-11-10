@@ -373,7 +373,10 @@ block never deletes the task. Changing one block never moves another.
 ## Shutdown: `O` (Newport, Ellie, Sunsama)
 
 The "Shut down" button appears on today's header from two hours before shutdown time (`O` works
-any time). The ritual is meant to take under two minutes: it fills itself in, and each choice is
+any time). Before 4 am it is for the day before, on the habits' 4 am boundary: the button stays up
+until that day is shut down, and the button, `O` and Telegram's link all close that day. A task
+done after midnight counts as that day's win. When that day isn't the week on screen (1 am on a
+Monday), Shutdown reads its tasks first. The ritual is meant to take under two minutes: it fills itself in, and each choice is
 one tap.
 
 1. **Today's wins**, filled in from what is already logged (src/sheet/shutdown-close.mjs): tasks

@@ -5,11 +5,17 @@
 // Why a decision for each: an unfinished goal keeps pulling at attention until it is done or has
 // a specific plan (Masicampo & Baumeister 2011), and a specific to-do list for the next days
 // before bed sped sleep onset (Scullin et al. 2018). Wins are counts and names, never points.
-import { addDays, formatMinutes, laterThisWeek, localNow, moveChange, plural } from "./logic.mjs";
+import { addDays, formatMinutes, laterThisWeek, moveChange, plural } from "./logic.mjs";
+import { habitDay } from "./habit-rate.mjs";
 
-// Done today, wherever the task sits now: by done_at on his clock, or, with no done_at, a task on
-// today that is done.
-export const doneToday = (t, today, tz) => Boolean(t.done) && (t.done_at ? localNow(new Date(t.done_at), tz).day === today : t.day === today);
+// The day Shutdown closes: today, or before 4 am the day before, the habits' day boundary
+// (habit-rate.mjs, habitDay). The button, `O` and Telegram's ?open=shutdown all use it, so a
+// shutdown at 1 am closes the evening he is still in.
+export const shutdownDay = (now, tz) => habitDay(now, tz);
+
+// Done today, wherever the task sits now: by done_at on the same 4 am boundary, or, with no
+// done_at, a task on today that is done.
+export const doneToday = (t, today, tz) => Boolean(t.done) && (t.done_at ? habitDay(new Date(t.done_at), tz) === today : t.day === today);
 
 const WORK = new Set(["github", "jira"]);
 

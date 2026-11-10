@@ -10,7 +10,7 @@
 import css from "../styles/sheet-shutdown.css?inline";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
-import { addDays, byPosition, localNow, positionBetween } from "./logic.mjs";
+import { addDays, byPosition, localNow, positionBetween, weekDays } from "./logic.mjs";
 import { el, state, render, load, completeTask, dropBlocks, failed, progressHooks } from "./planner.mjs";
 import { dayProgress } from "./progress.mjs";
 import { habitDay } from "./habit-rate.mjs";
@@ -390,6 +390,7 @@ async function finish(e) {
     // The roll's moves, as the server made them (its positions come with the reload behind).
     for (const { t, change } of rolled) state.tasks.set(t.id, { ...t, ...change });
     state.days[today] = { ...(state.days[today] ?? { day: today, planned: false }), shutdown: true, reflection: note };
+    hooks.closed?.(today);
     state.blocks = state.blocks.filter((b) => !(b.proposed && localNow(new Date(b.starts_at), tz).day === today));
     load({ scroll: false }).catch(console.error);
     if (mine !== session) return;
@@ -409,32 +410,52 @@ async function finish(e) {
   }
 }
 
-export function open(day) {
-  session++;
+// The day's tasks when it isn't the week on screen (after midnight on a Monday, or another week
+// open): read into the planner's state, which the dialog reads, before it builds.
+async function readDay(day) {
+  const [tasks, days] = await Promise.all([api.rest(`tasks?day=eq.${day}&order=position`), api.rest(`days?day=eq.${day}`)]);
+  for (const t of tasks) state.tasks.set(t.id, t);
+  if (days[0]) state.days[day] = days[0];
+}
+
+export async function open(day) {
+  const mine = ++session;
   busy = false;
   dialog.removeAttribute("aria-busy");
   today = day;
   step = "today";
-  reflection = state.days[today]?.reflection ?? "";
   decisions = new Map();
   asked = false;
   shown = new Set();
   drawnWins = false;
+  const r = prefetch(today);
+  if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
+  if (state.week && !weekDays(state.week).includes(day)) {
+    parts = {};
+    body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), el("p", { className: "small", textContent: "Reading the day…" }));
+    dialog.showModal();
+    dialog.querySelector("#sheet-shut-title")?.focus();
+    try { await readDay(day); } catch (e) { if (mine === session) { dialog.close(); failed(e); } return; }
+    if (mine !== session || !dialog.open) return;
+  }
+  reflection = state.days[today]?.reflection ?? "";
   box = el("textarea", { className: "sheet-reflect", rows: 2, value: reflection, ariaLabel: "What went well, what got in the way? (optional)", placeholder: "What went well, what got in the way? (optional)" });
   box.dataset.key = "reflect";
   box.addEventListener("input", () => { reflection = box.value; });
-  const r = prefetch(today);
-  if (Date.now() - r.winsAt > WINS_FRESH_MS) readWins(r);
   r.wins.then(landed(r));
   r.extras.then(landed(r));
   r.extrasLate.then(landed(r));
   buildToday();
-  dialog.showModal();
+  if (!dialog.open) dialog.showModal();
   // The heading, not a choice: a screen reader starts at the top, and no answer is preselected.
   dialog.querySelector("#sheet-shut-title")?.focus();
 }
 
-export function setupView(root) {
+let hooks = {};
+
+// `closed(day)` tells shutdown.mjs a day was shut down (for the button off the week on screen).
+export function setupView(root, given = {}) {
+  hooks = given;
   dialog = root.querySelector("[data-shut]");
   body = el("div", {});
   live = el("p", { className: "visually-hidden", role: "status" });

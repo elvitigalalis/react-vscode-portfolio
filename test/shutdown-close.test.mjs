@@ -2,7 +2,7 @@
 // it fills in, the places an unfinished task can go, and what Finish saves for each.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rollsOnServer, choicesFor, closedLine, decisionChange, doneToday, firstUp, targetOf, undecided, winLines, winsOf } from "../src/sheet/shutdown-close.mjs";
+import { rollsOnServer, shutdownDay, choicesFor, closedLine, decisionChange, doneToday, firstUp, targetOf, undecided, winLines, winsOf } from "../src/sheet/shutdown-close.mjs";
 
 const tz = "America/New_York";
 const today = "2026-11-03"; // a Tuesday
@@ -86,4 +86,12 @@ test("a plain Tomorrow rides on shut_down's roll; a timed one or a third roll is
   assert.equal(rollsOnServer(T("a", "A", { rolls: 3 }), "tomorrow"), false, "the roll would park it in Inbox");
   assert.equal(rollsOnServer(T("a", "A", { at_time: "15:00:00" }), "tomorrow"), false);
   assert.equal(rollsOnServer(T("a", "A"), "week"), false);
+});
+
+test("before 4 am, Shutdown closes the day before, and what was done after midnight counts for it", () => {
+  assert.equal(shutdownDay(new Date("2026-11-04T06:30:00Z"), tz), "2026-11-03", "1:30 am Wednesday");
+  assert.equal(shutdownDay(new Date("2026-11-04T09:30:00Z"), tz), "2026-11-04", "4:30 am Wednesday");
+  assert.equal(shutdownDay(new Date("2026-11-04T03:00:00Z"), tz), "2026-11-03", "10 pm Tuesday");
+  assert.equal(doneToday(T("a", "A", { done: true, done_at: "2026-11-04T06:00:00Z" }), today, tz), true, "done at 1 am counts for Tuesday");
+  assert.equal(doneToday(T("b", "B", { done: true, done_at: "2026-11-03T08:30:00Z" }), today, tz), false, "3:30 am Tuesday was Monday's");
 });
