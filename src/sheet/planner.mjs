@@ -20,6 +20,7 @@ import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
 import * as cheer from "./celebrate.mjs";
 import { dayProgress, progressText, weekDone, weekTitle } from "./progress.mjs";
+import { ledger } from "./optimistic.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -180,11 +181,31 @@ async function undo() {
 
 // --- Changes -----------------------------------------------------------------------------
 
-async function patch(id, change) {
+// Saving in the background (optimistic.mjs): a task's or an event to-do's change shows at once and
+// saves after the row's earlier saves. One that fails puts the row back, says "Not saved" on it
+// (`errors`, until its next change) and redraws; the caller's catch names it in the status line.
+const taskBook = ledger({ get: (id) => state.tasks.get(id), set: (id, row) => state.tasks.set(id, row) });
+const todoBook = ledger({
+  get: (key) => state.todos.find((t) => t.cal_event_key === key),
+  set: (key, row) => { const i = state.todos.findIndex((t) => t.cal_event_key === key); if (i < 0) state.todos.push(row); else state.todos[i] = row; },
+});
+const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -> the row's note
+
+function saving(book, key, change, save) {
+  errors.delete(key);
+  return book.write(key.slice(key.indexOf(":") + 1), change, save).then(
+    (saved) => { render(); return saved; },
+    (e) => { errors.set(key, "Not saved"); render(); throw e; });
+}
+
+// A task PATCH that matched no row (deleted elsewhere) saved nothing: that is a failure too.
+async function updated(id, change) {
   const saved = await api.updateTask(id, change);
-  state.tasks.set(id, saved);
+  if (!saved) throw new Error(`task ${id} is gone`);
   return saved;
 }
+const write = (id, change, save = () => updated(id, change)) => saving(taskBook, `task:${id}`, change, save);
+const patch = (id, change) => write(id, change);
 
 // Google calendar blocks of a task. A block with no gcal_id was made while Google was off.
 const blocksOf = (id) => state.blocks.filter((b) => b.task_id === id);
@@ -198,56 +219,75 @@ export async function dropBlocks(id) {
   state.blocks = state.blocks.filter((b) => b.task_id !== id);
 }
 
+// Tasks typed in whose save is still out: drawn as rows in their day or list (addingRow) until
+// the saved task takes their place. Not in state.tasks, so nothing can act on one before it has an id.
+const adding = [];
+const whereKey = (where) => `add:${where.day ?? where.list}${where.also ? ":also" : ""}`;
+const sameWhere = (a, b) => (a.day ?? null) === (b.day ?? null) && (a.day ? true : a.list === b.list);
+
 // `extra` goes into the new row as it is ({ done: true } for Also did…).
 export async function addTask(text, where, extra = {}) {
   // A due date counts from the task's day; a Someday task's counts from today.
   const parsed = parseEntry(text, where.day ?? state.today);
   if (!parsed.title) return;
   const siblings = where.day ? tasksOn(where.day) : tasksIn(where.list);
-  // A deadline written only in the title ("Nov 14 11:59pm") becomes the due date.
-  const task = await api.insertTask(withTitleDue({
-    ...parsed, day: where.day ?? null, list: where.day ? null : where.list,
-    position: positionBetween(lastPosition(siblings), null), ...extra,
-  }, state.today));
-  state.tasks.set(task.id, task);
-  return task;
+  // After the tasks still being added there, so quick adds keep the order they were typed in.
+  const last = Math.max(...[lastPosition(siblings), ...adding.filter((a) => sameWhere(a.where, where)).map((a) => a.position)].filter((p) => p != null));
+  const position = positionBetween(Number.isFinite(last) ? last : null, null);
+  const row = { where, title: parsed.title, position };
+  adding.push(row);
+  errors.delete(whereKey(where));
+  try {
+    // A deadline written only in the title ("Nov 14 11:59pm") becomes the due date.
+    const task = await api.insertTask(withTitleDue({ ...parsed, day: where.day ?? null, list: where.day ? null : where.list, position, ...extra }, state.today));
+    state.tasks.set(task.id, task);
+    taskBook.note(task.id, task);
+    return task;
+  } catch (e) {
+    errors.set(whereKey(where), "Not added");
+    throw e;
+  } finally {
+    adding.splice(adding.indexOf(row), 1);
+  }
 }
 
-// Move a task to a day (or a Someday list), at the end unless a position is given. Moving to
-// another day removes its blocks: a block is a plan for one day.
-export async function moveTask(id, where, position) {
+// Move a task to a day (or a Someday list), at the end unless a position is given. It shows there
+// at once; the promise settles with the save. Moving to another day removes its blocks: a block is
+// a plan for one day.
+export function moveTask(id, where, position) {
   const t = state.tasks.get(id);
   const target = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const pos = position ?? positionBetween(lastPosition(target.filter((x) => x.id !== id)), null);
   const { change, before } = moveChange(t, where, pos);
-  if (where.day !== t.day) await dropBlocks(id);
-  await patch(id, change);
-  offerUndo("Moved.", () => patch(id, before));
+  const moving = where.day !== t.day;
+  return write(id, change, async () => { if (moving) await dropBlocks(id); return updated(id, change); })
+    .then(() => offerUndo("Moved.", () => patch(id, before)));
 }
 
-// `lead` goes before "Done: …" in the Undo toast ("Day cleared."), written with it in one go so
-// a screen reader hears the toast once.
-export async function completeTask(id, done = true, lead = null) {
+// Done (or not) shows at once; the promise settles with the save. `lead` goes before "Done: …" in
+// the Undo toast ("Day cleared."), written with it in one go so a screen reader hears it once.
+export function completeTask(id, done = true, lead = null) {
   const t = state.tasks.get(id);
-  if (done) {
-    const at = new Date();
-    for (const b of blocksOf(id)) {
-      const r = blockOnComplete(b, at);
-      if (r.action === "delete") {
-        if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
-        await api.deleteBlock(b.id);
-        state.blocks = state.blocks.filter((x) => x.id !== b.id);
-      } else if (r.action === "shrink") {
-        if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: r.ends_at } });
-        Object.assign(b, await api.updateBlock(b.id, { ends_at: r.ends_at }));
+  return write(id, { done }, async () => {
+    if (done) {
+      const at = new Date();
+      for (const b of blocksOf(id)) {
+        const r = blockOnComplete(b, at);
+        if (r.action === "delete") {
+          if (b.gcal_id && api.googleReady()) await api.deleteEvent(b.gcal_id);
+          await api.deleteBlock(b.id);
+          state.blocks = state.blocks.filter((x) => x.id !== b.id);
+        } else if (r.action === "shrink") {
+          if (b.gcal_id && api.googleReady()) await api.patchEvent(b.gcal_id, { end: { dateTime: r.ends_at } });
+          Object.assign(b, await api.updateBlock(b.id, { ends_at: r.ends_at }));
+        }
       }
     }
-  }
-  await patch(id, { done });
-  if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false }));
+    return updated(id, { done });
+  }).then(() => { if (done) offerUndo(`${lead ? `${lead} ` : ""}Done: ${t.title}`, () => patch(id, { done: false })); });
 }
 
-// ✓ on a row (and a swipe or the Now/Next line): flip it, and say so if it didn't save.
+// ✓ on a row (and a swipe or the Now/Next line): flip it at once, and say so if it didn't save.
 export async function toggleDone(id, lead = null) {
   const done = !state.tasks.get(id).done;
   try { await completeTask(id, done, lead); } catch (err) { failed(err, `save ${named(state.tasks.get(id))} as ${done ? "done" : "not done"}`, () => completeTask(id, done)); }
@@ -272,11 +312,13 @@ async function hold(work) {
 // The row a task shows in on the page (not in a dialog or a closed Log or project), if any.
 const rowOf = (id) => [...root.querySelectorAll(`.sheet-task[data-id="${CSS.escape(id)}"]`)].find((r) => !r.closest("dialog, details:not([open])") && r.getClientRects().length) ?? null;
 
-// The old row plays its ✓ (cheer.playRow) while `save` runs; the page redraws once both are over,
-// or after cheer.SAVE_MS at most: a save that hangs (a slow network) mustn't freeze every redraw.
-// It then redraws again when it lands. A failed save needs nothing undone: state never changed,
-// so the redraw shows the row open again. Returns { saving }, the save itself.
-async function playOff(li, save, { leave = false, moment = null, quiet = false, why = {}, from = li.querySelector(".sheet-check") } = {}) {
+// The old row plays its ✓ (cheer.playRow) while `save` runs. A save that shows its change at once
+// (toggleDone, saving in the background) holds the redraw only for the animation: the redraw then
+// draws the done row whether or not the save has landed, and a save that fails later puts the row
+// back and redraws again. A save that changes nothing until it lands (focus mode's outbox,
+// `gated`) holds it for both, or cheer.SAVE_MS at most: a save that hangs mustn't freeze every
+// redraw. Returns { saving }, the save itself.
+async function playOff(li, save, { leave = false, moment = null, quiet = false, why = {}, gated = false, from = li.querySelector(".sheet-check") } = {}) {
   cheer.cheer(from, { moment, quiet, why });
   const list = li.closest(".sheet-rows");
   const before = leave ? cheer.places(list) : null;
@@ -285,7 +327,7 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
   // A hidden tab doesn't run animations, so a short timer stands in for one there; a tab hidden
   // midway is covered by the cap.
   const anim = document.hidden ? cheer.wait(150) : cheer.capped(cheer.playRow(li, { leave }), cheer.ANIM_MS);
-  const got = await hold(cheer.capped(Promise.all([saving, anim]), cheer.SAVE_MS));
+  const got = await hold(gated ? cheer.capped(Promise.all([saving, anim]), cheer.SAVE_MS) : anim);
   if (got === cheer.LATE) saving.then(() => render(), () => render());
   await drew;
   if (before) cheer.slide(before, root.querySelectorAll(`.sheet-rows[data-list="${CSS.escape(list.dataset.list ?? "")}"] [data-id]`));
@@ -293,9 +335,12 @@ async function playOff(li, save, { leave = false, moment = null, quiet = false, 
 }
 
 // ✓ on a task, from its row, a key, a swipe, the Now/Next line or focus mode. Reopening a done
-// task just saves and redraws. `save` defaults to toggleDone (focus mode passes its outbox).
+// task redraws at once. `save` defaults to toggleDone, which shows the change before it saves;
+// focus mode passes its outbox, which doesn't, so its ✓ still waits for it (gated).
 // A Someday row leaves for the Log once done, so it fades out and the Log's count pops.
-// A second tap while the first still saves does nothing (cheer.once, keyed by task or event).
+// A second tap while the ✓ plays does nothing (cheer.once, keyed by task or event); one after it
+// queues behind the first save (optimistic.mjs), so the server gets them in order. Resolves once the
+// row is redrawn, with the save still running; an outbox ✓ stays busy until its save ends.
 // `focusMin`: the minutes of the focus session that finished it (focus Done), for the burst.
 const inFlight = new Set();
 export async function checkOff(id, { li = rowOf(id), save = null, quiet = false, from, focusMin = null } = {}) {
@@ -303,16 +348,24 @@ export async function checkOff(id, { li = rowOf(id), save = null, quiet = false,
   if (!t) return;
   await cheer.once(inFlight, `task:${id}`, async () => {
     const moment = t.done ? null : cheer.momentOf(t, state.tasks.values(), state.today);
+    const gated = Boolean(save);
     save ??= () => toggleDone(id, cheer.MOMENT_WORDS[moment] ?? null);
-    if (t.done || !li) { await save(); render(); return; }
+    if (t.done || !li) {
+      const saving = save();
+      if (gated) await saving;
+      render();
+      // With no animation to wait out, a double tap's second half still mustn't flip it back.
+      if (!gated) await cheer.wait(cheer.TAP_MS);
+      return;
+    }
     const leave = Boolean(li.closest(".sheet-list"));
     const why = { first: cheer.firstOfDay(state.tasks.values(), state.today, SHEET.timeZone), rolls: t.rolls ?? 0, early: cheer.inside(t, focusMin) };
-    const { saving } = await playOff(li, save, { leave, moment, quiet, why, ...(from ? { from } : {}) });
+    const { saving } = await playOff(li, save, { leave, moment, quiet, why, gated, ...(from ? { from } : {}) });
     if (state.tasks.get(id)?.done) {
       if (moment === "day") cheer.pop(root.querySelector(".sheet-day.is-today .sheet-alldone"));
       if (leave) cheer.pop($("[data-log-count]"));
     }
-    await saving;
+    if (gated) await saving;
   });
 }
 
@@ -429,6 +482,10 @@ const withWhen = (start, end, kids) => [start == null ? null : whenLabel(start, 
 // A task on a day with a time (taskSpan) reads like an event row: "7–7:20 pm  Register for classes".
 export const spanOf = (t) => (t.day ? taskSpan(t, t.day, SHEET.timeZone, state.blocks) : null);
 
+// "Not saved" on a row whose last change didn't save (errors), until its next change.
+const errNote = (key) => (errors.has(key) ? el("span", { className: "sheet-row-err", textContent: errors.get(key) }) : null);
+const errWords = (key) => (errors.has(key) ? `, ${errors.get(key).toLowerCase()}` : "");
+
 export function taskRow(t, span = spanOf(t)) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
@@ -440,13 +497,14 @@ export function taskRow(t, span = spanOf(t)) {
   const hz = state.states.get(t.id);
   const level = hz ? (t.due && !t.done && t.due < state.today ? "overdue" : null) : dueLevel(t, state.blocks, state.today, SHEET.timeZone);
   const line = hz && !t.done ? horizonLine(hz, state.horizon.filter((a) => a.task_id === t.id), t.due, state.today) : null;
-  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}${t.day && !t.done && t.rolls >= 1 ? ", carried over" : ""}. Edit`);
+  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}${t.day && !t.done && t.rolls >= 1 ? ", carried over" : ""}${errWords(`task:${t.id}`)}. Edit`);
   li.append(...[
     ...withWhen(span?.start, span?.end, [
       title,
       // The details, kept together so they move under the title as one line when they don't fit.
       detailsOf(t, clash, level, span, hz),
-      line ? el("span", { className: `sheet-hz-line${hz.state === "wont_fit" ? " is-overdue" : ""}`, ariaHidden: "true", textContent: line }) : null]),
+      line ? el("span", { className: `sheet-hz-line${hz.state === "wont_fit" ? " is-overdue" : ""}`, ariaHidden: "true", textContent: line }) : null,
+      errNote(`task:${t.id}`)]),
     el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
@@ -461,8 +519,15 @@ const fitBox = (box) => { box.style.height = "auto"; box.style.height = `${box.s
 function addRow(where, label, placeholder = "+ Add a task") {
   const input = taskBox({ ariaLabel: label, placeholder });
   if (where.day) input.dataset.day = where.day; else input.dataset.list = where.list;
-  return el("li", { className: "sheet-row is-empty is-add" }, input);
+  return el("li", { className: "sheet-row is-empty is-add" }, input, errNote(whereKey(where)));
 }
+// The box for `where`; on today, Also did… (`also`) is the second box.
+const addBox = (where) => root.querySelector(where.day ? `.sheet-add[data-day="${where.day}"]${where.also ? "[data-also]" : ":not([data-also])"}` : `.sheet-add[data-list="${CSS.escape(where.list ?? "")}"]`);
+
+// A task typed in whose save is still out (adding): its title, muted, until the saved row takes
+// its place. Not a .sheet-task, so no click, key, swipe or drag acts on it.
+const addingRow = (a) => el("li", { className: "sheet-row sheet-adding", ariaBusy: "true" }, ...withWhen(null, null, [el("span", { className: "sheet-title", textContent: a.title })]));
+const addingIn = (where) => adding.filter((a) => sameWhere(a.where, where)).map((a) => ({ kind: "adding", ...a }));
 
 // Also did… (docs/sheet.md): today's second box, for a win that wasn't planned. Enter logs it as
 // a task already done today, so it counts in the progress line.
@@ -470,7 +535,7 @@ function alsoRow(day) {
   const input = taskBox({ ariaLabel: "Log something else you did today", placeholder: "Also did…" });
   input.dataset.day = day;
   input.dataset.also = "";
-  return el("li", { className: "sheet-row is-empty is-add is-also" }, input);
+  return el("li", { className: "sheet-row is-empty is-add is-also" }, input, errNote(whereKey({ day, also: true })));
 }
 
 // --- Event to-dos (docs/sheet-v5.md, "Event to-dos") ---------------------------------------
@@ -492,7 +557,8 @@ function eventTodoRow(r) {
     r.allDay ? null : el("span", { className: "visually-hidden", textContent: spoken(r.start, r.end) }),
     ...withWhen(r.allDay ? null : r.start, r.end, [
       el("span", { className: "sheet-title", textContent: r.title, title: r.raw }),
-      el("span", { className: "sheet-details" }, el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar")))]),
+      el("span", { className: "sheet-details" }, el("span", { className: "sheet-meta sheet-source" }, icon("calendar", "From your calendar"))),
+      errNote(`event:${r.key}`)]),
     check, more].filter(Boolean));
   return li;
 }
@@ -503,11 +569,10 @@ const eventRowOf = (target) => {
   return { key, day, row: rowsOn(day).find((r) => r.kind === "event" && r.key === key) };
 };
 
-async function saveEventTodo(key, day, change) {
-  await api.saveEventTodo({ cal_event_key: key, day, ...change });
-  const t = state.todos.find((x) => x.cal_event_key === key);
-  if (t) Object.assign(t, change);
-  else state.todos.push({ cal_event_key: key, title_ai: null, done: false, hidden: false, ...change });
+// Shows at once and saves in the background, like a task (saving).
+function saveEventTodo(key, day, change) {
+  if (!state.todos.some((x) => x.cal_event_key === key)) state.todos.push({ cal_event_key: key, title_ai: null, done: false, hidden: false });
+  return saving(todoBook, `event:${key}`, change, () => api.saveEventTodo({ cal_event_key: key, day, ...change }));
 }
 
 export async function toggleEventTodo(target, { quiet = false } = {}) {
@@ -520,10 +585,10 @@ export async function toggleEventTodo(target, { quiet = false } = {}) {
       if (!row.done) offerUndo(`Done: ${row.title}`, () => saveEventTodo(key, day, { done: false }));
     } catch (e) { failed(e, `save "${row.title}" as ${row.done ? "not done" : "done"}`, () => saveEventTodo(key, day, { done: !row.done })); }
   };
+  // As with a task: done shows at once, and the save runs on behind the redraw.
   const ran = await cheer.once(inFlight, `event:${day}:${key}`, async () => {
-    if (row.done || !li) { await save(); render(); return; }
-    const { saving } = await playOff(li, save, { quiet, ...(target.matches?.(".sheet-nownext-done") ? { from: target } : {}) });
-    await saving;
+    if (row.done || !li) { save(); render(); await cheer.wait(cheer.TAP_MS); return; }
+    await playOff(li, save, { quiet, ...(target.matches?.(".sheet-nownext-done") ? { from: target } : {}) });
   });
   if (ran) root.querySelector(`[data-key="${CSS.escape(key)}"] .sheet-check`)?.focus();
 }
@@ -572,7 +637,7 @@ function dayColumn(day, rows, items) {
   const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
   const blank = day === state.today && !items.length;
-  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : eventTodoRow(r))),
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : r.kind === "adding" ? addingRow(r) : eventTodoRow(r))),
     blank ? blankRow() : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`),
     day === state.today ? alsoRow(day) : null);
@@ -701,7 +766,8 @@ function listColumn(name) {
   // Done ones wait in the Log below the lists (somedayLog).
   const list = tasksIn(name).filter((t) => !t.project_id && !t.done);
   // An empty list always shows its "+ Add a task" hint.
-  const ul = el("ul", { className: `sheet-rows${list.length ? "" : " is-blank"}` }, ...list.map((t) => taskRow(t, null)), addRow({ list: name }, `Add a task to ${name}`));
+  const typed = addingIn({ list: name });
+  const ul = el("ul", { className: `sheet-rows${list.length + typed.length ? "" : " is-blank"}` }, ...list.map((t) => taskRow(t, null)), ...typed.map(addingRow), addRow({ list: name }, `Add a task to ${name}`));
   ul.dataset.list = name;
   return el("section", { className: "sheet-list" }, el("h3", { className: "sheet-head" }, el("span", { className: "sheet-wd", textContent: name })), ul);
 }
@@ -709,11 +775,14 @@ function listColumn(name) {
 export function render() {
   if (holds) { owed = true; return; }
   const a = document.activeElement;
-  const keep = a?.classList.contains("sheet-add") ? { day: a.dataset.day, list: a.dataset.list, also: "also" in a.dataset } : null;
+  // An edit in place redraws when it ends (startEdit), so a save landing mid-edit can't wipe it.
+  if (a?.classList.contains("sheet-edit") && root.contains(a)) return;
+  // The box being typed in keeps its words and caret: saves now land while he types the next task.
+  const keep = a?.classList.contains("sheet-add") ? { day: a.dataset.day, list: a.dataset.list, also: "also" in a.dataset, value: a.value, from: a.selectionStart, to: a.selectionEnd } : null;
   state.today = now().day;
   const days = weekDays(state.week);
   if (!days.includes(state.focus)) state.focus = days.includes(state.today) ? state.today : days[0];
-  const items = Object.fromEntries(days.map((d) => [d, rowsOn(d)]));
+  const items = Object.fromEntries(days.map((d) => [d, [...rowsOn(d), ...addingIn({ day: d })]]));
   // Today holds one more box (Also did…) under its add row.
   const rows = Math.max(rowCount(items), items[state.today] ? Math.max(items[state.today].length, 1) + 2 : 0);
   $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])));
@@ -742,7 +811,16 @@ export function render() {
   for (const hook of renderHooks) hook();
   hostToast(root, toast);
 
-  if (keep) root.querySelector(keep.day ? `.sheet-add[data-day="${keep.day}"]${keep.also ? "[data-also]" : ":not([data-also])"}` : `.sheet-add[data-list="${CSS.escape(keep.list)}"]`)?.focus();
+  const box = keep ? addBox(keep) : null;
+  if (box) {
+    box.focus();
+    if (keep.value && !box.value) {
+      box.value = keep.value;
+      box.setSelectionRange(keep.from, keep.to);
+      typedChip(box);
+      fitBox(box);
+    }
+  }
   for (const r of drawn.splice(0)) r();
 }
 
@@ -751,7 +829,12 @@ export const renderHooks = [];
 // --- Loading -----------------------------------------------------------------------------
 
 // `scroll: false` keeps the week where it is (a reload on coming back, refreshStale).
+// A load started later wins: an older one that returns after it changes nothing. Rows with saves
+// out keep their changes (optimistic.mjs).
+let loadGen = 0;
 export async function load({ scroll = true } = {}) {
+  const gen = ++loadGen;
+  const since = [taskBook.now(), todoBook.now()];
   const days = weekDays(state.week);
   const [tasks, blocks, dayList, parked, settings, todos, sleep, sleepTimes, sleepDays, horizon, states, actuals] = await Promise.all([
     api.listTasks(days[0], days[6]),
@@ -767,17 +850,21 @@ export async function load({ scroll = true } = {}) {
     api.listHorizonStates(),
     api.listActualsOn(now().day),
   ]);
+  if (gen !== loadGen) return;
   state.actuals = actuals;
   state.horizon = horizon;
   state.states = new Map(states.map((h) => [h.task_id, h]));
   state.sleepTimes = sleepTimes;
   state.sleepDays = sleepDays;
   state.todos = todos;
+  todoBook.keep(since[1]);
   state.settings = settings;
   state.sleep = sleep;
   state.calendars = settings?.calendars ?? [];
   await loadEvents(days);
+  if (gen !== loadGen) return;
   state.tasks = new Map(tasks.map((t) => [t.id, t]));
+  taskBook.keep(since[0]);
   state.blocks = blocks;
   state.days = Object.fromEntries(dayList.map((d) => [d.day, d]));
   state.parked = parked.length;
@@ -1036,11 +1123,15 @@ async function menuAction(kind) {
   root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus();
 }
 
-// One of the task menu's actions on a task (the menu, and the week's keys), then a redraw.
+// One of the task menu's actions on a task (the menu, the week's keys, a swipe), then a redraw. A
+// move shows at once (moveTask), so it resolves then, with the save running on; the others resolve
+// once saved.
+const MOVES = new Set(["today", "tomorrow", "next-week", "day-before", "day-after", "this-week", "someday", "drop"]);
 export async function taskAction(id, kind) {
   const run = () => runAction(id, kind);
-  try { await run(); } catch (e) { failed(e, ACTION_WORDS[kind]?.replace("%s", named(state.tasks.get(id))) ?? null, run); }
+  const going = run().catch((e) => failed(e, ACTION_WORDS[kind]?.replace("%s", named(state.tasks.get(id))) ?? null, run)).then(() => render());
   render();
+  if (!MOVES.has(kind)) await going;
 }
 
 async function runAction(id, kind) {
@@ -1134,7 +1225,12 @@ async function onPointerUp(e) {
   try {
     for (const t of dropTargets) if (await t.drop?.(e, d)) { render(); return; }
     const spot = dropSpot(e.clientX, e.clientY, d.id);
-    if (spot) await moveTask(d.id, spot.where, spot.position);
+    if (spot) {
+      const move = () => moveTask(d.id, spot.where, spot.position);
+      const going = move();
+      render(); // it shows where it was dropped at once
+      try { await going; } catch (err) { failed(err, `move ${named(state.tasks.get(d.id))}`, move); }
+    }
   } catch (err) { failed(err); }
   render();
 }
@@ -1287,16 +1383,25 @@ function wire() {
     }
     input.value = "";
     fitBox(input);
+    input.closest("li")?.querySelector(".sheet-typed")?.setAttribute("hidden", "");
     const where = input.dataset.day ? { day: input.dataset.day } : { list: input.dataset.list };
     const also = "also" in input.dataset;
-    // On failure the text goes back in the box; Retry adds it and empties the box again.
-    const add = async () => {
+    if (also) where.also = true;
+    // The typed row shows at once (adding), and the box is free for the next task. On failure the
+    // row goes, "Not added" shows by the box and the words go back in it if it's still empty;
+    // Retry adds it and empties the box again. Also did… logs it already done, with Undo.
+    const log = async () => {
       const t = await addTask(text, where, also ? { done: true } : {});
-      input.value = "";
       if (also && t) offerUndo(`Logged: ${t.title}`, async () => { await api.deleteTask(t.id); state.tasks.delete(t.id); });
     };
-    try { await add(); } catch (err) { failed(err, `add "${parseEntry(text, state.today).title}"`, add); input.value = text; }
+    const add = async () => { await log(); const box = addBox(where); if (box?.value === text) { box.value = ""; fitBox(box); } };
+    const going = log();
     render();
+    let lost = false;
+    try { await going; } catch (err) { failed(err, `add "${parseEntry(text, state.today).title}"`, add); lost = true; }
+    render();
+    const box = lost ? addBox(where) : null;
+    if (box && !box.value) { box.value = text; typedChip(box); fitBox(box); }
   });
 
   document.addEventListener("keydown", (e) => {
