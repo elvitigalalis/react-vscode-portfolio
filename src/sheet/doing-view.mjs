@@ -83,7 +83,7 @@ function card(pick, minutes, s) {
     go.dataset.block = b.id;
     actions.append(go);
   }
-  const done = el("button", { type: "button", className: "sheet-check sheet-doing-done", ariaLabel: `Complete ${title}` }, icon("check"), el("span", { textContent: "Done" }));
+  const done = el("button", { type: "button", className: "sheet-check sheet-doing-done", ariaLabel: `Done: ${title}` }, icon("check"), el("span", { textContent: "Done" }));
   done.dataset.act = "doing-done";
   if (task) done.dataset.task = task.id;
   else Object.assign(done.dataset, { key: r.key, day: state.today });
@@ -153,7 +153,12 @@ function show(next) {
   keep(next);
   render();
   if (next === "doing") box.querySelector(".sheet-doing-start, .sheet-doing-done")?.focus();
-  else root.querySelector(`.sheet-day[data-day="${state.today}"] .sheet-head`)?.scrollIntoView({ block: "nearest" });
+  else {
+    // Focus lands where the week now starts for him: today's heading.
+    const head = root.querySelector(`.sheet-day[data-day="${state.today}"] .sheet-head`);
+    head?.setAttribute("tabindex", "-1");
+    head?.focus();
+  }
 }
 
 export function setupDoing(node) {
