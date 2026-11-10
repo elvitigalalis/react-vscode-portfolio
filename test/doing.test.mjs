@@ -62,6 +62,9 @@ test("doingMode: Doing by day on a phone, the week outside it, and his pick for 
   assert.equal(doingMode({ ...day, minutes: H(12), hasCard: false }), "week");
   assert.equal(doingMode({ ...day, minutes: H(12), stored: { day: "2026-11-09", mode: "week" } }), "week");
   assert.equal(doingMode({ ...day, minutes: H(8), stored: { day: "2026-11-09", mode: "doing" } }), "doing");
+  // dayStart on today is held to now rounded up to the quarter hour: 10:30 at 10:20 has begun.
+  assert.equal(doingMode({ ...day, dayStart: H(10, 30), minutes: H(10, 20) }), "doing");
+  assert.equal(doingMode({ ...day, dayStart: H(11), minutes: H(10, 20) }), "week");
   // Yesterday's pick doesn't carry over.
   assert.equal(doingMode({ ...day, minutes: H(12), stored: { day: "2026-11-08", mode: "week" } }), "doing");
 });

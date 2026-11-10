@@ -10,7 +10,7 @@ import { formatClock, formatSpan, localNow } from "./logic.mjs";
 import { doingPick, doingMode, minutesLeft } from "./doing.mjs";
 import { focusClock } from "./focus.mjs";
 import { rowTitle } from "./now-next.mjs";
-import { el, icon, state, render, renderHooks, loadHooks, actHooks, rowsOn, checkOff, toggleEventTodo, windowOn, shutdownAt, NARROW } from "./planner.mjs";
+import { el, icon, state, render, renderHooks, loadHooks, actHooks, rowsOn, checkOff, toggleEventTodo, dayStart, shutdownAt, NARROW } from "./planner.mjs";
 import { getSession, openFocus, progressFor, audioContext } from "./focus-start.mjs";
 import { reflowLine } from "./reflow-view.mjs";
 import "./doing-styles.mjs";
@@ -23,8 +23,7 @@ const keep = (mode) => { try { localStorage.setItem(KEY, JSON.stringify({ day: s
 let root, box;
 // The view in use; null until the first draw after each load of the week (the first, and each
 // reload on coming back or changing week), so the default is chosen then and never flips under
-// him mid-use. His day runs from
-// when it opens (planner.mjs windowOn: after his wake, not held to now) to the shutdown line.
+// him mid-use. His day runs from planner.mjs's dayStart (after his wake) to the shutdown line.
 let mode = null;
 let loaded = false;
 
@@ -110,7 +109,7 @@ function draw() {
   drawnKey = cardKey(pick);
   // Not before the week has loaded: a draw before then has no rows.
   if (mode == null && loaded) {
-    mode = doingMode({ stored: read(), today: state.today, minutes, dayStart: windowOn(state.today).from, shutdown: shutdownAt(state.today), shutDown: Boolean(state.days[state.today]?.shutdown), hasCard: Boolean(pick.card) });
+    mode = doingMode({ stored: read(), today: state.today, minutes, dayStart: dayStart(state.today), shutdown: shutdownAt(state.today), shutDown: Boolean(state.days[state.today]?.shutdown), hasCard: Boolean(pick.card) });
   }
   const doing = mode === "doing" && matchMedia(NARROW).matches;
   root.classList.toggle("is-doing", doing);

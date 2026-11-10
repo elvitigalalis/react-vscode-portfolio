@@ -182,8 +182,8 @@ Checking something off should feel good every time without getting old (src/shee
 Under 48 rem, one day shows at a time (above). On top of that:
 
 - **Doing view** (Llama Life's one thing now, Tiimo's visual timer; src/sheet/doing-view.mjs,
-  logic in doing.mjs). During his day (from when it opens after his wake to the shutdown line,
-  not shut down) a phone opens to one card instead of the week, so the crowded today stamps
+  logic in doing.mjs). During his day (from the day's start, 30 minutes after his wake or 9:30 am
+  without Oura, to the shutdown line, not shut down) a phone opens to one card instead of the week, so the crowded today stamps
   (Now/Next, load bar, strip, Oura, progress, wind-down) and the sections under the week (school
   load, habits, projects, Someday, the Tell Claude box) are out of sight until he asks for them.
   - The card is the task a focus session is running on ("Focusing"), else the open row on now

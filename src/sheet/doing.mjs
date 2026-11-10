@@ -25,10 +25,13 @@ export function doingPick(rows, minutes, sessionTask = null) {
 
 // Which view a phone opens to: the one he picked today (`stored`, { day, mode }), else Doing
 // during his day (from its start to the shutdown line, not shut down) when there is a card,
-// else the week.
+// else the week. `dayStart` is planner.mjs's dayStart(today): 30 minutes after his wake (9:30 am
+// without Oura), but on today never before now rounded up to the quarter hour, so the day has
+// begun once it is no later than that.
 export function doingMode({ stored = null, today, minutes, dayStart, shutdown, shutDown = false, hasCard }) {
   if (stored?.day === today && (stored.mode === "doing" || stored.mode === "week")) return stored.mode;
-  return hasCard && !shutDown && minutes >= dayStart && minutes < shutdown ? "doing" : "week";
+  const begun = dayStart <= Math.ceil(minutes / 15) * 15;
+  return hasCard && !shutDown && begun && minutes < shutdown ? "doing" : "week";
 }
 
 // "25 min", "1h05": time left on the card's ring, rounded up to the minute.
