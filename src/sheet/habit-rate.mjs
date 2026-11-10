@@ -34,7 +34,7 @@ export function habitView(habit, done, today, since = null) {
   let of = 0;
   let n = 0;
   let last = null; // the last scheduled day before today
-  for (let i = done.has(today) ? 0 : 1; i < RATE_OF * 7 && of < RATE_OF; i++) {
+  for (let i = done.has(today) ? 0 : 1; i <= RATE_OF * 7 && of < RATE_OF; i++) {
     const day = addDays(today, -i);
     if (since && day < since) break;
     if (!scheduledOn(habit, day)) continue;

@@ -69,6 +69,15 @@ test("habitView: a once-a-week habit looks back seven weeks", () => {
   assert.deepEqual([v.done, v.of], [2, 7]); // Sundays 11-08 back to 09-27
 });
 
+test("habitView: a once-a-week habit on its open day still finds seven weeks behind it", () => {
+  const monday = { days: [1] };
+  // Today is Monday and still open: the last seven Mondays are 11-02 back to 09-21, the oldest
+  // exactly 49 days ago.
+  const v = habitView(monday, set("2026-09-21", "2026-11-02"), TODAY);
+  assert.deepEqual([v.done, v.of], [2, 7]);
+  assert.equal(v.dots[6].state, "due");
+});
+
 test("habitView: back asks after a missed scheduled day, only when today is scheduled and open", () => {
   assert.equal(habitView(daily, set("2026-11-07"), TODAY).back, true);             // missed Sun
   assert.equal(habitView(daily, set("2026-11-08"), TODAY).back, false);            // did Sun
