@@ -14,8 +14,15 @@ habit_done  habit_id uuid references habits on delete cascade, day date, created
             primary key (habit_id, day); owner-only (RLS owner_all), no anon, in no public view
 ```
 
-One row means he ticked that habit on that habit day. /plan writes it (upsert, ignore
-duplicates) and deletes it on un-tick; nothing else reads it.
+One row means the habit was done that habit day. /plan writes it (upsert, ignore duplicates)
+and deletes it on un-tick. The Gym habit (a name with gym, lift or workout) is also ticked by:
+
+- **oura-sync and hevy-sync** (`_shared/gym-tick.ts`): each workout that finishes a Gym habit
+  block (ring.mjs `gymDone`, the same match that ends the block) ticks it for the habit day the
+  workout ended.
+- **Finishing a session on /plan/gym** (gym-ui.mjs `markHabit`), block or not.
+
+The telegram function reads it so the Gym start nudge skips a habit already ticked today.
 
 ## Rules (src/sheet/habit-rate.mjs, test/habit-rate.test.mjs)
 

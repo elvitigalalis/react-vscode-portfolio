@@ -2,7 +2,7 @@
 // New York (EST, UTC-5). Expected values by hand.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gymMatches, restMode, ringLine } from "../src/sheet/ring.mjs";
+import { gymDone, gymMatches, restMode, ringLine } from "../src/sheet/ring.mjs";
 
 const TZ = "America/New_York";
 const D = "2026-11-04";
@@ -28,6 +28,15 @@ test("gymMatches: other habits, proposed blocks and a block already past stay", 
   assert.deepEqual(gymMatches(w, [block("b1", "h1", "17:00", "18:00", { proposed: true })], habits, TZ), []);
   // The workout ended after the block: nothing left to change.
   assert.deepEqual(gymMatches(w, [block("b1", "h1", "16:00", "17:30")], habits, TZ), []);
+});
+
+test("gymDone: each Gym block a workout finished ticks the habit, even one already past", () => {
+  const w = [workout("weightlifting", "17:00", "18:00")];
+  assert.deepEqual(gymDone(w, [block("b1", "h1", "16:00", "17:30")], habits, TZ), [{ habit_id: "h1", ends_at: at("18:00") }]);
+  assert.deepEqual(gymDone([workout("strengthTraining", "08:00", "09:10")], [block("b1", "h1", "17:00", "18:30")], habits, TZ), [{ habit_id: "h1", ends_at: at("09:10") }]);
+  assert.deepEqual(gymDone([workout("other", "08:00", "09:10")], [block("b1", "h1", "17:00", "18:30")], habits, TZ), []);
+  assert.deepEqual(gymDone(w, [block("b2", "h2", "17:00", "18:00")], habits, TZ), []);
+  assert.deepEqual(gymDone(w, [block("b1", "h1", "17:00", "18:00", { proposed: true })], habits, TZ), []);
 });
 
 test("ringLine: the day's matched ring time, length only", () => {

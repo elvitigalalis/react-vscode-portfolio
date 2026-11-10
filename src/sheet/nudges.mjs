@@ -16,6 +16,7 @@ import { bedtimeFor, nightAt, shutdownFor, tonight } from "./bedtime.mjs";
 import { lateNap } from "./oura-day.mjs";
 import { pickTips, tipContext } from "./tips.mjs";
 import { GYM_HABIT } from "./ring.mjs";
+import { habitDay } from "./habit-rate.mjs";
 import { healthLine } from "./health.mjs";
 import { nextRoutine, prs, workoutText } from "./hevy.mjs";
 
@@ -384,10 +385,13 @@ function gymLine(day) {
 // The Gym habit block's start nudge, only while settings.gym_nudge_on: "▶ 5:30 pm · Gym: Push #2
 // (90 min)". One a day, at the first Gym block still on that starts outside quiet hours; no
 // buttons (a habit block has no Done tap), no repeat and no Finished?: the workout that ends the
-// block is the answer. Beside the nudge budget.
+// block is the answer. Beside the nudge budget. A habit already ticked today (habit_done, its
+// habit day: docs/sheet-habits.md) gets none.
 function gymNudge(day) {
   if (!day.settings.gym_nudge_on || day.log.some((n) => n.kind === "gym")) return [];
-  const g = gymBlocks(day).find(({ b, start }) => start >= BRIEF_AT && start < QUIET_FROM && day.now < Date.parse(b.ends_at));
+  const hd = habitDay(new Date(day.now), day.tz);
+  const ticked = new Set((day.habitDone ?? []).filter((r) => r.day === hd).map((r) => r.habit_id));
+  const g = gymBlocks(day).find(({ b, start }) => start >= BRIEF_AT && start < QUIET_FROM && day.now < Date.parse(b.ends_at) && !ticked.has(b.habit_id));
   if (!g) return [];
   const next = nextRoutine(day.hevy?.history);
   const text = `▶ ${formatClock(g.start)} · ${g.name}${next ? `: ${next.title}` : ""} (${blockMinutes(g.b)} min)`;

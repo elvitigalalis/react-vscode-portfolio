@@ -114,6 +114,14 @@ test("gym nudge: when on, one at the Gym block's start with the next routine and
   assert.deepEqual(whatToSend(nudgeOn(), at("2026-10-26T21:29:00Z")), []);
 });
 
+test("gym nudge: none once the habit is ticked for today; yesterday's tick doesn't count", () => {
+  const ticked = (d) => nudgeOn({ habitDone: [{ habit_id: "h-gym", day: d }] });
+  assert.deepEqual(whatToSend(ticked(day), at("2026-10-26T21:30:00Z")), []);
+  assert.equal(whatToSend(ticked("2026-10-25"), at("2026-10-26T21:30:00Z"))[0].kind, "gym");
+  // Another habit's tick changes nothing.
+  assert.equal(whatToSend(nudgeOn({ habitDone: [{ habit_id: "h-read", day }] }), at("2026-10-26T21:30:00Z"))[0].kind, "gym");
+});
+
 test("gym nudge: without a known next routine it names the habit only", () => {
   const [m] = whatToSend(nudgeOn({ hevy: undefined }), at("2026-10-26T21:31:00Z"));
   assert.equal(m.text, "▶ 5:30 pm · Gym (90 min)");

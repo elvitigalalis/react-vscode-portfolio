@@ -7,7 +7,8 @@ import * as api from "./api.mjs";
 import { addDays, blockOnComplete, localNow, zonedIso } from "./logic.mjs";
 import { lightDismiss } from "./dismiss.mjs";
 import { loadAll, send } from "./gym-api.mjs";
-import { ringLine } from "./ring.mjs";
+import { GYM_HABIT, ringLine } from "./ring.mjs";
+import { habitDay } from "./habit-rate.mjs";
 import { keyOf, outbox } from "./gym-sync.mjs";
 import {
   activeExercise, e1rm, historyFor, nextDay, ordered, parseSlot, plateText, prsFor, range, readNum, records, rxLine, setToSave, strip, suggest, warmups,
@@ -459,8 +460,14 @@ async function finishSession() {
 }
 
 // A Gym habit block today goes the way a done task's block does (blockOnComplete in logic.mjs):
-// it ends now if it's under way, or is dropped if it hadn't started.
+// it ends now if it's under way, or is dropped if it hadn't started. The Gym habit is ticked for
+// the habit day too (habit_done, docs/sheet-habits.md), block or not.
 async function markHabit() {
+  try {
+    const day = habitDay(new Date(), SHEET.timeZone);
+    const habits = await api.listHabits();
+    await Promise.all(habits.filter((h) => GYM_HABIT.test(h.name ?? "")).map((h) => api.markHabitDone(h.id, day)));
+  } catch (e) { console.error(e); }
   try {
     const tz = SHEET.timeZone;
     const today = localNow(new Date(), tz).day;
