@@ -922,19 +922,35 @@ export async function load({ scroll = true, quiet = false, sync = null } = {}) {
 const UPDATING = "Updating…";
 let copy = false; // the week on screen is the stored copy, until the first load draws
 
-// Draws this week's stored copy, if there is one, marked "Updating…". True when it did.
+// The week's data as before anything is read: what a copy that can't be drawn leaves behind.
+const blankWeek = () => ({ tasks: new Map(), blocks: [], days: {}, parked: 0, todos: [], horizon: [], states: new Map(),
+  settings: null, calendars: [], sleep: [], sleepTimes: [], sleepDays: [], actuals: [], events: [], todoEvents: [] });
+
+// Draws this week's stored copy, if there is one, marked "Updating…". True when it did. A copy
+// that can't be drawn (a shape this code doesn't expect) is thrown away and the page loads as if
+// there were none: the copy is only ever a placeholder.
 function showCopy() {
   let got = null;
   try { got = unpack(localStorage.getItem(SNAPSHOT_KEY), state.week); } catch {}
   if (!got) return false;
-  Object.assign(state, got);
-  setEvents(cachedEvents(weekDays(state.week)));
-  eventsFor = state.week;
-  copy = true;
-  render();
-  scrollToToday($("[data-week]"));
-  setStatus(UPDATING);
-  return true;
+  try {
+    Object.assign(state, got);
+    setEvents(cachedEvents(weekDays(state.week)));
+    eventsFor = state.week;
+    copy = true;
+    render();
+    scrollToToday($("[data-week]"));
+    setStatus(UPDATING);
+    return true;
+  } catch (e) {
+    console.warn("Stored week not drawn", e);
+    try { localStorage.removeItem(SNAPSHOT_KEY); } catch {}
+    Object.assign(state, blankWeek());
+    eventsFor = null;
+    copy = false;
+    setStatus(null);
+    return false;
+  }
 }
 
 // Stores the week as just loaded; only this week's, the one /plan opens on.
