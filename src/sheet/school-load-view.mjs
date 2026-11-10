@@ -8,16 +8,16 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { formatMinutes, localNow, weekDays, weekdayName } from "./logic.mjs";
 import { el, state, render, renderHooks, eventsOn, dayStart, shutdownAt, workloadCap, offerUndo, failed } from "./planner.mjs";
-import { freeOn, weekLoad, QUICK_EST } from "./school-load.mjs";
+import { courseCodes, freeOn, weekLoad, QUICK_EST } from "./school-load.mjs";
 
 // Free minutes on each day of the week on screen, from the day's start (now, on today) to its
 // shutdown line, less his busy events and fixed-time tasks, at most the workload cap, less the
 // day's other planned work (school-load.mjs, freeOn).
-function freeByDay(days, today, nowMin) {
+function freeByDay(days, today, nowMin, codes) {
   const tasks = [...state.tasks.values()];
   return Object.fromEntries(days.filter((d) => d >= today).map((d) => {
     const from = Math.max(dayStart(d), d === today ? nowMin : 0);
-    return [d, freeOn(eventsOn(d), tasks.filter((t) => t.day === d), from, shutdownAt(d), workloadCap())];
+    return [d, freeOn(eventsOn(d), tasks.filter((t) => t.day === d), from, shutdownAt(d), workloadCap(), codes)];
   }));
 }
 
@@ -84,7 +84,9 @@ export function setupSchoolLoad(root) {
   renderHooks.push(() => {
     const local = localNow(new Date(), SHEET.timeZone);
     const days = weekDays(state.week);
-    const w = weekLoad([...state.tasks.values()], days, local.day, freeByDay(days, local.day, local.minutes));
+    const tasks = [...state.tasks.values()];
+    const codes = courseCodes(tasks);
+    const w = weekLoad(tasks, days, local.day, freeByDay(days, local.day, local.minutes, codes), codes);
     const title = root.querySelector("[data-week-title]");
     title.querySelector(".sheet-crunch")?.remove();
     if (!w || !w.items.length) { box.hidden = true; box.replaceChildren(); return; }

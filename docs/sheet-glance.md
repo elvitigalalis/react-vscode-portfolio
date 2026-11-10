@@ -134,7 +134,10 @@ this week less than the time he has? Logic in `src/sheet/school-load.mjs` (cover
 both loaded after sign-in, so /plan's first load doesn't carry them.
 
 - **School work** is an undone task from the Brightspace feed (`source = 'brightspace'`, pace.mjs's
-  "course"), or one tagged with a course code (`#cse316`, `#ams-261`) or `#school`, that has no
+  "course"), or one tagged with one of his course codes (`#cse316`, `#ams-261`) or `#school`. His
+  course codes are an allow-list read from the feed: the code that starts a Brightspace task's
+  title ("AMS 261 Exam 2", which the feed takes from the item's location). A course-shaped tag that
+  isn't on it (`#kan-329`, `#ieee101`) is not school. School work is such a task that has no
   `at_time` and is not a project step. From Brightspace only items with a `due` count (the
   feed's "- Due" items). Its other items are calendar events: a timed one (an exam, a class
   meeting) is something he goes to, so it takes free time instead; an untimed one (a holiday,

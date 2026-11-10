@@ -6,21 +6,34 @@ import { loadShare } from "./glance.mjs";
 
 // --- Which tasks are school work -----------------------------------------------------------
 
-// A tag that names a course: "cse316", "AMS 261", "ams-261". "school" and "class" count too.
-const COURSE_TAG = /^[a-z]{2,4}[\s-]?\d{3}$/i;
+// His courses, as an allow-list of codes ("ams261"): the code the feed puts first in each
+// Brightspace event's title (feeds.mjs, eventTitle: "AMS 261 Exam 2", from the item's LOCATION),
+// and any a Brightspace due item's title starts with. A course-shaped tag that isn't one of his
+// courses ("kan-329" for Jira, "ieee101") is not school.
+const COURSE_CODE = /^\s*([A-Za-z]{2,4})[\s-]?(\d{3})\b/;
+const code = (s) => { const m = COURSE_CODE.exec(String(s ?? "")); return m ? `${m[1]}${m[2]}`.toLowerCase() : null; };
+export const courseCodes = (tasks) => new Set([...tasks].filter((t) => t.source === "brightspace").map((t) => code(t.title)).filter(Boolean));
+
+// A tag that names one of his courses ("cse316", "AMS 261", "ams-261"), or says school.
 const SCHOOL_TAGS = new Set(["school", "class", "course", "hw", "homework"]);
-export const isSchoolTag = (tag) => Boolean(tag) && (COURSE_TAG.test(tag.trim()) || SCHOOL_TAGS.has(tag.trim().toLowerCase()));
+export const isSchoolTag = (tag, codes = new Set()) => {
+  const t = String(tag ?? "").trim();
+  if (!t) return false;
+  if (SCHOOL_TAGS.has(t.toLowerCase())) return true;
+  const c = code(t);
+  return Boolean(c) && c.length === t.replace(/[\s-]/g, "").length && codes.has(c);
+};
 
 // School: everything the Brightspace feed made (pace.mjs calls it "course"), or a task tagged
-// with a course code or #school.
-export const isSchool = (t) => t.source === "brightspace" || isSchoolTag(t.tag);
+// with one of his course codes or #school.
+export const isSchool = (t, codes) => t.source === "brightspace" || isSchoolTag(t.tag, codes);
 
 // School work is school that is not at a fixed time. From Brightspace, only items with a due
 // date count (feeds.mjs, courseTaskChanges: the "- Due" items). The feed's other items are
 // calendar events (courseEventChanges: no due, a day): a timed one (an exam, a class meeting) is
 // something he goes to, so it takes free time instead; an untimed one (a holiday, Reading Day)
 // is no work at all.
-export const isSchoolWork = (t) => !t.at_time && (t.source === "brightspace" ? Boolean(t.due) : isSchool(t));
+export const isSchoolWork = (t, codes) => !t.at_time && (t.source === "brightspace" ? Boolean(t.due) : isSchool(t, codes));
 
 // --- Estimates ----------------------------------------------------------------------------
 
@@ -54,12 +67,12 @@ const dueOf = (t) => t.due ?? t.day ?? null;
 // this week. Older overdue work is taken as let go, so it doesn't weigh on every week after.
 // Earliest due first.
 export const OVERDUE_DAYS = 14;
-export function schoolDue(tasks, days, today) {
+export function schoolDue(tasks, days, today, codes = courseCodes(tasks)) {
   const [first, last] = [days[0], days[days.length - 1]];
   const thisWeek = first <= today && today <= last;
   const since = addDays(today, -OVERDUE_DAYS);
   return [...tasks]
-    .filter((t) => !t.done && isSchoolWork(t) && !t.project_id)
+    .filter((t) => !t.done && isSchoolWork(t, codes) && !t.project_id)
     .map((t) => ({ task: t, due: dueOf(t), ...schoolMinutes(t) }))
     .filter(({ due }) => due && due <= last && (due >= first || (thisWeek && due < today && due >= since)))
     .sort((a, b) => a.due.localeCompare(b.due) || String(a.task.title).localeCompare(String(b.task.title), "en", { numeric: true }));
@@ -71,7 +84,7 @@ export function schoolDue(tasks, days, today) {
 // without one) where no event already covers them, held to `cap` (the Settings workload cap,
 // as the day chips are: planner.mjs dayCapacity). The day's other planned work comes off after
 // the cap: the estimates of its undone, untimed tasks that aren't school work. Never below 0.
-export function freeOn(dayEvents, dayTasks, from, to, cap = Infinity) {
+export function freeOn(dayEvents, dayTasks, from, to, cap = Infinity, codes = new Set()) {
   if (!(to > from)) return 0;
   const clock = (hhmm) => { const [h, m] = String(hhmm).split(":").map(Number); return h * 60 + m; };
   const open = dayTasks.filter((t) => !t.done);
@@ -79,7 +92,7 @@ export function freeOn(dayEvents, dayTasks, from, to, cap = Infinity) {
     const start = clock(t.at_time);
     return { busy: true, allDay: false, start, end: start + (t.est_min > 0 ? t.est_min : 30) };
   });
-  const other = open.filter((t) => !t.at_time && !isSchoolWork(t)).reduce((s, t) => s + (t.est_min > 0 ? t.est_min : 0), 0);
+  const other = open.filter((t) => !t.at_time && !isSchoolWork(t, codes)).reduce((s, t) => s + (t.est_min > 0 ? t.est_min : 0), 0);
   return Math.max(0, Math.min(cap, freeMinutes([...dayEvents, ...spans], from, to)) - other);
 }
 
@@ -87,9 +100,9 @@ export function freeOn(dayEvents, dayTasks, from, to, cap = Infinity) {
 // that is over. `free` is `freeByDay` summed over the days from today on; `need` is schoolDue's
 // minutes. level and pct are loadShare's (the day load's rule): over when need > free, near from
 // 85%. A crunch week is an over week; `short` is by how much.
-export function weekLoad(tasks, days, today, freeByDay) {
+export function weekLoad(tasks, days, today, freeByDay, codes = courseCodes(tasks)) {
   if (days[days.length - 1] < today) return null;
-  const items = schoolDue(tasks, days, today);
+  const items = schoolDue(tasks, days, today, codes);
   const need = items.reduce((s, i) => s + i.minutes, 0);
   const free = days.filter((d) => d >= today).reduce((s, d) => s + Math.max(0, freeByDay[d] ?? 0), 0);
   const { pct, level } = loadShare(need, free);

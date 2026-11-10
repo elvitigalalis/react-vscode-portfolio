@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSchool, isSchoolWork, isSchoolTag, guessMinutes, schoolMinutes, schoolDue, freeOn, weekLoad, QUICK_EST, DEFAULT_SCHOOL_EST } from "../src/sheet/school-load.mjs";
+import { courseCodes, isSchool, isSchoolWork, isSchoolTag, guessMinutes, schoolMinutes, schoolDue, freeOn, weekLoad, QUICK_EST, DEFAULT_SCHOOL_EST } from "../src/sheet/school-load.mjs";
 import { weekDays } from "../src/sheet/logic.mjs";
 
 const T = (title, extra = {}) => ({ id: title, title, day: null, list: "Brightspace", due: null, est_min: null, at_time: null, tag: null, done: false, source: null, project_id: null, ...extra });
@@ -8,9 +8,14 @@ const days = weekDays("2026-11-09"); // Mon Nov 9 – Sun Nov 15
 
 test("school is Brightspace's or tagged with a course or #school", () => {
   assert.ok(isSchool(T("Quiz 6", { source: "brightspace" })));
-  for (const tag of ["cse316", "AMS 261", "ams-261", "school", "Class"]) assert.ok(isSchoolTag(tag), tag);
-  for (const tag of [null, "", "workit", "campus", "cse", "c3160"]) assert.ok(!isSchoolTag(tag), String(tag));
-  assert.ok(isSchool(T("Lab writeup", { tag: "cse320" })));
+  // His courses come from the feed's titles: "AMS 261 Exam 2" (an event), "CSE316 HW 3" (a due item).
+  const codes = courseCodes([T("AMS 261 Exam 2", { source: "brightspace" }), T("CSE316 HW 3", { source: "brightspace" }), T("CSE 320 notes", { tag: "x" }), T("Quiz 6", { source: "brightspace" })]);
+  assert.deepEqual([...codes].sort(), ["ams261", "cse316"]);
+  for (const tag of ["cse316", "CSE 316", "AMS 261", "ams-261", "school", "Class"]) assert.ok(isSchoolTag(tag, codes), tag);
+  // Course-shaped tags that aren't his courses: a Jira key, a club.
+  for (const tag of [null, "", "workit", "campus", "cse", "c3160", "kan-329", "ieee101", "cse320", "cse316x"]) assert.ok(!isSchoolTag(tag, codes), String(tag));
+  assert.ok(isSchool(T("Lab writeup", { tag: "cse316" }), codes));
+  assert.ok(!isSchool(T("Lab writeup", { tag: "cse316" })));
   assert.ok(!isSchool(T("Ship auth", { tag: "workit", source: "github" })));
   // A timed Brightspace event is something he goes to, not work due.
   assert.ok(!isSchoolWork(T("AMS 261 Exam 2", { source: "brightspace", day: "2026-11-10", at_time: "14:00:00", est_min: 80 })));
@@ -42,6 +47,8 @@ test("the week's school work: due in the week, overdue on the current week, earl
     T("Next week's paper", { source: "brightspace", due: "2026-11-17" }),
     T("Done HW", { source: "brightspace", due: "2026-11-11", done: true }),
     T("Read ch. 7", { tag: "cse320", day: "2026-11-13", list: null }),
+    T("CSE 320 Lecture", { source: "brightspace", day: "2026-11-11", at_time: "09:00:00", est_min: 50, list: null }),
+    T("Sprint ticket", { tag: "kan-329", day: "2026-11-12", list: null, est_min: 60 }),
     T("Ship auth", { tag: "workit", day: "2026-11-11", list: null, est_min: 60 }),
     T("Exam", { source: "brightspace", day: "2026-11-11", at_time: "10:00:00", est_min: 80, list: null }),
     T("Step", { tag: "cse416", due: "2026-11-12", project_id: "p1" }),
