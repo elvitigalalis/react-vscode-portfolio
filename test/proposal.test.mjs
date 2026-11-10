@@ -368,3 +368,9 @@ test("checkProposal: next_day moves plan_day's untimed tasks that couldn't fit, 
     "next_day[4]: not one of the tasks read_planner gave",
   ]);
 });
+
+test("planSnapshot: a dropped task is out of play, even when due soon", () => {
+  const course = (id, list) => ({ id, title: id, day: null, list, done: false, due: "2026-11-06", source: "brightspace", est_min: 60, at_time: null, tag: null });
+  const rows = { settings: { time_zone: "America/New_York" }, tasks: [course("kept", "Inbox"), course("gone", "Dropped")], blocks: [], busy: [], days: [], campus: [], proposal: null, needsOpen: [], accounts: [] };
+  assert.deepEqual(planSnapshot(rows, new Date("2026-11-04T11:07:00Z")).tasks.map((t) => t.id), ["kept"]);
+});

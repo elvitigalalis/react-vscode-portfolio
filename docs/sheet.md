@@ -193,6 +193,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
   past tomorrow), Someday and Drop. Drop never deletes: the task moves to the Someday list
   "Dropped", with Undo, and can be dragged back any time. Any move to a Someday list resets
   `rolls` to 0 (Undo restores it), so the look-back and shutdown stop counting it as moving.
+  A dropped task is out of play everywhere else too (`isDropped`, logic.mjs): Claude's
+  `read_planner`, the horizon and Telegram's brief, check-in and warnings leave it out.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.

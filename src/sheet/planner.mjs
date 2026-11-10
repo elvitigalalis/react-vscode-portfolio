@@ -4,7 +4,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
-  positionBetween, byPosition, carriedNote, laterThisWeek, moveChange, blockOnComplete, zonedIso, formatClock, formatSpan,
+  positionBetween, byPosition, carriedNote, laterThisWeek, moveChange, DROPPED, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
   somedayLog,
 } from "./logic.mjs";
@@ -1021,9 +1021,6 @@ function openMenu(id, anchor) {
   menu.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
   menu.querySelector("button:not([hidden], [hidden] *)").focus();
 }
-
-// Drop never deletes: the task goes to the Someday list "Dropped", where it can be picked back up.
-export const DROPPED = "Dropped";
 
 // What each task action is, for the status line when it fails.
 const ACTION_WORDS = { today: "move %s to today", tomorrow: "move %s to tomorrow", "next-week": "move %s to next week", "day-before": "move %s a day earlier",

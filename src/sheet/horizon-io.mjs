@@ -2,7 +2,7 @@
 // re-flow reads, the engine's input built from them, the key that lets an unchanged re-flow be
 // skipped, and the re-flow itself. Free of the network: the telegram and planner-mcp functions
 // pass reflowHorizon their own read and rpc, so node --test covers it.
-import { addDays, blockMinutes, freeMinutes, localNow, minutesOn, zonedIso } from "./logic.mjs";
+import { addDays, blockMinutes, freeMinutes, isDropped, localNow, minutesOn, zonedIso } from "./logic.mjs";
 import { paceByKind } from "./pace.mjs";
 import { dayCap, sleepDebt, wakeOn, wakeProfile, windowStart } from "./sleep.mjs";
 import { bedtimeFor, shutdownFor } from "./bedtime.mjs";
@@ -22,7 +22,7 @@ const isoWeekday = (day) => new Date(`${day}T12:00:00Z`).getUTCDay() || 7;
 export function horizonQueries(today, timeZone) {
   const midnight = (d) => zonedIso(d, 0, timeZone);
   return {
-    tasks: { table: "tasks", select: "id,title,due,est_min,at_time,source,tag,done,project_id,step", filters: [["done", "is", "false"], ["due", "not.is", "null"]] },
+    tasks: { table: "tasks", select: "id,title,due,est_min,at_time,source,tag,done,project_id,step,day,list", filters: [["done", "is", "false"], ["due", "not.is", "null"]] },
     actuals: { table: "actuals", select: "at,kind,est_min,minutes", order: "at" },
     habits: { table: "habits", select: "id,name,days,ideal,minutes,flex_min,defence", order: "position" },
     days: { table: "days", select: "day,shutdown,shutdown_at", filters: [["day", "eq", today]] },
@@ -69,7 +69,8 @@ export function horizonInput(rows, now) {
   // done minutes: both would take it off what is left.
   const lockedToday = (b) => localNow(new Date(b.starts_at), tz).day === today && locked(b, now);
   const done = confirmedDoneMin((rows.blocks ?? []).filter((b) => b.task_id && !lockedToday(b)), rows.feedback ?? []);
-  const tasks = rows.tasks.filter((t) => !t.done && t.due && !t.at_time)
+  // A dropped task (logic.mjs, isDropped) gets no time and no state.
+  const tasks = rows.tasks.filter((t) => !t.done && !isDropped(t) && t.due && !t.at_time)
     .map((t) => ({ id: t.id, due: t.due, minutes: horizonMinutes(t, paces), done_min: done[t.id] ?? 0, minutes_p80: horizonMinutes(t, p80), kind: workKind(t),
       // A project's step (docs/sheet-projects.md) is planned after the steps before it.
       ...(t.project_id ? { project: t.project_id, step: t.step } : {}) }))

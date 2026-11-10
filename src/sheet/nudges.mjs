@@ -8,7 +8,7 @@
 import { ORIGIN } from "../site.mjs";
 import { clockSpan, couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
-import { addDays, localNow, weekdayName, zonedIso, minutesOn, atRisk, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
+import { addDays, localNow, weekdayName, zonedIso, minutesOn, atRisk, isDropped, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
 import { REASON_WORDS } from "./replan.mjs";
 import { dayCap, isWeekend, wakeProfile } from "./sleep.mjs";
@@ -273,7 +273,7 @@ function brief(day) {
   const blocksToday = blocks.filter((b) => { const m = minutesOn(b.starts_at, today, tz); return m >= 0 && m < 1440; });
   // Horizon planning: a task with a horizon state is at risk while tight; won't fit has its own line.
   const hz = horizonStates(day);
-  const risky = tasks.filter((t) => atRisk(t, blocks, today, tz, hz.get(t.id))).sort((a, b) => a.due.localeCompare(b.due));
+  const risky = tasks.filter((t) => !isDropped(t) && atRisk(t, blocks, today, tz, hz.get(t.id))).sort((a, b) => a.due.localeCompare(b.due));
   const wont = risky.filter((t) => hz.get(t.id)?.state === "wont_fit");
   const n = blocksToday.length;
   const lines = [greeting(day, blocksToday), `Today: ${plural(todays.length, "task")}, ${plural(n, "block")}${live(day).length > BUDGET ? `, nudging the first ${BUDGET}` : ""}.`];
@@ -425,7 +425,7 @@ function lastWeekLine({ lastWeek, today, tz, tasks }, hz) {
     .filter(([, m]) => m >= 1.2 || m <= 0.8).sort((a, b) => Math.abs(Math.log(b[1])) - Math.abs(Math.log(a[1])))[0] ?? [];
   if (kind) parts.push(`${PACE_WORDS[kind]} ran ${pace.toFixed(1)}× estimate.`);
   const words = { on_track: "on track", tight: "tight", wont_fit: "won't fit" };
-  const due = tasks.filter((t) => !t.done && t.due && t.due >= today && t.due <= addDays(today, 6))
+  const due = tasks.filter((t) => !t.done && !isDropped(t) && t.due && t.due >= today && t.due <= addDays(today, 6))
     .sort((a, b) => a.due.localeCompare(b.due)).slice(0, 3)
     .map((t) => { const st = words[hz.get(t.id)?.state]; const name = String(t.title).slice(0, 30).trim(); return st ? `${name} (${st})` : name; });
   if (due.length) parts.push(`Due this week: ${due.join(", ")}.`);
@@ -458,7 +458,7 @@ const news = (h) => (h.state === "wont_fit" && h.notified !== "wont_fit") || (h.
 // the nudge budget. Moved minutes alone never send one. It carries `horizon`, the states told.
 function horizonMessage(day) {
   const hz = horizonStates(day);
-  const tasks = day.tasks.filter((t) => !t.done && hz.has(t.id) && news(hz.get(t.id)))
+  const tasks = day.tasks.filter((t) => !t.done && !isDropped(t) && hz.has(t.id) && news(hz.get(t.id)))
     .sort((a, b) => (hz.get(a.id).state === "wont_fit" ? 0 : 1) - (hz.get(b.id).state === "wont_fit" ? 0 : 1) || a.due.localeCompare(b.due));
   if (!tasks.length) return [];
   const lines = tasks.map((t) => {
@@ -686,7 +686,7 @@ function checkin({ tasks, day: row, today, tz, needsOpen, settings, sleep, sleep
   const at = Math.min(h * 60 + m, CHECKIN_LATEST);
   const done = todays.filter((t) => t.done).length;
   const lines = [`Shutdown time. ${done} done, ${todays.length - done} left.`];
-  const tomorrow = tasks.filter((t) => !t.done && t.due === addDays(today, 1));
+  const tomorrow = tasks.filter((t) => !t.done && !isDropped(t) && t.due === addDays(today, 1));
   if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
   if (needsOpen.length) lines.push(`Needs you: ${needsOpen.length}.`);
   return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: planUrl("shutdown") }] }];

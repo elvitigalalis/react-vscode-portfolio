@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, laterThisWeek, moveChange, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, laterThisWeek, moveChange, isDropped, DROPPED, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
@@ -317,4 +317,11 @@ test("moveChange: a move to Someday resets rolls, and Undo puts them back", () =
   const later = moveChange(t, { day: "2026-11-15" }, 1);
   assert.deepEqual(later.change, { day: "2026-11-15", list: null, position: 1 });
   assert.equal("rolls" in later.before, false);
+});
+
+test("isDropped: only a task on the Someday list \"Dropped\"", () => {
+  assert.equal(DROPPED, "Dropped");
+  assert.equal(isDropped({ day: null, list: "Dropped" }), true);
+  assert.equal(isDropped({ day: null, list: "Inbox" }), false);
+  assert.equal(isDropped({ day: "2026-11-09", list: null }), false);
 });

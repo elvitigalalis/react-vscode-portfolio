@@ -378,6 +378,12 @@ export function moveChange(t, where, position) {
   return { change, before };
 }
 
+// Drop never deletes: the task goes to the Someday list "Dropped", where it can be picked back
+// up. A dropped task is out of play: Claude's plan (proposal.mjs) and Telegram's warnings
+// (nudges.mjs) leave it out.
+export const DROPPED = "Dropped";
+export const isDropped = (t) => t.day == null && t.list === DROPPED;
+
 // A carried-over task's "Later this week": the week's last day, when that is past tomorrow;
 // else null (the choice is hidden).
 export const laterThisWeek = (today) => { const end = addDays(weekStart(today), 6); return end > addDays(today, 1) ? end : null; };
