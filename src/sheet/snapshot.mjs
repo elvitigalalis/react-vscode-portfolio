@@ -5,7 +5,7 @@
 // calendar IDs, and only the settings the week reads, never keys or IDs. Calendar events have
 // their own copy (planner.mjs, sheet.events.<week>). Pure.
 
-export const SNAPSHOT_KEY = "sheet.snapshot.v1";
+export { SNAPSHOT_KEY } from "./snapshot-key.mjs";
 const VERSION = 1;
 
 // The settings the week reads (capacity, wind-down, Telegram's switch), less the calendar IDs.

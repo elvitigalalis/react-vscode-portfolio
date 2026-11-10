@@ -20,8 +20,7 @@ import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
 import * as cheer from "./celebrate.mjs";
 import { dayProgress, progressText, weekDone, weekTitle } from "./progress.mjs";
-import { ledger } from "./optimistic.mjs";
-import { pack, unpack, SNAPSHOT_KEY } from "./snapshot.mjs";
+import { SNAPSHOT_KEY } from "./snapshot-key.mjs";
 
 export const el = (tag, props = {}, ...kids) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -196,11 +195,18 @@ async function undo() {
 // Saving in the background (optimistic.mjs): a task's or an event to-do's change shows at once and
 // saves after the row's earlier saves. One that fails puts the row back, says "Not saved" on it
 // (`errors`, until its next change) and redraws; the caller's catch names it in the status line.
-const taskBook = ledger({ get: (id) => state.tasks.get(id), set: (id, row) => state.tasks.set(id, row), drop: (id) => state.tasks.delete(id) });
-const todoBook = ledger({
-  get: (key) => state.todos.find((t) => t.cal_event_key === key),
-  set: (key, row) => { const i = state.todos.findIndex((t) => t.cal_event_key === key); if (i < 0) state.todos.push(row); else state.todos[i] = row; },
-});
+// optimistic.mjs loads once signed in (start(), before anything is drawn): signed out, /plan
+// carries none of it.
+let taskBook = null;
+let todoBook = null;
+let booksReady = null;
+const books = () => (booksReady ??= import("./optimistic.mjs").then(({ ledger }) => {
+  taskBook = ledger({ get: (id) => state.tasks.get(id), set: (id, row) => state.tasks.set(id, row), drop: (id) => state.tasks.delete(id) });
+  todoBook = ledger({
+    get: (key) => state.todos.find((t) => t.cal_event_key === key),
+    set: (key, row) => { const i = state.todos.findIndex((t) => t.cal_event_key === key); if (i < 0) state.todos.push(row); else state.todos[i] = row; },
+  });
+}, (e) => { booksReady = null; throw e; }));
 const errors = new Map(); // "task:<id>", "event:<key>" or "add:<day or list>" -> the row's note
 
 // Saves wait for the first load to land: a change made on the stored copy (snapshot.mjs) shows at
@@ -971,9 +977,14 @@ const blankWeek = () => ({ tasks: new Map(), blocks: [], days: {}, parked: 0, to
 // Draws this week's stored copy for `user`, if there is one, marked "Updating…". True when it did. A copy
 // that can't be drawn (a shape this code doesn't expect) is thrown away and the page loads as if
 // there were none: the copy is only ever a placeholder.
-function showCopy(user, text = readCopy()) {
+// snapshot.mjs loads only once signed in (signed out, /plan carries none of it); start() asks for
+// it first thing, so it is there by the time it is needed.
+let snapshotModule = null;
+const snapshot = () => (snapshotModule ??= import("./snapshot.mjs"));
+
+async function showCopy(user, text = readCopy()) {
   let got = null;
-  try { got = unpack(text, state.week, user); } catch {}
+  try { got = (await snapshot()).unpack(text, state.week, user); } catch {}
   if (!got) return false;
   try {
     Object.assign(state, got);
@@ -1008,7 +1019,8 @@ function takeCopy() {
 // Stores the week as just loaded; only this week's, the one /plan opens on.
 function saveCopy() {
   if (state.week !== weekStart(now().day)) return;
-  try { localStorage.setItem(SNAPSHOT_KEY, pack(state, api.userId())); } catch {}
+  const user = api.userId();
+  snapshot().then(({ pack }) => { try { localStorage.setItem(SNAPSHOT_KEY, pack(state, user)); } catch {} }, console.error);
 }
 
 // --- Coming back (research U8/P1) ----------------------------------------------------------
@@ -1595,7 +1607,10 @@ export async function start(node, plugins = [], settings = settingsModule) {
   settingsModule = settings;
   if (!api.configured) return setStatus("The planner is not set up yet.");
   api.takeRedirect();
-  if (!(await api.signedIn())) {
+  const signedIn = api.signedIn();
+  // Signed in, the stored week (snapshot.mjs) is drawn first: its module starts loading now.
+  signedIn.then((yes) => { if (yes) { snapshot().catch(() => {}); books().catch(() => {}); } });
+  if (!(await signedIn)) {
     // Signed out (the button, or a session that ran out): no copy of the week stays behind.
     forgetEvents();
     const button = el("button", { type: "button", className: "sheet-btn primary", textContent: "Sign in with Google" });
@@ -1605,6 +1620,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
     status.replaceChildren("This is Lisul's planner. The public view is at ", el("a", { href: "/now/", textContent: "/now" }), ". ", button);
     return;
   }
+  try { await books(); } catch (e) { return failed(e); }
   wire();
   for (const plugin of plugins) plugin(root);
   // Back from connecting mail or the calendar: those sections say how it went (mail-settings.mjs).
@@ -1616,7 +1632,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
   // account can open the planner.
   const user = api.userId();
   const held = user ? null : takeCopy();
-  let early = user ? showCopy(user) : false;
+  let early = user ? await showCopy(user) : false;
   if (early) $("[data-tools]").hidden = false;
   try {
     const settings = await api.settings();
@@ -1626,7 +1642,7 @@ export async function start(node, plugins = [], settings = settingsModule) {
       $("[data-tools]").hidden = false;
       return;
     }
-    if (!user) early = showCopy(null, held);
+    if (!user) early = await showCopy(null, held);
     // The events' read starts with the tables', so it needs the calendars now.
     state.settings = settings;
     state.calendars = settings.calendars ?? [];
