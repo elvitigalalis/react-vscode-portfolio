@@ -44,25 +44,36 @@ export function reflowLine() {
 const title = (id) => state.tasks.get(id)?.title ?? "a block";
 const iso = (m) => zonedIso(state.today, m, tz);
 
-async function moveAll(moves, side) {
+// Saves the moves in order, each to its `side` ("to" or "from"), adding each to `done` once saved.
+async function moveAll(moves, side, done = []) {
   for (const m of moves) {
     const b = state.blocks.find((x) => x.id === m.id);
     if (b) await saveBlock(b, { starts_at: iso(m[side].start), ends_at: iso(m[side].end) });
+    done.push(m);
   }
 }
 
-async function reflow() {
+const listed = (moves) => moves.map((m) => `${title(m.task_id)} ${formatClock(m.to.start)}`).join(", ");
+
+// Plans from the page as it is now (so a Retry plans again rather than replaying an old plan) and
+// saves it. A save that fails partway still offers Undo for the moves that saved, then throws.
+async function apply() {
   const plan = planToday();
-  if (!plan?.moves.length || busyNow) return;
+  if (!plan?.moves.length) return;
+  const done = [];
+  try { await moveAll(plan.moves, "to", done); } catch (e) {
+    if (done.length) offerUndo(`Reflowed ${done.length} of ${plan.moves.length}: ${listed(done)}.`, () => moveAll(done, "from"));
+    throw e;
+  }
+  const unfit = plan.unfit.map((id) => title(state.blocks.find((b) => b.id === id)?.task_id));
+  offerUndo(`Reflowed: ${listed(plan.moves)}.${unfit.length ? ` Didn't fit before shutdown: ${unfit.join(", ")}.` : ""}`, () => moveAll(plan.moves, "from"));
+}
+
+async function reflow() {
+  if (busyNow || !planToday()?.moves.length) return;
   busyNow = true;
   render();
-  const run = () => moveAll(plan.moves, "to");
-  try {
-    await run();
-    const moved = plan.moves.map((m) => `${title(m.task_id)} ${formatClock(m.to.start)}`).join(", ");
-    const unfit = plan.unfit.map((id) => title(state.blocks.find((b) => b.id === id)?.task_id));
-    offerUndo(`Reflowed: ${moved}.${unfit.length ? ` Didn't fit before shutdown: ${unfit.join(", ")}.` : ""}`, () => moveAll(plan.moves, "from"));
-  } catch (e) { failed(e, "reflow the rest of today", run); }
+  try { await apply(); } catch (e) { failed(e, "reflow the rest of today", apply); }
   busyNow = false;
   render();
 }
