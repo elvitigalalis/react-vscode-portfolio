@@ -21,6 +21,10 @@ end with the time since Start, and four actions. Terms are as in [GLOSSARY.md](.
   not when he comes back to a mark over 30 seconds gone (`chimesDue`). They follow Settings, Day,
   "Completion sound" (off by default) and the iPhone's silent switch, and play only while the
   view shows.
+- **Screen stays on** while the view shows (wake.mjs), so the ring stays in sight (Tiimo users'
+  complaint is a screen that dims mid-timer): the Screen Wake Lock API where the browser has it,
+  else, or when it is refused, a one-second black video playing muted on a loop. It lets go when
+  the view closes and asks again each time the page comes back into view.
 - **Done** records the minutes from Start to Done into `actuals` (rounded, 1–960; under a minute
   records nothing), then marks the task done exactly as the week's ✓ does (`completeTask`: the
   block shrinks to now, or goes if it hadn't started; Undo reopens the task).

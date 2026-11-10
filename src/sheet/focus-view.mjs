@@ -4,8 +4,8 @@
 // Stop. Leaving (Back to plan, or Escape) keeps the session; /plan shows Resume. Stop ends it
 // without finishing the task: it asks where he left off, credits the minutes to the task, and the
 // next Start shows both (focus-notes.mjs).
-// A soft chime at halfway and with 2 minutes left, when Completion sound is on (Settings).
-// No animation beyond the ring's one-second
+// A soft chime at halfway and with 2 minutes left, when Completion sound is on (Settings); the
+// screen stays on while the view shows (wake.mjs). No animation beyond the ring's one-second
 // step, which reduced motion turns off.
 // Its styles come with it, as text added on load (as lookback-view.mjs does), so /plan's first
 // load carries no rules it doesn't use (Lighthouse's unused-css-rules gate).
@@ -16,6 +16,7 @@ import { stopRow, doneRow, sessionMinutes, creditMinutes, NOTE_MAX } from "./foc
 import { formatMinutes, localNow } from "./logic.mjs";
 import { el, state, render, checkOff } from "./planner.mjs";
 import { soundOn } from "./celebrate.mjs";
+import * as wake from "./wake.mjs";
 
 let io, dialog, parts, timer;
 // When the clock last ticked (epoch ms), for the chimes.
@@ -114,7 +115,7 @@ export function setupFocusView(deps) {
       parts.actions, parts.stop,
       parts.note));
   dialog.setAttribute("aria-labelledby", "sheet-focus-title");
-  dialog.addEventListener("close", () => { clearInterval(timer); render(); });
+  dialog.addEventListener("close", () => { clearInterval(timer); wake.release(); render(); });
   // Any tap in the view (Start's included, through open) lets the chimes play later.
   dialog.addEventListener("pointerdown", wakeAudio);
   // Escape while Stop's question is open goes back to the actions, keeping the view and session.
@@ -149,6 +150,7 @@ export function open(blockId) {
   parts.note.textContent = "";
   parts.stuck.disabled = false;
   wakeAudio();
+  wake.keep();
   ticked = Date.now();
   tick();
   clearInterval(timer);
