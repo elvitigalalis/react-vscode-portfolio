@@ -188,3 +188,12 @@ test("confirmed is the server's copy, without the changes still out", async () =
   await next;
   assert.equal(l.confirmed("t1").day, "2026-11-05");
 });
+
+test("a restored row (its delete failed) is kept by a load again", () => {
+  const { box, l } = setup();
+  const since = l.now();
+  l.forget("t1");
+  l.restore("t1");
+  l.keep(since);
+  assert.equal(box.rows.has("t1"), true);
+});

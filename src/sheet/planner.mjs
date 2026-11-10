@@ -413,13 +413,24 @@ function focusAfter(id, sel, list, index) {
   else if (list) refocus(list, index);
 }
 
+// Delete, like every change, shows at once: the row goes now and the delete runs behind it. One
+// that fails puts the row back with "Not deleted" and reloads the week, since its blocks may be
+// half gone.
 async function removeTask(id) {
   const t = state.tasks.get(id);
   const ticket = undoTicket();
-  await firstLoad; // its blocks as loaded, not as stored
-  await dropBlocks(id);
-  await api.deleteTask(id);
   forgetTask(id);
+  try {
+    await firstLoad; // its blocks as loaded, not as stored
+    await dropBlocks(id);
+    await api.deleteTask(id);
+  } catch (e) {
+    taskBook.restore(id);
+    state.tasks.set(id, t);
+    errors.set(`task:${id}`, "Not deleted");
+    load({ scroll: false }).catch(console.error);
+    throw e;
+  }
   const { id: _, created_at, updated_at, ...copy } = t;
   offerUndo(`Deleted: ${t.title}`, async () => {
     const back = await api.insertTask(copy);

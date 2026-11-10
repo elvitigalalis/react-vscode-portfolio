@@ -79,6 +79,8 @@ export function ledger({ get, set, drop = () => {} }) {
       wrote.delete(key);
       gone.set(key, ++clock);
     },
+    // A delete that failed: the row is back, and loads keep it again.
+    restore(key) { gone.delete(key); },
     pending: (key) => open.has(key),
     // The row as the server last confirmed it, without the changes still out (what an Undo
     // goes back to).
