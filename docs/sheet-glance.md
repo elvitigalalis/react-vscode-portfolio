@@ -89,7 +89,7 @@ the base spec is [sheet.md](sheet.md).
      for ok, `--warn` for near and `--danger` for over, on a `--line` track. The "3h30" text
      stays.
    - **Day strip:** under the bar, a 6px strip from `stripSegments`. Busy times are grey, blocks
-     are sage, and proposed blocks are dashed. Today's strip has a now tick.
+     are sage, and proposed blocks are dashed. Today's strip has a now tick in `--accent`.
    - **Plan today:** the header gets the same bar at full width, with a marker at "Done ≈".
    - *Why:* Sunsama and Ellie compare planned time with capacity, and Structured draws the day.
      The text stays, so the bar adds to the page and passes 1.4.1 and 1.4.11.
@@ -97,7 +97,8 @@ the base spec is [sheet.md](sheet.md).
    - **Proposed blocks:** the sparkles icon in place of the "(proposed)" suffix.
    - **Approve:** a small accent button with the check icon and the word "Approve".
    - **Blocks under 30 minutes:** one line, ellipsis, with the full title on hover.
-   - **The now line:** 2px `--danger`, with a dot and a time label. It draws beneath block text.
+   - **The now line:** 2px `--accent`, with a dot and a time label. It draws beneath block text.
+     Red (`--danger`) is kept for what needs acting on: overdue, over capacity, a failed feed.
    - **The header sentence** becomes a banner: sparkles, "Claude proposed 2 blocks" and
      [Approve all].
    - **The two-line keyboard hint** becomes "Drag tasks onto the timeline · ? for keys".

@@ -175,8 +175,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
 - **Tasks are public by default.** Private ones carry a small "private" label in the planner.
 - Click a task to edit its title; a small menu (also on right-click and `.`) has: To today, To
   tomorrow, To next week, Day before, Day after, To Someday, Public/Private, Clear due date (when
-  it has one), Delete. This menu is also the keyboard and
-  screen-reader way to do everything drag does.
+  it has one), Delete. A task carried over twice or more leads with where it could go
+  (Rollover). This menu is also the keyboard and screen-reader way to do everything drag does.
 - **Drag** a task within a day, between days, or to and from Someday (Pointer Events). On touch,
   hold a task for 0.3 s to pick it up, so a swipe still scrolls. The dragged task leaves a 25 % ghost.
 - **Hover** shows a check circle at the row's right end; clicking it completes the task.
@@ -186,11 +186,35 @@ Under 48 rem, one day shows at a time (above). On top of that:
 
 - Each night, every task that is **undone, untimed and dated before today** moves to today and
   its `rolls` count goes up by one.
-- The task shows a small circled count (②, ③), and its text fades a step with each roll.
+- The task shows a neutral "carried over" tag in its details, the same at every roll; the count
+  is only in the tag's hover text. Its title keeps full ink: a rolled task isn't made to look worse.
+- **Where it could go:** a task carried over twice or more opens its menu with "Carried over a few
+  times. Where should it go?" and Tomorrow, Later this week (the week's last day, when that is
+  past tomorrow), Someday and Drop. Drop never deletes: the task moves to the Someday list
+  "Dropped", with Undo, and can be dragged back any time. Any move to a Someday list resets
+  `rolls` to 0 (Undo restores it), so the look-back and shutdown stop counting it as moving.
+  A dropped task is out of play everywhere else too (`isDropped`, logic.mjs): Claude's
+  `read_planner`, the horizon, the week's school load and Telegram's brief, check-in and
+  warnings leave it out.
 - **On the 4th roll it goes back to Someday** (list "Inbox") with `rolls` reset, and today shows
   one muted line: "2 tasks moved to Someday". No dialog.
 - Tasks with a fixed time, done tasks and Someday tasks never roll.
 - Proposed blocks of earlier days are deleted: a proposal lapses at the end of its day.
+
+## Over-commit note (Sunsama, Akiflow)
+
+- When today's planned minutes (undone estimates, plus what is left of blocks no estimate
+  counts, such as habit blocks) are more than the day's capacity (the free time left before
+  shutdown, held to the workload cap: the same number as Plan today's header), today shows one
+  calm line under its strip in muted ink: "Planned 9h · about 6h free · Move some to tomorrow",
+  or "room for about 8h" when the cap is the smaller. The capacity is rounded to a quarter hour
+  before comparing, so the line never reads "Planned 6h · about 6h free".
+- "Move some to tomorrow" opens a list of today's undone untimed tasks under the line (no
+  fixed time, no block); a tap moves one to tomorrow, with the usual Undo. The line goes away
+  once the plan fits: the Undo toast then reads "Moved. Plan fits now." and takes focus.
+- It warns and never blocks: nothing is moved for him, and adding more still works.
+- Past the day's shutdown, or once the day is shut down, it doesn't show. Blocks count only up
+  to shutdown.
 
 ## Plan today: `P` (Newport, Ellie, Sunsama)
 
@@ -208,6 +232,8 @@ Opens over the week: today's tasks on the left, today's timeline on the right (0
 - **Finish line:** "Done ≈ 4:40 pm · shutdown 5:00 pm". The shutdown line on the timeline can be
   dragged; it is saved per day. Undragged, it sits where wind-down starts (5 pm to 11 pm), else at
   5 pm ([sheet-v5.md](sheet-v5.md), "Shutdown follows wind-down").
+- **Over-commit note:** the same line as on the week's today ("Over-commit note" above), under
+  the meter, for the day being planned; its list moves a task a day on.
 - **Drag a task onto the timeline → a block as tall as its estimate** (30 min if none). The block
   is created as an event on the "Time blocks" Google calendar: its title is the task's title if
   public, **"Busy" if private** (Ellie's privacy mode). One task may have several blocks.

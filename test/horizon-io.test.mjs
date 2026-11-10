@@ -121,7 +121,7 @@ test("horizonKey: the same inputs give the same key; previous and field order do
 
 test("horizonQueries: what the re-flow reads", () => {
   const q = horizonQueries(TODAY, TZ);
-  assert.equal(queryPath(q.tasks), "tasks?select=id,title,due,est_min,at_time,source,tag,done,project_id,step&done=is.false&due=not.is.null");
+  assert.equal(queryPath(q.tasks), "tasks?select=id,title,due,est_min,at_time,source,tag,done,project_id,step,day,list&done=is.false&due=not.is.null");
   assert.equal(queryPath(q.previous), `horizon_alloc?select=task_id,day,minutes,over_min&day=gte.${TODAY}&order=day`);
   assert.equal(queryPath(q.days), `days?select=day,shutdown,shutdown_at&day=eq.${TODAY}`);
   assert.equal(queryPath(q.busy("2026-11-09")), "busy?select=starts_at,ends_at&starts_at=lt.2026-11-10T05:00:00.000Z&ends_at=gt.2026-11-05T05:00:00.000Z&order=starts_at");
@@ -189,4 +189,9 @@ test("reflowHorizon: today's free time starts where read_planner's window does, 
   assert.ok(io.calls[0][1].allocs.filter((a) => a.day === TODAY).reduce((n, a) => n + a.minutes - a.over_min, 0) <= 105);
   assert.ok(ids.every((id) => states[id].state !== "on_track"), JSON.stringify(r.states));
   assert.ok(ids.some((id) => states[id].state === "wont_fit" && states[id].short_min > 0));
+});
+
+test("horizonInput: a dropped task gets no time", () => {
+  const tasks = [task(A, "2026-11-09"), task(B, "2026-11-09", { list: "Dropped" })];
+  assert.deepEqual(horizonInput(rows({ tasks }), eight).tasks.map((t) => t.id), [A]);
 });

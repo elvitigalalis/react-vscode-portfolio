@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, zonedIso, minutesOn, parseEntry, formatMinutes, formatClock, formatSpan,
-  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, rollMark, barWidth, rightNow,
+  rowCount, positionBetween, load, planningDay, dialogDay, snap, blockOnComplete, proposedOn, googleStep, carriedNote, laterThisWeek, moveChange, isDropped, DROPPED, barWidth, rightNow,
   eventsOnDay, freeMinutes, clashWith, visibleEvents, atRisk, dueLabel, blockReminders, capMinutes,
 } from "../src/sheet/logic.mjs";
 
@@ -192,10 +192,14 @@ test("calendar alerts: block events have none while Telegram is on, Google's def
   assert.deepEqual(blockReminders(null), google);
 });
 
-test("rollover marks and the public view's redaction", () => {
-  assert.equal(rollMark(0), "");
-  assert.equal(rollMark(1), "②");
-  assert.equal(rollMark(2), "③");
+test("the carried-over note and the public view's redaction", () => {
+  assert.equal(carriedNote(0), null);
+  assert.equal(carriedNote(1), "Carried over once");
+  assert.equal(carriedNote(3), "Carried over 3 times");
+  assert.equal(laterThisWeek("2026-11-09"), "2026-11-15"); // Mon → Sun
+  assert.equal(laterThisWeek("2026-11-13"), "2026-11-15"); // Fri → Sun
+  assert.equal(laterThisWeek("2026-11-14"), null); // Sat: Sun is tomorrow
+  assert.equal(laterThisWeek("2026-11-15"), null);
   assert.equal(barWidth(2), 4);
   assert.equal(barWidth(40), 24);
   assert.equal(rightNow({ public: true, title: "WorkIt auth" }), "WorkIt auth");
@@ -302,4 +306,22 @@ test("capMinutes: hours from Settings as the cap's minutes, or null", () => {
   assert.equal(capMinutes("1"), 60);
   assert.equal(capMinutes("16"), 960);
   for (const bad of ["", "0.5", "16.5", "6.25", "six", "6h"]) assert.equal(capMinutes(bad), null, bad);
+});
+
+test("moveChange: a move to Someday resets rolls, and Undo puts them back", () => {
+  const t = { day: "2026-11-09", list: null, position: 3, at_time: null, rolls: 2 };
+  const drop = moveChange(t, { list: "Dropped" }, 7);
+  assert.deepEqual(drop.change, { day: null, list: "Dropped", position: 7, at_time: null, rolls: 0 });
+  assert.deepEqual(drop.before, { day: "2026-11-09", list: null, position: 3, at_time: null, rolls: 2 });
+  // A move between days keeps the count: rollover's own rule.
+  const later = moveChange(t, { day: "2026-11-15" }, 1);
+  assert.deepEqual(later.change, { day: "2026-11-15", list: null, position: 1 });
+  assert.equal("rolls" in later.before, false);
+});
+
+test("isDropped: only a task on the Someday list \"Dropped\"", () => {
+  assert.equal(DROPPED, "Dropped");
+  assert.equal(isDropped({ day: null, list: "Dropped" }), true);
+  assert.equal(isDropped({ day: null, list: "Inbox" }), false);
+  assert.equal(isDropped({ day: "2026-11-09", list: null }), false);
 });

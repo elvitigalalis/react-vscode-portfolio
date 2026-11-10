@@ -7,7 +7,7 @@ import { el, icon, state, render, load as reload, taskRow, moveTask, dropTargets
 import { sourceOf, loadShare } from "./glance.mjs";
 import { burst } from "./celebrate.mjs";
 import { approveAllCall, planNotes } from "./morning.mjs";
-import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock, setWindow } from "./plan-today.mjs";
+import { START, END, PX, y, minuteAt, tasksOn, blocksOn, shutdownAt, approveButton, saveBlock, setWindow, overNote } from "./plan-today.mjs";
 import { estimateHint, keepsMoving } from "./lookback.mjs";
 import { history as readHistory, lookbackEntry, moverPrompts } from "./lookback-view.mjs";
 import { estimateLearning, learningLine } from "./estimate-learning.mjs";
@@ -22,6 +22,7 @@ let rev = null;   // its revision number (v5)
 let proposal = null; // the day's newest revision, for Approve all
 let picked = null; // a task tapped in the list, waiting for a tap on the timeline (touch, keyboard)
 let history = null; // the look-back (docs/sheet-lookback.md), null until read
+let picking = false; // the over-commit note's list is open (plan-today.mjs, overNote)
 
 // "Done ≈" counts from when his day starts (planner.mjs dayStart: after his wake), on today
 // never before now; it counted from a fixed 9 am before.
@@ -135,6 +136,7 @@ export function draw() {
     planBar(m),
     // Estimates against actuals (estimate-learning.mjs), once there are enough finished tasks.
     learnLine(m.total),
+    overNote(day, picking, () => { picking = !picking; draw(); }, "dialog"),
     el("p", { className: "small", textContent: picked
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag tasks onto the timeline · ? for keys" }),
@@ -182,6 +184,7 @@ async function fetchNotes() {
 export async function open() {
   const here = localNow(new Date(), SHEET.timeZone);
   day = dialogDay(here, shutdownAt(here.day), Boolean(state.days[here.day]?.shutdown));
+  picking = false;
   await Promise.all([fetchEvents(), fetchNotes(), readHistory().then((h) => { history = h; })]);
   draw();
   dialog.showModal();

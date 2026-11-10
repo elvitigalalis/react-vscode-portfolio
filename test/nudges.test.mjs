@@ -660,3 +660,12 @@ test("start nudge: a task with a page gets an Open button beside Done and Snooze
   const plain = whatToSend(snap(task("t1", "Gym")), at("2026-10-26T14:00:10Z")).find((m) => m.kind === "start");
   assert.equal(plain.buttons.length, 2);
 });
+
+test("check-in and brief: a dropped task isn't due tomorrow or at risk", () => {
+  const due = (id, list) => task(id, id, { day: null, list, due: "2026-10-27", est_min: 60 });
+  const snap = snapshot({ tasks: [task("t1", "Gym"), due("Lab", "Inbox"), due("Old essay", "Dropped")] });
+  const [m] = whatToSend(snap, at("2026-10-26T21:00:00Z")).filter((x) => x.kind === "checkin");
+  assert.equal(m.text, "Shutdown time. 0 done, 1 left.\nTomorrow: 1 due (Lab).");
+  const [brief] = whatToSend(snap, at("2026-10-26T12:00:00Z"));
+  assert.ok(!brief.text.includes("Old essay"), brief.text);
+});

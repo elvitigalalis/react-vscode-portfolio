@@ -2,7 +2,7 @@
 // written out by hand.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { feedAlert } from "../src/sheet/glance.mjs";
+import { feedAlert, plannedLeft, overCommit } from "../src/sheet/glance.mjs";
 
 // ---------------------------------------------------------------- feedAlert staleness
 
@@ -103,4 +103,36 @@ test("settingsOpen: no section (S, the ⋯ menu) opens all on a wide screen and 
   assert.deepEqual(settingsOpen(GROUPS, null, true), [false, false, false, false]);
   // An unknown name is no section.
   assert.deepEqual(settingsOpen(GROUPS, "feeds", true), [false, false, false, false]);
+});
+
+test("plannedLeft: undone estimates plus the rest of blocks no estimate covers", () => {
+  const now = Date.parse("2026-11-09T15:00:00Z");
+  const tasks = [
+    { id: "a", done: false, est_min: 60 },
+    { id: "b", done: true, est_min: 90 },
+    { id: "c", done: false, est_min: null },
+  ];
+  const blocks = [
+    { task_id: "a", starts_at: "2026-11-09T16:00:00Z", ends_at: "2026-11-09T17:00:00Z" }, // its estimate counts
+    { task_id: "b", starts_at: "2026-11-09T18:00:00Z", ends_at: "2026-11-09T19:00:00Z" }, // done
+    { task_id: "c", starts_at: "2026-11-09T14:30:00Z", ends_at: "2026-11-09T15:30:00Z" }, // 30 left
+    { task_id: null, starts_at: "2026-11-09T20:00:00Z", ends_at: "2026-11-09T20:45:00Z" }, // a habit, 45
+    { task_id: null, starts_at: "2026-11-09T12:00:00Z", ends_at: "2026-11-09T13:00:00Z" }, // over
+    { task_id: null, proposed: true, starts_at: "2026-11-09T21:00:00Z", ends_at: "2026-11-09T22:00:00Z" },
+  ];
+  assert.equal(plannedLeft(tasks, blocks, now), 60 + 30 + 45);
+  // Clipped to shutdown at 8:30 pm UTC: the habit block counts 30 of its 45 minutes.
+  assert.equal(plannedLeft(tasks, blocks, now, Date.parse("2026-11-09T20:30:00Z")), 60 + 30 + 30);
+  assert.equal(plannedLeft([], [], now), 0);
+});
+
+test("overCommit: only when planned is past the room, as rounded to a quarter hour", () => {
+  assert.equal(overCommit(300, 360), null);
+  assert.equal(overCommit(360, 360), null);
+  assert.deepEqual(overCommit(540, 367), { planned: 540, room: 360 });
+  assert.deepEqual(overCommit(30, 0), { planned: 30, room: 0 });
+  // 6h planned against 6h05 of room: the note would read "about 6h", so it doesn't show...
+  assert.equal(overCommit(360, 365), null);
+  // ...and 6h05 against 5h55 reads "about 6h" too, but planned is past it.
+  assert.deepEqual(overCommit(365, 355), { planned: 365, room: 360 });
 });

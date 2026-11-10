@@ -2,7 +2,7 @@
 // read_planner shows Claude, the checks a submitted proposal must pass before apply_proposal
 // writes it, and the lines the brief adds for it. Kept free of the network and of Node APIs so
 // node --test covers it; the planner-mcp and telegram Edge Functions import it.
-import { localNow, zonedIso, minutesOn, planningDay, atRisk, addDays, formatClock, blockMinutes, plural, proposedOn } from "./logic.mjs";
+import { localNow, zonedIso, minutesOn, planningDay, atRisk, isDropped, addDays, formatClock, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { freeFood } from "./campus.mjs";
 import { weatherHours } from "./sources.mjs";
 import { paceByKind, pacedMinutes, plannedVsDone } from "./pace.mjs";
@@ -164,7 +164,8 @@ export function planSnapshot(rows, now) {
   // Horizon planning: each task's minutes on plan_day and its state (horizonOf).
   const hz = horizonOf(rows.horizon, day);
   const risky = (t) => atRisk(t, rows.blocks, day, tz, hz.get(t.id)?.row);
-  const undone = rows.tasks.filter((t) => !t.done);
+  // A dropped task (logic.mjs, isDropped) is out of play: not at risk, not due, not on the horizon.
+  const undone = rows.tasks.filter((t) => !t.done && !isDropped(t));
   const groups = [
     undone.filter((t) => t.day === day),
     undone.filter(risky),

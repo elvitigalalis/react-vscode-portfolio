@@ -4,7 +4,7 @@ import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import {
   addDays, weekStart, weekDays, localNow, dayLabel, parseEntry, titleDue, withTitleDue, formatMinutes, rowCount,
-  positionBetween, byPosition, rollMark, rollOpacity, blockOnComplete, zonedIso, formatClock, formatSpan,
+  positionBetween, byPosition, carriedNote, laterThisWeek, moveChange, DROPPED, blockOnComplete, zonedIso, formatClock, formatSpan,
   eventsOnDay, freeMinutes, clashWith, dueLabel, VIS, plural, capMinutes, minutesOn,
   somedayLog,
 } from "./logic.mjs";
@@ -217,11 +217,11 @@ export async function addTask(text, where, extra = {}) {
 // another day removes its blocks: a block is a plan for one day.
 export async function moveTask(id, where, position) {
   const t = state.tasks.get(id);
-  const before = { day: t.day, list: t.list, position: t.position, at_time: t.at_time };
   const target = where.day ? tasksOn(where.day) : tasksIn(where.list);
   const pos = position ?? positionBetween(lastPosition(target.filter((x) => x.id !== id)), null);
+  const { change, before } = moveChange(t, where, pos);
   if (where.day !== t.day) await dropBlocks(id);
-  await patch(id, { day: where.day ?? null, list: where.day ? null : where.list, position: pos, ...(where.day ? {} : { at_time: null }) });
+  await patch(id, change);
   offerUndo("Moved.", () => patch(id, before));
 }
 
@@ -395,9 +395,10 @@ const DUE = {
 };
 
 // A task's details beside its title: source, time (when its title doesn't show it), clash,
-// estimate, due date and private.
+// estimate, due date, private and carried over (on a day, while undone).
 function detailsOf(t, clash, level, span, hz) {
   const src = sourceOf(t);
+  const carried = t.day && !t.done ? carriedNote(t.rolls) : null;
   const due = DUE[level];
   const chip = hz && !t.done ? horizonChip(hz) : null;
   const kids = [
@@ -411,6 +412,7 @@ function detailsOf(t, clash, level, span, hz) {
     // Horizon planning: the task's state, in the due date's colours.
     chip ? el("span", { className: `sheet-meta sheet-hz is-${chip.level}`, textContent: chip.text }) : null,
     t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
+    carried ? el("span", { className: "sheet-meta sheet-carried", textContent: "carried over", title: carried }) : null,
   ].filter(Boolean);
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
 }
@@ -431,7 +433,6 @@ export function taskRow(t, span = spanOf(t)) {
   const li = el("li", { className: `sheet-row sheet-task${t.done ? " is-done" : ""}` });
   li.dataset.id = t.id;
   if (sourceOf(t)) li.dataset.source = sourceOf(t);
-  li.style.setProperty("--ink", String(rollOpacity(t.rolls)));
   const when = span ? spoken(span.start, span.end) : "";
   const title = el("button", { type: "button", className: "sheet-title", textContent: t.title, title: t.title });
   const clash = t.at_time && t.day && !t.done ? clashWith(clock(t.at_time.slice(0, 5)), eventsOn(t.day)) : null;
@@ -439,10 +440,9 @@ export function taskRow(t, span = spanOf(t)) {
   const hz = state.states.get(t.id);
   const level = hz ? (t.due && !t.done && t.due < state.today ? "overdue" : null) : dueLevel(t, state.blocks, state.today, SHEET.timeZone);
   const line = hz && !t.done ? horizonLine(hz, state.horizon.filter((a) => a.task_id === t.id), t.due, state.today) : null;
-  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}. Edit`);
+  title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}${t.day && !t.done && t.rolls >= 1 ? ", carried over" : ""}. Edit`);
   li.append(...[
     ...withWhen(span?.start, span?.end, [
-      rollMark(t.rolls) ? el("span", { className: "sheet-roll", textContent: rollMark(t.rolls), title: `Rolled over ${plural(t.rolls, "time")}` }) : null,
       title,
       // The details, kept together so they move under the title as one line when they don't fit.
       detailsOf(t, clash, level, span, hz),
@@ -1002,22 +1002,30 @@ function startEdit(li) {
 
 let menuFor = null;
 
-function openMenu(id, anchor) {
+async function openMenu(id, anchor) {
   const menu = $("[data-menu]");
   menuFor = id;
   const t = state.tasks.get(id);
   menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
   menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
+  // Where it could go: a task carried over twice or more leads with Tomorrow, Later this week,
+  // Someday and Drop; the plain "To tomorrow" and "To Someday" step aside meanwhile.
+  const triage = Boolean(t.day && !t.done && t.rolls >= 2);
+  menu.querySelector("[data-triage]").hidden = !triage;
+  // Its styles (calm-styles.mjs) are in before it shows, so it never flashes unstyled.
+  if (triage) await import("./calm-styles.mjs").catch(console.error);
+  menu.querySelector('[data-triage] [data-move="this-week"]').hidden = !laterThisWeek(now().day);
+  for (const kind of ["tomorrow", "someday"]) menu.querySelector(`:scope > [data-move="${kind}"]`).hidden = triage;
   const r = anchor.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 365)}px`;
   menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
-  menu.querySelector("button").focus();
+  menu.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
+  menu.querySelector("button:not([hidden], [hidden] *)").focus();
 }
 
 // What each task action is, for the status line when it fails.
 const ACTION_WORDS = { today: "move %s to today", tomorrow: "move %s to tomorrow", "next-week": "move %s to next week", "day-before": "move %s a day earlier",
-  "day-after": "move %s a day later", someday: "move %s to Someday", visibility: "change who sees %s", "clear-due": "clear the due date of %s", delete: "delete %s" };
+  "day-after": "move %s a day later", "this-week": "move %s to later this week", someday: "move %s to Someday", drop: "drop %s", visibility: "change who sees %s", "clear-due": "clear the due date of %s", delete: "delete %s" };
 
 async function menuAction(kind) {
   const id = menuFor;
@@ -1044,7 +1052,9 @@ async function runAction(id, kind) {
   if (kind === "day-before" || kind === "day-after") {
     await moveTask(id, { day: addDays(state.tasks.get(id).day ?? today, kind === "day-after" ? 1 : -1) });
   }
+  if (kind === "this-week") await moveTask(id, { day: laterThisWeek(today) ?? addDays(today, 1) });
   if (kind === "someday") await moveTask(id, { list: "Inbox" });
+  if (kind === "drop") await moveTask(id, { list: DROPPED });
   if (kind === "visibility") await toggleVisibility(id);
   if (kind === "clear-due") await clearDue(id);
   if (kind === "delete") await removeTask(id);

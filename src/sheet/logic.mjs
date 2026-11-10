@@ -365,11 +365,28 @@ export function visibleEvents(dayEvents, max, nowMin = null) {
 
 // --- Rollover display --------------------------------------------------------------------
 
-export const ROLL_MARKS = ["", "②", "③"];
-export const rollMark = (rolls) => (rolls >= 1 && rolls <= 2 ? ROLL_MARKS[rolls] : "");
-// The title's ink fades a step per roll, never under 4.5:1 (WCAG 1.4.3): 0.7 of --fg is 5.0:1
-// on --chip in light mode, the worst case (test/roll-contrast.test.mjs).
-export const rollOpacity = (rolls) => [1, 0.85, 0.7][Math.min(rolls, 2)];
+// A carried-over task gets a neutral "carried over" tag, the same at every roll: no fading and
+// no count on the row. The count is only in the tag's hover text.
+export const carriedNote = (rolls) => (rolls >= 1 ? `Carried over ${rolls === 1 ? "once" : `${rolls} times`}` : null);
+
+// A move's patch and what Undo puts back. A task sent to a Someday list (To Someday, Drop, a drag)
+// starts over: its fixed time and its roll count go, as the nightly park does, so the look-back
+// and shutdown stop treating it as one that keeps moving.
+export function moveChange(t, where, position) {
+  const change = { day: where.day ?? null, list: where.day ? null : where.list, position, ...(where.day ? {} : { at_time: null, rolls: 0 }) };
+  const before = { day: t.day, list: t.list, position: t.position, at_time: t.at_time, ...(where.day ? {} : { rolls: t.rolls ?? 0 }) };
+  return { change, before };
+}
+
+// Drop never deletes: the task goes to the Someday list "Dropped", where it can be picked back
+// up. A dropped task is out of play: Claude's plan (proposal.mjs) and Telegram's warnings
+// (nudges.mjs) leave it out.
+export const DROPPED = "Dropped";
+export const isDropped = (t) => t.day == null && t.list === DROPPED;
+
+// A carried-over task's "Later this week": the week's last day, when that is past tomorrow;
+// else null (the choice is hidden).
+export const laterThisWeek = (today) => { const end = addDays(weekStart(today), 6); return end > addDays(today, 1) ? end : null; };
 
 // --- The public view ---------------------------------------------------------------------
 

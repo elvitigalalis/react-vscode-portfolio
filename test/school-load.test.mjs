@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { courseCodes, isSchool, isSchoolWork, isSchoolTag, guessMinutes, schoolMinutes, schoolDue, freeOn, weekLoad, QUICK_EST, DEFAULT_SCHOOL_EST } from "../src/sheet/school-load.mjs";
-import { weekDays } from "../src/sheet/logic.mjs";
+import { weekDays, DROPPED } from "../src/sheet/logic.mjs";
 
 const T = (title, extra = {}) => ({ id: title, title, day: null, list: "Brightspace", due: null, est_min: null, at_time: null, tag: null, done: false, source: null, project_id: null, ...extra });
 const days = weekDays("2026-11-09"); // Mon Nov 9 – Sun Nov 15
@@ -50,7 +50,7 @@ test("the week's school work: due in the week, overdue on the current week, earl
     T("Done HW", { source: "brightspace", due: "2026-11-11", done: true }),
     T("Read ch. 7", { tag: "cse320", day: "2026-11-13", list: null }),
     T("CSE 320 Lecture", { source: "brightspace", day: "2026-11-11", at_time: "09:00:00", est_min: 50, list: null }),
-    T("Let go", { source: "brightspace", due: "2026-11-12", list: "Dropped" }),
+    T("Let go", { source: "brightspace", due: "2026-11-12", list: DROPPED }),
     T("Sprint ticket", { tag: "kan-329", day: "2026-11-12", list: null, est_min: 60 }),
     T("Ship auth", { tag: "workit", day: "2026-11-11", list: null, est_min: 60 }),
     T("Exam", { source: "brightspace", day: "2026-11-11", at_time: "10:00:00", est_min: 80, list: null }),

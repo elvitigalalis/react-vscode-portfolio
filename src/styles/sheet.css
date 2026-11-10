@@ -122,9 +122,6 @@
 .sheet-notice { color: var(--muted); font-size: 0.875rem; margin: 0 0 0.5rem; }
 
 .sheet-task { position: relative; cursor: grab; }
-/* A rolled task fades its title only (rollOpacity); its time, details and Approve keep full ink.
-   A done title is already muted, so it doesn't fade again. */
-.sheet-task:not(.is-done) .sheet-title { opacity: var(--ink, 1); }
 .sheet-title {
   flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
   padding: 0; cursor: text; overflow-wrap: anywhere;
@@ -133,7 +130,6 @@
 .sheet-clash { color: var(--warn); font-size: 0.8125rem; cursor: help; }
 .sheet-risk { color: var(--warn); cursor: help; }
 .sheet-typed { white-space: nowrap; }
-.sheet-roll { color: var(--muted); font-size: 0.8125rem; }
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 /* Check and menu sit over the row's right end on hover, so titles keep the full width. */
 .sheet-check, .sheet-more {
@@ -331,9 +327,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
    subgrid, and the week's rows would stop lining up. */
 .sheet-task { container: sheet-row / inline-size; flex-wrap: wrap; align-content: flex-start; }
 .sheet-title { min-width: min(8ch, 100%); }
-/* A roll mark stays on the title's line: the title's basis leaves room for it. */
-.sheet-roll { flex: none; }
-.sheet-roll + .sheet-title { max-width: calc(100% - 1.25rem); }
 .sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
 @container sheet-row (width < 40rem) {
   .sheet-title { flex: 1 1 auto; }
@@ -394,7 +387,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-seg.is-busy { background: color-mix(in srgb, var(--muted) 55%, transparent); }
 .sheet-seg.is-block { background: var(--accent); }
 .sheet-seg.is-proposed { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 5px); }
-.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--danger); }
+/* Red is for what needs acting on (overdue, over capacity, a failed feed); the time of day isn't. */
+/* A 1px halo in the page colour keeps it visible over a block, which is the same accent. */
+.sheet-strip-now { position: absolute; top: -2px; bottom: -2px; width: 2px; margin-left: -1px; background: var(--accent); box-shadow: 0 0 0 1px var(--bg); }
 /* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
 .sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
 .sheet-planbar .sheet-meter { height: 6px; border-radius: 3px; }
@@ -419,11 +414,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-block.is-short .sheet-btn-approve { align-self: center; }
 /* The now line: 2px, a dot at the timeline's edge and its time in the hour gutter. It comes
    before the blocks, which cover it, so it never runs through their text. */
-.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--danger); margin-top: -1px; pointer-events: none; }
-.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--accent); margin-top: -1px; pointer-events: none; }
+.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 .sheet-nowline span {
   position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
-  font-size: 0.6875rem; line-height: 1; color: var(--danger); font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem; line-height: 1; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .sheet-banner {
   display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.875rem;

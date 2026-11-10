@@ -31,6 +31,25 @@ export function loadShare(minutes, capacity) {
   return { pct: Math.min(100, Math.round((100 * minutes) / capacity)), level };
 }
 
+// Over-commit (docs/sheet.md, "Over-commit note"): the minutes still planned on a day, its undone
+// tasks' estimates plus the part between `nowMs` and `endMs` (shutdown) of each block no estimate
+// already counts (a habit block, or a block on a task with no estimate). Proposed blocks don't count.
+export function plannedLeft(tasks, blocks, nowMs, endMs = Infinity) {
+  const counted = new Set(tasks.filter((t) => t.done || t.est_min).map((t) => t.id));
+  const est = tasks.filter((t) => !t.done).reduce((s, t) => s + (t.est_min ?? 0), 0);
+  return blocks.filter((b) => !b.proposed && !counted.has(b.task_id)).reduce((s, b) =>
+    s + Math.max(0, Math.round((Math.min(endMs, Date.parse(b.ends_at)) - Math.max(nowMs, Date.parse(b.starts_at))) / 60_000)), est);
+}
+
+// The note's numbers when `planned` is more than `room`, the day's capacity (planner.mjs
+// dayCapacity: the free time left before shutdown, held to the workload cap, as Plan today's
+// header reads it), else null. Room is rounded to a quarter hour first, since the note says
+// "about", so it never reads "Planned 6h · about 6h free".
+export function overCommit(planned, room) {
+  const about = Math.round(room / 15) * 15;
+  return planned > about ? { planned, room: about } : null;
+}
+
 // A day's strip: busy events and blocks as percentages of the window `from`–`to` (minutes past
 // midnight), rounded to 0.1 and sorted by start. Parts outside the window are clipped and
 // anything wholly outside is dropped; all-day and free events are left out. Overlaps stay
