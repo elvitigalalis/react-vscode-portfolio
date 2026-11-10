@@ -2,7 +2,7 @@
 // it fills in, the places an unfinished task can go, and what Finish saves for each.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { choicesFor, closedLine, decisionChange, doneToday, firstUp, targetOf, undecided, winLines, winsOf } from "../src/sheet/shutdown-close.mjs";
+import { rollsOnServer, choicesFor, closedLine, decisionChange, doneToday, firstUp, targetOf, undecided, winLines, winsOf } from "../src/sheet/shutdown-close.mjs";
 
 const tz = "America/New_York";
 const today = "2026-11-03"; // a Tuesday
@@ -74,4 +74,12 @@ test("every open task needs a place; the closed line says where they went", () =
   assert.equal(closedLine(new Map()), null);
   assert.equal(firstUp([T("a", "Done one", { done: true }), T("b", "Lab 5")]), "Lab 5");
   assert.equal(firstUp([]), null);
+});
+
+test("a plain Tomorrow rides on shut_down's roll; a timed one or a third roll is written", () => {
+  assert.equal(rollsOnServer(T("a", "A"), "tomorrow"), true);
+  assert.equal(rollsOnServer(T("a", "A", { rolls: 2 }), "tomorrow"), true);
+  assert.equal(rollsOnServer(T("a", "A", { rolls: 3 }), "tomorrow"), false, "the roll would park it in Inbox");
+  assert.equal(rollsOnServer(T("a", "A", { at_time: "15:00:00" }), "tomorrow"), false);
+  assert.equal(rollsOnServer(T("a", "A"), "week"), false);
 });

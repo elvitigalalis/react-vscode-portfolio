@@ -82,6 +82,12 @@ export function decisionChange(t, kind, today, position) {
   return kind === "tomorrow" ? { ...change, rolls: (t.rolls ?? 0) + 1 } : change;
 }
 
+// A Tomorrow that the day's shut_down makes itself (supabase/schema.sql, roll_tasks): an untimed
+// task under three rolls moves to tomorrow as a roll in the same request, so Finish needs no write
+// of its own for it. A timed task, or one the roll would park in Inbox, is moved by a write.
+export const ROLLS_BEFORE_INBOX = 3;
+export const rollsOnServer = (t, kind) => kind === "tomorrow" && !t.at_time && (t.rolls ?? 0) < ROLLS_BEFORE_INBOX;
+
 // Today's unfinished tasks that still need a decision.
 export const undecided = (open, decisions) => open.filter((t) => !decisions.has(t.id));
 
