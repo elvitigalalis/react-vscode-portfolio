@@ -312,8 +312,9 @@ Under 48 rem, one day shows at a time (above). On top of that:
   and their old order, starts on a 5-minute mark at the first free time after the one before
   (a later block never moves earlier), and stays clear of busy Google events (not all-day or
   free ones), every block that stays put and the shutdown line. What stays put: a block running
-  now, the one a focus session is on, habit blocks, done tasks' blocks and blocks of a task with
-  a fixed time (`@3pm`). Proposed blocks take no time, as for +15 min in focus.
+  now, the one a focus session is on, habit blocks, done tasks' blocks, blocks of a task with
+  a fixed time (`@3pm`) and a later block already planned past shutdown (it isn't reported as
+  one that didn't fit). Proposed blocks take no time, as for +15 min in focus.
 - Each move saves as a drag in Plan today does (`saveBlock`): the block's Google event moves too,
   and a moved block is his, so no revision moves it again.
 - The Undo toast is the receipt: "Reflowed: OS homework 4:30 pm, Email advisor 6 pm." plus

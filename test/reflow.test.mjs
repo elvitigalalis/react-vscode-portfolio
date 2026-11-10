@@ -67,6 +67,16 @@ test("reflowPlan: nothing goes past shutdown; what doesn't fit stays and is name
   assert.deepEqual(plan.unfit, ["b2"]);
 });
 
+test("reflowPlan: a later block already running past shutdown stays and isn't called unfit", () => {
+  const plan = reflowPlan({
+    blocks: [B("b1", "t1", H(9), H(10)), B("late", "t2", H(21, 30), H(22, 30))],
+    tasks: tasks({ id: "t1" }, { id: "t2" }),
+    busy: [], now: H(19), shutdown: H(22),
+  });
+  assert.deepEqual(to(plan), { b1: [H(19), H(20)] });
+  assert.deepEqual(plan.unfit, []);
+});
+
 test("reflowPlan: a later block that can't fit keeps its time, and nothing is laid over it", () => {
   const plan = reflowPlan({
     blocks: [B("b0", "t0", H(8), H(8, 30)), B("b1", "t1", H(9), H(10, 30)), B("b2", "t2", H(20, 30), H(21, 45))],

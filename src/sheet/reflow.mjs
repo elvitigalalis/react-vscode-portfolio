@@ -26,7 +26,9 @@ export function reflowPlan({ blocks, tasks, busy, now, shutdown, keep = [] }) {
     const t = b.task_id && tasks.get(b.task_id);
     return Boolean(t) && !t.done && !t.at_time && !b.proposed && !keep.includes(b.id);
   };
-  const candidates = blocks.filter((b) => open(b) && (b.end <= now || b.start >= now) && b.start < shutdown)
+  // A later block that already runs past shutdown was planned that way: it stays, and isn't
+  // reported as one that didn't fit.
+  const candidates = blocks.filter((b) => open(b) && (b.end <= now || (b.start >= now && b.end <= shutdown)))
     .sort((a, b) => a.start - b.start);
   const pinned = new Set();
   for (;;) {
