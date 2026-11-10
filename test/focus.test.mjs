@@ -33,7 +33,7 @@ test("proposed blocks, done tasks, habit blocks and tomorrow's blocks get none",
 
 test("a session counts down to the block's end and up from Start", () => {
   const s = startSession(blocks[1], at("2026-11-04T19:05:00Z"));
-  assert.deepEqual(s, { block_id: "b1", task_id: "t1", started_at: Date.parse("2026-11-04T19:05:00Z"), ends_at: Date.parse("2026-11-04T19:45:00Z") });
+  assert.deepEqual(s, { block_id: "b1", task_id: "t1", started_at: Date.parse("2026-11-04T19:05:00Z"), ends_at: Date.parse("2026-11-04T19:45:00Z"), half_at: Date.parse("2026-11-04T19:25:00Z") });
   assert.deepEqual(focusClock(s, at("2026-11-04T19:20:30Z")), { left: "24:30", elapsed: "15:30", over: false, share: 15.5 / 40 });
   // Past the end it says by how much, calmly, and the share stays full.
   assert.deepEqual(focusClock(s, at("2026-11-04T19:47:05Z")), { left: "+2:05", elapsed: "42:05", over: true, share: 1 });
@@ -51,7 +51,7 @@ test("countdown reads m:ss under an hour and h:mm:ss over", () => {
 });
 
 test("a stored session reads back only when whole", () => {
-  const s = { block_id: "b1", task_id: "t1", started_at: 1, ends_at: 2 };
+  const s = { block_id: "b1", task_id: "t1", started_at: 1, ends_at: 2, half_at: 1.5 };
   assert.deepEqual(readSession(JSON.stringify(s)), s);
   for (const bad of [null, "", "{", "[]", JSON.stringify({ ...s, ends_at: "x" }), JSON.stringify({ ...s, block_id: 3 })]) assert.equal(readSession(bad), null);
 });
@@ -177,4 +177,15 @@ test("chimesDue: a session of 4 minutes or less has only the halfway chime", () 
   const s = { started_at: 0, ends_at: 4 * 60_000 };
   assert.deepEqual(chimesDue(s, 0, 2 * 60_000), ["half"]);
   assert.deepEqual(chimesDue({ started_at: 0, ends_at: 5 * 60_000 }, 0, 3 * 60_000), ["half", "two"]);
+});
+
+test("chimesDue: the halfway mark is fixed at Start, so +15 min doesn't ring it again", () => {
+  const b = { id: "b1", task_id: "t1", ends_at: "2026-11-04T15:30:00Z" };
+  const s = startSession(b, new Date("2026-11-04T15:00:00Z"));
+  assert.equal(s.half_at, Date.parse("2026-11-04T15:15:00Z"));
+  const longer = { ...s, ends_at: s.ends_at + 15 * 60_000 };
+  // The old mark at 10:15 has passed; a halfway of the longer span (10:22:30) doesn't ring.
+  assert.deepEqual(chimesDue(longer, Date.parse("2026-11-04T15:22:29Z"), Date.parse("2026-11-04T15:22:31Z")), []);
+  assert.equal(readSession(JSON.stringify(longer)).half_at, s.half_at);
+  assert.equal(readSession(JSON.stringify({ ...s, half_at: undefined })).half_at, s.half_at);
 });
