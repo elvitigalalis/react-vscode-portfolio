@@ -35,8 +35,20 @@ test("gymDone: each Gym block a workout finished ticks the habit, even one alrea
   assert.deepEqual(gymDone(w, [block("b1", "h1", "16:00", "17:30")], habits, TZ), [{ habit_id: "h1", ends_at: at("18:00") }]);
   assert.deepEqual(gymDone([workout("strengthTraining", "08:00", "09:10")], [block("b1", "h1", "17:00", "18:30")], habits, TZ), [{ habit_id: "h1", ends_at: at("09:10") }]);
   assert.deepEqual(gymDone([workout("other", "08:00", "09:10")], [block("b1", "h1", "17:00", "18:30")], habits, TZ), []);
-  assert.deepEqual(gymDone(w, [block("b2", "h2", "17:00", "18:00")], habits, TZ), []);
-  assert.deepEqual(gymDone(w, [block("b1", "h1", "17:00", "18:00", { proposed: true })], habits, TZ), []);
+  // A generic workout over another habit's block, or over a proposed Gym block, ticks nothing.
+  const other = [workout("other", "17:00", "18:00")];
+  assert.deepEqual(gymDone(other, [block("b2", "h2", "17:00", "18:00")], habits, TZ), []);
+  assert.deepEqual(gymDone(other, [block("b1", "h1", "17:00", "18:00", { proposed: true })], habits, TZ), []);
+});
+
+test("gymDone: a lifting workout ticks every Gym habit with no block at all", () => {
+  const lift = workout("strengthTraining", "08:00", "09:10");
+  assert.deepEqual(gymDone([lift], [], habits, TZ), [{ habit_id: "h1", ends_at: at("09:10") }]);
+  // A Hevy workout comes in as activity "strength" (hevy.mjs asRingWorkouts).
+  assert.deepEqual(gymDone([{ ...lift, activity: "strength" }], [], habits, TZ), [{ habit_id: "h1", ends_at: at("09:10") }]);
+  // A generic workout with no block, or no Gym habit at all, ticks nothing.
+  assert.deepEqual(gymDone([workout("walking", "08:00", "09:10")], [], habits, TZ), []);
+  assert.deepEqual(gymDone([lift], [], [{ id: "h2", name: "Lunch" }], TZ), []);
 });
 
 test("ringLine: the day's matched ring time, length only", () => {
