@@ -125,14 +125,15 @@ in about 0.4 s instead of 3.6 s, and a move, reopen or new task shows in under 0
 
 - **The last copy first:** after each load of this week, /plan keeps a copy of what the week
   draws in this browser (`sheet.snapshot.v1`): tasks, blocks, days, event to-dos, horizon rows,
-  the settings the week reads and each day's Oura scores. No Oura nights or bedtime windows, no
+  the settings the week reads, today's focus minutes and each day's Oura scores. No Oura nights or bedtime windows, no
   keys or Telegram IDs. Signing out deletes it. On opening, signed in, the copy draws at once with
   "Updating…" in the status line, then the normal load replaces it. If the load fails, the
   status line says the page is the week as last seen.
 - **Google's events load beside the tables,** never before the first draw: the week draws with
   the events kept from last time and redraws when Google answers, only if they changed.
 - **Coming back** (a reload after a minute away) redraws only when something read has changed;
-  the Oura poll already did. A refresh of the projects list redraws only that list.
+  the Oura poll already did. Projects and habits still read their own rows again then. A refresh
+  of the projects list redraws only that list.
 
 ### Completion
 
