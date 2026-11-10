@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
-import { lightDismiss, onBackdrop, menuStep } from "../src/sheet/dismiss.mjs";
+import { lightDismiss, onBackdrop, menuStep, holdEscape } from "../src/sheet/dismiss.mjs";
 
 function fakeDialog() {
   const on = {};
@@ -48,13 +48,30 @@ test("lightDismiss: a drag out of the dialog, or into it, leaves it open", () =>
   assert.equal(d.closed, 0);
 });
 
-test("/plan: every dialog gets lightDismiss, and nothing cancels Escape", () => {
+test("/plan: every dialog gets lightDismiss, and only holdEscape can keep one open on Escape", () => {
   assert.match(readFileSync("src/sheet/planner.mjs", "utf8"), /for \(const d of root\.querySelectorAll\("dialog"\)\) lightDismiss\(d\)/);
+  // The two documented holds (docs/sheet.md, Shutdown while Finish saves; docs/sheet-focus.md,
+  // Escape in Stop's question) go through holdEscape; nothing else listens for cancel.
+  const holds = [];
   for (const f of readdirSync("src/sheet")) {
     const src = readFileSync(`src/sheet/${f}`, "utf8");
-    assert.doesNotMatch(src, /["']cancel["']/, `${f} listens for cancel`);
+    if (f !== "dismiss.mjs") assert.doesNotMatch(src, /addEventListener\(\s*["']cancel["']|\.oncancel\b|oncancel:/, `${f} listens for cancel`);
+    if (f !== "dismiss.mjs" && /\bholdEscape\(dialog/.test(src)) holds.push(f);
     assert.doesNotMatch(src, /createElement\(["']dialog/, `${f} makes a dialog outside the page`);
   }
+  assert.deepEqual(holds.sort(), ["focus-view.mjs", "shutdown-view.mjs"]);
+});
+
+test("holdEscape: Escape closes as usual unless the dialog holds it, and the hold runs its own step", () => {
+  const on = {};
+  const d = { addEventListener(type, fn) { on[type] = fn; } };
+  let held = false, steps = 0;
+  holdEscape(d, () => { if (!held) return false; steps++; return true; });
+  const escape = () => { const e = { stopped: false, preventDefault() { this.stopped = true; } }; on.cancel(e); return e.stopped; };
+  assert.equal(escape(), false, "not held: the browser closes it");
+  held = true;
+  assert.equal(escape(), true, "held: stays open");
+  assert.equal(steps, 1);
 });
 
 test("menuStep: arrow keys move through a menu's items and wrap; Home and End jump; other keys don't move", () => {

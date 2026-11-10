@@ -1,7 +1,9 @@
 // Light dismiss for /plan's dialogs: a click or tap on the backdrop closes a dialog the way its
 // Close or Cancel button does (dialog.close(), so its "close" listeners reset state the same way),
 // never as Save or Done. Escape is the browser's own: it fires the cancel event and then closes the
-// dialog, which ends in the same "close" event, and nothing on /plan cancels it. Popover menus
+// dialog, which ends in the same "close" event. Only holdEscape (below) may stop that, and only
+// while its dialog says so: Shutdown while Finish saves, focus mode while Stop's question is open
+// (docs/sheet.md, docs/sheet-focus.md). Nothing else on /plan listens for cancel. Popover menus
 // (the ⋯ menu, the task menu) are popover="auto", which the browser already closes on Escape and
 // on a click outside.
 // https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/cancel_event
@@ -24,6 +26,13 @@ export function lightDismiss(dialog) {
     if (down && onBackdrop(dialog, e)) dialog.close();
     down = false;
   });
+}
+
+// Escape that doesn't close `dialog` while `hold(event)` is true: the one way /plan keeps a dialog
+// open on Escape (test/dismiss.test.mjs checks no other module listens for cancel). `hold` may do
+// what Escape means there instead (focus mode's Keep going) and returns whether it held.
+export function holdEscape(dialog, hold) {
+  dialog.addEventListener("cancel", (e) => { if (hold(e)) e.preventDefault(); });
 }
 
 // Arrow keys in a popover menu (WAI-ARIA APG, menu pattern:

@@ -17,6 +17,7 @@ import { habitDay } from "./habit-rate.mjs";
 import { bedtimeFor, bedtimeMarker, tonight } from "./bedtime.mjs";
 import { burst } from "./celebrate.mjs";
 import * as lb from "./lookback-shutdown.mjs";
+import { holdEscape } from "./dismiss.mjs";
 import { choicesFor, closedLine, decisionChange, firstUp, rollsOnServer, targetOf, undecided, winLines, winsOf } from "./shutdown-close.mjs";
 
 document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
@@ -508,6 +509,6 @@ export function setupView(root, given = {}) {
     const b = e.target.closest(".sheet-shut-choice");
     if (b) choose(b.dataset.id, b.dataset.kind);
   });
-  dialog.addEventListener("cancel", (e) => { if (busy) e.preventDefault(); });
+  holdEscape(dialog, () => busy);
   dialog.addEventListener("close", () => { session++; render(); });
 }

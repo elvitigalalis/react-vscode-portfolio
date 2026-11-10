@@ -17,6 +17,7 @@ import { formatMinutes, localNow } from "./logic.mjs";
 import { el, state, render, checkOff } from "./planner.mjs";
 import { soundOn } from "./celebrate.mjs";
 import * as wake from "./wake.mjs";
+import { holdEscape } from "./dismiss.mjs";
 
 let io, dialog, parts, timer;
 // When the clock last ticked (epoch ms), for the chimes.
@@ -118,10 +119,10 @@ export function setupFocusView(deps) {
   // Any tap in the view (Start's included, through open) lets the chimes play later.
   dialog.addEventListener("pointerdown", wakeAudio);
   // Escape while Stop's question is open goes back to the actions, keeping the view and session.
-  dialog.addEventListener("cancel", (e) => {
-    if (parts.stop.hidden) return;
-    e.preventDefault();
+  holdEscape(dialog, () => {
+    if (parts.stop.hidden) return false;
     keepGoing(true);
+    return true;
   });
   document.body.append(dialog);
 }
