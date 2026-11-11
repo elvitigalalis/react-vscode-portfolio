@@ -57,11 +57,6 @@
 
 body.sheet-dragging { user-select: none; cursor: grabbing; }
 
-.sheet-someday-title { font-size: 1.0625rem; margin: 2rem 0 0.5rem; }
-
-.sheet-someday { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1rem; }
-
-.sheet-list .sheet-head { border-bottom-width: 1px; }
 
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
@@ -260,19 +255,5 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-evtodo:hover { border-bottom-color: var(--accent); }
 
-/* Projects (docs/sheet-projects.md, src/sheet/project-list.mjs): one quiet row per project,
-   opening to its steps as task rows. */
-.sheet-projects[hidden] { display: none; }
-
-.sheet-project-list { list-style: none; display: grid; gap: 0.25rem; max-width: 40rem; }
-
-.sheet-project summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; padding: 0.25rem 0; }
-
-.sheet-project-title { font-weight: 600; }
-
-.sheet-project-steps { margin: 0 0 0.5rem 1rem; }
-
-/* Finished Someday tasks, folded away under the lists. */
-.sheet-log { margin-top: 1rem; }
-
-.sheet-log summary { cursor: pointer; color: var(--muted); }
+/* The sections under the week (Habits, Projects, Someday, the Log) come with their scripts:
+   plan-sections.css, plan-habits.css. */

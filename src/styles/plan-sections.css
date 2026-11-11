@@ -1,0 +1,86 @@
+/* The sections under the week (docs/sheet.md, "Look"): Habits, Projects, Someday and the Log share
+   one header, 15px/600 with its count in --text-3, and one row, 32px with a --surface-2 fill on
+   hover and a 6px radius. A disclosure (the Log, a project, School this week) leads with a Lucide
+   chevron that turns down when open, never the native triangle. Loaded with sections.mjs
+   once signed in, so /plan's first paint carries none of it. The week's own rows are drawn by
+   sheet.css and sheet-plan.css; these rules only touch rows inside the sections. Tokens:
+   plan-base.css. */
+
+/* The header. */
+.sheet-someday-title {
+  display: flex; align-items: center; gap: 8px; margin: 32px 0 8px;
+  font-size: 15px; font-weight: 600; line-height: 20px; letter-spacing: -0.01em; color: var(--text-1);
+}
+.sheet-sec-n { font-size: 13px; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sheet-sec-n:empty { display: none; }
+
+/* Disclosures: the marker goes, a chevron takes its place. */
+:is(.sheet-log, .sheet-project, .sheet-school) > summary { list-style: none; cursor: pointer; }
+:is(.sheet-log, .sheet-project, .sheet-school) > summary::-webkit-details-marker { display: none; }
+.sheet-chev { width: 16px; height: 16px; stroke-width: 1.5; color: var(--text-3); }
+[open] > summary > .sheet-chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: no-preference) { .sheet-chev { transition: transform 150ms var(--ease); } }
+
+/* Rows: the week's task row, without its rule, as a 32px line with a hover fill. A hovered row
+   sets --bg to its fill, so ✓ and ⋯ (drawn on --bg over the title's end) sit on it cleanly. */
+:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-row {
+  min-height: 32px; padding: 6px 8px; border-bottom: 0; border-radius: var(--radius);
+  font-size: 13px; line-height: 20px;
+}
+:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-task:hover { --bg: var(--surface-2); background: var(--bg); }
+:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-check { right: 32px; }
+:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-more { right: 4px; }
+:is(.sheet-list, .sheet-log, .sheet-project-steps) :is(.sheet-check, .sheet-more) { width: 24px; height: 24px; border-radius: var(--radius-sm); }
+:is(.sheet-list, .sheet-log, .sheet-project-steps) :is(.sheet-check, .sheet-more):hover { background: color-mix(in srgb, var(--text-1) 8%, var(--bg)); }
+:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-icon { stroke-width: 1.5; }
+@media (pointer: coarse) {
+  :is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-row { min-height: 44px; }
+}
+@media (hover: none) {
+  :is(.sheet-list, .sheet-log, .sheet-project-steps) :is(.sheet-check, .sheet-more) { width: 44px; height: 44px; margin-block: -10px; }
+}
+
+/* An empty list's quiet "+ Add a task", and the add row of a list with tasks on hover or focus. */
+.sheet-list .sheet-add { font-size: 13px; line-height: 20px; }
+.sheet-list .sheet-add::placeholder { color: transparent; }
+.sheet-list .sheet-rows:is(:hover, .is-blank) .sheet-add::placeholder, .sheet-list .sheet-add:focus::placeholder { color: var(--text-3); }
+@media (hover: none) { .sheet-list .sheet-add::placeholder { color: var(--text-3); } }
+@media (hover: none), (max-width: 48rem) { .sheet-list .sheet-add { font-size: 16px; } }
+
+/* Someday: its lists side by side, each headed by its name and open count. */
+/* Rows and list headers are inset 8px for their hover fill; the lists sit 8px out, so their
+   words line up with the section headers on the page's gutter. */
+.sheet-someday { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 24px; margin-inline: -8px; }
+.sheet-list > .sheet-head {
+  display: flex; align-items: center; gap: 8px; min-height: 28px; margin: 0; padding: 0 8px;
+  border: 0; font-size: 13px; font-weight: 600; line-height: 20px; letter-spacing: -0.01em;
+}
+.sheet-list > .sheet-head .sheet-wd { font-weight: 600; text-transform: none; letter-spacing: inherit; }
+.sheet-list > .sheet-head .sheet-sec-n { font-size: 12px; }
+/* New list…: a bare line like the add rows, under the lists' headers. */
+.sheet-newlist {
+  width: 100%; min-height: 28px; margin-top: 0; padding: 4px 8px; border: 0; border-radius: var(--radius);
+  font-size: 13px; color: var(--text-1); background: transparent;
+}
+.sheet-list .sheet-newlist::placeholder { color: var(--text-3); }
+.sheet-newlist:hover { background: var(--surface-2); }
+@media (hover: none), (max-width: 48rem) { .sheet-newlist { min-height: 44px; font-size: 16px; } }
+
+/* The Log: a header that opens. */
+.sheet-log { margin-top: 24px; }
+.sheet-log > summary { width: fit-content; margin: 0 0 4px -4px; padding: 4px 8px 4px 4px; border-radius: var(--radius); }
+.sheet-log > summary:hover { background: var(--surface-2); }
+.sheet-log > .sheet-rows { max-width: 640px; margin-inline: -8px; }
+
+/* Projects: one row per project that opens to its steps. */
+.sheet-project-list { list-style: none; display: grid; gap: 2px; max-width: 640px; }
+.sheet-project > summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-height: 32px; padding: 6px 8px 6px 4px;
+  border-radius: var(--radius); font-size: 13px; line-height: 20px;
+}
+.sheet-project > summary:hover { background: var(--surface-2); }
+.sheet-project-title { font-weight: 500; color: var(--text-1); }
+.sheet-project > summary .sheet-hz { font-size: 12px; font-weight: 500; }
+.sheet-project > summary .sheet-hz-line { font-size: 12px; color: var(--text-3); }
+.sheet-project-steps { margin: 0 0 8px 20px; }
+@media (pointer: coarse) { .sheet-project > summary { min-height: 44px; } }
