@@ -21,23 +21,16 @@
 [open] > summary > .sheet-chev { transform: rotate(90deg); }
 @media (prefers-reduced-motion: no-preference) { .sheet-chev { transition: transform 150ms var(--ease); } }
 
-/* Rows: the week's task row, without its rule, as a 32px line with a hover fill. A hovered row
-   sets --bg to its fill, so ✓ and ⋯ (drawn on --bg over the title's end) sit on it cleanly. */
+/* Rows: the week's task row (plan-week.css: its round box, meta line and hover ⋯), without its
+   rule, as a 32px line with a hover fill. A hovered row sets --bg to its fill. */
 :is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-row {
   min-height: 32px; padding: 6px 8px; border-bottom: 0; border-radius: var(--radius);
   font-size: 13px; line-height: 20px;
 }
 :is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-task:hover { --bg: var(--surface-2); background: var(--bg); }
-:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-check { right: 32px; }
-:is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-more { right: 4px; }
-:is(.sheet-list, .sheet-log, .sheet-project-steps) :is(.sheet-check, .sheet-more) { width: 24px; height: 24px; border-radius: var(--radius-sm); }
-:is(.sheet-list, .sheet-log, .sheet-project-steps) :is(.sheet-check, .sheet-more):hover { background: color-mix(in srgb, var(--text-1) 8%, var(--bg)); }
 :is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-icon { stroke-width: 1.5; }
 @media (pointer: coarse) {
   :is(.sheet-list, .sheet-log, .sheet-project-steps) .sheet-row { min-height: 44px; }
-}
-@media (hover: none) {
-  :is(.sheet-list, .sheet-log, .sheet-project-steps) :is(.sheet-check, .sheet-more) { width: 44px; height: 44px; margin-block: -10px; }
 }
 
 /* An empty list's quiet "+ Add a task", and the add row of a list with tasks on hover or focus. */
