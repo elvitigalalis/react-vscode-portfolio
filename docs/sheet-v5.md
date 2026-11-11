@@ -789,8 +789,8 @@ calendars, and "Time blocks" for the events a message made), minus The Sheet's o
 with the calendar icon after the title and a checkbox; its menu has Open in Calendar and Hide. The gray event
 list above the tasks is gone; the calendar still shows on Plan today's timeline and the strip.
 
-A timed task reads the same way: its time "7–7:20 pm" is a label of its own before the title, in a
-fixed column so titles line up, on task and event rows alike (screen readers hear "7 to 7:20 pm,
+A timed task shows its time "7–7:20 pm" at the right end of its details line, and an event under
+its title (the restyle's calendar block, docs/sheet.md "The week"; screen readers hear "7 to 7:20 pm,
 Register for classes"). It uses `taskSpan`, on the week's days and in Plan today. It starts at its `at_time`, else its approved
 block's start, else its pending block's; it ends at that block's end, else `est_min` later, else
 30 minutes later. The other details (source, clash ⚠, estimate, due date, lock) stay beside it.

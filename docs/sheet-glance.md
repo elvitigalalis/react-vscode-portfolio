@@ -77,18 +77,19 @@ the base spec is [sheet.md](sheet.md).
    - *Why:* NN/g says icons need labels, which we keep, except for well-known marks. Things 3
      is about 95 % neutral, with colour and icons only for meaning.
 3. **Sources look like sources.**
-   - **Course tasks:** a 3px `--stem` left edge and the graduation-cap icon.
+   - **Course tasks:** the graduation-cap icon, tinted (docs/sheet.md, "The week"; the 3px
+     `--stem` edge went with the restyle).
    - **Campus tasks:** the ticket icon.
-   - **Blocks** take their task's edge colour on the timeline and in the week.
+   - **Blocks** take their task's edge colour on the timeline.
    - **The day's campus row:** a chip with the ticket icon and "2", plus the utensils icon and
      its count when any event has free food (`campusSummary`).
    - *Why:* Akiflow colours a slot by its project, and Sunsama users ask for whole-tile colour.
      WCAG 1.4.1 requires an icon with every tint.
 4. **Load and free time, drawn.**
-   - **Load bar:** each day header gets a 4px bar from `loadShare`. It is filled in `--accent`
+   - **Load bar:** each day header gets a 2px bar from `loadShare`. It is filled in `--accent`
      for ok, `--warn` for near and `--danger` for over, on a `--line` track. The "3h30" text
      stays.
-   - **Day strip:** under the bar, a 6px strip from `stripSegments`. Busy times are grey, blocks
+   - **Day strip:** under the bar, a 4px strip from `stripSegments`. Busy times are grey, blocks
      are the accent, and proposed blocks are dashed. Today's strip has a now tick in `--accent`.
    - **Plan today:** the header gets the same bar at full width, with a marker at "Done ≈".
    - *Why:* Sunsama and Ellie compare planned time with capacity, and Structured draws the day.
@@ -117,7 +118,7 @@ the base spec is [sheet.md](sheet.md).
    - *Why:* at 390 px the top bar wrapped to 3 rows.
 7. **Overdue vs at risk, and empty states.**
    - **Due levels** (`dueLevel`): overdue is red, with the word "overdue"; at risk is amber.
-     Both keep the ⚠ shape. Amber text never sits on a `--chip` background, which is 4.0:1 in
+     Both show the warning triangle. Amber text never sits on a `--chip` background, which is 4.0:1 in
      light mode.
    - **An empty today** shows one muted line: "Nothing planned. Press P to plan today".
    - **An empty Someday list** always shows its "+ Add a task" placeholder.

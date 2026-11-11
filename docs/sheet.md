@@ -59,11 +59,12 @@ tasks jumping days across time zones.
 ## The page (TeuxDeux, Tweek)
 
 - **Seven equal day columns,** Monday to Sunday. Weekends are full size (a top Tweek complaint).
-  Rows sit on 1px ruled lines and **line up across the week:** every column has as many rows as
-  the busiest day plus one empty row. A long title wraps onto more lines, never cut off; on wide
-  screens its row grows in every column, so the lines stay level (also on /now).
-- **Day header:** weekday in bold uppercase with slight letter-spacing, date beside it in muted
-  text. **Today is marked by the accent colour only** (header text and its 2px rule).
+  Columns sit on faint hairlines, with no ruled filler rows, and **rows line up across the week:**
+  each row is a grid row of the whole week (CSS subgrid), so the tasks start level and a long
+  title, which wraps onto more lines and is never cut off, grows its row in every column. /now
+  keeps its ruled lines and filler rows.
+- **Day header:** "Tue" in 13px/600, the date beside it in `--text-3`; **today's date sits in an
+  accent pill.** Under it, every day has the load and free-time strip (below), then a faint line.
 - **His calendar sits above each day's tasks** (Things 3, Todoist): small and gray, each event
   as its time range ("8–9:20 am") over its full name, all-day events first, then by time.
   Read-only; a click opens the event in Google. Events that have ended today fade. Past four,
@@ -74,14 +75,15 @@ tasks jumping days across time zones.
 - **Day load chip:** the day's undone estimates. Its budget is 5 h 30, or less when his events
   leave less free time between 9:30 am and 10 pm (today: from now). Then it reads `2h45 / 3h10`.
   All-day events and events marked free in Google don't count. Amber within 15 %, red over.
-- **Clash mark:** an `@3:45` task that lands inside a busy event shows ⚠ ("Clashes with …").
+- **Clash mark:** an `@3:45` task that lands inside a busy event shows the warning triangle
+  ("Clashes with …").
 - **The Log sits under the Someday lists:** a closed section holding finished Someday tasks, newest
-  first. Completing one moves it there; ↺ puts it back on its list.
+  first. Completing one moves it there; its filled box puts it back on its list.
 - **Habits sit under the week** ([sheet-habits.md](sheet-habits.md)): a ✓ for today, the last
   seven days as dots and "5 of last 7 sessions", a rate rather than a streak.
 - **Someday lists sit under the week:** named columns of undated tasks. They are the capture list
   and never roll over.
-- **Done:** struck through and faded to 20 % opacity; it stays in place.
+- **Done:** its box fills, its title is struck through in `--text-3`; it stays in place.
 - **Progress** (src/sheet/progress.mjs): counts that say what got done, never points, levels,
   streaks or anything a miss takes away. Today's header line reads "3 of 7 done · 1h40 focused"
   after a small accent ring that closes as today's tasks get done; the focused half (the minutes of
@@ -165,6 +167,28 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   Claude's proposed blocks have no fill and a dashed outline, and a small Approve chip.
   - **Focus:** `:focus-visible` only, a 2px accent ring 2px out. A heading or box that script
     focuses (`tabindex="-1"`) shows none. `::selection` is an accent wash; scrollbars are thin.
+- **The week** (`plan-week.css`, /plan only):
+  - **Rows:** one component for every task list (the week, Someday, projects, the Log, Plan
+    today's list): 32px, a `--surface-2` fill on hover with a 6px radius, a 16px round box on the
+    left, the title at 13px/500, and the meta (source icon, estimate, due date, lock) in `--text-3`
+    12px on the line under it, a timed task's time at the line's right end. ⋯ shows over the top
+    right on hover; on touch the box and ⋯ always show, each with a 44px tap area. Where a row is
+    wide (a container query on the row), the meta moves up beside the title.
+  - **Sources** tint their icon (course violet, campus amber, Slack green, Jira blue, GitHub
+    ink); no edge bars. Due at risk or overdue swaps the flag for the warning triangle.
+  - **Proposals:** a dashed `--border-strong` outline on the row and one quiet Approve chip
+    (`--accent-tint`), with the sparkles in the accent.
+  - **Calendar events** never read as tasks: a block tinted in the blue event hue with a 3px bar,
+    the title at 12px/500 and the time under it in the hue's ink. Its box and ⋯ show on hover.
+    Done, it loses the tint.
+  - **Today's header** is one line, the progress ring and "1 of 5 done · 1h10 focused", plus the
+    Now line. The line is a button (a chevron at its end) that opens Next, Oura, wind-down and,
+    on phones, the week's count; it stays open across redraws.
+  - **Empty states:** an empty day shows "+ Add a task" (other days on hover, phones always); an
+    empty week shows one centred "Nothing planned this week" with Plan today (this week) or Add
+    a task.
+  - **Week chrome:** Tell Claude is one box with Send inside it; Recent messages opens with a
+    chevron.
 - **Sections under the week** (`plan-sections.css`, with `sections.mjs`; Habits in
   `plan-habits.css`, School this week in `school-load.css`): Habits, Projects, Someday, the Log
   and School this week share one header, 15px/600 with its count in `--text-3`, and one row, 32px
@@ -310,7 +334,7 @@ Under 48 rem, one day shows at a time (above). On top of that:
   messages come after the day, before Someday, as one line until the box is in use; the
   "characters left" count shows only within 500 of the limit. A laptop keeps the box on top.
 - **Now/Next** (every width): one quiet line under today's header, "Now: OS homework until 3:30
-  pm ✓ · Next: Gym 5:30 pm", from the rows already loaded (timed tasks and event to-dos, not done).
+  pm ✓", with "Next: Gym 5:30 pm" under the header's chevron while there is a Now, from the rows already loaded (timed tasks and event to-dos, not done).
   In an overlap the row that started last is Now. ✓ completes it, with Undo. Redrawn each minute.
 - **Details…** in a task's ⋯ menu: an estimate (presets 15m to 2h, or minutes), a native time
   and date picker, and a tag, each with Clear. It is the only way to clear an estimate or a
