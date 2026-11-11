@@ -64,6 +64,8 @@
 .sheet-field .sheet-switch { margin-top: 1px; }
 .sheet-field.is-sub { align-items: center; min-height: 32px; margin-top: 4px; font-size: 13px; color: var(--text-1); }
 .sheet-field.is-sub .sheet-switch { margin-top: 0; }
+/* A switch's "On"/"Off" note is for screen readers (role="status"): the switch already shows it. */
+.sheet-field:not(.is-sub) + .small[role="status"] { position: absolute; width: 1px; height: 1px; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* The switch: a 32×18 track, the knob at the right and the accent when on. It is the same
    aria-pressed button as before (bedtime-settings.mjs, replan-settings.mjs, hevy-settings.mjs,
