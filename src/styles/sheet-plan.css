@@ -40,19 +40,12 @@
 
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 
-.sheet-check:hover { color: var(--accent-text); }
-
-@media (hover: none) {
-  /* A 44 px tap area (WCAG 2.5.5) with the same small mark; the negative margin keeps the row's height. */
-  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; width: 2.75rem; height: 2.75rem; margin-block: -0.6rem; background: transparent; }
-}
-
 @media (hover: none) { .sheet-add::placeholder { color: var(--muted); }
 }
 
 .sheet-float {
   position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; max-width: 16rem;
-  background: var(--bg); border: 1px solid var(--accent); border-radius: 0.3rem; padding: 0.2rem 0.5rem; font-size: 0.875rem;
+  background: var(--surface); box-shadow: var(--shadow-pop); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; font-weight: 500;
 }
 
 body.sheet-dragging { user-select: none; cursor: grabbing; }
@@ -87,9 +80,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 
-@media (min-width: 48.0625rem) {
-  .sheet-when { flex-basis: 100%; font-size: 0.75rem; line-height: 1.2; }
-}
 
 /* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
 .sheet-overdue { color: var(--danger); cursor: help; }

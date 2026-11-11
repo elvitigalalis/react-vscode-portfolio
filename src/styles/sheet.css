@@ -97,15 +97,6 @@
   flex: 1; min-width: 0; text-align: left; font: inherit; color: inherit; background: none; border: 0;
   padding: 0; cursor: text; overflow-wrap: anywhere;
 }
-/* Check and menu sit over the row's right end on hover, so titles keep the full width. */
-.sheet-check, .sheet-more {
-  position: absolute; top: 50%; translate: 0 -50%; width: 1.6rem; height: 1.6rem; border: 0; border-radius: 50%;
-  background: var(--bg); color: var(--muted); font: inherit; font-size: 0.8125rem; cursor: pointer; opacity: 0;
-}
-.sheet-check { right: 1.6rem; }
-.sheet-more { right: 0; }
-.sheet-task:hover .sheet-check, .sheet-task:hover .sheet-more, .sheet-check:focus-visible, .sheet-more:focus-visible { opacity: 1; }
-.sheet-task:hover { border-bottom-color: var(--accent); }
 .sheet-task.is-done .sheet-title { color: var(--muted); text-decoration: line-through; }
 .sheet-add {
   width: 100%; font: inherit; font-size: 0.9375rem; color: var(--fg); background: transparent;
@@ -123,10 +114,8 @@ textarea.sheet-add {
 /* The add row's hint shows on hover and focus, and always on touch screens. */
 .sheet-add::placeholder { color: transparent; }
 .sheet-rows:hover .sheet-add::placeholder, .sheet-add:focus::placeholder { color: var(--muted); }
-.sheet-rows.is-drop { background: var(--chip); }
 .is-ghost { opacity: 0.25; }
 .sheet-task { -webkit-touch-callout: none; }
-.sheet-task.is-held { background: var(--chip); }
 .sheet-toast {
   position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 5;
   background: var(--fg); color: var(--bg); border-radius: 0.4rem; padding: 0.5rem 0.9rem; font-size: 0.875rem;
@@ -142,11 +131,6 @@ textarea.sheet-add {
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
   .sheet-planner .sheet-day:not(.is-focus) { display: none; }
-}
-.sheet-row:has(.sheet-proposal) { flex-wrap: wrap; }
-.sheet-proposal {
-  flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.4rem; border: 1px dashed var(--accent); border-radius: 0.3rem;
-  padding: 0 0.3rem; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 .sheet-dialog-end { display: flex; justify-content: flex-end; margin-top: 1rem; }
 .sheet-dialog-end { gap: 0.5rem; }
@@ -181,50 +165,17 @@ textarea.sheet-add {
   fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
 }
 
-/* Rows never collapse (docs/sheet-glance.md, change 1). A title keeps at least 8 characters.
-   In a day or list column, the details wrap under the title as one 0.75rem line whenever the
-   title wouldn't fit beside them on one line (its flex basis becomes its one-line width). A
-   proposal already takes a line of its own (.sheet-proposal). The query container is the task
-   row, which spans its day column: size containment on .sheet-day itself would end its
-   subgrid, and the week's rows would stop lining up. */
-.sheet-task { container: sheet-row / inline-size; flex-wrap: wrap; align-content: flex-start; }
-.sheet-title { min-width: min(8ch, 100%); }
-.sheet-details { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.75rem; }
-@container sheet-row (width < 40rem) {
-  .sheet-title { flex: 1 1 auto; }
-}
-
-/* A timed row's time (task and event rows alike): a label of its own before the title, in the
-   accent ink, tabular and a step smaller. On phones it is a fixed column on the left and the
-   title wraps under itself beside it (.sheet-body); in the week's narrow columns it is a line of
-   its own above the title. Done rows dim and strike it with the title. */
-.sheet-when { flex: none; font-size: 0.8125rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--accent-text, var(--accent)); line-height: 1.172rem; }
-/* One layout for every row: the title on its own line, the details always on the line under it. */
-.sheet-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 0.125rem; }
-.sheet-body > .sheet-title { width: 100%; text-align: start; }
-.sheet-body > .sheet-details { display: flex; }
-.sheet-row:has(> .sheet-body) { align-items: flex-start; }
-.sheet-row:has(> .sheet-when) { align-items: baseline; }
-@media (max-width: 48rem) { .sheet-when { width: 6rem; } }
-@media (min-width: 48.0625rem) {
-  .sheet-row:has(> .sheet-when) { flex-wrap: wrap; align-content: flex-start; }
-}
-
-/* Sources look like sources (docs/sheet-glance.md, change 3): a course task has a 3px --stem
-   left edge and the graduation cap, a campus task the ticket. Its blocks take the same edge on
-   the Plan today timeline and in the week. The tint always comes with its icon (WCAG 1.4.1). */
-.sheet-task[data-source="course"] { border-left: 3px solid var(--stem); padding-left: 0.35rem; }
-.sheet-task[data-source="course"] .sheet-proposal { border-left: 3px solid var(--stem); }
-/* v5 SRC1: GitHub tasks take a --fg edge with the GitHub mark, Jira tasks a --muted edge with the
-   kanban, on rows and blocks alike. */
-.sheet-task[data-source="github"], .sheet-block[data-source="github"] { border-left: 3px solid var(--fg); padding-left: 0.35rem; }
-.sheet-task[data-source="jira"], .sheet-block[data-source="jira"] { border-left: 3px solid var(--muted); padding-left: 0.35rem; }
+/* A task's row (its grid, box, time and details) is plan-week.css's: only /plan draws one. The
+   source tint pairs with the source's icon (WCAG 1.4.1); the timeline's blocks keep an edge. */
+.sheet-task[data-source="github"] .sheet-source { color: var(--fg); }
+.sheet-task[data-source="jira"] .sheet-source { color: var(--ev-blue-text, var(--muted)); }
+.sheet-block[data-source="github"] { border-left: 3px solid var(--fg); padding-left: 0.35rem; }
+.sheet-block[data-source="jira"] { border-left: 3px solid var(--muted); padding-left: 0.35rem; }
 
 /* Load and free time, drawn (docs/sheet-glance.md, change 4). Under each day's header, a 4px
    load meter on a --line track and a 6px strip of 7 am to 11 pm: busy grey, blocks sage, proposals
    dashed, and a now tick on today. The load's text stays beside them. */
 .sheet-glance { display: grid; gap: 3px; margin: 0.2rem 0 0.25rem; }
-.sheet-proposal > .sheet-icon { color: var(--accent-text, var(--accent)); }
 
 /* A calmer top bar (docs/sheet-glance.md, change 6): ‹ Today › on the left, then Plan today,
    chips, Nudges and ⋯. On phones it is one row: the week title and the button words that have

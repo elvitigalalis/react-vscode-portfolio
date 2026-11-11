@@ -538,14 +538,16 @@ function typedChip(input) {
   chip.hidden = !text;
 }
 
-// The due date's look by level: overdue in red with the word, at risk in amber; both carry ⚠.
+// The due date's look by level: overdue in red with the word, at risk in amber; both carry the
+// warning triangle in place of the flag.
 const DUE = {
   overdue: { className: " sheet-overdue", title: "Overdue: its due date has passed", tail: " overdue" },
   risk: { className: " sheet-risk", title: "At risk: no block before it is due", tail: "" },
 };
 
-// A task's details beside its title: source, time (when its title doesn't show it), clash,
-// estimate, due date, private and carried over (on a day, while undone).
+// A task's details under its title: source, time (when its title doesn't show it), clash,
+// estimate, due date, private and carried over (on a day, while undone), then a timed row's time
+// at the line's end.
 function detailsOf(t, clash, level, span, hz) {
   const src = sourceOf(t);
   const carried = t.day && !t.done ? carriedNote(t.rolls) : null;
@@ -555,20 +557,21 @@ function detailsOf(t, clash, level, span, hz) {
     // v5 SRC1: a GitHub or Jira task's icon links to its page (tasks.link is https only).
     src ? el(t.link ? "a" : "span", { className: "sheet-meta sheet-source", ...(t.link ? { href: t.link, target: "_blank", rel: "noopener" } : {}) }, sourceIcon(src)) : null,
     t.at_time && !span ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
-    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
+    clash ? el("span", { className: "sheet-clash", title: `Clashes with ${clash.title}` }, icon("alert-triangle")) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
     t.due ? el("span", { className: `sheet-meta${due?.className ?? ""}`, ...(due ? { title: due.title } : {}) },
-      due ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
+      icon(due ? "alert-triangle" : "flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
     // Horizon planning: the task's state, in the due date's colours.
     chip ? el("span", { className: `sheet-meta sheet-hz is-${chip.level}`, textContent: chip.text }) : null,
     t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
     carried ? el("span", { className: "sheet-meta sheet-carried", textContent: "carried over", title: carried }) : null,
+    span ? whenLabel(span.start, span.end) : null,
   ].filter(Boolean);
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
 }
 
-// A timed row's time, its own label before the title in a fixed column ("7–7:20 pm"), the same on
-// task and event rows. Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
+// A timed row's time ("7–7:20 pm"): under an event's title, at the end of a task's details line.
+// Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
 const whenLabel = (start, end) => el("span", { className: "sheet-when", ariaHidden: "true", textContent: formatSpan(start, end) });
 const spoken = (start, end) => `${formatSpan(start, end).replace("–", " to ")}, `;
 // Every row has one layout: its time (when it has one), then a body holding the title and, on a
@@ -596,13 +599,13 @@ export function taskRow(t, span = spanOf(t)) {
   const line = hz && !t.done ? horizonLine(hz, state.horizon.filter((a) => a.task_id === t.id), t.due, state.today) : null;
   title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}${t.day && !t.done && t.rolls >= 1 ? ", carried over" : ""}${errWords(`task:${t.id}`)}. Edit`);
   li.append(...[
-    ...withWhen(span?.start, span?.end, [
+    ...withWhen(null, null, [
       title,
       // The details, kept together so they move under the title as one line when they don't fit.
       detailsOf(t, clash, level, span, hz),
       line ? el("span", { className: `sheet-hz-line${hz.state === "wont_fit" ? " is-overdue" : ""}`, ariaHidden: "true", textContent: line }) : null,
       errNote(`task:${t.id}`)]),
-    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
+    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
   return li;
@@ -646,7 +649,7 @@ export const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: t
 function eventTodoRow(r) {
   const li = el("li", { className: `sheet-row sheet-evtodo${r.done ? " is-done" : ""}` });
   li.dataset.key = r.key;
-  const check = el("button", { type: "button", className: "sheet-check", ariaLabel: r.done ? `Reopen ${r.title}` : `Complete ${r.title}` }, r.done ? "↺" : icon("check"));
+  const check = el("button", { type: "button", className: "sheet-check", ariaLabel: r.done ? `Reopen ${r.title}` : `Complete ${r.title}` }, icon("check"));
   check.dataset.act = "evtodo-done";
   const more = el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${r.title}` }, icon("more-horizontal"));
   more.dataset.act = "evtodo-more";
