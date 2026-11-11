@@ -644,8 +644,9 @@ function alsoRow(day) {
 // (event-todos.mjs). The calendar itself shows on Plan today's timeline.
 export const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
 
-// An event row looks like a timed task row: its time first, the title, and the calendar icon on
-// the details line under it, where a task shows its source.
+// An event row has a task row's parts (its time, the title, the calendar icon on the details
+// line), but draws as a tinted calendar block with its time under the title (plan-week.css), so
+// it never reads as a task.
 function eventTodoRow(r) {
   const li = el("li", { className: `sheet-row sheet-evtodo${r.done ? " is-done" : ""}` });
   li.dataset.key = r.key;
