@@ -55,9 +55,30 @@
      moves into ⋯ (Theme). */
   .plan-bar:has(> [data-tools]:not([hidden])) > :is(.plan-mark, .plan-theme) { display: none; }
   .plan-bar .sheet-nav { margin-right: auto; }
-  .plan-bar { gap: 4px; }
+  .plan-bar { flex-wrap: nowrap; gap: 2px; }
+  /* One quiet row: every button a ghost in --text-2, Plan the only fill; the day reads as text. */
+  .plan-bar :is(.sheet-btn:not(.primary), .sheet-chips .sheet-chip) { color: var(--text-2); background: transparent; border-color: transparent; box-shadow: none; }
+  .plan-bar :is(.sheet-btn:not(.primary), .sheet-chips .sheet-chip):hover { background: var(--surface-2); }
+  .plan-bar [data-act="this-week"] { padding-inline: 6px; font-weight: 600; color: var(--text-1); }
+  .plan-bar .sheet-nudges[aria-pressed="true"] { color: var(--accent-text); }
+  .plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); }
+}
+/* Phones: icons only, and Needs you's count is a small pill on its envelope. */
+@media (max-width: 30rem) {
+  .plan-bar :is(.sheet-chips .sheet-chip, .sheet-nudges, [data-act="shutdown"]) { position: relative; padding-inline: 6px; }
+  .plan-bar [data-needs-n] {
+    position: absolute; top: 0; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+    font: 600 11px/16px var(--sans); letter-spacing: 0; color: var(--on-accent); background: var(--accent); box-shadow: 0 0 0 2px var(--bg);
+  }
+  .plan-bar [data-act="plan"] { padding-inline: 12px; }
 }
 @media (pointer: coarse) {
   .plan-bar { padding: 2px 0; }
   .plan-bar .sheet-chips .sheet-chip { min-height: 44px; }
+  .plan-bar [data-needs-n] { top: 6px; right: 4px; }
+}
+/* On a phone's touch screen Plan keeps a 32px fill inside its 44px tap area. */
+@media (pointer: coarse) and (max-width: 48rem) {
+  .plan-bar .sheet-tools [data-act="plan"] { position: relative; min-height: 32px; margin-inline: 4px; }
+  .plan-bar .sheet-tools [data-act="plan"]::after { content: ""; position: absolute; inset: -6px -4px; }
 }
