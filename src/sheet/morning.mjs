@@ -53,6 +53,12 @@ export const gmailLink = (link) =>
 export const threadLink = (account, thread) => (/^[0-9a-f]{6,32}$/.test(thread)
   ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${thread}` : null);
 
+// A Jira row's Open in Jira link: an https:// issue link on a <name>.atlassian.net site, at most
+// with the comment it points to, else null. work-sync builds only these, and /plan checks again
+// before drawing one.
+export const jiraLink = (link) => (typeof link === "string"
+  && /^https:\/\/[a-z0-9][a-z0-9-]*\.atlassian\.net\/browse\/[A-Z][A-Z0-9_]*-\d+(?:\?focusedCommentId=\d{1,20})?$/.test(link) ? link : null);
+
 // --- Plan today ----------------------------------------------------------------------------
 
 // What the day's proposal says above Plan today's timeline: "Didn't fit: …", "Couldn't fit: …"
