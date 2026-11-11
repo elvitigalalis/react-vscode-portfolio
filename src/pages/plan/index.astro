@@ -259,7 +259,7 @@ import "../../styles/plan-shell.css";
           <p class="small">Your main Google calendar always shows. Paste another one's Calendar ID, one per line. Only you see them; never on /now.</p>
           <details class="sheet-settings-more"><summary>Where to find an ID</summary><p class="small">In Google Calendar, open Settings, click the calendar under "Settings for my calendars", and copy its Calendar ID from "Integrate calendar".</p></details>
           <label class="visually-hidden" for="sheet-cal-ids">Extra calendar IDs, one per line</label>
-          <textarea id="sheet-cal-ids" class="sheet-reflect" rows="3" spellcheck="false" placeholder="abc123@group.calendar.google.com"></textarea>
+          <textarea id="sheet-cal-ids" class="sheet-reflect" rows="3" autocomplete="off" spellcheck="false" placeholder="abc123@group.calendar.google.com"></textarea>
           <p class="sheet-dialog-end"><span class="small" role="status" data-cal-ids-note></span> <button type="button" class="sheet-btn primary" data-act="save-calendars">Save</button></p>
         </section>
 
@@ -337,7 +337,7 @@ import "../../styles/plan-shell.css";
           <details class="sheet-settings-more"><summary>More</summary><p class="small">Claude places these around your tasks on their days, starting within the ideal time ± flex. Firm ones go in before tasks, flexible ones after hard deadlines; one that can't fit is left out that day. They never show on /now.</p></details>
           <ul class="sheet-mail" data-habits></ul>
           <form class="sheet-habit-form" data-habit-form>
-            <label>Name <input name="name" type="text" maxlength="40" required placeholder="Gym"></label>
+            <label>Name <input name="name" type="text" maxlength="40" required autocomplete="off" placeholder="Gym"></label>
             <fieldset><legend>Days</legend> <label><input type="checkbox" name="days[]" value="1"> Mon</label> <label><input type="checkbox" name="days[]" value="2"> Tue</label> <label><input type="checkbox" name="days[]" value="3"> Wed</label> <label><input type="checkbox" name="days[]" value="4"> Thu</label> <label><input type="checkbox" name="days[]" value="5"> Fri</label> <label><input type="checkbox" name="days[]" value="6"> Sat</label> <label><input type="checkbox" name="days[]" value="7"> Sun</label></fieldset>
             <label>Ideal time <input name="ideal" type="time" value="12:00" required></label>
             <label>Minutes <input name="minutes" class="sheet-cap" type="number" min="15" max="240" step="5" value="30" required></label>
@@ -362,7 +362,7 @@ import "../../styles/plan-shell.css";
           <h3 id="sheet-int-title">Interest profile</h3>
           <p class="small">A few plain lines on what you like: topics, clubs, career goals, and what you'd skip. Claude picks campus events against them when it plans your day.</p>
           <label class="visually-hidden" for="sheet-interests">Your interest profile, a few lines</label>
-          <textarea id="sheet-interests" class="sheet-reflect" rows="6" placeholder="Robotics, embedded systems, free food"></textarea>
+          <textarea id="sheet-interests" class="sheet-reflect" rows="6" autocomplete="off" placeholder="Robotics, embedded systems, free food"></textarea>
           <p class="small">Only you and Claude read this. It never shows on /now.</p>
           <p class="sheet-dialog-end"><span class="small" role="status" data-interests-note></span> <button type="button" class="sheet-btn primary" data-act="save-interests">Save</button></p>
         </section>
@@ -416,7 +416,7 @@ import "../../styles/plan-shell.css";
           <details class="sheet-settings-more"><summary>More</summary><p class="small">What the server reads every hour, and how the last read went. GitHub and Jira read "not connected" until their tokens are set.</p></details>
           <ul class="sheet-mail" data-feeds></ul>
           <!-- v5 SRC1: the orgs whose GitHub reviews and issues become tasks; feed-status.mjs saves them. -->
-          <p class="sheet-dialog-end"><label for="sheet-gh-orgs">GitHub orgs</label> <input id="sheet-gh-orgs" type="text" placeholder="acme-robotics, other-org"> <span class="small" role="status" data-gh-note></span> <button type="button" class="sheet-btn primary" data-act="save-gh-orgs">Save</button></p>
+          <p class="sheet-dialog-end"><label for="sheet-gh-orgs">GitHub orgs</label> <input id="sheet-gh-orgs" type="text" autocomplete="off" spellcheck="false" placeholder="acme-robotics, other-org"> <span class="small" role="status" data-gh-note></span> <button type="button" class="sheet-btn primary" data-act="save-gh-orgs">Save</button></p>
         </section>
 
       <!-- Pace (docs/sheet-v5.md, "/plan"): src/sheet/pace-settings.mjs fills the list. -->
