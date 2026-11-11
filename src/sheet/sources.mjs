@@ -158,7 +158,9 @@ export function jiraTaskChanges(issues, { tasks, seen, site, today }) {
 // site's statuses, To Do, In Progress, In PR Review and Done, have none that waits on him). An
 // event older than `since` (ms), on a Done issue, already answered by a comment of his, or in
 // `known` (message ids already written) is skipped. A row holds the issue key and summary, the
-// person and the link, never comment text.
+// person and the link, never comment text. Its message_id is the comment's or changelog entry's
+// id ('comment:<id>', 'assigned:<id>'), or 'assigned:new:<issue id>', never the key: an issue
+// moved to another project keeps them, so it never gives a second row.
 
 const JIRA_KEY = /^[A-Z][A-Z0-9_]*-\d+$/;
 const JIRA_ID = /^\d{1,20}$/;
@@ -200,19 +202,19 @@ export function jiraNeeds(issues, { self, site, known = [], since = 0 } = {}) {
       if (!JIRA_ID.test(String(c?.id ?? "")) || !c.author?.accountId || c.author.accountId === self || !fresh(at(c.created))) continue;
       const mention = mentions(c.body, self);
       if (!mention && !mine) continue;
-      add({ source: "jira", account: "jira", message_id: `${key}:comment:${c.id}`, link: `${base}?focusedCommentId=${c.id}`,
+      add({ source: "jira", account: "jira", message_id: `comment:${c.id}`, link: `${base}?focusedCommentId=${c.id}`,
         sender: person(c.author), subject, why: mention ? "Mentioned you in a comment" : "Commented on your issue", kind: "reply" });
     }
     if (!mine) continue;
     const handed = (issue.changelog?.histories ?? []).filter((h) => (h?.items ?? []).some((i) => (i?.fieldId ?? i?.field) === "assignee" && i.to === self));
     for (const h of handed) {
       if (!JIRA_ID.test(String(h?.id ?? "")) || !h.author?.accountId || h.author.accountId === self || !fresh(at(h.created))) continue;
-      add({ source: "jira", account: "jira", message_id: `${key}:assigned:${h.id}`, link: base,
+      add({ source: "jira", account: "jira", message_id: `assigned:${h.id}`, link: base,
         sender: person(h.author), subject, why: "Assigned it to you", kind: "assigned" });
     }
     const creator = f.creator ?? f.reporter;
-    if (!handed.length && creator?.accountId && creator.accountId !== self && fresh(at(f.created))) {
-      add({ source: "jira", account: "jira", message_id: `${key}:assigned:new`, link: base,
+    if (!handed.length && JIRA_ID.test(String(issue.id ?? "")) && creator?.accountId && creator.accountId !== self && fresh(at(f.created))) {
+      add({ source: "jira", account: "jira", message_id: `assigned:new:${issue.id}`, link: base,
         sender: person(creator), subject, why: "Assigned it to you", kind: "assigned" });
     }
   }
@@ -221,12 +223,19 @@ export function jiraNeeds(issues, { self, site, known = [], since = 0 } = {}) {
 
 // The open Jira rows ([{ id, message_id, kind, created_at }]) that no longer need him, by id: the
 // issue is Done, he has commented on it since the row was written, or (for an assignment) it is
-// no longer his. A row whose issue isn't in `issues` (not changed lately) is left alone.
+// no longer his. A row's issue is the one holding its comment or changelog entry (or with its
+// issue id); a row whose issue isn't in `issues` (not changed lately) is left alone.
 /** @param {any[]} open @param {any[]} issues @param {string} self @returns {string[]} */
 export function jiraResolved(open, issues, self) {
-  const byKey = new Map((issues ?? []).filter((i) => JIRA_KEY.test(String(i?.key ?? ""))).map((i) => [i.key, i]));
+  const byId = new Map();
+  for (const i of issues ?? []) {
+    if (!JIRA_KEY.test(String(i?.key ?? ""))) continue;
+    for (const c of i.fields?.comment?.comments ?? []) byId.set(`comment:${c?.id}`, i);
+    for (const h of i.changelog?.histories ?? []) byId.set(`assigned:${h?.id}`, i);
+    byId.set(`assigned:new:${i.id}`, i);
+  }
   return (open ?? []).filter((r) => {
-    const issue = byKey.get(String(r?.message_id ?? "").split(":")[0]);
+    const issue = byId.get(String(r?.message_id ?? ""));
     if (!issue) return false;
     return jiraDone(issue) || lastOwnComment(issue, self) > at(r.created_at)
       || (r.kind === "assigned" && issue.fields?.assignee?.accountId !== self);

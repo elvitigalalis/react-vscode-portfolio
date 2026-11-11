@@ -13,8 +13,9 @@ const SINCE = Date.parse("2026-11-08T00:00:00Z");
 const mention = (id) => ({ type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: "COMMENT-TEXT " }, { type: "mention", attrs: { id } }] }] });
 const plain = { type: "doc", version: 1, content: [{ type: "paragraph", content: [{ type: "text", text: "COMMENT-TEXT" }] }] };
 const comment = (id, author, created, body = plain) => ({ id, author, created, body });
-const issue = (key, fields = {}, histories = []) => ({
-  key, changelog: { histories },
+let nextId = 1;
+const issue = (key, fields = {}, histories = [], id = String(10000 + nextId++)) => ({
+  key, id, changelog: { histories },
   fields: { summary: "Fix the login", status: { statusCategory: { key: "indeterminate" } }, assignee: SELF, creator: SELF,
     created: "2026-10-01T10:00:00.000-0400", comment: { comments: [] }, ...fields },
 });
@@ -23,7 +24,7 @@ const run = (issues, opts = {}) => jiraNeeds(issues, { self: ME, site: SITE, kno
 
 test("jiraNeeds: a comment by someone else on his issue is a reply row, with the issue and the person", () => {
   assert.deepEqual(run([issue("KAN-7", { comment: { comments: [comment("10001", ANA, "2026-11-09T10:00:00.000-0500")] } })]), [{
-    source: "jira", account: "jira", message_id: "KAN-7:comment:10001", link: "https://example.atlassian.net/browse/KAN-7?focusedCommentId=10001",
+    source: "jira", account: "jira", message_id: "comment:10001", link: "https://example.atlassian.net/browse/KAN-7?focusedCommentId=10001",
     sender: "Ana Ruiz", subject: "KAN-7: Fix the login", why: "Commented on your issue", kind: "reply",
   }]);
 });
@@ -35,17 +36,17 @@ test("jiraNeeds: a mention counts on an issue that isn't his, a plain comment th
     comment("2", ANA, "2026-11-09T11:00:00Z"),
     comment("3", ANA, "2026-11-09T12:00:00Z", mention("5b:someone-else")),
   ] } })]);
-  assert.deepEqual(rows.map((r) => [r.message_id, r.why]), [["KAN-8:comment:1", "Mentioned you in a comment"]]);
+  assert.deepEqual(rows.map((r) => [r.message_id, r.why]), [["comment:1", "Mentioned you in a comment"]]);
 });
 
 test("jiraNeeds: newly assigned to him by someone else, by a change or at creation", () => {
   const rows = run([
     issue("KAN-9", {}, [assign("20001", ANA, "2026-11-09T09:00:00Z")]),
-    issue("KAN-10", { creator: ANA, created: "2026-11-09T09:00:00Z" }),
+    issue("KAN-10", { creator: ANA, created: "2026-11-09T09:00:00Z" }, [], "10500"),
   ]);
   assert.deepEqual(rows.map((r) => [r.message_id, r.kind, r.sender, r.link, r.why]), [
-    ["KAN-9:assigned:20001", "assigned", "Ana Ruiz", "https://example.atlassian.net/browse/KAN-9", "Assigned it to you"],
-    ["KAN-10:assigned:new", "assigned", "Ana Ruiz", "https://example.atlassian.net/browse/KAN-10", "Assigned it to you"],
+    ["assigned:20001", "assigned", "Ana Ruiz", "https://example.atlassian.net/browse/KAN-9", "Assigned it to you"],
+    ["assigned:new:10500", "assigned", "Ana Ruiz", "https://example.atlassian.net/browse/KAN-10", "Assigned it to you"],
   ]);
 });
 
@@ -71,8 +72,8 @@ test("jiraNeeds: old events, Done issues and ones he has answered are skipped", 
 test("jiraNeeds: never twice, within a run or across runs", () => {
   const i = issue("KAN-17", { comment: { comments: [comment("9", ANA, "2026-11-09T09:00:00Z")] } });
   assert.equal(run([i, i]).length, 1);
-  assert.deepEqual(run([i], { known: [{ message_id: "KAN-17:comment:9" }] }), []);
-  assert.deepEqual(run([i], { known: ["KAN-17:comment:9"] }), []);
+  assert.deepEqual(run([i], { known: [{ message_id: "comment:9" }] }), []);
+  assert.deepEqual(run([i], { known: ["comment:9"] }), []);
 });
 
 test("jiraNeeds: never comment text; odd keys, ids and sites give nothing; names are one line", () => {
@@ -89,22 +90,27 @@ test("jiraNeeds: never comment text; odd keys, ids and sites give nothing; names
 });
 
 test("jiraResolved: Done, answered or no longer his closes a row; an issue not read leaves it", () => {
-  const open = [
-    { id: "a", message_id: "KAN-21:comment:1", kind: "reply", created_at: "2026-11-09T12:00:00Z" },
-    { id: "b", message_id: "KAN-22:comment:2", kind: "reply", created_at: "2026-11-09T12:00:00Z" },
-    { id: "c", message_id: "KAN-23:assigned:3", kind: "assigned", created_at: "2026-11-09T12:00:00Z" },
-    { id: "d", message_id: "KAN-24:comment:4", kind: "reply", created_at: "2026-11-09T12:00:00Z" },
-    { id: "e", message_id: "KAN-25:comment:5", kind: "reply", created_at: "2026-11-09T12:00:00Z" },
-    { id: "f", message_id: "KAN-26:comment:6", kind: "reply", created_at: "2026-11-09T12:00:00Z" },
-  ];
+  const row = (id, message_id, kind = "reply") => ({ id, message_id, kind, created_at: "2026-11-09T12:00:00Z" });
+  const open = [row("a", "comment:1"), row("b", "comment:2"), row("c", "assigned:3", "assigned"), row("d", "comment:4"),
+    row("e", "comment:5"), row("f", "comment:6"), row("g", "assigned:new:10900", "assigned")];
+  const others = (id) => ({ comment: { comments: [comment(id, ANA, "2026-11-09T11:00:00Z")] } });
   const issues = [
-    issue("KAN-21", { status: { statusCategory: { key: "done" } } }),
-    issue("KAN-22", { comment: { comments: [comment("7", SELF, "2026-11-09T13:00:00Z")] } }),
-    issue("KAN-23", { assignee: ANA }),
-    issue("KAN-24", { comment: { comments: [comment("8", SELF, "2026-11-09T11:00:00Z")] } }),
-    issue("KAN-25", { assignee: ANA }),
+    issue("KAN-21", { ...others("1"), status: { statusCategory: { key: "done" } } }),
+    issue("KAN-22", { comment: { comments: [comment("2", ANA, "2026-11-09T11:00:00Z"), comment("7", SELF, "2026-11-09T13:00:00Z")] } }),
+    issue("KAN-23", { assignee: ANA }, [assign("3", ANA, "2026-11-09T11:00:00Z")]),
+    issue("KAN-24", { comment: { comments: [comment("4", ANA, "2026-11-09T10:00:00Z"), comment("8", SELF, "2026-11-09T11:00:00Z")] } }),
+    issue("KAN-25", { ...others("5"), assignee: ANA }),
+    issue("KAN-27", { assignee: ANA }, [], "10900"),
   ];
-  assert.deepEqual(jiraResolved(open, issues, ME), ["a", "b", "c"]);
+  assert.deepEqual(jiraResolved(open, issues, ME), ["a", "b", "c", "g"]);
+});
+
+test("jiraNeeds: an issue moved to another project keeps its row ids, so no second row", () => {
+  const before = issue("KAN-30", { comment: { comments: [comment("40", ANA, "2026-11-09T09:00:00Z")] } }, [assign("41", ANA, "2026-11-09T09:00:00Z")], "10700");
+  const first = run([before]);
+  assert.deepEqual(first.map((r) => r.message_id), ["comment:40", "assigned:41"]);
+  const moved = { ...before, key: "OPS-4" };
+  assert.deepEqual(run([moved], { known: first.map((r) => r.message_id) }), []);
 });
 
 test("jiraLink: only https:// issue links on an atlassian.net site", () => {

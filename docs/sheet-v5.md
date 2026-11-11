@@ -628,13 +628,14 @@ weather_cache id boolean pk default true check (id), point text not null,
   message_id, link, sender, subject: "<KEY>: <summary>", why, kind }`. Never comment text. What
   counts:
   - an issue newly assigned to him by someone else: a changelog entry whose `assignee` item has
-    `to` = his accountId (`message_id` `<KEY>:assigned:<history id>`), or an issue someone else
-    created already assigned to him (`<KEY>:assigned:new`); kind `assigned`, why "Assigned it to
+    `to` = his accountId (`message_id` `assigned:<history id>`), or an issue someone else
+    created already assigned to him (`assigned:new:<issue id>`); kind `assigned`, why "Assigned it to
     you", link `https://<site>/browse/<KEY>`;
   - a comment by someone else that mentions him (an ADF `mention` node with his accountId), or
-    any comment by someone else on an issue assigned to him (`<KEY>:comment:<id>`); kind
+    any comment by someone else on an issue assigned to him (`comment:<id>`); kind
     `reply`, why "Mentioned you in a comment" or "Commented on your issue", link with
     `?focusedCommentId=<id>`.
+  A `message_id` never holds the key, so an issue moved to another project gives no second row.
   Left out: his own actions, status moves and other field changes (his site's statuses are To
   Do, In Progress, In PR Review and Done, none waiting on him), events before `since`, Done
   issues, events he has answered with a later comment, and ids in `known`.
