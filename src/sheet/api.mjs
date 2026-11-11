@@ -204,8 +204,9 @@ export const saveHevyKey = (key) => rest("rpc/hevy_key_save", { method: "POST", 
 export const disconnectHevy = () => rest("hevy_account?id=eq.true", { method: "DELETE" });
 
 // The morning plan (docs/sheet-morning.md, "/plan"): Needs you rows not done, marking one done,
-// and a day's proposal with the campus events it picked.
-export const listNeeds = () => rest("needs_you?done=is.false&order=created_at");
+// and a day's proposal with the campus events it picked. Needs you is mail and Jira only: Slack
+// rows, from before Slack stopped feeding it, never show.
+export const listNeeds = () => rest("needs_you?done=is.false&source=in.(mail,jira)&order=created_at");
 // v5 M1: the threads he's awaiting a reply on, which the mail sync keeps (read only).
 export const listAwaiting = () => rest("reply_state?select=account,thread_id,who,since&state=eq.awaiting&order=since");
 export const setNeedDone = (id, done) => rest(`needs_you?id=eq.${id}`, { method: "PATCH", body: { done } });
