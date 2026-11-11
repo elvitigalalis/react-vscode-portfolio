@@ -25,7 +25,7 @@
 .sheet-day .sheet-wd { text-transform: none; letter-spacing: inherit; font-weight: 600; }
 .sheet-day .sheet-dt { color: var(--text-3); font-weight: 500; }
 .sheet-week .is-today .sheet-wd { color: var(--accent-text); }
-.sheet-week .is-today .sheet-dt { padding: 0 7px; border-radius: 999px; color: var(--on-accent); background: var(--accent); }
+.sheet-week .is-today .sheet-dt { padding: 0 6px; border-radius: 999px; color: var(--on-accent); background: var(--accent); }
 .sheet-alldone { display: inline-flex; color: var(--success); }
 .sheet-alldone .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
 
@@ -59,9 +59,10 @@ button.sheet-today-sum:hover { background: var(--surface-2); }
 .sheet-stamps-row:has([aria-expanded="false"]) .sheet-nownext-done ~ .sheet-nownext-part { display: none; }
 
 /* A row: 32px, a --surface-2 fill on hover, the round box, the title, and the meta in --text-3
-   12px on the line under it, a timed task's time first, as an event's time sits under its title. The body's parts are the row's
-   own grid items. Where a row is wide (Plan today's list), the meta moves up beside the title: the
-   row is the query container, since size containment on .sheet-day would end its subgrid. */
+   12px on the line under it, a timed task's time first, as an event's time sits under its title.
+   The body's parts are the row's own grid items. Where a row is wide (Plan today's list), the meta
+   moves up beside the title: the row is the query container, since size containment on .sheet-day
+   would end its subgrid. */
 .sheet-rows > .sheet-row { min-height: 32px; padding: 6px; border: 0; border-radius: var(--radius); font-size: 13px; line-height: 20px; }
 .sheet-rows > .sheet-task { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-content: start; align-items: start; gap: 2px 8px; container: sheet-row / inline-size; }
 .sheet-task:hover, .sheet-task.is-held { background: var(--surface-2); }
@@ -122,7 +123,7 @@ button.sheet-today-sum:hover { background: var(--surface-2); }
 /* Calendar events: a tinted block with a 3px bar, the title over its time in the hue's ink. Its
    check and ⋯ show on hover. Done, it loses the tint. */
 .sheet-rows > .sheet-evtodo {
-  display: grid; align-self: start; min-height: 0; margin: 2px 0; padding: 4px 8px 4px 11px; border-radius: var(--radius-sm);
+  display: grid; align-self: start; gap: 0 8px; min-height: 0; margin: 2px 0; padding: 4px 8px 4px 11px; border-radius: var(--radius-sm);
   line-height: 16px; background: var(--ev-blue-bg); box-shadow: inset 3px 0 var(--ev-blue-bar);
 }
 .sheet-evtodo .sheet-title { font-size: 12px; font-weight: 500; }
@@ -150,7 +151,7 @@ button.sheet-today-sum:hover { background: var(--surface-2); }
 }
 
 /* The add row: "+ Add a task" shows on an empty day, on a hovered day and always on touch. */
-.sheet-rows > .is-add { padding-left: 9px; cursor: text; }
+.sheet-rows > .is-add { gap: 8px; padding-left: 9px; cursor: text; }
 .sheet-rows > .is-add:hover { background: var(--surface-2); }
 .sheet-rows .sheet-add { font-size: 13px; line-height: 20px; }
 /* Under 16px iOS Safari zooms into the box. */

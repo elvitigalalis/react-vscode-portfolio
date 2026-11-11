@@ -43,6 +43,8 @@
 .plan-bar .sheet-chips .sheet-chip:hover { background: var(--surface-2); }
 .plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); border-color: var(--border-strong); }
 .plan-bar .sheet-chip .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+/* Icon to label: 6px, on the 4px grid's half step like every button (plan-ui.css). */
+.plan-bar .sheet-tools .sheet-btn:has(.sheet-icon) { gap: 6px; }
 .plan-bar .sheet-nudges[aria-pressed="false"] .sheet-icon { color: var(--text-3); }
 
 /* Signed out, Privacy and the way home (plan-base.css) sit under the sign-in line. */
