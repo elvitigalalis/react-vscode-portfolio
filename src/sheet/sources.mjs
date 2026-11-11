@@ -146,14 +146,15 @@ export function jiraTaskChanges(issues, { tasks, seen, site, today }) {
 }
 
 // --- Jira updates in Needs you ---------------------------------------------------------------
-// work-sync reads the issues Lisul is assignee, reporter or watcher of that changed in the last
-// two days (POST /rest/api/3/search/jql with fields summary, status, assignee, creator, created and
+// work-sync reads the issues Lisul is assignee, reporter or watcher of that changed since
+// jiraNeedsSince (POST /rest/api/3/search/jql with fields summary, status, assignee, creator, created and
 // comment, and expand=changelog) and hands them here with his accountId (GET /rest/api/3/myself).
 // What needs him, written by code with no AI:
 // - an issue newly assigned to him by someone else: a changelog entry setting assignee to him, or
 //   an issue someone else created already assigned to him (kind 'assigned');
 // - a comment by someone else that mentions him (an ADF mention node with his accountId), or any
-//   comment by someone else on an issue assigned to him (kind 'reply').
+//   comment by someone else on an issue assigned to him (kind 'reply'). Mentions count only on
+//   the issues read, those he is assignee, reporter or watcher of: JQL can't search for them.
 // Nothing else counts: his own actions, status moves and other field changes are left out (his
 // site's statuses, To Do, In Progress, In PR Review and Done, have none that waits on him). An
 // event older than `since` (ms), on a Done issue, already answered by a comment of his, or in
@@ -224,7 +225,8 @@ export function jiraNeeds(issues, { self, site, known = [], since = 0 } = {}) {
 // The open Jira rows ([{ id, message_id, kind, created_at }]) that no longer need him, by id: the
 // issue is Done, he has commented on it since the row was written, or (for an assignment) it is
 // no longer his. A row's issue is the one holding its comment or changelog entry (or with its
-// issue id); a row whose issue isn't in `issues` (not changed lately) is left alone.
+// issue id); a row whose issue isn't in `issues` (not changed lately, or reassigned away and not
+// watched) is left alone, and stays open until he marks it done.
 /** @param {any[]} open @param {any[]} issues @param {string} self @returns {string[]} */
 export function jiraResolved(open, issues, self) {
   const byId = new Map();

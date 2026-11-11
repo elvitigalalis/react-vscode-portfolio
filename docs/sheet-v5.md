@@ -622,7 +622,9 @@ weather_cache id boolean pk default true check (id), point text not null,
   no `needs_you` row, no `feed_seen` id, no `slack_new` change. `slackNeeds` and `slackLink` are
   gone; `slack_new` stays a known reason only for rows logged before.
 - `jiraNeeds(issues, { self, site, known, since })` takes a JQL search of the issues he is
-  assignee, reporter or watcher of updated in the last 2 days (fields summary, status,
+  assignee, reporter or watcher of updated since `jiraNeedsSince` (feed-state.mjs: two days
+  back, or the `jira-needs` feed's last good read when earlier, as JQL `updated >= -<minutes>m`;
+  fields summary, status,
   assignee, creator, created, comment; `expand: "changelog"`) and his accountId (`GET
   /rest/api/3/myself`), and returns `needs_you` rows `{ source: 'jira', account: 'jira',
   message_id, link, sender, subject: "<KEY>: <summary>", why, kind }`. Never comment text. What
@@ -636,13 +638,19 @@ weather_cache id boolean pk default true check (id), point text not null,
     `reply`, why "Mentioned you in a comment" or "Commented on your issue", link with
     `?focusedCommentId=<id>`.
   A `message_id` never holds the key, so an issue moved to another project gives no second row.
+  Mentions count only on issues he is assignee, reporter or watcher of: a mention on any other
+  issue isn't read, since JQL can't search for mentions.
   Left out: his own actions, status moves and other field changes (his site's statuses are To
   Do, In Progress, In PR Review and Done, none waiting on him), events before `since`, Done
   issues, events he has answered with a later comment, and ids in `known`.
-  - **Decided:** work-sync writes the rows and their ids in `feed_seen ('jira-needs', id)`, so
+  - **Decided:** work-sync reads them after the Jira tasks are saved, in its own try, recorded in
+    `feed_state` as `jira-needs` ("Jira updates" in Settings): a failure there never drops the
+    task changes or marks `jira` failed. It writes the rows and their ids in `feed_seen ('jira-needs', id)`, so
     one he marked done (and `nightly_roll` deleted) never returns. `jiraResolved(open, issues,
     self)` gives the open Jira rows to mark done: the issue is Done, he commented after the row
-    was written, or an assigned issue is no longer his. `jiraLink` (morning.mjs) is the link
+    was written, or an assigned issue is no longer his. It sees only issues the search returns,
+    so a row for an issue reassigned away from him may stay open if he no longer watches it
+    (until he marks it done, or `nightly_roll` drops it after 14 days). `jiraLink` (morning.mjs) is the link
     check, shared with /plan: https:// on `<name>.atlassian.net/browse/<KEY>`, at most with
     `?focusedCommentId=<digits>`.
 - `handshakeBusy(events)` returns busy rows (`source = 'handshake'`) for parsed Handshake events
@@ -701,7 +709,7 @@ weather_cache id boolean pk default true check (id), point text not null,
 | `message` | /plan's message box | the owner's session, as `calendar-connect` | saves a message to Claude and fires the morning task ([sheet-messages.md](sheet-messages.md)) |
 
 - **Every sync** records itself in `feed_state` under its source name (`freebusy`, `gmail`,
-  `github`, `jira`, `slack`, `handshake`, `academic`, `weather`), never with a URL or token in
+  `github`, `jira`, `jira-needs`, `slack`, `handshake`, `academic`, `weather`), never with a URL or token in
   `error`. One with no secret returns `{ ok: true, skipped: "not connected" }` and writes
   `feed_state` with `ok = null, error = 'not connected'`.
 - **calendar-connect** asks for `openid email https://www.googleapis.com/auth/calendar.freebusy
