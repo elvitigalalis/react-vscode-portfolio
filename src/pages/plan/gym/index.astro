@@ -18,13 +18,17 @@ import "../../../styles/plan-ui.css";
   <link slot="head" rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <meta slot="head" name="apple-mobile-web-app-title" content="Gym" />
   <section class="sheet-page gym">
-    <div class="sheet-bar-top">
+    <!-- The app's bar (gym.css): ‹ Plan, the title, and Today / Records / Edit as one segmented
+         control. -->
+    <div class="sheet-bar-top gym-bar">
       <h1>Gym</h1>
       <nav class="gym-tools" data-gym-tools aria-label="Gym" hidden>
-        <a class="sheet-btn" href="/plan/">‹ Plan</a>
-        <button type="button" class="sheet-btn" data-view="today" aria-pressed="true">Today</button>
-        <button type="button" class="sheet-btn" data-view="records" aria-pressed="false">Records</button>
-        <button type="button" class="sheet-btn" data-view="edit" aria-pressed="false">Edit</button>
+        <a class="sheet-btn ghost gym-back" href="/plan/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg>Plan</a>
+        <span class="gym-seg">
+          <button type="button" class="sheet-btn" data-view="today" aria-pressed="true">Today</button>
+          <button type="button" class="sheet-btn" data-view="records" aria-pressed="false">Records</button>
+          <button type="button" class="sheet-btn" data-view="edit" aria-pressed="false">Edit</button>
+        </span>
       </nav>
     </div>
     <p class="sheet-status" data-status>Loading…</p>
@@ -47,6 +51,15 @@ import "../../../styles/plan-ui.css";
 
     <dialog class="sheet-dialog" data-gym-swap aria-labelledby="gym-swap-title"></dialog>
     <dialog class="sheet-dialog" data-gym-summary aria-labelledby="gym-summary-title"></dialog>
+    <!-- Icons: Lucide (ISC), drawn by gym-ui.mjs's icon(). -->
+    <svg class="sheet-sprite" aria-hidden="true">
+      <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /><path d="M12 5v14" /></symbol>
+      <symbol id="i-arrow-left-right" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4" /><path d="M4 7h16" /><path d="m16 21 4-4-4-4" /><path d="M20 17H4" /></symbol>
+    </svg>
     <p class="plan-foot"><a href="/privacy/">Privacy</a> · <a href="/">lisul-elvi.com</a></p>
   </section>
 </Base>
