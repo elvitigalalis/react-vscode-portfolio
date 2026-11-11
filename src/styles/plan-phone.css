@@ -65,10 +65,7 @@
 .sheet-details-field { display: grid; gap: 0.3rem; margin: 0 0 0.9rem; font-size: 0.9375rem; }
 .sheet-details-field > label { font-weight: 600; }
 .sheet-details-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
-.sheet-details-row input {
-  flex: 1 1 8rem; min-width: 0; min-height: 2.75rem; font: inherit; font-size: 1rem; color: var(--fg); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.3rem 0.5rem;
-}
+.sheet-details-row input { flex: 1 1 8rem; min-width: 0; min-height: 2.75rem; }
 .sheet-details-row .sheet-link { min-height: 2.75rem; min-width: 2.75rem; }
 .sheet-details-presets { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .sheet-taskinfo .sheet-btn { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
