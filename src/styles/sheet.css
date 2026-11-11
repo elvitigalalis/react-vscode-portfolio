@@ -144,26 +144,12 @@ textarea.sheet-add {
   .sheet-planner .sheet-day:not(.is-focus) { display: none; }
   .sheet-planner .sheet-row.is-empty:not(.is-add) { display: none; }
 }
-.sheet-plan { width: min(56rem, calc(100vw - 2rem)); max-width: none; }
-.sheet-event, .sheet-block, .sheet-preview {
-  position: absolute; left: 0.25rem; right: 0.5rem; border-radius: 0.3rem; padding: 0.1rem 0.4rem;
-  font-size: 0.75rem; line-height: 1.25; overflow: hidden; overflow-wrap: anywhere;
-}
-.sheet-block { background: color-mix(in srgb, var(--accent) 22%, var(--bg)); border-left: 3px solid var(--accent); display: flex; gap: 0.3rem; }
-.sheet-block.is-done { opacity: 0.4; }
-.sheet-block-title { flex: 1; min-width: 0; overflow: hidden; }
-.sheet-block { cursor: grab; }
-/* Proposed blocks are Claude's until approved: a dashed outline, no fill. */
-.sheet-block.is-proposed { background: var(--bg); border: 1px dashed var(--accent); }
 .sheet-row:has(.sheet-proposal) { flex-wrap: wrap; }
 .sheet-proposal {
   flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.4rem; border: 1px dashed var(--accent); border-radius: 0.3rem;
   padding: 0 0.3rem; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums;
 }
 .sheet-dialog-end { display: flex; justify-content: flex-end; margin-top: 1rem; }
-.sheet-plan .sheet-task { cursor: grab; }
-.sheet-plan .sheet-task.is-picked { background: var(--chip); border-bottom-color: var(--accent); }
-.sheet-plan .sheet-title { cursor: pointer; }
 .sheet-dialog-end { gap: 0.5rem; }
 #sheet-cal-ids { margin-top: 0.75rem; font-family: var(--mono); font-size: 0.8125rem; }
 .sheet-week > .sheet-status { grid-column: 1 / -1; }
@@ -229,25 +215,16 @@ textarea.sheet-add {
    left edge and the graduation cap, a campus task the ticket. Its blocks take the same edge on
    the Plan today timeline and in the week. The tint always comes with its icon (WCAG 1.4.1). */
 .sheet-task[data-source="course"] { border-left: 3px solid var(--stem); padding-left: 0.35rem; }
-.sheet-block[data-source="course"] { background: color-mix(in srgb, var(--stem) 18%, var(--bg)); border-left: 3px solid var(--stem); }
-.sheet-block.is-proposed[data-source="course"] { background: var(--bg); }
 .sheet-task[data-source="course"] .sheet-proposal { border-left: 3px solid var(--stem); }
 /* v5 SRC1: GitHub tasks take a --fg edge with the GitHub mark, Jira tasks a --muted edge with the
    kanban, on rows and blocks alike. */
 .sheet-task[data-source="github"], .sheet-block[data-source="github"] { border-left: 3px solid var(--fg); padding-left: 0.35rem; }
 .sheet-task[data-source="jira"], .sheet-block[data-source="jira"] { border-left: 3px solid var(--muted); padding-left: 0.35rem; }
-.sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
 
 /* Load and free time, drawn (docs/sheet-glance.md, change 4). Under each day's header, a 4px
    load meter on a --line track and a 6px strip of 7 am to 11 pm: busy grey, blocks sage, proposals
    dashed, and a now tick on today. The load's text stays beside them. */
 .sheet-glance { display: grid; gap: 3px; margin: 0.2rem 0 0.25rem; }
-.sheet-block-title .sheet-icon { margin-right: 0.2rem; color: var(--accent-text, var(--accent)); }
-.sheet-banner {
-  display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.875rem;
-  border: 1px dashed var(--accent); border-radius: 0.4rem;
-}
-.sheet-banner > .sheet-icon { color: var(--accent-text, var(--accent)); }
 .sheet-proposal > .sheet-icon { color: var(--accent-text, var(--accent)); }
 
 /* A calmer top bar (docs/sheet-glance.md, change 6): ‹ Today › on the left, then Plan today,

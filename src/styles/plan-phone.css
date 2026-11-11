@@ -36,14 +36,6 @@
   .sheet-btn-approve::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 2.75rem); height: 2.75rem; translate: -50% -50%; }
   /* In the week and the banner, Approve itself is 24 px tall (WCAG 2.5.8). */
   :is(.sheet-proposal, .sheet-banner) > .sheet-btn-approve { min-height: 1.5rem; padding-inline: 0.5rem; }
-  /* Plan today: the 6 px resize bar and the shutdown line keep their look; the block lets the
-     hit areas reach past its edge (its title still clips itself). */
-  .sheet-block { overflow: visible; }
-  .sheet-resize::after { content: ""; position: absolute; left: 0; right: 0; top: -0.5rem; height: 2.75rem; }
-  .sheet-shutline::after { content: ""; position: absolute; left: 0; right: 0; top: -1.375rem; height: 2.75rem; }
-  /* Above the resize bar's hit area, which covers all of a block under 30 minutes. */
-  .sheet-block-x { position: relative; z-index: 1; min-width: 2.75rem; }
-  .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
 }
 
 /* The Now/Next line above today (research U18). In the week's narrow column each part keeps one
