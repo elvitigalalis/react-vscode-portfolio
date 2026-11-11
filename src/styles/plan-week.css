@@ -158,11 +158,25 @@ button.sheet-today-sum:hover { background: var(--surface-2); }
 .sheet-week-empty-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
 .sheet-week-empty .sheet-btn { margin-top: 12px; }
 
+/* Tell Claude: one box with Send inside it, the hint under it. */
+.sheet-planner .sheet-message { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 0; margin: 0 0 12px; }
+.sheet-message::before {
+  content: ""; grid-area: 1 / 1 / 2 / -1; align-self: stretch; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.sheet-message:focus-within::before { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.sheet-message textarea { grid-area: 1 / 1; min-height: 40px; padding: 10px 12px; border: 0; background: none; outline: none; }
+.sheet-message .sheet-btn { grid-area: 1 / 2; margin: 6px; }
+.sheet-message .sheet-message-hint { grid-column: 1 / -1; padding: 0 12px; font-size: 12px; color: var(--text-3); }
+.sheet-message-recent summary { display: inline-flex; align-items: center; gap: 4px; list-style: none; font-size: 12px; color: var(--text-3); }
+.sheet-message-recent summary::-webkit-details-marker { display: none; }
+.sheet-message-recent[open] summary .sheet-icon { rotate: 90deg; }
+
 /* A swipe slides the body's parts with the rest of the row (plan-phone.css). */
 @media (max-width: 48rem) { .is-swiping > .sheet-body > * { translate: var(--swipe) 0; } }
 
 @media (pointer: coarse) { button.sheet-today-sum { min-height: 44px; } }
 
 @media (prefers-reduced-motion: no-preference) {
-  .sheet-today-toggle > .sheet-icon { transition: rotate 150ms var(--ease); }
+  :is(.sheet-today-toggle, .sheet-message-recent summary) > .sheet-icon { transition: rotate 150ms var(--ease); }
 }
