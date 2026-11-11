@@ -165,6 +165,28 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   Claude's proposed blocks have no fill and a dashed outline, and a small Approve chip.
   - **Focus:** `:focus-visible` only, a 2px accent ring 2px out. A heading or box that script
     focuses (`tabindex="-1"`) shows none. `::selection` is an accent wash; scrollbars are thin.
+- **Sections under the week** (`plan-sections.css`, with `sections.mjs`; Habits in
+  `plan-habits.css`, School this week in `school-load.css`): Habits, Projects, Someday, the Log
+  and School this week share one header, 15px/600 with its count in `--text-3`, and one row, 32px
+  (44px on touch) with a `--surface-2` fill on hover and a 6px radius, its words on the page's
+  gutter. A disclosure leads with a Lucide chevron that turns down when open, never the native
+  triangle. Someday lists are headed by name and open count (no uppercase, no rule); an empty
+  list shows a quiet "+ Add a task", and a list a feed made (GitHub, Jira) shows only while it
+  holds something open. Habits: an 18px ring that fills with the accent, the week as 8px dots.
+  School this week: a slim 4px meter, estimate picks as small 24px chips (44px on touch), and a
+  crunch week in `--warning-text` on an amber tint. On a phone it follows the day, with the other sections,
+  so today's list sits right under the bar. All of it loads once signed in; the first draw
+  waits for it, so the stored copy never draws it unstyled.
+- **Phone bar:** one 48px row: ‹ day ›, Plan (the only fill, 32px inside a 44px tap area), Needs
+  you, Nudges and ⋯, each a ghost icon button. Needs you's count is a small accent pill on the
+  envelope; a failed feed is a red dot on ⋯.
+- **Doing card:** a raised `--surface` card with `--shadow-card` and a 12px radius: a 12px muted
+  label ("Now · until 10:45 am"), the 40px ring beside a 20px/600 title, the time left, the first
+  step, then Start (primary) and Done. "Then" is a grouped list of 44px rows, the time in a
+  fixed `--text-3` column.
+- **/plan/gym:** the same tokens and buttons, a sticky 48px bar (‹ Plan, the title, and Today /
+  Records / Edit as a segmented control), each exercise a raised card, and Lucide icons from the
+  page's own sprite for ✓, ✕, −, + and swap.
 - **Motion:** 150 ms on `cubic-bezier(.23,1,.32,1)` for hovers, presses (`scale(.97)` on
   `:active`) and opening menus and dialogs; transform and opacity only. Also the 0.25 s fades, the
   check-off below, the progress ring closing a step (400 ms) and Shutdown's "Day closed" rising in
