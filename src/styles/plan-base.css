@@ -84,16 +84,18 @@
 }
 
 /* Type: px sizes (11 meta, 12 labels, 13 rows and UI, 14 inputs, 15 body, 20 titles, 24 page),
-   -0.01em at 13-15px and -0.02em from 20px. Inter's open digits and round quotes (cv01, ss03), and
-   tabular figures so times and counts line up. */
+   -0.01em at 13-15px and -0.02em from 20px. Inter's open digits and round quotes (cv01, ss03).
+   Tabular figures go only on times, counts and durations: Inter's tnum also sets the hyphen to a
+   figure's width, which spaces out words like "read-only" in running text. */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--text-1);
   font: 400 13px/1.5 var(--sans); letter-spacing: -0.01em;
-  font-feature-settings: "cv01", "ss03"; font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv01", "ss03";
   -webkit-font-smoothing: antialiased;
 }
+:is(.sheet-when, .sheet-details, .sheet-dt, .sheet-load-chip, .sheet-stamps, .sheet-nownext, [data-needs-n], kbd, time) { font-variant-numeric: tabular-nums; }
 h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.25; text-wrap: balance; }
 h1 { font-size: 24px; letter-spacing: -0.02em; }
 h2 { font-size: 20px; letter-spacing: -0.02em; }
