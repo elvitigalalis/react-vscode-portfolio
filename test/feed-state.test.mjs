@@ -53,3 +53,14 @@ test("feedRows: every known source has a row, a missing one marked not set up, i
   // A row for a source not in the list still shows, after the known ones.
   assert.deepEqual(feedRows([{ source: "new", ok: true }], ["slack"]), [{ source: "slack", missing: true }, { source: "new", ok: true }]);
 });
+
+test("jiraNeedsSince: two days back, or the last good read when that is earlier", async () => {
+  const { jiraNeedsSince } = await import("../src/sheet/feed-state.mjs");
+  const now = new Date("2026-11-10T15:00:00Z");
+  const twoDays = Date.parse("2026-11-08T15:00:00Z");
+  assert.deepEqual(jiraNeedsSince(null, now), { since: twoDays, minutes: 2880 });
+  assert.deepEqual(jiraNeedsSince({ ok: true, last_ok_at: "2026-11-10T14:00:00Z" }, now), { since: twoDays, minutes: 2880 });
+  // An outage since the 5th: the read goes back to the last good one.
+  assert.deepEqual(jiraNeedsSince({ ok: false, fetched_at: "2026-11-10T14:00:00Z", last_ok_at: "2026-11-05T14:59:30Z" }, now),
+    { since: Date.parse("2026-11-05T14:59:30Z"), minutes: 7201 });
+});

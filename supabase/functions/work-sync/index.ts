@@ -17,7 +17,8 @@
 //   scope read:jira-work). Recorded as "jira".
 // - Jira updates for Needs you: GET /rest/api/3/myself for his accountId, then the same search
 //   for `(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND
-//   updated >= -2d`, with fields summary, status, assignee, creator, created and comment and
+//   updated >= -<minutes>m` (from jiraNeedsSince: two days back, or the last good read when
+//   earlier), with fields summary, status, assignee, creator, created and comment and
 //   expand=changelog. jiraNeeds (src/sheet/sources.mjs) picks the updates that need him and
 //   jiraResolved the open rows that no longer do; this file writes needs_you rows with source
 //   'jira' (their ids also in feed_seen ('jira-needs', id), so one he marked done never comes
@@ -38,6 +39,7 @@
 import { githubTaskChanges, jiraNeeds, jiraResolved, jiraTaskChanges } from "../../../src/sheet/sources.mjs";
 import { githubExpiry } from "../../../src/sheet/health.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
+import { jiraNeedsSince } from "../../../src/sheet/feed-state.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -48,7 +50,6 @@ const JIRA_SITE = env("SHEET_JIRA_SITE").trim().toLowerCase().replace(/^https:\/
 const PER_PAGE = 100;
 const JIRA_PAGES = 5;
 const UPDATE_PAGES = 2;
-const UPDATE_DAYS = 2;
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -243,16 +244,18 @@ async function needsSource(now: Date, today: string) {
   }
 }
 
-// Needs you's Jira rows: the updates of the last UPDATE_DAYS days that need him, written once
-// each, and the open rows that no longer need him marked done. As save: the rows first, then
+// Needs you's Jira rows: the updates since jiraNeedsSince (two days back, or the last good read
+// when earlier) that need him, written once each, and the open rows that no longer need him marked done. As save: the rows first, then
 // their ids.
 async function jiraUpdates(now: Date, today: string) {
   const me = await fetch(`https://${JIRA_SITE}/rest/api/3/myself`, { headers: jiraHeaders() });
   if (!me.ok) throw new Error(`jira: myself HTTP ${me.status}`);
   const self = String((await me.json())?.accountId ?? "");
   if (!/^[\w:-]{1,128}$/.test(self)) throw new Error("jira: myself gave no accountId");
+  const [state] = await db("feed_state?select=fetched_at,ok,last_ok_at&source=eq.jira-needs");
+  const { since, minutes } = jiraNeedsSince(state, now);
   const { issues } = await jiraSearch({
-    jql: `(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND updated >= -${UPDATE_DAYS}d ORDER BY updated DESC`,
+    jql: `(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND updated >= -${minutes}m ORDER BY updated DESC`,
     fields: ["summary", "status", "assignee", "creator", "created", "comment"],
     expand: "changelog",
   }, UPDATE_PAGES);
@@ -260,7 +263,6 @@ async function jiraUpdates(now: Date, today: string) {
     ...(await db("needs_you?select=message_id&source=eq.jira")),
     ...(await db("feed_seen?select=uid&source=eq.jira-needs")).map((r: { uid: string }) => r.uid),
   ];
-  const since = now.getTime() - UPDATE_DAYS * 24 * 60 * 60_000;
   const rows = jiraNeeds(issues, { self, site: JIRA_SITE, known, since });
   if (rows.length) {
     await db("needs_you?on_conflict=account,message_id", {
