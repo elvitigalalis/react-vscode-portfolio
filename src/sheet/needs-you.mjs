@@ -8,6 +8,7 @@ import { dayLabel, dueLabel, localNow } from "./logic.mjs";
 import { el, icon, sourceIcon, state, renderHooks, reloadHooks, keyHooks, actHooks, offerUndo, failed } from "./planner.mjs";
 import { needsGroups, gmailLink, threadLink, slackLink } from "./morning.mjs";
 import { needsFeedback, neverOffers } from "./triage.mjs";
+import { dialogHead } from "./dialog-head.mjs";
 
 let root, dialog;
 let rows = [];          // needs_you rows not done when read; Done flips them here too
@@ -94,7 +95,7 @@ function draw() {
   if (!dialog.open) return;
   const groups = needsGroups(rows);
   dialog.replaceChildren(...[
-    el("h2", { id: "sheet-needs-title", textContent: "Needs you" }),
+    dialogHead(el("h2", { id: "sheet-needs-title", textContent: "Needs you" })),
     note ? el("p", { className: "sheet-notice", role: "status" }, note, " ", undoButton()) : null,
     ...offers.map(offerLine),
     groups.length || awaiting.length ? null : el("p", { className: "sheet-notice", textContent: "Nothing needs you right now." }),
@@ -104,7 +105,7 @@ function draw() {
     awaiting.length ? el("section", { className: "sheet-needs-group" },
       el("h3", { textContent: "Awaiting reply" }),
       el("ul", { className: "sheet-needs-list" }, ...awaiting.map(waitItem))) : null,
-    el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn", textContent: "Close" })),
+    el("form", { method: "dialog", className: "sheet-dialog-end sheet-dialog-foot" }, el("button", { type: "submit", className: "sheet-btn", textContent: "Close" })),
   ].filter(Boolean));
 }
 

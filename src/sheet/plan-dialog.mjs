@@ -16,6 +16,7 @@ import { progressText } from "./focus-notes.mjs";
 import { progressFor } from "./focus-start.mjs";
 // The timeline's styles (plan-dialog.css) come with it, before the dialog first opens.
 import css from "../styles/plan-dialog.css?inline";
+import { dialogHead } from "./dialog-head.mjs";
 
 document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
@@ -134,7 +135,7 @@ export function draw() {
   const proposals = proposedOn(state.blocks, day, SHEET.timeZone).length;
   const scroll = dialog.querySelector(".sheet-timeline-wrap")?.scrollTop;
   dialog.replaceChildren(...[
-    el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekdayName(day)} ${date}` }),
+    dialogHead(el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekdayName(day)} ${date}` })),
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
@@ -155,7 +156,7 @@ export function draw() {
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
-    el("form", { method: "dialog", className: "sheet-dialog-end" },
+    el("form", { method: "dialog", className: "sheet-dialog-end sheet-dialog-foot" },
       el("button", { type: "submit", className: "sheet-btn primary", value: "done", textContent: "Done" })),
   ].filter(Boolean));
   if (scroll != null) dialog.querySelector(".sheet-timeline-wrap").scrollTop = scroll;

@@ -137,13 +137,13 @@ import "../../styles/plan-shell.css";
     </div>
 
     <dialog class="sheet-dialog" data-help aria-labelledby="sheet-help-title">
-      <h2 id="sheet-help-title">Help</h2>
+      <header class="sheet-dialog-head"><h2 tabindex="-1" autofocus id="sheet-help-title">Help</h2><form method="dialog"><button type="submit" class="sheet-btn sheet-icon-btn" aria-label="Close"><svg class="sheet-icon" aria-hidden="true"><use href="#i-x"></use></svg></button></form></header>
       <!-- Typed syntax first: it works on every screen. The keys follow, on a mouse or trackpad
            only (sheet.css hides them on a touch screen). -->
       <h3 class="sheet-legend-title">Typing a task</h3>
       <dl class="sheet-keys">
         <dt>~45m · @3pm · #tag</dt><dd>Estimate, fixed time, tag</dd>
-        <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (⚠) within two days with no block</dd>
+        <dt>^fri · ^10/30 · ^tomorrow</dt><dd>Due date; at risk (<svg class="sheet-icon" aria-hidden="true"><use href="#i-alert-triangle"></use></svg><span class="visually-hidden">warning sign</span>) within two days with no block</dd>
         <dt>!p</dt><dd>Private: /now shows a bar, Google says Busy</dd>
         <dt>Enter</dt><dd>Add the task, start the next</dd>
         <dt>⋯ → Details…</dt><dd>The same details without typing, and Clear for each</dd>
@@ -181,7 +181,7 @@ import "../../styles/plan-shell.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-lock"></use></svg><span class="visually-hidden">Lock</span></dt><dd>Private: only you see it</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-flag"></use></svg><span class="visually-hidden">Flag</span></dt><dd>Due date</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-clock"></use></svg><span class="visually-hidden">Clock</span></dt><dd>Fixed time</dd>
-        <dt>⚠</dt><dd>At risk (amber), overdue (red), or clashes with an event</dd>
+        <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-alert-triangle"></use></svg><span class="visually-hidden">Warning sign</span></dt><dd>At risk (amber), overdue (red), or clashes with an event</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-graduation-cap"></use></svg><span class="visually-hidden">Graduation cap</span></dt><dd>Course task from Brightspace</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-calendar"></use></svg><span class="visually-hidden">Calendar</span></dt><dd>An event on your calendar, as a to-do</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-ticket"></use></svg><span class="visually-hidden">Ticket</span></dt><dd>Campus event</dd>
@@ -199,12 +199,12 @@ import "../../styles/plan-shell.css";
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="visually-hidden">Alert</span></dt><dd>A feed failed: open Settings to see which</dd>
         <dt><svg class="sheet-icon" aria-hidden="true"><use href="#i-mail"></use></svg><span class="visually-hidden">Mail</span></dt><dd>Needs you: mail waiting on you</dd>
       </dl>
-      <form method="dialog"><button type="submit" class="sheet-btn">Close</button></form>
+      <form method="dialog" class="sheet-dialog-foot"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
     <!-- A day's Oura numbers (docs/sheet-v5.md, "Day numbers"): src/sheet/oura-popover.mjs fills it. -->
     <dialog class="sheet-dialog sheet-oura-dialog" data-oura-day aria-labelledby="sheet-oura-day-title">
-      <h2 id="sheet-oura-day-title">Oura</h2>
+      <header class="sheet-dialog-head"><h2 tabindex="-1" autofocus id="sheet-oura-day-title">Oura</h2><form method="dialog"><button type="submit" class="sheet-btn sheet-icon-btn" aria-label="Close"><svg class="sheet-icon" aria-hidden="true"><use href="#i-x"></use></svg></button></form></header>
       <dl class="sheet-oura-list" data-oura-list></dl>
       <section data-oura-tips hidden aria-labelledby="sheet-oura-tips-title">
         <h3 id="sheet-oura-tips-title" class="sheet-oura-h">How to raise it</h3>
@@ -216,7 +216,7 @@ import "../../styles/plan-shell.css";
         <p class="small" data-oura-spread></p>
       </section>
       <p class="small">From your Oura ring. Only you see these.</p>
-      <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
+      <p class="sheet-dialog-end sheet-dialog-foot"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
     </dialog>
     <dialog class="sheet-dialog sheet-settings" data-settings aria-labelledby="sheet-settings-title">
       <h2 id="sheet-settings-title">Settings</h2>

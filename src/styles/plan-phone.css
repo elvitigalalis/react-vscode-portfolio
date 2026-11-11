@@ -39,18 +39,6 @@
   .sheet-nownext-done::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2.75rem; height: 2.75rem; translate: -50% -50%; }
 }
 
-/* The task details dialog (research U11). */
-.sheet-taskinfo { width: min(26rem, calc(100vw - 2rem)); }
-.sheet-taskinfo h2 { overflow-wrap: anywhere; }
-.sheet-details-field { display: grid; gap: 0.3rem; margin: 0 0 0.9rem; font-size: 0.9375rem; }
-.sheet-details-field > label { font-weight: 600; }
-.sheet-details-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
-.sheet-details-row input { flex: 1 1 8rem; min-width: 0; min-height: 2.75rem; }
-.sheet-details-row .sheet-link { min-height: 2.75rem; min-width: 2.75rem; }
-.sheet-details-presets { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.sheet-taskinfo .sheet-btn { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
-.sheet-details-note { margin: 0; font-size: 0.875rem; color: var(--danger); }
-
 /* To-dos first (research U13): on phones the Tell Claude box and Recent drop under the days, and the
    box is one line until it's in use. The DOM keeps them first for the Mac's keyboard. */
 @media (max-width: 48rem) {
