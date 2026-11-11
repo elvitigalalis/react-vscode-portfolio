@@ -9,10 +9,10 @@ import { feedAlert } from "./glance.mjs";
 import { feedRows } from "./feed-state.mjs";
 import { githubOrgsFromInput } from "./sources.mjs";
 
-const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", gmail: "Gmail", oura: "Oura", hevy: "Hevy", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", gmail: "Gmail", oura: "Oura", hevy: "Hevy", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", "jira-needs": "Jira updates", slack: "Slack" };
 // Every source a sync job writes to feed_state, in Settings order. One that has never written a
 // row (Handshake and the academic calendar until their links are set) shows as "not set up".
-const SOURCES = ["brightspace", "campus", "freebusy", "gmail", "oura", "hevy", "github", "jira", "slack", "handshake", "academic", "weather"];
+const SOURCES = ["brightspace", "campus", "freebusy", "gmail", "oura", "hevy", "github", "jira", "jira-needs", "slack", "handshake", "academic", "weather"];
 const when = (iso) => new Date(iso).toLocaleString("en-US", { timeZone: SHEET.timeZone, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 // "Brightspace: ok, 12 items, Nov 3, 2:20 PM", or the error. A row with no fetch yet says so, and

@@ -67,12 +67,14 @@ Deno.serve(async (req) => {
     jira: await source("jira", Boolean(JIRA_TOKEN && JIRA_EMAIL && JIRA_SITE), [JIRA_TOKEN, JIRA_EMAIL, JIRA_SITE], now, async () => {
       if (!/^[a-z0-9][a-z0-9-]*\.atlassian\.net$/.test(JIRA_SITE)) throw new Error("jira: SHEET_JIRA_SITE isn't <name>.atlassian.net");
       const { issues, whole } = await jiraIssues();
-      await jiraUpdates(now, today);
       return { read: issues.length, whole, changes: jiraTaskChanges(issues, { ...(await planner("jira")), site: JIRA_SITE, today }) };
     }),
   };
+  // Needs you's Jira updates run after the tasks are saved, on their own: a failure here is
+  // recorded under "jira-needs" and never undoes or fails the Jira task sync.
+  const jira_needs = await needsSource(now, today);
   const ok = out.github.ok !== false && out.jira.ok !== false;
-  return Response.json({ ok, ...out }, { status: ok ? 200 : 502 });
+  return Response.json({ ok, ...out, jira_needs }, { status: ok ? 200 : 502 });
 });
 
 // --- Sync -------------------------------------------------------------------------------------
@@ -224,6 +226,23 @@ async function jiraSearch(query: Record<string, unknown>, pages: number) {
 
 const jiraIssues = () => jiraSearch({ jql: "assignee = currentUser() AND statusCategory != Done ORDER BY key", fields: ["summary", "duedate"] }, JIRA_PAGES);
 
+// The Jira updates' run, recorded in feed_state as "jira-needs".
+async function needsSource(now: Date, today: string) {
+  const fetched_at = now.toISOString();
+  if (!(JIRA_TOKEN && JIRA_EMAIL && JIRA_SITE) || !/^[a-z0-9][a-z0-9-]*\.atlassian\.net$/.test(JIRA_SITE)) {
+    await saveFeedState("jira-needs", { fetched_at, ok: null, error: "not connected" });
+    return { ok: null, skipped: "not connected" };
+  }
+  try {
+    const { read, inserted, resolved } = await jiraUpdates(now, today);
+    await saveFeedState("jira-needs", { fetched_at, ok: true, error: null, items: read });
+    return { ok: true, items: read, inserted, resolved };
+  } catch (e) {
+    await feedFailed("jira-needs", e, fetched_at, [JIRA_TOKEN, JIRA_EMAIL, JIRA_SITE]);
+    return { ok: false };
+  }
+}
+
 // Needs you's Jira rows: the updates of the last UPDATE_DAYS days that need him, written once
 // each, and the open rows that no longer need him marked done. As save: the rows first, then
 // their ids.
@@ -260,4 +279,5 @@ async function jiraUpdates(now: Date, today: string) {
   if (resolved.length) {
     await db(`needs_you?id=in.(${resolved.join(",")})&done=is.false`, { method: "PATCH", body: JSON.stringify({ done: true }) });
   }
+  return { read: issues.length, inserted: rows.length, resolved: resolved.length };
 }

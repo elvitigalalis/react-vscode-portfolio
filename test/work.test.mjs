@@ -40,6 +40,14 @@ test("work-sync: Jira updates for Needs you, read-only, written as jira rows and
   assert.doesNotMatch(fn, /console\.log/);
 });
 
+test("work-sync: Jira updates run after the task sync, on their own, recorded as jira-needs", () => {
+  const jiraTasks = fn.slice(fn.indexOf('jira: await source("jira"'), fn.indexOf("const jira_needs"));
+  assert.doesNotMatch(jiraTasks, /jiraUpdates/);
+  assert.match(fn, /const jira_needs = await needsSource\(now, today\);\n  const ok = out\.github\.ok !== false && out\.jira\.ok !== false;/);
+  assert.match(fn, /await feedFailed\("jira-needs", e, fetched_at, \[JIRA_TOKEN, JIRA_EMAIL, JIRA_SITE\]\)/);
+  assert.match(fn, /saveFeedState\("jira-needs", \{ fetched_at, ok: true/);
+});
+
 // --- /plan ----------------------------------------------------------------------------------------
 
 test("githubOrgsFromInput: Settings' orgs, comma or space separated, lower case, once each", async () => {
