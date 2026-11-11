@@ -13,6 +13,9 @@
 @media (min-width: 48.01rem) { .sheet-week > .sheet-day:first-child { margin-left: -12px; border-left: 0; } }
 @media (max-width: 48rem) { .sheet-week > .sheet-day { margin-inline: -6px; padding: 0; border: 0; } }
 .sheet-planner .sheet-day > .sheet-rows { grid-template-rows: none; grid-auto-rows: min-content; align-content: start; }
+/* A tablet's week scrolls sideways (sheet.css): whole columns fill the width, none cut in half. */
+@media (min-width: 48.01rem) and (max-width: 64rem) { .sheet-planner .sheet-week { grid-template-columns: repeat(7, max(11rem, 100% / 5)); } }
+@media (min-width: 48.01rem) and (max-width: 56rem) { .sheet-planner .sheet-week { grid-template-columns: repeat(7, max(11rem, 100% / 4)); } }
 
 /* Day header: "Tue" in 13px/600 and the date in --text-3; today's date sits in an accent pill. */
 .sheet-day > .sheet-head {
