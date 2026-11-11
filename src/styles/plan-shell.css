@@ -1,0 +1,63 @@
+/* /plan as an app (docs/sheet.md, "Look"): no site chrome (Base.astro, app="plan"), its own 48px
+   bar, and the page at full width up to 1680px, every left edge on the same 24px gutter (16px on
+   phones). Only /plan imports this. */
+.sheet-page.sheet-planner { max-width: 1680px; padding: 0 24px 32px; }
+/* Keyboard focus and jumps scroll clear of the sticky bar. */
+:root { scroll-padding-top: 60px; }
+
+/* The bar sticks to the top. Its ground and bottom hairline reach both edges of the window (a
+   border image set out past its sides, which adds no scrolling), while its contents keep the
+   page's gutter. The hairline is opaque, so rows scrolling under the bar don't show through it. */
+.plan-bar {
+  position: sticky; top: 0; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px;
+  min-height: 48px; margin: 0 0 12px; padding: 6px 0;
+  border-image: linear-gradient(to top, color-mix(in srgb, var(--text-1) 8%, var(--bg)) 1px, var(--bg) 1px) fill 0 / 0 / 0 100vmax;
+}
+/* ‹ Today › and the title sit on the left after the wordmark; the actions after the title's
+   space, the switch last. The tools box lays its buttons straight into the bar. */
+.plan-bar .sheet-tools { display: contents; }
+.plan-bar .sheet-nav { order: 1; gap: 2px; margin: 0; }
+.plan-bar > h1 {
+  order: 2; flex: 1; min-width: 0; margin: 0 0 0 4px;
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em; line-height: 28px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.plan-bar .sheet-tools > :not(.sheet-nav), .plan-bar .sheet-chips > * { order: 3; }
+.plan-theme { order: 4; margin-left: auto; }
+.plan-mark {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; padding-right: 12px;
+  border-right: 1px solid var(--border); font-size: 14px; font-weight: 600; line-height: 20px;
+}
+.plan-mark .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; color: var(--accent-text); }
+/* Signed out the bar holds the wordmark and the switch; the h1 stays for screen readers. */
+.plan-bar:has(> [data-tools][hidden]) > h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.plan-bar:has(> [data-tools][hidden]) > .plan-mark { border-right: 0; }
+
+/* The bar's chips (Needs you, Feed failed) are buttons like the rest: secondary, and red for a
+   failure. */
+.plan-bar .sheet-chips .sheet-chip {
+  min-height: 28px; gap: 6px; padding: 0 10px; border-radius: var(--radius);
+  font-size: 13px; font-weight: 500; background: var(--surface); border-color: var(--border-strong);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.plan-bar .sheet-chips .sheet-chip:hover { background: var(--surface-2); }
+.plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); }
+.plan-bar .sheet-chip .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+.plan-bar .sheet-nudges[aria-pressed="false"] .sheet-icon { color: var(--text-3); }
+
+/* Signed out, Privacy and the way home (plan-base.css) sit under the sign-in line. */
+.sheet-planner:has([data-tools]:not([hidden])) > .plan-foot { display: none; }
+.sheet-planner > .sheet-status { font-size: 14px; color: var(--text-2); }
+
+@media (max-width: 48rem) {
+  .sheet-page.sheet-planner { padding-inline: 16px; }
+  /* On a phone the bar is the day's: the wordmark goes once the planner opens, and the switch
+     moves into ⋯ (Theme). */
+  .plan-bar:has(> [data-tools]:not([hidden])) > :is(.plan-mark, .plan-theme) { display: none; }
+  .plan-bar .sheet-nav { margin-right: auto; }
+  .plan-bar { gap: 4px; }
+}
+@media (pointer: coarse) {
+  .plan-bar { padding: 2px 0; }
+  .plan-bar .sheet-chips .sheet-chip { min-height: 44px; }
+}
