@@ -40,3 +40,10 @@ test("/plan: Needs you reads mail and Jira rows only, and draws no Slack icon or
   const needs = read("../src/sheet/needs-you.mjs");
   assert.doesNotMatch(needs, /slack/i);
 });
+
+test("counts: an open Slack row counts nowhere; mail (or no source) and Jira rows do", async () => {
+  const { needsShown } = await import("../src/sheet/proposal.mjs");
+  const rows = [{ id: 1, source: "mail" }, { id: 2 }, { id: 3, source: "jira" }, { id: 4, source: "slack" }, { id: 5, source: "jira", done: true }];
+  assert.deepEqual(needsShown(rows).map((r) => r.id), [1, 2, 3]);
+  assert.match(read("../supabase/functions/telegram/index.ts"), /needs_you\?select=\*&done=is\.false&source=in\.\(mail,jira\)/);
+});

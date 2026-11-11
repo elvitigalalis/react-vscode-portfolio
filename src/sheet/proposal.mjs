@@ -300,6 +300,10 @@ export const MAX_FIRST_STEP = 80;
 export const MAX_NEEDS = 15;
 export const MAX_PICKS = 5;
 export const NEEDS_KINDS = ["reply", "deadline", "meeting", "admin"];
+
+// The Needs you rows /plan shows, for every count: not done, and mail or Jira (Slack rows from
+// before Slack stopped feeding it never count). A row with no source is mail.
+export const needsShown = (rows) => (rows ?? []).filter((n) => !n.done && ["mail", "jira"].includes(n.source ?? "mail"));
 // No block starts before 7:00 am.
 const EARLIEST = 7 * 60;
 const HHMM = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -838,7 +842,7 @@ export function proposalLines(proposal, blocks, tasks, needsOpen, picks, campus,
   // Event titles come from the campus feed, not through checkProposal; one that could become a
   // link stays off Telegram (it still shows in /plan, as text).
   for (const e of events.filter((x) => !linkish(x.title)).slice(0, SHOWN_PICKS)) lines.push(pickLine(e, tz));
-  const open = needsOpen.filter((n) => !n.done).length;
-  if (open) lines.push(`Mail: ${open} ${open === 1 ? "needs" : "need"} you.`);
+  const open = needsShown(needsOpen).length;
+  if (open) lines.push(`Needs you: ${open}.`);
   return lines;
 }

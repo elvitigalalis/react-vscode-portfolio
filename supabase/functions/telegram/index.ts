@@ -101,7 +101,7 @@ async function snapshot(now: Date, facts: TickFacts = {}) {
   const log = await db(`nudges?select=*&day=eq.${today}`);
   // v5 R1: the newest revision and the one before it, for the replan message.
   const [proposal = null, previous = null] = await db(`proposals?select=*&day=eq.${today}&order=rev.desc&limit=2`);
-  const needsOpen = await db("needs_you?select=*&done=is.false");
+  const needsOpen = await db("needs_you?select=*&done=is.false&source=in.(mail,jira)");
   // v5 W1: the cached forecast, for the brief's weather line.
   const [weather = null] = await db("weather_cache?select=periods,alerts");
   // v5 P1: the busy times around today, which More time must not run into.

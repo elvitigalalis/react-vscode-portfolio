@@ -98,7 +98,7 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
   - `"Didn't fit: <note>"` when there is a note;
   - `"Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)"` for at most 2 picks, leaving out
     any pick whose feed title could become a link (`linkish`);
-  - `"Mail: 3 need you."`
+  - `"Needs you: 3."`
 
 `src/sheet/nudges.mjs`, extended:
 - **The brief:**

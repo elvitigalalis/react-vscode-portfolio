@@ -94,7 +94,7 @@ const PLAN_LINES = [
   "3:30 pm · HW3 (30 min)",
   "Didn't fit: Lab 4 didn't fit before shutdown.",
   "Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)",
-  "Mail: 3 need you.",
+  "Needs you: 3.",
 ];
 
 const briefSent = { block_id: null, kind: "brief", day, send_at: "2026-11-04T13:00:00.000Z", sent_at: "2026-11-04T13:00:01Z" };
