@@ -55,11 +55,11 @@ kbd {
 .sheet-btn kbd { margin: 0 -4px 0 2px; font: 500 11px/1 var(--sans); opacity: 1; }
 .sheet-btn.primary kbd { color: inherit; background: rgb(255 255 255 / 0.18); border-color: transparent; }
 
-/* Inputs: text, number, date and time fields, text areas and selects. The task box (.sheet-add)
-   stays a bare line of text in its row. */
+/* Inputs: text, number, date and time fields, text areas and selects, 32px (18px lines and 6px
+   padding). The task box (.sheet-add) stays a bare line of text in its row. */
 :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea:not(.sheet-add), select) {
   min-height: 32px; padding: 6px 10px; border-radius: var(--radius);
-  font: 400 14px/1.4 var(--sans); letter-spacing: -0.01em; color: var(--text-1);
+  font: 400 14px/18px var(--sans); letter-spacing: -0.01em; color: var(--text-1);
   background: var(--surface); border: 1px solid var(--border-strong);
 }
 :where(input, textarea, select):hover:not(:focus, .sheet-add) { border-color: color-mix(in srgb, var(--text-1) 24%, transparent); }

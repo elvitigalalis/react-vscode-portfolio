@@ -122,7 +122,11 @@
 .sheet-dialog .sheet-notice { padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-2); }
 
 /* --- Help -------------------------------------------------------------------------------- */
-.sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0; margin: 0 0 8px; font-size: 13px; }
+/* One key column for every list, so the descriptions line up down the whole dialog; keys are kbd
+   chips. */
+.sheet-keys { display: grid; grid-template-columns: 192px minmax(0, 1fr); gap: 0; margin: 0 0 8px; font-size: 13px; }
+@media (max-width: 40rem) { .sheet-keys { grid-template-columns: max-content minmax(0, 1fr); } }
+.sheet-keys kbd + kbd { margin-left: 2px; }
 .sheet-keys :is(dt, dd) { padding: 6px 0; border-bottom: 1px solid var(--border-faint); }
 .sheet-keys dt { padding-right: 24px; font-weight: 500; color: var(--text-1); font-variant-numeric: tabular-nums; }
 .sheet-keys dd { margin: 0; color: var(--text-2); }

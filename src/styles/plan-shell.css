@@ -41,13 +41,17 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 .plan-bar .sheet-chips .sheet-chip:hover { background: var(--surface-2); }
-.plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); }
+.plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); border-color: var(--border-strong); }
 .plan-bar .sheet-chip .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+/* Icon to label: 6px, on the 4px grid's half step like every button (plan-ui.css). */
+.plan-bar .sheet-tools .sheet-btn:has(.sheet-icon) { gap: 6px; }
 .plan-bar .sheet-nudges[aria-pressed="false"] .sheet-icon { color: var(--text-3); }
 
 /* Signed out, Privacy and the way home (plan-base.css) sit under the sign-in line. */
 .sheet-planner:has([data-tools]:not([hidden])) > .plan-foot { display: none; }
 .sheet-planner > .sheet-status { font-size: 14px; color: var(--text-2); }
+/* Signed out: Sign in sits on its own line under the sentence, not trailing it. */
+.sheet-status > .sheet-btn { display: flex; width: fit-content; margin-top: 12px; }
 
 @media (max-width: 48rem) {
   .sheet-page.sheet-planner { padding-inline: 16px; }
