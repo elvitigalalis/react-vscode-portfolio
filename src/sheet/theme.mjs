@@ -18,9 +18,12 @@ export function setupTheme(doc = document) {
     for (const b of doc.querySelectorAll("[data-theme-switch]")) {
       b.hidden = false;
       const use = b.querySelector("use");
-      // The icon button names its state in its label; the menu item says it in words.
-      if (use) {
-        use.setAttribute("href", ICON[now]);
+      const label = b.querySelector("[data-theme-label]");
+      use?.setAttribute("href", ICON[now]);
+      // The icon button names its state in its label; the menu item says it in words, beside
+      // the same icon.
+      if (label) label.textContent = `Theme: ${NAME[now]}`;
+      else if (use) {
         b.ariaLabel = `Theme: ${NAME[now]}. Switch to ${NAME[next]}`;
         b.title = `Theme: ${NAME[now]}`;
       } else b.textContent = `Theme: ${NAME[now]}`;

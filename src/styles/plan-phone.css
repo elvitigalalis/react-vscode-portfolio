@@ -1,22 +1,11 @@
 /* /plan on phones and touch screens, only on /plan (the gym page shares sheet.css, so these
    stay out of it). */
 /* Phones and touch screens (research/plan-improvements.md 2, 3, 6, 7; plan-phone.md 9, 10). */
-/* The ⋯ menu: Gym is a link that reads like the buttons. Feed failed shows only on phones. */
-.sheet-menu a {
-  display: block; font-size: 0.875rem; color: inherit; text-decoration: none;
-  border-radius: 0.25rem; padding: 0.4rem 0.6rem;
-}
-.sheet-menu a:hover, .sheet-menu a:focus-visible { background: var(--chip); }
-.sheet-menu .sheet-icon { margin-right: 0.15rem; }
-.sheet-menu [data-feed-menu] { display: none; color: var(--danger); }
-.sheet-menu [data-plan-menu] { display: none; }
-/* Help lists the keys only where there is a keyboard and pointer to use them. */
-@media (pointer: coarse) and (hover: none) { .sheet-help-keys { display: none; } }
 /* Phones: the bar holds ‹ day ›, Plan, Needs you, Nudges and ⋯ on one row. A failed feed folds
-   into ⋯ as a dot and the menu's Feed failed item, which opens Settings like the chip. */
+   into ⋯ as a dot and the menu's Feed failed item (plan-overlays.css), which opens Settings like
+   the chip. */
 @media (max-width: 30rem) {
   .sheet-chips .sheet-chip.is-alert { display: none; }
-  .sheet-planner:has([data-feed-alert]:not([hidden])) [data-feed-menu] { display: block; }
   .sheet-planner:has([data-feed-alert]:not([hidden])) [popovertarget="sheet-more"] { position: relative; }
   .sheet-planner:has([data-feed-alert]:not([hidden])) [popovertarget="sheet-more"]::after {
     content: ""; position: absolute; top: 0.3rem; right: 0.3rem; width: 0.5rem; height: 0.5rem;
@@ -24,7 +13,6 @@
   }
   /* In the shutdown window, Shut down takes Plan's place and Plan today moves into ⋯. */
   .sheet-tools:has([data-act="shutdown"]:not([hidden])) [data-act="plan"] { display: none; }
-  .sheet-planner:has([data-act="shutdown"]:not([hidden])) [data-plan-menu] { display: block; }
 }
 /* Touch: 44 px tap areas (Apple HIG, Accessibility, "at least 44x44 pt":
    https://developer.apple.com/design/human-interface-guidelines/accessibility). Where the
@@ -77,8 +65,6 @@
 /* Swipes (swipe-ui.mjs, docs/sheet.md, "On the phone"). pan-y hands sideways moves to the page and
    keeps vertical scrolling and pinch zoom with the browser. A row's contents slide; ::before fills
    the space they leave with what letting go will do. */
-.sheet-help-touch { display: none; }
-@media (pointer: coarse) { .sheet-help-touch { display: block; } }
 @media (max-width: 48rem) {
   .sheet-planner :is(.sheet-day, .sheet-list) { touch-action: pan-y pinch-zoom; }
   .sheet-evtodo { position: relative; }

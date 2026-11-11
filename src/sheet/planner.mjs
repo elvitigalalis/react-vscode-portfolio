@@ -702,9 +702,10 @@ function openEventMenu(target) {
   const menu = $("[data-evmenu]");
   menu.querySelector('[data-act="evtodo-open"]').hidden = !row.link;
   const r = target.getBoundingClientRect();
-  menu.style.top = `${Math.min(r.bottom + 4, window.innerHeight - 100)}px`;
-  menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
+  const w = menu.offsetWidth;
+  menu.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
+  menu.style.left = `${Math.max(8, Math.min(r.right - w, document.documentElement.clientWidth - w - 8))}px`;
   menu.querySelector("button:not([hidden])")?.focus();
 }
 
@@ -1295,7 +1296,7 @@ async function openMenu(id, anchor) {
   const menu = $("[data-menu]");
   menuFor = id;
   const t = state.tasks.get(id);
-  menu.querySelector('[data-move="visibility"]').textContent = t.public ? "Make private" : "Make public";
+  menu.querySelector("[data-visibility-label]").textContent = t.public ? "Make private" : "Make public";
   menu.querySelector('[data-move="clear-due"]').hidden = !t.due;
   // Where it could go: a task carried over twice or more leads with Tomorrow, Later this week,
   // Someday and Drop; the plain "To tomorrow" and "To Someday" step aside meanwhile.
@@ -1306,8 +1307,10 @@ async function openMenu(id, anchor) {
   menu.querySelector('[data-triage] [data-move="this-week"]').hidden = !laterThisWeek(now().day);
   for (const kind of ["tomorrow", "someday"]) menu.querySelector(`:scope > [data-move="${kind}"]`).hidden = triage;
   const r = anchor.getBoundingClientRect();
-  menu.style.left = `${Math.max(8, Math.min(r.right - 180, document.documentElement.clientWidth - 200))}px`;
   menu.showPopover();
+  // Placed once shown, by its own size: right-aligned to the ⋯, inside the window.
+  const w = menu.offsetWidth;
+  menu.style.left = `${Math.max(8, Math.min(r.right - w, document.documentElement.clientWidth - w - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(r.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
   menu.querySelector("button:not([hidden], [hidden] *)").focus();
 }

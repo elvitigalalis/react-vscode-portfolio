@@ -52,15 +52,17 @@ import "../../styles/plan-shell.css";
          here, a failed feed shows as a dot on ⋯ and the Feed failed item below, and in the shutdown
          window Plan today moves here to make room for Shut down. -->
     <div class="sheet-menu" id="sheet-more" data-more popover>
-      <button type="button" class="is-alert" data-act="settings" data-section="status" data-feed-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg> Feed failed</button>
-      <button type="button" data-act="plan" data-plan-menu>Plan today</button>
-      <a href="/plan/gym/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg> Gym</a>
-      <button type="button" data-act="calendars">Calendars</button>
-      <button type="button" data-act="settings">Settings <kbd>S</kbd></button>
-      <button type="button" data-act="help">Help <kbd>?</kbd></button>
-      <button type="button" data-theme-switch hidden>Theme</button>
-      <a href="/privacy/">Privacy</a>
-      <button type="button" data-act="sign-out">Sign out</button>
+      <button type="button" class="is-alert" data-act="settings" data-section="status" data-feed-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg>Feed failed</button>
+      <button type="button" data-act="plan" data-plan-menu><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>Plan today <kbd>P</kbd></button>
+      <hr class="sheet-menu-sep" data-phone-sep>
+      <a href="/plan/gym/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-dumbbell"></use></svg>Gym</a>
+      <button type="button" data-act="calendars"><svg class="sheet-icon" aria-hidden="true"><use href="#i-calendar"></use></svg>Calendars</button>
+      <button type="button" data-act="settings"><svg class="sheet-icon" aria-hidden="true"><use href="#i-settings"></use></svg>Settings <kbd>S</kbd></button>
+      <button type="button" data-act="help"><svg class="sheet-icon" aria-hidden="true"><use href="#i-help"></use></svg>Help <kbd>?</kbd></button>
+      <button type="button" data-theme-switch hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-monitor"></use></svg><span data-theme-label>Theme</span></button>
+      <hr class="sheet-menu-sep">
+      <a href="/privacy/"><svg class="sheet-icon" aria-hidden="true"><use href="#i-shield"></use></svg>Privacy</a>
+      <button type="button" data-act="sign-out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-log-out"></use></svg>Sign out</button>
     </div>
     <!-- Messages to Claude (docs/sheet-messages.md): src/sheet/message-box.mjs sends them and
          lists the newest 10 with what each added. Hidden until the owner's settings load. -->
@@ -104,27 +106,30 @@ import "../../styles/plan-shell.css";
       <!-- A task carried over twice or more leads with where it could go instead (docs/sheet.md, Rollover). -->
       <div class="sheet-menu-triage" data-triage hidden>
         <p>Carried over a few times. Where should it go?</p>
-        <button type="button" data-move="tomorrow">Tomorrow</button>
-        <button type="button" data-move="this-week">Later this week</button>
-        <button type="button" data-move="someday">Someday</button>
-        <button type="button" data-move="drop">Drop (to Someday, "Dropped")</button>
+        <button type="button" data-move="tomorrow"><svg class="sheet-icon" aria-hidden="true"><use href="#i-sunrise"></use></svg>Tomorrow</button>
+        <button type="button" data-move="this-week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-calendar"></use></svg>Later this week</button>
+        <button type="button" data-move="someday"><svg class="sheet-icon" aria-hidden="true"><use href="#i-archive"></use></svg>Someday</button>
+        <button type="button" data-move="drop"><svg class="sheet-icon" aria-hidden="true"><use href="#i-x"></use></svg>Drop (to Someday, “Dropped”)</button>
       </div>
-      <button type="button" data-move="details">Details…</button>
-      <button type="button" data-move="today">To today</button>
-      <button type="button" data-move="tomorrow">To tomorrow</button>
-      <button type="button" data-move="next-week">To next week</button>
-      <button type="button" data-move="day-before">Day before</button>
-      <button type="button" data-move="day-after">Day after</button>
-      <button type="button" data-move="someday">To Someday</button>
-      <button type="button" data-move="visibility">Make private</button>
-      <button type="button" data-move="clear-due" hidden>Clear due date</button>
-      <button type="button" data-move="delete">Delete</button>
+      <button type="button" data-move="details"><svg class="sheet-icon" aria-hidden="true"><use href="#i-info"></use></svg>Details…</button>
+      <hr class="sheet-menu-sep">
+      <button type="button" data-move="today"><svg class="sheet-icon" aria-hidden="true"><use href="#i-sun"></use></svg>To today</button>
+      <button type="button" data-move="tomorrow"><svg class="sheet-icon" aria-hidden="true"><use href="#i-sunrise"></use></svg>To tomorrow <kbd>D</kbd></button>
+      <button type="button" data-move="next-week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevrons-right"></use></svg>To next week</button>
+      <button type="button" data-move="day-before"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-left"></use></svg>Day before</button>
+      <button type="button" data-move="day-after"><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Day after</button>
+      <button type="button" data-move="someday"><svg class="sheet-icon" aria-hidden="true"><use href="#i-archive"></use></svg>To Someday <kbd>Z</kbd></button>
+      <hr class="sheet-menu-sep">
+      <button type="button" data-move="visibility"><svg class="sheet-icon" aria-hidden="true"><use href="#i-lock"></use></svg><span data-visibility-label>Make private</span></button>
+      <button type="button" data-move="clear-due" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-flag"></use></svg>Clear due date</button>
+      <hr class="sheet-menu-sep">
+      <button type="button" class="is-danger" data-move="delete"><svg class="sheet-icon" aria-hidden="true"><use href="#i-trash"></use></svg>Delete</button>
     </div>
 
     <!-- Event to-dos (docs/sheet-v5.md, "Event to-dos"): a calendar event's row menu. -->
     <div class="sheet-menu" data-evmenu popover>
-      <button type="button" data-act="evtodo-open">Open in Calendar</button>
-      <button type="button" data-act="evtodo-hide">Hide</button>
+      <button type="button" data-act="evtodo-open"><svg class="sheet-icon" aria-hidden="true"><use href="#i-external-link"></use></svg>Open in Calendar</button>
+      <button type="button" data-act="evtodo-hide"><svg class="sheet-icon" aria-hidden="true"><use href="#i-eye-off"></use></svg>Hide</button>
     </div>
 
     <div class="sheet-toast" role="status" data-toast hidden>
@@ -491,6 +496,22 @@ import "../../styles/plan-shell.css";
   const setupHabits = (root) => import("../../sheet/habit-list.mjs").then((m) => m.setupHabits(root));
   // School load (docs/sheet-glance.md) loads after sign-in, off the first load.
   const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root)).catch(console.error);
+      <!-- Menus and dialogs (plan-overlays.css): Lucide x, info, sunrise, chevrons-right, archive,
+           trash-2, settings, circle-help, shield, log-out, external-link, eye-off, user and activity. -->
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
+      <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M12 2v8" /><path d="m4.93 10.93 1.41 1.41" /><path d="M2 18h2" /><path d="M20 18h2" /><path d="m19.07 10.93-1.41 1.41" /><path d="M22 22H2" /><path d="m8 6 4-4 4 4" /><path d="M16 18a4 4 0 0 0-8 0" /></symbol>
+      <symbol id="i-chevrons-right" viewBox="0 0 24 24"><path d="m6 17 5-5-5-5" /><path d="m13 17 5-5-5-5" /></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><path d="M10 11v6" /><path d="M14 11v6" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></symbol>
+      <symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></symbol>
+      <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></symbol>
   // Reflow rest of today (docs/sheet.md) loads after sign-in, off the first load.
   const setupReflow = (root) => import("../../sheet/reflow-view.mjs").then((m) => m.setupReflow(root)).catch(console.error);
   // The Doing view (docs/sheet.md, "On the phone") loads on a phone, after sign-in, or when the
@@ -511,5 +532,7 @@ import "../../styles/plan-shell.css";
   setupTheme();
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
-  start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);
+  start(document.querySelector(".sheet-planner"), [setupOverlays, setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);
 </script>
+  // The menus', dialogs' and toast's styles (overlays.mjs) load once signed in, off the first load.
+  const setupOverlays = () => import("../../sheet/overlays.mjs").catch(console.error);

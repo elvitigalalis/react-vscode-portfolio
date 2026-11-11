@@ -1,0 +1,55 @@
+/* /plan's menus, dialogs and toast (docs/sheet.md, "Look"): added as text once he is signed in
+   (overlays.mjs, Vite's ?inline), so the signed-out first paint carries none of it (Lighthouse's
+   unused-css-rules gate). The shared surface (--surface, --shadow-pop, radii) is plan-ui.css's;
+   what a dialog draws inside comes with its own script (plan-dialog.css, plan-settings.css,
+   sheet-shutdown.css, sheet-lookback.css, sheet-calm.css), which loads after this and builds on it.
+   Tokens: plan-base.css. */
+
+/* --- Menus ----------------------------------------------------------------------------------
+   Popovers (the task's ⋯, the top bar's ⋯, an event's ⋯, a carried-over task's triage): 28px
+   items with a 16px icon, the label and, where a key does the same, its kbd at the right end.
+   Groups part on a hairline; Delete is red. Placed by script (planner.mjs, topbar.mjs). */
+.sheet-menu { position: fixed; inset: auto; margin: 0; min-width: 208px; max-width: calc(100vw - 16px); }
+.sheet-menu :is(button, a) {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 0 8px;
+  font: 400 13px/1.2 var(--sans); letter-spacing: -0.01em; color: var(--text-1); text-align: left; text-decoration: none;
+  background: none; border: 0; border-radius: var(--radius-sm); cursor: pointer; white-space: nowrap;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.sheet-menu :is(button, a)[hidden] { display: none; }
+.sheet-menu :is(button, a) > .sheet-icon { flex: none; width: 16px; height: 16px; stroke-width: 1.5; color: var(--text-3); }
+.sheet-menu :is(button, a):is(:hover, :focus-visible) > .sheet-icon { color: var(--text-2); }
+.sheet-menu kbd { margin-left: auto; padding-left: 16px; padding-right: 0; min-width: 0; height: auto; border: 0; background: none; font-size: 12px; color: var(--text-3); }
+.sheet-menu a[href^="http"]::after { content: none; }
+.sheet-menu-sep { height: 1px; margin: 4px -4px; border: 0; background: var(--border); }
+/* Destructive and alert items are red, icon and all; their hover takes a red tint. */
+.sheet-menu :is(.is-danger, .is-alert), .sheet-menu :is(.is-danger, .is-alert) > .sheet-icon { color: var(--danger); }
+.sheet-menu :is(.is-danger, .is-alert):is(:hover, :focus-visible) { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
+/* Opened by a click, the first item takes focus: its fill shows it, never a ring (plan-ui.css). */
+@media (pointer: coarse) {
+  .sheet-menu { min-width: 232px; }
+  .sheet-menu :is(button, a) { min-height: 44px; padding: 0 12px; gap: 12px; font-size: 15px; }
+  .sheet-menu kbd { display: none; }
+}
+
+/* The ⋯ menu: Feed failed and Plan today show only on a phone, when the bar has no room for them
+   (a failed feed as a dot on ⋯; Plan today while Shut down holds its place). The hairline under
+   them shows with them. */
+.sheet-menu :is([data-feed-menu], [data-plan-menu], [data-phone-sep]) { display: none; }
+@media (max-width: 30rem) {
+  .sheet-planner:has([data-feed-alert]:not([hidden])) [data-feed-menu] { display: flex; }
+  .sheet-planner:has([data-act="shutdown"]:not([hidden])) [data-plan-menu] { display: flex; }
+  .sheet-planner:is(:has([data-feed-alert]:not([hidden])), :has([data-act="shutdown"]:not([hidden]))) [data-phone-sep] { display: block; }
+}
+
+/* --- Help -------------------------------------------------------------------------------- */
+.sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0; margin: 0 0 8px; font-size: 13px; }
+.sheet-keys :is(dt, dd) { padding: 6px 0; border-bottom: 1px solid var(--border-faint); }
+.sheet-keys dt { padding-right: 24px; font-weight: 500; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.sheet-keys dd { margin: 0; color: var(--text-2); }
+.sheet-keys .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; vertical-align: -3px; color: var(--text-2); }
+.sheet-legend-title { font-size: 13px; font-weight: 600; margin: 20px 0 4px; color: var(--text-1); }
+.sheet-help-touch { display: none; }
+@media (pointer: coarse) { .sheet-help-touch { display: block; } }
+@media (pointer: coarse) and (hover: none) { .sheet-help-keys { display: none; } }
+

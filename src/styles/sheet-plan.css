@@ -1,6 +1,6 @@
-/* The Sheet's rules only /plan draws (docs/sheet.md): the week's tasks, rows, menus, Plan today's
-   header, Shutdown and the rest of the planner (Settings' and Plan today's timeline come with their
-   scripts). /plan/gym, /now and /oauth/consent import only sheet.css, so they don't ship these
+/* The Sheet's rules only /plan draws (docs/sheet.md): the week's tasks, rows, Plan today's header
+   and the rest of the planner (menus and dialogs come with overlays.mjs, Settings' and Plan today's
+   timeline with their scripts). /plan/gym, /now and /oauth/consent import only sheet.css, so they don't ship these
    (Lighthouse's unused-css-rules gate). Tokens: plan-base.css. Imported after sheet.css, whose
    rules these followed. */
 
@@ -88,27 +88,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-someday { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1rem; }
 
 .sheet-list .sheet-head { border-bottom-width: 1px; }
-
-/* Its surface (ground, radius, shadow, padding) is plan-ui.css's. */
-.sheet-menu { position: fixed; inset: auto; margin: 0; min-width: 11rem; }
-
-.sheet-menu button {
-  display: block; width: 100%; text-align: left; font: inherit; font-size: 0.875rem; color: inherit;
-  background: none; border: 0; border-radius: 0.25rem; padding: 0.4rem 0.6rem; cursor: pointer;
-}
-
-.sheet-menu button:hover, .sheet-menu button:focus-visible { background: var(--chip); }
-
-.sheet-menu button[hidden] { display: none; }
-
-.sheet-keys { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; font-size: 0.875rem; margin: 0 0 1rem; }
-
-.sheet-keys dt { font-weight: 600; }
-
-.sheet-keys dd { margin: 0; color: var(--muted); }
-
-/* The icon legend under the keys. */
-.sheet-legend-title { font-size: 0.875rem; margin: 0 0 0.35rem; }
 
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
@@ -226,8 +205,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 .sheet-chips .sheet-chip { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8125rem; min-height: 2rem; }
 
 .sheet-chip.is-alert { color: var(--danger); border-color: var(--danger); }
-
-.sheet-menu kbd { font: inherit; font-size: 0.75rem; color: var(--muted); margin-left: 0.25rem; }
 
 @media (max-width: 48rem) {
   .sheet-planner .sheet-bar-top h1, .sheet-wide { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
