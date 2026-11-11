@@ -18,22 +18,24 @@
 .sheet-settings-tab[aria-current="true"] .sheet-icon { color: var(--accent-text); }
 .sheet-settings-body { min-width: 0; }
 
-/* A group: its name as the section title (a chevron, not the browser's triangle), then its parts. */
+/* A group: its name as a plain section heading (settings-sections.mjs keeps it from folding), then
+   its parts. A group a phone isn't showing is hidden whole. */
 .sheet-settings-group { scroll-margin-top: -4px; }
-.sheet-settings-group + .sheet-settings-group { border-top: 1px solid var(--border); margin-top: 8px; }
+.sheet-settings-group:not([open]) { display: none; }
+.sheet-settings-group:not(:first-of-type) { border-top: 1px solid var(--border); margin-top: 8px; }
 .sheet-settings-group-title {
-  display: flex; align-items: center; gap: 6px; padding: 12px 0 4px; list-style: none; cursor: pointer;
-  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-1); width: fit-content;
+  display: block; padding: 12px 0 4px; list-style: none; cursor: default;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-1);
 }
 .sheet-settings-group-title::-webkit-details-marker, .sheet-settings-more > summary::-webkit-details-marker { display: none; }
 /* Lucide chevron-right, drawn by a mask so the summary keeps its own text. */
-.sheet-settings-group-title::before, .sheet-settings-more > summary::before {
+.sheet-settings-more > summary::before {
   content: ""; flex: none; width: 16px; height: 16px; background: var(--text-3);
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / 16px no-repeat;
 }
-:is(.sheet-settings-group, .sheet-settings-more)[open] > summary::before { rotate: 90deg; }
+.sheet-settings-more[open] > summary::before { rotate: 90deg; }
 @media (prefers-reduced-motion: no-preference) {
-  .sheet-settings-group-title::before, .sheet-settings-more > summary::before { transition: rotate 150ms var(--ease); }
+  .sheet-settings-more > summary::before { transition: rotate 150ms var(--ease); }
 }
 
 /* A part: its title, a line of help in the third ink, then its controls. */
@@ -119,8 +121,8 @@
   .sheet-settings-more > summary { min-height: 44px; }
 }
 
-/* Phones: the list runs across the top, under the header, as a segmented control; each group
-   stays a disclosure, the others closed (glance.mjs, settingsOpen). */
+/* Phones: the list runs across the top, under the header, as a segmented control that shows one
+   group at a time (glance.mjs, settingsOpen); the control names it, so its heading is only read. */
 @media (max-width: 40rem) {
   .sheet-settings-main { display: block; }
   .sheet-settings-index {
@@ -132,5 +134,6 @@
   .sheet-settings-tab:hover { background: none; }
   .sheet-settings-tab[aria-current="true"] { background: var(--surface); box-shadow: var(--shadow-card); }
   .sheet-settings-group { scroll-margin-top: 48px; }
-  .sheet-settings-group-title { width: 100%; min-height: 44px; padding: 0; }
+  .sheet-settings-group:not(:first-of-type) { border-top: 0; margin-top: 0; }
+  .sheet-settings-group-title { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
