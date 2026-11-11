@@ -1,0 +1,124 @@
+/* The planner's base (docs/sheet.md, "Look"): /plan and /plan/gym import this instead of the site's
+   global.css, so they carry none of the portfolio's rules. Linear-neutral: a cool grey ramp, one
+   indigo accent, Inter only, px type on a 4px grid. Every colour is light-dark(day, night) under
+   data-app="plan" (Base.astro, app="plan"): the OS picks unless the theme switch set data-theme
+   on <html>, which forces color-scheme. The site's old token names (--fg, --muted, --line, …) point
+   at the new ones, so every rule written against them takes the new palette.
+   Contrast (WCAG AA, 4.5:1 for text) holds in both modes; four values moved from the research
+   palette to get there: --text-3 light #6f6e77 → #6b6a73 (4.46 on --accent-tint), --danger light
+   #e5484d → #ce2c31 (3.9 on white), --accent dark #6e6ade → #6560da (white on it was 4.39), and
+   amber text is --warning-text (#f5a524 on white is 2.0; --warning stays for fills). */
+:root[data-app="plan"] {
+  color-scheme: light dark;
+  --bg: light-dark(#ffffff, #0f1011);
+  --bg-subtle: light-dark(#f9f9fa, #08090a);
+  --surface: light-dark(#ffffff, #18191b);
+  --surface-2: light-dark(#f2f2f4, #1f2023);
+  --border: light-dark(rgb(0 0 0 / 0.08), rgb(255 255 255 / 0.08));
+  --border-faint: light-dark(rgb(0 0 0 / 0.05), rgb(255 255 255 / 0.05));
+  --border-strong: light-dark(rgb(0 0 0 / 0.12), rgb(255 255 255 / 0.12));
+  --text-1: light-dark(#1c1d1f, #f7f8f8);
+  --text-2: light-dark(#3c4149, #d0d6e0);
+  --text-3: light-dark(#6b6a73, #8a8f98);
+  --text-4: light-dark(#a1a0a8, #62666d);
+  --accent: light-dark(#5b5bd6, #6560da);
+  --accent-hover: light-dark(#5151cd, #5a56d0);
+  --accent-tint: light-dark(#f0f0ff, #1d1d3a);
+  --accent-text: light-dark(#4b49c4, #b1a9ff);
+  /* Accent text on an inverted surface (the toast: --text-1 behind it). */
+  --accent-inverse: light-dark(#b1a9ff, #4b49c4);
+  --on-accent: #ffffff;
+  --danger: light-dark(#ce2c31, #ec5d5e);
+  --success: light-dark(#30a46c, #3dd68c);
+  --warning: light-dark(#f5a524, #ffc53d);
+  --warning-text: light-dark(#9a5b00, #ffc53d);
+  /* Calendar hues (Radix Colors, MIT): a tinted ground, a bar and text, each AA on its ground. */
+  --ev-blue-bg: light-dark(#e6f4fe, #0d2847); --ev-blue-bar: #0090ff; --ev-blue-text: light-dark(#0b66b5, #70b8ff);
+  --ev-violet-bg: light-dark(#f4f0fe, #291f43); --ev-violet-bar: #6e56cf; --ev-violet-text: light-dark(#6550b9, #baa7ff);
+  --ev-green-bg: light-dark(#e6f6eb, #132d21); --ev-green-bar: #30a46c; --ev-green-text: light-dark(#1d7a50, #3dd68c);
+  --ev-amber-bg: light-dark(#fff7c2, #302008); --ev-amber-bar: #ffc53d; --ev-amber-text: light-dark(#9a5b00, #ffca16);
+  --ev-red-bg: light-dark(#feebec, #3b1219); --ev-red-bar: #e5484d; --ev-red-text: light-dark(#ce2c31, #ff9592);
+  --ev-gray-bg: light-dark(#f0f0f3, #222325); --ev-gray-bar: light-dark(#8b8d98, #696e77); --ev-gray-text: light-dark(#60646c, #b0b4ba);
+  --shadow-card: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-pop: 0 0 0 1px var(--border-strong), 0 8px 24px rgb(0 0 0 / 0.08), 0 2px 6px rgb(0 0 0 / 0.04);
+  --radius-sm: 4px; --radius: 6px; --radius-md: 8px; --radius-lg: 12px;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --sans: "Inter", "Inter Fallback", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* The site's names, on the new palette. */
+  --fg: var(--text-1);
+  --muted: var(--text-3);
+  --line: var(--border);
+  --line-strong: var(--border-strong);
+  --chip: var(--surface-2);
+  --card: var(--surface);
+  --btn: var(--accent);
+  --btn-hover: var(--accent-hover);
+  --on-btn: var(--on-accent);
+  --stem: var(--text-3);
+  --warn: var(--warning-text);
+  --leaf-1: var(--ev-violet-bar);
+  --leaf-2: var(--ev-blue-bar);
+  --leaf-3: var(--ev-green-bar);
+  --serif: var(--sans);
+  --heading-weight: 600;
+}
+:root[data-app="plan"][data-theme="light"] { color-scheme: light; }
+:root[data-app="plan"][data-theme="dark"] { color-scheme: dark; }
+/* Shadows aren't colours, so light-dark() can't hold them: dark mode lifts with a deeper shadow. */
+:root[data-app="plan"][data-theme="dark"] { --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.12), 0 8px 32px rgb(0 0 0 / 0.5); }
+@media (prefers-color-scheme: dark) {
+  :root[data-app="plan"]:not([data-theme="light"]) { --shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.12), 0 8px 32px rgb(0 0 0 / 0.5); }
+}
+
+/* Inter, self-hosted (SIL OFL, cut to Latin; licence in /fonts/), with a metric-matched fallback so
+   nothing shifts on swap. The planner has no second face. */
+@font-face {
+  font-family: "Inter"; src: url("/fonts/inter-text.woff2") format("woff2");
+  font-weight: 400 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Inter Fallback"; src: local("Arial");
+  size-adjust: 107.5%; ascent-override: 90.1%; descent-override: 22.4%; line-gap-override: 0%;
+}
+
+/* Type: px sizes (11 meta, 12 labels, 13 rows and UI, 14 inputs, 15 body, 20 titles, 24 page),
+   -0.01em at 13-15px and -0.02em from 20px. Inter's open digits and round quotes (cv01, ss03), and
+   tabular figures so times and counts line up. */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text-1);
+  font: 400 13px/1.5 var(--sans); letter-spacing: -0.01em;
+  font-feature-settings: "cv01", "ss03"; font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.25; text-wrap: balance; }
+h1 { font-size: 24px; letter-spacing: -0.02em; }
+h2 { font-size: 20px; letter-spacing: -0.02em; }
+h3 { font-size: 15px; }
+h4 { font-size: 13px; }
+p, li { text-wrap: pretty; }
+ul, ol { margin: 0; padding: 0; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: var(--accent-text); text-underline-offset: 0.2em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+main a[href^="http"]::after { content: "\2009\2197"; font-size: 0.85em; }
+.small { color: var(--text-3); font-size: 12px; margin: 8px 0 0; }
+.small a { color: inherit; }
+/* With no site footer, an app page keeps Privacy and the way home in a quiet line of its own. */
+.plan-foot { margin: 24px 0 0; color: var(--text-3); font-size: 12px; }
+.plan-foot a { color: inherit; }
+
+/* Focus: a 2px accent ring for the keyboard only. A heading or box that script focuses (tabindex
+   -1, so a screen reader starts there) shows none. */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[tabindex="-1"]:focus { outline: none; }
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+/* Thin scrollbars in the grey of a strong border, everywhere it scrolls. */
+:root[data-app="plan"] { scrollbar-color: var(--border-strong) transparent; }
+* { scrollbar-width: thin; }
+
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 8px; z-index: 30; background: var(--surface); padding: 4px 8px; border-radius: var(--radius); box-shadow: var(--shadow-pop); }

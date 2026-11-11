@@ -1,7 +1,7 @@
 /* The Sheet's rules only /plan draws (docs/sheet.md): the week's tasks, rows, menus, Plan today,
    Shutdown, Settings and the rest of the planner. /plan/gym, /now and /oauth/consent import only
-   sheet.css, so they don't ship these (Lighthouse's unused-css-rules gate). Same tokens as
-   global.css. Imported right after sheet.css, whose rules these followed. */
+   sheet.css, so they don't ship these (Lighthouse's unused-css-rules gate). Tokens: plan-base.css,
+   imported right after sheet.css, whose rules these followed. */
 
 /* The stamps row holds the stamps, the Oura chips and wind-down; it stays its column's width. */
 .sheet-stamps-row { min-width: 0; }
@@ -66,7 +66,7 @@
 
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 
-.sheet-check:hover { color: var(--accent); }
+.sheet-check:hover { color: var(--accent-text); }
 
 @media (hover: none) {
   /* A 44 px tap area (WCAG 2.5.5) with the same small mark; the negative margin keeps the row's height. */
@@ -148,11 +148,11 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; touch-action: none; }
 
-.sheet-preview { border: 1px dashed var(--accent); color: var(--accent); pointer-events: none; }
+.sheet-preview { border: 1px dashed var(--accent); color: var(--accent-text); pointer-events: none; }
 
 .sheet-shutline { position: absolute; left: -3.25rem; right: 0; border-top: 2px dashed var(--accent); cursor: ns-resize; touch-action: none; height: 0.75rem; }
 
-.sheet-shutline span { position: absolute; right: 0.4rem; top: -1.1rem; font-size: 0.6875rem; color: var(--accent); }
+.sheet-shutline span { position: absolute; right: 0.4rem; top: -1.1rem; font-size: 0.6875rem; color: var(--accent-text); }
 
 @media (max-width: 40rem) { .sheet-timeline-wrap { max-height: 45vh; }
 }
@@ -289,7 +289,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-nowline span {
   position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
-  font-size: 0.6875rem; line-height: 1; color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 0.6875rem; line-height: 1; color: var(--accent-text); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 
 .sheet-banner > .sheet-rev { color: var(--muted); font-size: 0.8125rem; }
@@ -431,7 +431,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-message-steps .is-done { color: var(--muted); }
 
-.sheet-message-tick { display: inline-block; width: 1em; color: var(--accent); }
+.sheet-message-tick { display: inline-block; width: 1em; color: var(--accent-text); }
 
 .sheet-message-decided { margin-top: 0.25rem; }
 
@@ -439,7 +439,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-message-notes { margin: 0.15rem 0; padding-left: 1.1rem; }
 
-.sheet-message-run { display: inline-block; margin-top: 0.15rem; color: var(--accent); }
+.sheet-message-run { display: inline-block; margin-top: 0.15rem; color: var(--accent-text); }
 
 @media (prefers-reduced-motion: no-preference) { .sheet-message-steps .is-current .sheet-message-tick { animation: sheet-pulse 1.2s ease-in-out infinite; }
 }

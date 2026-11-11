@@ -1,5 +1,5 @@
 /* Reflow rest of today (reflow-view.mjs) and the phone's Doing card (doing-view.mjs), added as text
-   when either loads (doing-styles.mjs). Same tokens as global.css. */
+   when either loads (doing-styles.mjs). Tokens: plan-base.css. */
 .sheet-reflow { margin: 0.2rem 0 0; font-size: 0.75rem; color: var(--muted); }
 .sheet-reflow .sheet-link { font-size: inherit; }
 @media (pointer: coarse) { .sheet-reflow .sheet-link { min-height: 2.75rem; } }
@@ -16,6 +16,7 @@
 .sheet-doing-card {
   display: flex; flex-direction: column; gap: 0.6rem; padding: 1.25rem 1rem 1rem;
   background: var(--card); border: 1px solid var(--line); border-radius: 0.75rem;
+  --bg: var(--card);
 }
 .sheet-doing-kicker, .sheet-doing-then h3 {
   margin: 0; color: var(--muted); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
@@ -37,7 +38,7 @@
   font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 0.4rem;
 }
 .sheet-doing-card:not(:has(.sheet-doing-start)) .sheet-doing-done { flex: 1; }
-.sheet-doing-card.is-checking .sheet-doing-done { color: var(--accent); }
+.sheet-doing-card.is-checking .sheet-doing-done { color: var(--accent-text); }
 .sheet-doing-card.is-checking .sheet-check path { stroke-dasharray: 1 1; }
 .sheet-doing-card:is(.is-checking, .is-done) .sheet-doing-title { color: var(--muted); }
 .sheet-doing-card.is-done .sheet-doing-title { text-decoration: line-through; }

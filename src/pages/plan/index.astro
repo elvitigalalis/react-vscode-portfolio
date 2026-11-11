@@ -4,14 +4,14 @@ import Base from "../../layouts/Base.astro";
 import { siteConfig } from "../../config";
 import { SHEET } from "../../site.mjs";
 import "../../styles/sheet.css";
+import "../../styles/plan-base.css";
 import "../../styles/sheet-plan.css";
 import "../../styles/plan-phone.css";
 import "../../styles/sheet-focus.css";
 import "../../styles/plan-settings.css";
-import "../../styles/global.css";
 ---
 
-<Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
+<Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex app="plan">
   {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
   <!-- Add to Home Screen: /plan/ opens full screen, as its own app (Web App Manifest,
        https://www.w3.org/TR/appmanifest/; scope and display as in /plan/gym/'s). -->
@@ -89,6 +89,8 @@ import "../../styles/global.css";
       <summary>Log (<span data-log-count>0</span>)</summary>
       <ul class="sheet-rows" data-log-list></ul>
     </details>
+    <!-- Until the planner opens (signed out), the bar has no ⋯ menu, so Privacy shows here. -->
+    <p class="plan-foot"><a href="/privacy/">Privacy</a> · <a href="/">lisul-elvi.com</a></p>
 
     <div class="sheet-menu" data-menu popover>
       <!-- A task carried over twice or more leads with where it could go instead (docs/sheet.md, Rollover). -->

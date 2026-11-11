@@ -7,7 +7,7 @@
   border: 1px solid var(--line-strong); border-radius: 50%; background: none; color: var(--muted); cursor: pointer;
 }
 .sheet-habit-check .sheet-icon { width: 1rem; height: 1rem; opacity: 0.35; }
-.sheet-habit-check:hover { color: var(--accent); border-color: var(--accent); }
+.sheet-habit-check:hover { color: var(--accent-text); border-color: var(--accent); }
 .sheet-habit.is-done .sheet-habit-check { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
 .sheet-habit.is-done .sheet-habit-check .sheet-icon { opacity: 1; }
 .sheet-habit-name { font-weight: 600; min-width: 7.5rem; }
@@ -17,7 +17,7 @@
 .sheet-habit-dots > .is-due { border-color: var(--accent); }
 .sheet-habit-dots > .is-off { border-color: transparent; background: radial-gradient(circle, var(--line) 0 30%, transparent 35%); }
 .sheet-habit-rate { color: var(--muted); font-variant-numeric: tabular-nums; }
-.sheet-habit-back { color: var(--accent); }
+.sheet-habit-back { color: var(--accent-text); }
 @media (prefers-reduced-motion: no-preference) {
   .sheet-habit.is-fresh .sheet-habit-check { animation: sheet-habit-pop 0.3s cubic-bezier(0.23, 1, 0.32, 1); }
 }

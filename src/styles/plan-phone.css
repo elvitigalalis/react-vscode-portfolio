@@ -51,7 +51,7 @@
 .sheet-nownext { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.35rem; margin: 0.2rem 0 0; font-size: 0.8125rem; line-height: 1.5rem; color: var(--muted); }
 .sheet-nownext b { font-weight: 600; color: var(--fg); }
 .sheet-nownext-part { min-width: 0; }
-.sheet-nownext-done { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 0.3rem; cursor: pointer; }
+.sheet-nownext-done { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0; color: var(--accent-text); background: none; border: 1px solid var(--line); border-radius: 0.3rem; cursor: pointer; }
 @media (min-width: 48.01rem) {
   .sheet-nownext-part { flex: 1 1 calc(100% - 2rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
@@ -101,7 +101,7 @@
   }
   .is-swipe-left::before { left: auto; right: 0; justify-content: flex-end; text-indent: 0; padding-inline-end: 0; }
   .is-swipe-left::before { direction: rtl; text-indent: 0.75rem; }
-  .is-armed::before { background: var(--accent); color: var(--bg); }
+  .is-armed::before { background: var(--accent); color: var(--on-btn); }
   .is-leaving { opacity: 0.5; }
   .is-day-swiping { translate: var(--swipe) 0; }
   .sheet-week:has(.is-day-swiping) { overflow-x: clip; }
@@ -115,7 +115,7 @@
    /now don't carry it. The row being checked shows its ✓ in the accent, its words go muted while
    a strike runs through them, and specks or confetti fly over the page. The script adds none of
    it under reduced motion. */
-.sheet-row.is-checking .sheet-check { opacity: 1; color: var(--accent); }
+.sheet-row.is-checking .sheet-check { opacity: 1; color: var(--accent-text); }
 .sheet-row.is-checking .sheet-check path { stroke-dasharray: 1 1; }
 .sheet-row.is-checking :is(.sheet-title, .sheet-when, .sheet-details) { color: var(--muted); }
 .sheet-strike { background: linear-gradient(currentColor 0 0) no-repeat 0 58% / 0% 1px; }

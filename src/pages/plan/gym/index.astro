@@ -6,11 +6,11 @@ import Base from "../../../layouts/Base.astro";
 import { siteConfig } from "../../../config";
 import { SHEET } from "../../../site.mjs";
 import "../../../styles/sheet.css";
+import "../../../styles/plan-base.css";
 import "../../../styles/gym.css";
-import "../../../styles/global.css";
 ---
 
-<Base title={`Gym · ${siteConfig.title}`} description="Lisul Elvitigala's lift tracker. Only he can sign in." path="/plan/gym/" noindex>
+<Base title={`Gym · ${siteConfig.title}`} description="Lisul Elvitigala's lift tracker. Only he can sign in." path="/plan/gym/" noindex app="plan">
   {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
   <!-- Add to Home Screen: a standalone app over /plan/ (it signs in once on its own). -->
   <link slot="head" rel="manifest" href="/plan/gym/manifest.webmanifest" />
@@ -46,6 +46,7 @@ import "../../../styles/global.css";
 
     <dialog class="sheet-dialog" data-gym-swap aria-labelledby="gym-swap-title"></dialog>
     <dialog class="sheet-dialog" data-gym-summary aria-labelledby="gym-summary-title"></dialog>
+    <p class="plan-foot"><a href="/privacy/">Privacy</a> · <a href="/">lisul-elvi.com</a></p>
   </section>
 </Base>
 

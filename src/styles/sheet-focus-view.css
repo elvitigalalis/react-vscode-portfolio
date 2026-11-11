@@ -1,6 +1,6 @@
 /* Focus mode's calm full-screen view and its Stop form (docs/sheet-focus.md), added as text when
    focus-view.mjs loads (Vite's ?inline), so /plan's first load carries no rules it doesn't use.
-   Same tokens as global.css; the ring's one-second step is off when motion is reduced, and nothing
+   Tokens: plan-base.css; the ring's one-second step is off when motion is reduced, and nothing
    else moves. */
 .sheet-focus {
   width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 1rem;

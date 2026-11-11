@@ -1,6 +1,6 @@
 /* Student load (docs/sheet-glance.md, "School load"): one bar above the week, the load meter's
-   colours (sheet.css, .sheet-meter-fill) and the day chip's (.sheet-load-chip). Same tokens as
-   global.css. Loaded with school-load-view.mjs, not on /plan's first paint. */
+   colours (sheet.css, .sheet-meter-fill) and the day chip's (.sheet-load-chip). Tokens: plan-base.css.
+   Loaded with school-load-view.mjs, not on /plan's first paint. */
 .sheet-school { margin: 0 0 0.75rem; font-size: 0.875rem; }
 .sheet-school-sum {
   display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 0.2rem 0.6rem;

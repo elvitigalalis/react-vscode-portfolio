@@ -1,4 +1,4 @@
-/* /plan/gym/ (docs/sheet-gym.md), on top of sheet.css and the site's tokens (global.css). Phone
+/* /plan/gym/ (docs/sheet-gym.md), on top of sheet.css and the planner's tokens (plan-base.css). Phone
    first: one column, thumb-sized controls (56 px steppers and ✓, 44 px chips), inputs at 20 px so
    iOS never zooms, and the rest timer in a bar along the bottom. */
 .gym { max-width: 40rem; padding-bottom: 6rem; }
@@ -6,7 +6,7 @@
 .gym a.sheet-btn { text-decoration: none; display: inline-flex; align-items: center; }
 .gym-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .gym-tools .sheet-btn { min-height: 2.75rem; display: inline-flex; align-items: center; text-decoration: none; }
-.gym-tools [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.gym-tools [aria-pressed="true"] { border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
 
 .gym-day { font-family: var(--serif); font-size: 1.5rem; margin: 0.5rem 0 0.4rem; }
 .gym-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0 1rem; color: var(--muted); font-size: 0.875rem; }
@@ -75,7 +75,7 @@
 .gym-unit { position: absolute; top: 0.15rem; left: 0; right: 0; text-align: center; font-size: 0.625rem; color: var(--muted); pointer-events: none; }
 .gym-check {
   width: 3.5rem; height: 3.5rem; border-radius: 50%; font: inherit; font-size: 1.5rem; cursor: pointer; touch-action: manipulation;
-  color: var(--accent); background: var(--bg); border: 2px solid var(--accent);
+  color: var(--accent-text); background: var(--bg); border: 2px solid var(--accent);
 }
 .gym-check.is-done { background: var(--accent); color: var(--on-btn); }
 .gym-set.is-done .gym-num { color: var(--muted); }

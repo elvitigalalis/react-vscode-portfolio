@@ -1,5 +1,5 @@
 /* The look-back (docs/sheet-lookback.md): one colour for done whatever the day was, nothing that
-   grades a week. Same tokens as global.css. */
+   grades a week. Tokens: plan-base.css. */
 .sheet-row:has(> .sheet-hint) { flex-wrap: wrap; }
 .sheet-hint { flex-basis: 100%; color: var(--muted); font-size: 0.75rem; line-height: 1.35; }
 .sheet-back-entry { margin: 0 0 0.5rem; }
@@ -21,7 +21,7 @@
   background: none; border: 0; border-bottom: 1px solid var(--line); padding: 0.35rem 0.2rem; cursor: pointer;
 }
 .sheet-shut-event::before { content: "○ "; color: var(--muted); }
-.sheet-shut-event.is-done::before { content: "✓ "; color: var(--accent); }
+.sheet-shut-event.is-done::before { content: "✓ "; color: var(--accent-text); }
 .sheet-shut-line { margin: 0.5rem 0; }
 .sheet-shut-past { margin-top: 0.5rem; font-size: 0.875rem; }
 .sheet-shut-past summary { cursor: pointer; color: var(--muted); }
