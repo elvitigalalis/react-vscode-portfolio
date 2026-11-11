@@ -142,7 +142,6 @@ textarea.sheet-add {
 /* Narrow screens: one day at a time. */
 @media (max-width: 48rem) {
   .sheet-planner .sheet-day:not(.is-focus) { display: none; }
-  .sheet-planner .sheet-row.is-empty:not(.is-add) { display: none; }
 }
 .sheet-row:has(.sheet-proposal) { flex-wrap: wrap; }
 .sheet-proposal {

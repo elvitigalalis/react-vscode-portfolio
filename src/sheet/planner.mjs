@@ -730,34 +730,46 @@ function blankRow() {
   return el("li", { className: "sheet-row sheet-blank" }, "Nothing planned yet. ", plan);
 }
 
+// The weekday as the header shows it ("Tue"); labels keep dayLabel's "TUE".
+const shortDay = (weekday) => weekday[0] + weekday.slice(1).toLowerCase();
+
+// The week's newer parts, today's summary line (which folds Oura, wind-down and the week's count
+// under it) and the empty week's message, come from week-parts.mjs, which the page's script
+// loads: kept out of this chunk, a signed-out first load (which draws no week) doesn't count
+// their code as unused (Lighthouse's unused-javascript). `open` is whether today's line is open.
+export const weekParts = { open: false, summary: null, empty: null };
+
 function dayColumn(day, rows, items) {
   const list = tasksOn(day);
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
-  const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
+  const today = day === state.today;
+  const allDone = today && list.length > 0 && list.every((t) => t.done);
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
-  const blank = day === state.today && !items.length;
-  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : r.kind === "adding" ? addingRow(r) : eventTodoRow(r))),
+  const blank = today && !items.length;
+  // No filler rows: the week's grid rows (--rows) still line every column's tasks up.
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}${items.length ? "" : " is-none"}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : r.kind === "adding" ? addingRow(r) : eventTodoRow(r))),
     blank ? blankRow() : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`),
-    day === state.today ? alsoRow(day) : null);
+    today ? alsoRow(day) : null);
   ul.dataset.day = day;
-  for (let i = items.length + (blank ? 2 : 1) + (day === state.today ? 1 : 0); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
-  const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
-  const section = el("section", { className: `sheet-day${day === state.today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
+  const marks = [info.planned && "Planned", info.shutdown && "Shut down"].filter(Boolean)
+    .flatMap((m, i) => [i ? " · " : null, el("span", { className: "sheet-mark" }, icon("check"), ` ${m}`)]);
+  const extra = [day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null, day === state.focus ? weekDoneMark() : null, today ? windDownMark() : null].filter(Boolean);
+  const more = today && extra.length && weekParts.summary ? el("div", { className: "sheet-today-more", id: "sheet-today-more", hidden: !weekParts.open }, ...extra) : null;
+  const progress = today ? progressMark(day) : null;
+  const section = el("section", { className: `sheet-day${today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
     el("h2", { className: "sheet-head" },
-      el("span", { className: "sheet-wd", textContent: weekday }), " ",
+      el("span", { className: "sheet-wd", textContent: shortDay(weekday) }), " ",
       el("span", { className: "sheet-dt", textContent: date }),
-      allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
-      day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
+      allDone ? el("span", { className: "sheet-alldone", title: "Everything done today" }, icon("circle-check"), el("span", { className: "visually-hidden", textContent: ", all done" })) : null,
+      today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     // The stamps row of the week's grid (sheet.css, subgrid): the Oura chips and wind-down sit in
     // it, so every column's tasks still start level.
     el("div", { className: "sheet-stamps-row" },
-      el("p", { className: "sheet-stamps", textContent: marks }),
-      day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
-      day === state.today ? progressMark(day) : null,
-      day === state.focus ? weekDoneMark() : null,
-      day === state.today ? windDownMark() : null,
+      el("p", { className: "sheet-stamps" }, ...marks),
+      more ? weekParts.summary(progress) : progress && el("p", { className: "sheet-today-sum" }, progress),
+      ...(more ? [more] : extra),
       day > state.today ? horizonDay(day) : null),
     ul);
   section.dataset.day = day;
@@ -792,7 +804,7 @@ function progressMark(day) {
   // Each half stays whole ("1 of 4 done ·" / "1h40 focused"); the real space between them is
   // where a narrow column wraps.
   const halves = text.split(" · ").flatMap((h, i, all) => [i ? " " : null, el("span", { textContent: i < all.length - 1 ? `${h} ·` : h })]);
-  return el("p", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
+  return el("span", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
 }
 
 // Phones hide the week title (the h1, still read out), so the shown day says the week's count
@@ -885,7 +897,7 @@ export function render() {
   const items = Object.fromEntries(days.map((d) => [d, [...rowsOn(d), ...addingIn({ day: d })]]));
   // Today holds one more box (Also did…) under its add row.
   const rows = Math.max(rowCount(items), items[state.today] ? Math.max(items[state.today].length, 1) + 2 : 0);
-  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])));
+  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])), ...(days.some((d) => items[d].length) || !weekParts.empty ? [] : [weekParts.empty()]));
   $("[data-week]").style.setProperty("--rows", String(rows));
   growProgress();
   const first = dayLabel(days[0]);
@@ -1547,9 +1559,9 @@ function wire() {
     if (move) return menuAction(move);
     const li = e.target.closest(".sheet-task");
     if (!li) {
-      // Any empty row of a day types into that day.
+      // A day's empty space, or an empty row, types into that day.
       const ul = e.target.closest(".sheet-rows");
-      if (ul && e.target.closest(".is-empty") && !e.target.closest(".sheet-add")) ul.querySelector(".sheet-add")?.focus();
+      if (ul && (e.target === ul || e.target.closest(".is-empty")) && !e.target.closest(".sheet-add")) ul.querySelector(".sheet-add")?.focus();
       return;
     }
     const id = li.dataset.id;

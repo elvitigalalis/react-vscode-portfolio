@@ -1,0 +1,74 @@
+/* The week (docs/sheet.md, "Look"): day columns on --border-faint hairlines with no ruled rows,
+   one row component for every task list, calendar events as tinted blocks, and quiet empty states.
+   Only /plan loads it (week-styles.mjs, as text before the first draw), after sheet.css, whose
+   shared day and row rules keep /now's ruled look.
+   The week's grid rows (sheet.css, subgrid) still line every column's tasks up. Tokens: plan-base.css. */
+
+/* Columns: a hairline between days, and one under the header band. The first column's rows
+   reach into the gutter so its text lines up with the bar's. */
+.sheet-planner .sheet-week { gap: 0; }
+.sheet-week > .sheet-day { min-width: 0; padding: 0 6px; border-left: 1px solid var(--border-faint); }
+@media (min-width: 48.01rem) { .sheet-week > .sheet-day:first-child { margin-left: -12px; border-left: 0; } }
+@media (max-width: 48rem) { .sheet-week > .sheet-day { margin-inline: -6px; padding: 0; border: 0; } }
+
+/* Day header: "Tue" in 13px/600 and the date in --text-3; today's date sits in an accent pill. */
+.sheet-day > .sheet-head {
+  align-items: center; gap: 6px; min-height: 32px; padding: 0 6px; border: 0;
+  font-size: 13px; line-height: 20px; letter-spacing: -0.01em;
+}
+.sheet-day .sheet-wd { text-transform: none; letter-spacing: inherit; font-weight: 600; }
+.sheet-day .sheet-dt { color: var(--text-3); font-weight: 500; }
+.sheet-week .is-today .sheet-wd { color: var(--accent-text); }
+.sheet-week .is-today .sheet-dt { padding: 0 7px; border-radius: 999px; color: var(--on-accent); background: var(--accent); }
+.sheet-alldone { display: inline-flex; color: var(--success); }
+.sheet-alldone .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+
+/* The band under the header: the load and free-time strip, the day's marks, and on today one
+   summary line (ring and count, the chevron for the rest) with the Now line under it. */
+.sheet-day > .sheet-stamps-row {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; padding: 2px 6px 8px;
+  border-bottom: 1px solid var(--border-faint); font-size: 12px; color: var(--text-3);
+}
+.sheet-day .sheet-stamps { order: -2; min-height: 0; margin: 0; font-size: 11px; line-height: 16px; }
+.sheet-day .sheet-stamps:empty { display: none; }
+.sheet-mark .sheet-icon { width: 12px; height: 12px; }
+.sheet-day .sheet-glance { gap: 2px; margin: 2px 0; }
+.sheet-today-sum {
+  order: -1; display: flex; align-items: center; gap: 4px; min-height: 24px; margin: 0 -6px; padding: 2px 6px;
+  font: 500 12px/16px var(--sans); letter-spacing: 0; color: var(--text-2); text-align: start;
+}
+button.sheet-today-sum { border: 0; border-radius: var(--radius); background: none; cursor: pointer; touch-action: manipulation; }
+button.sheet-today-sum:hover { background: var(--surface-2); }
+.sheet-today-sum .sheet-progress { flex: 1; margin: 0; gap: 6px; font-size: inherit; color: inherit; }
+.sheet-progress-ring { width: 14px; height: 14px; }
+.sheet-today-toggle > .sheet-icon { width: 14px; height: 14px; color: var(--text-3); }
+.sheet-today-toggle[aria-expanded="true"] > .sheet-icon { rotate: 90deg; }
+.sheet-today-more { display: grid; justify-items: start; gap: 4px; }
+.sheet-day .sheet-oura { margin: 0; font-size: 12px; }
+.sheet-day .sheet-nownext { margin: 0; font-size: 12px; line-height: 20px; color: var(--text-1); }
+.sheet-nownext b { font-weight: 500; color: var(--text-3); }
+.sheet-nownext-done { width: 18px; height: 18px; border: 1.5px solid var(--accent); border-radius: 50%; }
+.sheet-nownext-done .sheet-icon { width: 10px; height: 10px; stroke-width: 3; }
+/* Folded, Now stands alone: Next shows with the rest. */
+.sheet-stamps-row:has([aria-expanded="false"]) .sheet-nownext-done ~ .sheet-nownext-part { display: none; }
+
+/* The add row: "+ Add a task" shows on an empty day, on a hovered day and always on touch. */
+.sheet-rows > .is-add { padding-left: 9px; cursor: text; }
+.sheet-rows > .is-add:hover { background: var(--surface-2); }
+.sheet-rows .sheet-add { font-size: 13px; line-height: 20px; }
+/* Under 16px iOS Safari zooms into the box. */
+@media (hover: none) { .sheet-rows .sheet-add { font-size: 16px; } }
+.sheet-rows.is-none .sheet-add::placeholder { color: var(--text-3); }
+.sheet-rows > .sheet-blank { min-height: 0; font-size: 12px; color: var(--text-3); }
+
+/* A week with nothing on it: one message in the middle and the one thing to do. */
+.sheet-week-empty { grid-column: 1 / -1; display: grid; justify-items: center; gap: 4px; padding: 48px 16px; text-align: center; color: var(--text-3); }
+.sheet-week-empty p { margin: 0; }
+.sheet-week-empty-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.sheet-week-empty .sheet-btn { margin-top: 12px; }
+
+@media (pointer: coarse) { button.sheet-today-sum { min-height: 44px; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-today-toggle > .sheet-icon { transition: rotate 150ms var(--ease); }
+}

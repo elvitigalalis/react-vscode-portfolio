@@ -12,7 +12,7 @@
 .sheet-oura-note { flex-basis: 100%; color: var(--muted); white-space: normal; }
 
 /* Wind-down: today's bedtime line, thin and quiet (bedtime.mjs). */
-.sheet-winddown { margin: 0.1rem 0 0.2rem; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; border-left: 2px solid var(--line-strong); padding-left: 0.4rem; }
+.sheet-winddown { margin: 0; color: var(--muted); font-size: 12px; }
 
 /* His calendar above the tasks: small, gray, read-only. */
 .sheet-events { list-style: none; margin: 0.15rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--line); font-size: 0.75rem; line-height: 1.3; color: var(--muted); }
@@ -64,7 +64,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 
 /* Plan today: task list beside a timeline. */
-.sheet-load-chip { margin-left: auto; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sheet-load-chip { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); }
 
 .sheet-load-chip.is-near, .sheet-load.is-near strong { color: var(--warn); }
 
@@ -102,7 +102,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-hz-line { color: var(--muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
-.sheet-hz-day { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.6875rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-hz-day { margin: 0; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Amber on --chip is 4.0:1 in light mode, so on a held, picked or drop-target row (all --chip)
    amber text keeps a page-coloured ground. */
@@ -110,9 +110,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-meter, .sheet-strip { position: relative; display: block; background: var(--line); border-radius: 2px; overflow: hidden; }
 
-.sheet-meter { height: 4px; }
+.sheet-meter { height: 2px; }
 
-.sheet-strip { height: 6px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: visible; }
+.sheet-strip { height: 4px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: visible; }
 
 .sheet-meter-fill { display: block; height: 100%; background: var(--accent); }
 
