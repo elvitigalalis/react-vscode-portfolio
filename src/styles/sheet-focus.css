@@ -1,12 +1,11 @@
 /* Focus mode (docs/sheet-focus.md): the Start button on today's current or next block and a
    task's focused credit, on /plan from the first load. The full-screen view's rules are in
    sheet-focus-view.css, which comes with focus-view.mjs. Tokens: plan-base.css. */
-.sheet-row:has(.sheet-focus-line) { flex-wrap: wrap; }
-.sheet-focus-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.1rem 0 0.2rem; }
+.sheet-focus-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 2px; }
 .sheet-focus-progress { color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .sheet-focus-start {
-  flex: none; padding: 0 0.45rem; font: inherit; font-size: 0.75rem;
-  font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; cursor: pointer;
-  color: var(--accent-text); background: none; border: 1px solid var(--accent); border-radius: 0.25rem;
+  flex: none; min-height: 20px; padding: 0 6px; font: inherit; font-size: 12px;
+  font-weight: 500; line-height: 20px; cursor: pointer;
+  color: var(--accent-text); background: var(--accent-tint); border: 0; border-radius: var(--radius-sm, 0.25rem);
 }
-.sheet-focus-start:hover { background: var(--chip); }
+.sheet-focus-start:hover { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }

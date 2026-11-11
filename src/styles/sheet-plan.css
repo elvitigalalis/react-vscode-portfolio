@@ -12,7 +12,7 @@
 .sheet-oura-note { flex-basis: 100%; color: var(--muted); white-space: normal; }
 
 /* Wind-down: today's bedtime line, thin and quiet (bedtime.mjs). */
-.sheet-winddown { margin: 0.1rem 0 0.2rem; color: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; border-left: 2px solid var(--line-strong); padding-left: 0.4rem; }
+.sheet-winddown { margin: 0; color: var(--muted); font-size: 12px; }
 
 /* His calendar above the tasks: small, gray, read-only. */
 .sheet-events { list-style: none; margin: 0.15rem 0 0.25rem; padding-bottom: 0.25rem; border-bottom: 1px dashed var(--line); font-size: 0.75rem; line-height: 1.3; color: var(--muted); }
@@ -40,19 +40,12 @@
 
 .sheet-priv { color: var(--muted); font-size: 0.6875rem; letter-spacing: 0.02em; }
 
-.sheet-check:hover { color: var(--accent-text); }
-
-@media (hover: none) {
-  /* A 44 px tap area (WCAG 2.5.5) with the same small mark; the negative margin keeps the row's height. */
-  .sheet-check, .sheet-more { position: static; translate: none; opacity: 1; flex: none; width: 2.75rem; height: 2.75rem; margin-block: -0.6rem; background: transparent; }
-}
-
 @media (hover: none) { .sheet-add::placeholder { color: var(--muted); }
 }
 
 .sheet-float {
   position: fixed; left: 0; top: 0; z-index: 10; pointer-events: none; max-width: 16rem;
-  background: var(--bg); border: 1px solid var(--accent); border-radius: 0.3rem; padding: 0.2rem 0.5rem; font-size: 0.875rem;
+  background: var(--surface); box-shadow: var(--shadow-pop); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; font-weight: 500;
 }
 
 body.sheet-dragging { user-select: none; cursor: grabbing; }
@@ -64,7 +57,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 }
 
 /* Plan today: task list beside a timeline. */
-.sheet-load-chip { margin-left: auto; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sheet-load-chip { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--muted); }
 
 .sheet-load-chip.is-near, .sheet-load.is-near strong { color: var(--warn); }
 
@@ -87,9 +80,6 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 
-@media (min-width: 48.0625rem) {
-  .sheet-when { flex-basis: 100%; font-size: 0.75rem; line-height: 1.2; }
-}
 
 /* Due levels (change 7): overdue in red with the word, at risk in amber; both keep the ⚠. */
 .sheet-overdue { color: var(--danger); cursor: help; }
@@ -102,7 +92,7 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-hz-line { color: var(--muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
-.sheet-hz-day { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.6875rem; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-hz-day { margin: 0; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Amber on --chip is 4.0:1 in light mode, so on a held, picked or drop-target row (all --chip)
    amber text keeps a page-coloured ground. */
@@ -110,9 +100,9 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-meter, .sheet-strip { position: relative; display: block; background: var(--line); border-radius: 2px; overflow: hidden; }
 
-.sheet-meter { height: 4px; }
+.sheet-meter { height: 2px; }
 
-.sheet-strip { height: 6px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: visible; }
+.sheet-strip { height: 4px; background: color-mix(in srgb, var(--line) 50%, transparent); overflow: visible; }
 
 .sheet-meter-fill { display: block; height: 100%; background: var(--accent); }
 
@@ -243,17 +233,12 @@ body.sheet-dragging { user-select: none; cursor: grabbing; }
 
 .sheet-message-added .sheet-link { min-height: 1.5rem; margin-left: 0.25rem; }
 
-/* Event to-dos (docs/sheet-v5.md): a calendar event in the day's list, styled as a task, with the
-   calendar icon. Its check and menu show as a task's do. */
+/* Event to-dos (docs/sheet-v5.md): a calendar event in the day's list, drawn as a calendar block
+   (plan-week.css). */
 .sheet-evtodo { position: relative; }
 
 .sheet-evtodo .sheet-title { cursor: default; }
 
-.sheet-evtodo .sheet-source { color: var(--muted); }
-
-.sheet-evtodo:hover .sheet-check, .sheet-evtodo:hover .sheet-more { opacity: 1; }
-
-.sheet-evtodo:hover { border-bottom-color: var(--accent); }
 
 /* The sections under the week (Habits, Projects, Someday, the Log) come with their scripts:
    plan-sections.css, plan-habits.css. */

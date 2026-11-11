@@ -13,8 +13,6 @@ import { hostToast } from "./toast-host.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
-import { chipsLabel, dayChips, lateNap } from "./oura-day.mjs";
-import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
@@ -538,14 +536,16 @@ function typedChip(input) {
   chip.hidden = !text;
 }
 
-// The due date's look by level: overdue in red with the word, at risk in amber; both carry ⚠.
+// The due date's look by level: overdue in red with the word, at risk in amber; both carry the
+// warning triangle in place of the flag.
 const DUE = {
   overdue: { className: " sheet-overdue", title: "Overdue: its due date has passed", tail: " overdue" },
   risk: { className: " sheet-risk", title: "At risk: no block before it is due", tail: "" },
 };
 
-// A task's details beside its title: source, time (when its title doesn't show it), clash,
-// estimate, due date, private and carried over (on a day, while undone).
+// A task's details under its title: source, time (when its title doesn't show it), clash,
+// estimate, due date, private and carried over (on a day, while undone), then a timed row's time
+// at the line's end.
 function detailsOf(t, clash, level, span, hz) {
   const src = sourceOf(t);
   const carried = t.day && !t.done ? carriedNote(t.rolls) : null;
@@ -555,20 +555,21 @@ function detailsOf(t, clash, level, span, hz) {
     // v5 SRC1: a GitHub or Jira task's icon links to its page (tasks.link is https only).
     src ? el(t.link ? "a" : "span", { className: "sheet-meta sheet-source", ...(t.link ? { href: t.link, target: "_blank", rel: "noopener" } : {}) }, sourceIcon(src)) : null,
     t.at_time && !span ? el("span", { className: "sheet-meta" }, icon("clock"), ` ${formatClock(clock(t.at_time.slice(0, 5)))}`) : null,
-    clash ? el("span", { className: "sheet-clash", textContent: "⚠", title: `Clashes with ${clash.title}` }) : null,
+    clash ? el("span", { className: "sheet-clash", title: `Clashes with ${clash.title}` }, icon("alert-triangle")) : null,
     t.est_min ? el("span", { className: "sheet-meta", textContent: formatMinutes(t.est_min) }) : null,
     t.due ? el("span", { className: `sheet-meta${due?.className ?? ""}`, ...(due ? { title: due.title } : {}) },
-      due ? "⚠ " : null, icon("flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
+      icon(due ? "alert-triangle" : "flag"), ` ${dueText(t.due).replace(/^due /, "")}${due?.tail ?? ""}`) : null,
     // Horizon planning: the task's state, in the due date's colours.
     chip ? el("span", { className: `sheet-meta sheet-hz is-${chip.level}`, textContent: chip.text }) : null,
     t.public ? null : el("span", { className: "sheet-priv" }, icon("lock", "Only you see this")),
     carried ? el("span", { className: "sheet-meta sheet-carried", textContent: "carried over", title: carried }) : null,
+    span ? whenLabel(span.start, span.end) : null,
   ].filter(Boolean);
   return kids.length ? el("span", { className: "sheet-details" }, ...kids) : null;
 }
 
-// A timed row's time, its own label before the title in a fixed column ("7–7:20 pm"), the same on
-// task and event rows. Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
+// A timed row's time ("7–7:20 pm"): under an event's title, at the end of a task's details line.
+// Screen readers get it from the row's words instead: "7 to 7:20 pm, …".
 const whenLabel = (start, end) => el("span", { className: "sheet-when", ariaHidden: "true", textContent: formatSpan(start, end) });
 const spoken = (start, end) => `${formatSpan(start, end).replace("–", " to ")}, `;
 // Every row has one layout: its time (when it has one), then a body holding the title and, on a
@@ -596,13 +597,13 @@ export function taskRow(t, span = spanOf(t)) {
   const line = hz && !t.done ? horizonLine(hz, state.horizon.filter((a) => a.task_id === t.id), t.due, state.today) : null;
   title.setAttribute("aria-label", `${when}${t.title}${sourceWords(sourceOf(t))}${t.public ? "" : ", private"}${t.done ? ", done" : ""}${t.due ? `, ${dueText(t.due)}` : ""}${level ? `, ${level === "risk" ? "at risk" : "overdue"}` : ""}${line ? `, ${horizonChip(hz).text}, ${line}` : ""}${clash ? `, clashes with ${clash.title}` : ""}${t.day && !t.done && t.rolls >= 1 ? ", carried over" : ""}${errWords(`task:${t.id}`)}. Edit`);
   li.append(...[
-    ...withWhen(span?.start, span?.end, [
+    ...withWhen(null, null, [
       title,
       // The details, kept together so they move under the title as one line when they don't fit.
       detailsOf(t, clash, level, span, hz),
       line ? el("span", { className: `sheet-hz-line${hz.state === "wont_fit" ? " is-overdue" : ""}`, ariaHidden: "true", textContent: line }) : null,
       errNote(`task:${t.id}`)]),
-    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, t.done ? "↺" : icon("check")),
+    el("button", { type: "button", className: "sheet-check", ariaLabel: t.done ? `Reopen ${t.title}` : `Complete ${t.title}` }, icon("check")),
     el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${t.title}` }, icon("more-horizontal")),
   ].filter(Boolean));
   return li;
@@ -641,12 +642,13 @@ function alsoRow(day) {
 // (event-todos.mjs). The calendar itself shows on Plan today's timeline.
 export const rowsOn = (day) => dayRows({ day, timeZone: SHEET.timeZone, tasks: tasksOn(day), events: state.todoEvents, blocks: state.blocks, todos: state.todos });
 
-// An event row looks like a timed task row: its time first, the title, and the calendar icon on
-// the details line under it, where a task shows its source.
+// An event row has a task row's parts (its time, the title, the calendar icon on the details
+// line), but draws as a tinted calendar block with its time under the title (plan-week.css), so
+// it never reads as a task.
 function eventTodoRow(r) {
   const li = el("li", { className: `sheet-row sheet-evtodo${r.done ? " is-done" : ""}` });
   li.dataset.key = r.key;
-  const check = el("button", { type: "button", className: "sheet-check", ariaLabel: r.done ? `Reopen ${r.title}` : `Complete ${r.title}` }, r.done ? "↺" : icon("check"));
+  const check = el("button", { type: "button", className: "sheet-check", ariaLabel: r.done ? `Reopen ${r.title}` : `Complete ${r.title}` }, icon("check"));
   check.dataset.act = "evtodo-done";
   const more = el("button", { type: "button", className: "sheet-more", ariaLabel: `More for ${r.title}` }, icon("more-horizontal"));
   more.dataset.act = "evtodo-more";
@@ -730,34 +732,46 @@ function blankRow() {
   return el("li", { className: "sheet-row sheet-blank" }, "Nothing planned yet. ", plan);
 }
 
+// The weekday as the header shows it ("Tue"); labels keep dayLabel's "TUE".
+const shortDay = (weekday) => weekday[0] + weekday.slice(1).toLowerCase();
+
+// The week's newer parts, today's summary line (which folds Oura, wind-down and the week's count
+// under it), the empty week's message and a day's Oura chips, come from week-parts.mjs, which the page's script
+// loads: kept out of this chunk, a signed-out first load (which draws no week) doesn't count
+// their code as unused (Lighthouse's unused-javascript). `open` is whether today's line is open.
+export const weekParts = { open: false, summary: null, empty: null, oura: null };
+
 function dayColumn(day, rows, items) {
   const list = tasksOn(day);
   const { weekday, date } = dayLabel(day);
   const info = state.days[day] ?? {};
-  const allDone = day === state.today && list.length > 0 && list.every((t) => t.done);
+  const today = day === state.today;
+  const allDone = today && list.length > 0 && list.every((t) => t.done);
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
-  const blank = day === state.today && !items.length;
-  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : r.kind === "adding" ? addingRow(r) : eventTodoRow(r))),
+  const blank = today && !items.length;
+  // No filler rows: the week's grid rows (--rows) still line every column's tasks up.
+  const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}${items.length ? "" : " is-none"}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : r.kind === "adding" ? addingRow(r) : eventTodoRow(r))),
     blank ? blankRow() : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`),
-    day === state.today ? alsoRow(day) : null);
+    today ? alsoRow(day) : null);
   ul.dataset.day = day;
-  for (let i = items.length + (blank ? 2 : 1) + (day === state.today ? 1 : 0); i < rows; i++) ul.append(el("li", { className: "sheet-row is-empty" }));
-  const marks = [info.planned && "Planned ✓", info.shutdown && "Shut down ✓"].filter(Boolean).join(" · ");
-  const section = el("section", { className: `sheet-day${day === state.today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
+  const marks = [info.planned && "Planned", info.shutdown && "Shut down"].filter(Boolean)
+    .flatMap((m, i) => [i ? " · " : null, el("span", { className: "sheet-mark" }, icon("check"), ` ${m}`)]);
+  const extra = [day <= state.today ? weekParts.oura?.(day, `${weekday} ${date}`) : null, day === state.focus ? weekDoneMark() : null, today ? windDownMark() : null].filter(Boolean);
+  const more = today && extra.length && weekParts.summary ? el("div", { className: "sheet-today-more", id: "sheet-today-more", hidden: !weekParts.open }, ...extra) : null;
+  const progress = today ? progressMark(day) : null;
+  const section = el("section", { className: `sheet-day${today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
     el("h2", { className: "sheet-head" },
-      el("span", { className: "sheet-wd", textContent: weekday }), " ",
+      el("span", { className: "sheet-wd", textContent: shortDay(weekday) }), " ",
       el("span", { className: "sheet-dt", textContent: date }),
-      allDone ? el("span", { className: "sheet-alldone", textContent: " ✓", title: "Everything done today" }) : null,
-      day === state.today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
+      allDone ? el("span", { className: "sheet-alldone", title: "Everything done today" }, icon("circle-check"), el("span", { className: "visually-hidden", textContent: ", all done" })) : null,
+      today ? el("span", { className: "visually-hidden", textContent: " (today)" }) : null),
     // The stamps row of the week's grid (sheet.css, subgrid): the Oura chips and wind-down sit in
     // it, so every column's tasks still start level.
     el("div", { className: "sheet-stamps-row" },
-      el("p", { className: "sheet-stamps", textContent: marks }),
-      day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null,
-      day === state.today ? progressMark(day) : null,
-      day === state.focus ? weekDoneMark() : null,
-      day === state.today ? windDownMark() : null,
+      el("p", { className: "sheet-stamps" }, ...marks),
+      more ? weekParts.summary(progress) : progress && el("p", { className: "sheet-today-sum" }, progress),
+      ...(more ? [more] : extra),
       day > state.today ? horizonDay(day) : null),
     ul);
   section.dataset.day = day;
@@ -792,7 +806,7 @@ function progressMark(day) {
   // Each half stays whole ("1 of 4 done ·" / "1h40 focused"); the real space between them is
   // where a narrow column wraps.
   const halves = text.split(" · ").flatMap((h, i, all) => [i ? " " : null, el("span", { textContent: i < all.length - 1 ? `${h} ·` : h })]);
-  return el("p", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
+  return el("span", { className: "sheet-progress" }, ring, el("span", {}, ...halves));
 }
 
 // Phones hide the week title (the h1, still read out), so the shown day says the week's count
@@ -816,29 +830,6 @@ function growProgress() {
     fill.animate([{ strokeDashoffset: leftWas }, { strokeDashoffset: left }], { duration: 400, easing: cheer.EASE_OUT });
   }
   leftWas = left;
-}
-
-// Oura (oura-day.mjs): a past day's or today's "☾ 82 · ⚡ 86 · 7h 40m", a button that opens the
-// day's numbers; nothing on future days or without a row.
-// Today's also says a late nap ("late nap 5:10–6:20 pm") and "1 tip" when there is one.
-function ouraChips(day, when) {
-  const chips = dayChips(state.sleepDays.find((r) => r.day === day));
-  if (!chips.length) return null;
-  const today = day === state.today;
-  const nap = today ? lateNap(state.sleep, day, SHEET.timeZone) : null;
-  const tips = today ? pickTips(state.sleepDays, day).length : 0;
-  const extra = [nap, tips ? plural(tips, "tip") : null].filter(Boolean);
-  const kids = chips.flatMap((c, i) => [
-    i ? el("span", { className: "sheet-oura-sep", textContent: "·" }) : null,
-    c.icon ? icon(c.icon) : null,
-    el("span", { className: c.band ? `is-${c.band}` : "", textContent: c.text }),
-  ]);
-  if (extra.length) kids.push(el("span", { className: "sheet-oura-note", textContent: extra.join(" · ") }));
-  const label = `${chipsLabel(chips, when).replace(/\. Open details$/, "")}${extra.length ? `; ${extra.join("; ")}` : ""}. Open details`;
-  const button = el("button", { type: "button", className: "sheet-oura", ariaLabel: label }, ...kids);
-  button.dataset.act = "oura-day";
-  button.dataset.day = day;
-  return button;
 }
 
 // Horizon planning: a later day's planned minutes, faded ("OS project 1h30 · Essay 1h"). Only
@@ -885,7 +876,7 @@ export function render() {
   const items = Object.fromEntries(days.map((d) => [d, [...rowsOn(d), ...addingIn({ day: d })]]));
   // Today holds one more box (Also did…) under its add row.
   const rows = Math.max(rowCount(items), items[state.today] ? Math.max(items[state.today].length, 1) + 2 : 0);
-  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])));
+  $("[data-week]").replaceChildren(...days.map((d) => dayColumn(d, rows, items[d])), ...(days.some((d) => items[d].length) || !weekParts.empty ? [] : [weekParts.empty()]));
   $("[data-week]").style.setProperty("--rows", String(rows));
   growProgress();
   const first = dayLabel(days[0]);
@@ -1547,9 +1538,9 @@ function wire() {
     if (move) return menuAction(move);
     const li = e.target.closest(".sheet-task");
     if (!li) {
-      // Any empty row of a day types into that day.
+      // A day's empty space, or an empty row, types into that day.
       const ul = e.target.closest(".sheet-rows");
-      if (ul && e.target.closest(".is-empty") && !e.target.closest(".sheet-add")) ul.querySelector(".sheet-add")?.focus();
+      if (ul && (e.target === ul || e.target.closest(".is-empty")) && !e.target.closest(".sheet-add")) ul.querySelector(".sheet-add")?.focus();
       return;
     }
     const id = li.dataset.id;

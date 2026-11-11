@@ -1,0 +1,182 @@
+/* The week (docs/sheet.md, "Look"): day columns on --border-faint hairlines with no ruled rows,
+   one row component for every task list, calendar events as tinted blocks, and quiet empty states.
+   Only /plan loads it (week-styles.mjs, as text before the first draw), after sheet.css, whose
+   shared day and row rules keep /now's ruled look.
+   The week's grid rows (sheet.css, subgrid) still line every column's tasks up. Tokens: plan-base.css. */
+
+/* Columns: a hairline between days, and one under the header band. The first column's rows
+   reach into the gutter so its text lines up with the bar's. */
+.sheet-planner .sheet-week { gap: 0; }
+.sheet-week > .sheet-day { min-width: 0; padding: 0 6px; border-left: 1px solid var(--border-faint); }
+@media (min-width: 48.01rem) { .sheet-week > .sheet-day:first-child { margin-left: -12px; border-left: 0; } }
+@media (max-width: 48rem) { .sheet-week > .sheet-day { margin-inline: -6px; padding: 0; border: 0; } }
+
+/* Day header: "Tue" in 13px/600 and the date in --text-3; today's date sits in an accent pill. */
+.sheet-day > .sheet-head {
+  align-items: center; gap: 6px; min-height: 32px; padding: 0 6px; border: 0;
+  font-size: 13px; line-height: 20px; letter-spacing: -0.01em;
+}
+.sheet-day .sheet-wd { text-transform: none; letter-spacing: inherit; font-weight: 600; }
+.sheet-day .sheet-dt { color: var(--text-3); font-weight: 500; }
+.sheet-week .is-today .sheet-wd { color: var(--accent-text); }
+.sheet-week .is-today .sheet-dt { padding: 0 7px; border-radius: 999px; color: var(--on-accent); background: var(--accent); }
+.sheet-alldone { display: inline-flex; color: var(--success); }
+.sheet-alldone .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+
+/* The band under the header: the load and free-time strip, the day's marks, and on today one
+   summary line (ring and count, the chevron for the rest) with the Now line under it. */
+.sheet-day > .sheet-stamps-row {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; padding: 2px 6px 8px;
+  border-bottom: 1px solid var(--border-faint); font-size: 12px; color: var(--text-3);
+}
+.sheet-day .sheet-stamps { order: -2; min-height: 0; margin: 0; font-size: 11px; line-height: 16px; }
+.sheet-day .sheet-stamps:empty { display: none; }
+.sheet-mark .sheet-icon { width: 12px; height: 12px; }
+.sheet-day .sheet-glance { gap: 2px; margin: 2px 0; }
+.sheet-today-sum {
+  order: -1; display: flex; align-items: center; gap: 4px; min-height: 24px; margin: 0 -6px; padding: 2px 6px;
+  font: 500 12px/16px var(--sans); letter-spacing: 0; color: var(--text-2); text-align: start;
+}
+button.sheet-today-sum { border: 0; border-radius: var(--radius); background: none; cursor: pointer; touch-action: manipulation; }
+button.sheet-today-sum:hover { background: var(--surface-2); }
+.sheet-today-sum .sheet-progress { flex: 1; margin: 0; gap: 6px; font-size: inherit; color: inherit; }
+.sheet-progress-ring { width: 14px; height: 14px; }
+.sheet-today-toggle > .sheet-icon { width: 14px; height: 14px; color: var(--text-3); }
+.sheet-today-toggle[aria-expanded="true"] > .sheet-icon { rotate: 90deg; }
+.sheet-today-more { display: grid; justify-items: start; gap: 4px; }
+.sheet-day .sheet-oura { margin: 0; font-size: 12px; }
+.sheet-day .sheet-nownext { margin: 0; font-size: 12px; line-height: 20px; color: var(--text-1); }
+.sheet-nownext b { font-weight: 500; color: var(--text-3); }
+.sheet-nownext-done { width: 18px; height: 18px; border: 1.5px solid var(--accent); border-radius: 50%; }
+.sheet-nownext-done .sheet-icon { width: 10px; height: 10px; stroke-width: 3; }
+/* Folded, Now stands alone: Next shows with the rest. */
+.sheet-stamps-row:has([aria-expanded="false"]) .sheet-nownext-done ~ .sheet-nownext-part { display: none; }
+
+/* A row: 32px, a --surface-2 fill on hover, the round box, the title, and the meta in --text-3
+   12px on the line under it, a timed task's time at its right end. The body's parts are the row's
+   own grid items. Where a row is wide (Plan today's list), the meta moves up beside the title: the
+   row is the query container, since size containment on .sheet-day would end its subgrid. */
+.sheet-rows > .sheet-row { min-height: 32px; padding: 6px; border: 0; border-radius: var(--radius); font-size: 13px; line-height: 20px; }
+.sheet-rows > .sheet-task { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-content: start; align-items: start; gap: 2px 8px; container: sheet-row / inline-size; }
+.sheet-task:hover, .sheet-task.is-held { background: var(--surface-2); }
+:is(.sheet-task, .sheet-evtodo) > .sheet-body { display: contents; }
+.sheet-task > *, .sheet-task > .sheet-body > * { grid-column: 2; }
+.sheet-task > .sheet-check { grid-area: 1 / 1; }
+.sheet-task .sheet-title { font-weight: 500; }
+.sheet-task > :is(.sheet-edit, .sheet-typed) { grid-column: 1 / -1; }
+.sheet-rows .sheet-when { font-size: 12px; font-weight: 500; line-height: 16px; color: var(--text-3); }
+.sheet-rows .sheet-details { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; font-size: 12px; line-height: 16px; color: var(--text-3); }
+.sheet-details > .sheet-when { order: 1; margin-left: auto; }
+.sheet-details .sheet-icon { width: 14px; height: 14px; stroke-width: 1.5; vertical-align: -3px; }
+.sheet-rows :is(.sheet-meta, .sheet-priv) { font-size: 12px; letter-spacing: 0; }
+.sheet-task.is-done .sheet-title { font-weight: 400; }
+@container sheet-row (width >= 28rem) {
+  .sheet-task .sheet-details { grid-area: 1 / 3; justify-content: flex-end; max-width: 50cqi; margin-top: 2px; }
+}
+
+/* The box: a 16px circle (its 24px of space keeps WCAG 2.5.8's spacing). Hover shows the check
+   it will make; done fills it. */
+.sheet-row > :is(.sheet-check, .sheet-more) { display: grid; place-items: center; padding: 0; font: inherit; cursor: pointer; }
+.sheet-row > .sheet-check {
+  position: relative; width: 16px; height: 16px; margin-top: 2px; border: 1.5px solid color-mix(in srgb, var(--text-3) 70%, transparent);
+  border-radius: 50%; color: transparent; background: none;
+}
+.sheet-rows .sheet-check .sheet-icon { width: 10px; height: 10px; stroke-width: 3; }
+.sheet-task:hover > .sheet-check { color: var(--text-4); }
+.sheet-rows .sheet-check:hover { color: var(--text-3); border-color: var(--text-3); }
+.sheet-rows .is-checking > .sheet-check { border-color: var(--accent); }
+.sheet-rows .is-done > .sheet-check { color: var(--bg); background: var(--text-4); border-color: transparent; }
+/* ⋯ sits over the row's top right on hover. */
+.sheet-row > .sheet-more {
+  position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border: 0; opacity: 0;
+  border-radius: var(--radius-sm); color: var(--text-2); background: var(--surface-2);
+}
+.sheet-task:hover > .sheet-more, .sheet-more:focus-visible { opacity: 1; }
+.sheet-rows .sheet-more .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+
+/* Sources: the icon in its colour, no edge. */
+.sheet-task[data-source="course"] .sheet-source { color: var(--ev-violet-text); }
+.sheet-task[data-source="campus"] .sheet-source { color: var(--ev-amber-text); }
+.sheet-task[data-source="slack"] .sheet-source { color: var(--ev-green-text); }
+.sheet-rows :is(.sheet-clash, .sheet-risk) { color: var(--warning-text); }
+
+/* Claude's proposals: the row takes a dashed --border-strong edge and one quiet Approve chip. */
+.sheet-task:has(.sheet-btn-approve) { outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.sheet-rows .sheet-proposal { display: flex; align-items: center; gap: 4px; padding: 0; border: 0; font-size: 12px; color: var(--text-3); }
+.sheet-rows [title="Proposed by Claude"] > .sheet-icon { color: var(--accent-text); }
+.sheet-proposal > .sheet-btn-approve { margin-left: auto; }
+.sheet-rows .sheet-btn-approve {
+  min-height: 20px; padding: 0 6px; gap: 4px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 500; color: var(--accent-text); background: var(--accent-tint);
+}
+.sheet-rows .sheet-btn-approve:hover { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.sheet-rows .sheet-btn-approve .sheet-icon { width: 12px; height: 12px; stroke-width: 2; }
+
+/* Calendar events: a tinted block with a 3px bar, the title over its time in the hue's ink. Its
+   check and ⋯ show on hover. Done, it loses the tint. */
+.sheet-rows > .sheet-evtodo {
+  display: grid; align-self: start; min-height: 0; margin: 1px 0; padding: 4px 8px 4px 11px; border-radius: var(--radius-sm);
+  line-height: 16px; background: var(--ev-blue-bg); box-shadow: inset 3px 0 var(--ev-blue-bar);
+}
+.sheet-evtodo .sheet-title { font-size: 12px; font-weight: 500; }
+.sheet-evtodo > .sheet-when { order: 1; font-size: 11px; color: var(--ev-blue-text); }
+.sheet-evtodo .sheet-details { display: none; }
+.sheet-rows .sheet-evtodo > :is(.sheet-check, .sheet-more) { position: absolute; top: 4px; opacity: 0; background-color: var(--ev-blue-bg); }
+.sheet-rows .sheet-evtodo > .sheet-check { right: 32px; margin: 0; }
+.sheet-evtodo:hover > :is(.sheet-check, .sheet-more), .sheet-rows .sheet-evtodo > :focus-visible { opacity: 1; }
+.sheet-rows > .sheet-evtodo.is-done { background: none; box-shadow: inset 3px 0 var(--border-strong); }
+.sheet-evtodo.is-done > .sheet-when { color: var(--text-3); }
+.sheet-rows .sheet-evtodo.is-done > .sheet-check { opacity: 1; background-color: var(--text-4); }
+
+/* Touch: the box and ⋯ always show, each with a 44px tap area around a small mark. */
+@media (hover: none) {
+  .sheet-rows .sheet-more { position: relative; top: auto; right: auto; grid-area: 1 / 4; height: 20px; opacity: 1; color: var(--text-3); background: none; }
+  .sheet-rows :is(.sheet-check, .sheet-more)::after { content: ""; position: absolute; inset: -12px -10px; }
+}
+
+/* Touch: an event's box and ⋯ sit at its right, always shown. */
+@media (hover: none) {
+  .sheet-rows > .sheet-evtodo { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 12px; }
+  .sheet-rows .sheet-evtodo > :is(.sheet-check, .sheet-more) { position: relative; top: auto; right: auto; grid-row: 1 / 3; align-self: center; opacity: 1; }
+  .sheet-rows .sheet-evtodo > .sheet-check { grid-column: 2; margin: 0; }
+  .sheet-rows .sheet-evtodo > .sheet-more { grid-column: 3; }
+}
+
+/* The add row: "+ Add a task" shows on an empty day, on a hovered day and always on touch. */
+.sheet-rows > .is-add { padding-left: 9px; cursor: text; }
+.sheet-rows > .is-add:hover { background: var(--surface-2); }
+.sheet-rows .sheet-add { font-size: 13px; line-height: 20px; }
+/* Under 16px iOS Safari zooms into the box. */
+@media (hover: none) { .sheet-rows .sheet-add { font-size: 16px; } }
+.sheet-rows.is-none .sheet-add::placeholder { color: var(--text-3); }
+.sheet-rows > .sheet-blank { min-height: 0; font-size: 12px; color: var(--text-3); }
+.sheet-rows.is-drop { background: var(--accent-tint); border-radius: var(--radius); }
+
+/* A week with nothing on it: one message in the middle and the one thing to do. */
+.sheet-week-empty { grid-column: 1 / -1; display: grid; justify-items: center; gap: 4px; padding: 48px 16px; text-align: center; color: var(--text-3); }
+.sheet-week-empty p { margin: 0; }
+.sheet-week-empty-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.sheet-week-empty .sheet-btn { margin-top: 12px; }
+
+/* Tell Claude: one box with Send inside it, the hint under it. */
+.sheet-planner .sheet-message { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 0; margin: 0 0 12px; }
+.sheet-message::before {
+  content: ""; grid-area: 1 / 1 / 2 / -1; align-self: stretch; border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.sheet-message:focus-within::before { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+.sheet-message textarea { grid-area: 1 / 1; min-height: 40px; padding: 10px 12px; border: 0; background: none; outline: none; }
+.sheet-message .sheet-btn { grid-area: 1 / 2; margin: 6px; }
+.sheet-message .sheet-message-hint { grid-column: 1 / -1; padding: 0 12px; font-size: 12px; color: var(--text-3); }
+.sheet-message-recent summary { display: inline-flex; align-items: center; gap: 4px; list-style: none; font-size: 12px; color: var(--text-3); }
+.sheet-message-recent summary::-webkit-details-marker { display: none; }
+.sheet-message-recent[open] summary .sheet-icon { rotate: 90deg; }
+
+/* A swipe slides the body's parts with the rest of the row (plan-phone.css). */
+@media (max-width: 48rem) { .is-swiping > .sheet-body > * { translate: var(--swipe) 0; } }
+
+@media (pointer: coarse) { button.sheet-today-sum { min-height: 44px; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  :is(.sheet-today-toggle, .sheet-message-recent summary) > .sheet-icon { transition: rotate 150ms var(--ease); }
+}

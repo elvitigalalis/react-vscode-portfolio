@@ -73,7 +73,7 @@ import "../../styles/plan-shell.css";
       <p class="sheet-message-hint" id="sheet-message-hint"><span class="sheet-message-keys"><kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> sends. </span>Paste a class announcement and Claude adds its deadlines and dates. <span data-message-count></span></p>
     </form>
     <details class="sheet-message-recent" data-message-recent hidden>
-      <summary>Recent messages to Claude</summary>
+      <summary><svg class="sheet-icon" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Recent messages to Claude</summary>
       <ul class="sheet-message-log" data-message-log aria-live="polite"></ul>
     </details>
     <p class="sheet-status" data-status>Loading…</p>
@@ -518,6 +518,8 @@ import "../../styles/plan-shell.css";
 </Base>
 
 <script>
+  import "../../sheet/week-styles.mjs";
+  import "../../sheet/week-parts.mjs";
   import { start, drawWaits } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
   import { setupShutdown } from "../../sheet/shutdown.mjs";
