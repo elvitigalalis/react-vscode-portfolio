@@ -97,9 +97,61 @@ tasks jumping days across time zones.
 - Week navigation: `←` `→` change week, `T` (or the Today button) jumps to this week.
 - Narrow screens (< 48 rem): one day at a time with previous/next buttons, Someday below. No
   page-wide horizontal scroll.
-- The site's own colours and fonts (Fraunces headings, Inter text), light and dark mode, including the top bar's switch. Motion is limited to 0.25 s opacity
-  fades, the check-off below, the progress ring closing a step (400 ms) and Shutdown's "Day closed"
-  rising in (320 ms, 6 px), all off under `prefers-reduced-motion`.
+- Its own look, not the portfolio's: see **Look** below.
+
+### Look
+
+/plan is an app, not a page of the portfolio, and looks like the tools it sits beside (Linear,
+Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /now and
+/oauth/consent keep the site's look.
+
+- **App shell:** no site top bar or footer (`Base.astro`, `app="plan"`, which also sets
+  `data-app="plan"` on `<html>`, drops the Fraunces preload and gives the browser bar the page's
+  colour). /plan has its own sticky 48px bar (`plan-shell.css`): a small "Plan" wordmark, ‹ Today ›
+  and the week's title on the left; Plan today, the chips, Nudges, ⋯ and a light/dark/system
+  switch on the right (`theme.mjs`: System → Light → Dark, the site's `theme` key, so Base's
+  theme-init script applies it before first paint; on phones it is "Theme" in ⋯). Privacy is in ⋯,
+  and signed out it sits under the sign-in line. The page runs full width up to 1680px on a 24px
+  gutter (16px on phones), every left edge on it.
+- **Tokens** (`plan-base.css`, under `:root[data-app="plan"]`, each colour a `light-dark()` pair so
+  the OS and the switch both work): `--bg`, `--bg-subtle`, `--surface`, `--surface-2`, `--border`,
+  `--border-faint`, `--border-strong`, `--text-1` to `--text-4`, `--accent` (indigo),
+  `--accent-hover`, `--accent-tint`, `--accent-text`, `--danger`, `--success`, `--warning` (fills)
+  and `--warning-text`, six calendar hues (`--ev-<hue>-bg/-bar/-text`: blue, violet, green, amber,
+  red, gray), `--shadow-card`, `--shadow-pop`, radii 4/6/8/12 and the `--ease` curve. The site's
+  old names (`--fg`, `--muted`, `--line`, `--chip`, `--warn`, …) point at the new ones, so older rules
+  pick up the palette. Inside a dialog or menu, `--bg` is the raised surface.
+- **Contrast:** every text colour passes WCAG AA on the grounds it sits on, in both modes. Text in
+  the accent uses `--accent-text`, amber text `--warning-text`; `--accent`, `--warning` and the
+  hue bars are for fills, borders and icons. The research palette moved in four places to pass:
+  `--text-3` light, `--danger` light, `--accent` dark and amber text.
+- **Type:** Inter only (self-hosted, 26 KB), with `cv01` and `ss03` and tabular figures. Sizes in
+  px: 11 meta, 12 labels, 13 rows and UI (the body), 14 inputs, 15 body text, 20 titles, 24 page;
+  tracking −0.01em, −0.02em from 20px. Weights 400 text, 500 rows and labels, 600 headings and
+  titles. No uppercase labels except a tiny 11px muted one.
+- **Spacing:** a 4px grid.
+- **Components** (`plan-ui.css`, on /plan and /plan/gym):
+  - **Buttons:** one system, 28px (32px with `.lg`, 44px on a touch screen), 6px radius: secondary
+    (`.sheet-btn`: surface and a border), `.primary` (accent fill), `.ghost` (no border, a
+    `--surface-2` fill on hover), `.danger` (red) and `.sheet-icon-btn` (a square ghost). A
+    pressed toggle (`aria-pressed="true"`) takes the accent tint. Link-like buttons
+    (`.sheet-link`: Undo, Remove, Disconnect) are ghost buttons in `--accent-text`, not
+    underlined; real links in prose stay links.
+  - **Shortcuts:** `kbd` chips, 11px on `--surface-2` with a 4px radius.
+  - **Inputs:** 32px, 14px text, a `--border-strong` border and the accent on focus. The task box
+    stays a bare line of text in its row.
+  - **Dialogs and menus:** `--surface` with `--shadow-pop` and no border; dialogs 12px radius over
+    a dimmed, slightly blurred page, menus 8px radius and 4px padding. A menu opened by click
+    shows its first item with a fill, not a ring.
+  - **Focus:** `:focus-visible` only, a 2px accent ring 2px out. A heading or box that script
+    focuses (`tabindex="-1"`) shows none. `::selection` is an accent wash; scrollbars are thin.
+- **Motion:** 150 ms on `cubic-bezier(.23,1,.32,1)` for hovers, presses (`scale(.97)` on
+  `:active`) and opening menus and dialogs; transform and opacity only. Also the 0.25 s fades, the
+  check-off below, the progress ring closing a step (400 ms) and Shutdown's "Day closed" rising in
+  (320 ms, 6 px). All of it is off under `prefers-reduced-motion`.
+- **First paint stays small:** /plan and /plan/gym import `plan-base.css`, not the site's
+  `global.css`, so they carry none of the portfolio's rules. Styles only a dialog uses come with its
+  script (`?inline`): Settings with `settings.mjs`, Plan today's timeline with `plan-dialog.mjs`.
 
 ### Saving in the background
 
