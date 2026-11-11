@@ -95,7 +95,7 @@ export function draw() {
         habit ? icon("repeat", "Habit") : null, b.proposed ? icon("sparkles", "Proposed by Claude") : null,
         `${t.title}${b.proposed || b.gcal_id || habit ? "" : " (not in Google)"}`),
       b.proposed ? approveButton(`Approve block for ${t.title}`, "sheet-approve") : null,
-      el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed && !habit ? "Turn down" : "Remove"} block for ${t.title}` }),
+      el("button", { type: "button", className: "sheet-block-x", ariaLabel: `${b.proposed && !habit ? "Turn down" : "Remove"} block for ${t.title}` }, icon("x")),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
     // A block takes its task's source: the edge colour (sheet.css) and the icon.
@@ -147,8 +147,9 @@ export function draw() {
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag tasks onto the timeline · ? for keys" }),
     google,
-    proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"), el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
-      rev ? el("span", { className: "sheet-rev", textContent: `Revision ${rev}` }) : null,
+    proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"),
+      el("span", { className: "sheet-banner-text" }, el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
+        rev ? el("span", { className: "sheet-rev", textContent: `Revision ${rev}` }) : null),
       approveButton("Approve all proposed blocks", "sheet-approve-all", "Approve all")) : null,
     notes.length ? el("ul", { className: "sheet-plan-notes" }, ...notes.map((n) => el("li", { textContent: n }))) : null,
     lookbackEntry(history, draw),
