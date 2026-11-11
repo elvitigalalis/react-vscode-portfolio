@@ -59,10 +59,11 @@ tasks jumping days across time zones.
 ## The page (TeuxDeux, Tweek)
 
 - **Seven equal day columns,** Monday to Sunday. Weekends are full size (a top Tweek complaint).
-  Columns sit on faint hairlines, with no ruled filler rows, and **rows line up across the week:**
-  each row is a grid row of the whole week (CSS subgrid), so the tasks start level and a long
-  title, which wraps onto more lines and is never cut off, grows its row in every column. /now
-  keeps its ruled lines and filler rows.
+  Columns sit on faint hairlines, with no ruled filler rows. **The header bands line up across
+  the week** (CSS subgrid), so every column's tasks start level; under that, **each day's rows
+  stack at their own height**, as in Sunsama, so a long title (which wraps onto more lines and is
+  never cut off) or a two-line row in one day leaves no gap in the others. /now keeps its ruled
+  lines, filler rows and row-by-row alignment.
 - **Day header:** "Tue" in 13px/600, the date beside it in `--text-3`; **today's date sits in an
   accent pill.** Under it, every day has the load and free-time strip (below), then a faint line.
 - **His calendar sits above each day's tasks** (Things 3, Todoist): small and gray, each event
@@ -127,8 +128,9 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   the accent uses `--accent-text`, amber text `--warning-text`; `--accent`, `--warning` and the
   hue bars are for fills, borders and icons. The research palette moved in four places to pass:
   `--text-3` light, `--danger` light, `--accent` dark and amber text.
-- **Type:** Inter only (self-hosted, 26 KB), with `cv01` and `ss03` and tabular figures. Sizes in
-  px: 11 meta, 12 labels, 13 rows and UI (the body), 14 inputs, 15 body text, 20 titles, 24 page;
+- **Type:** Inter only (self-hosted, 26 KB), with `cv01` and `ss03`. Tabular figures only on
+  times, counts and durations (Inter's `tnum` also widens the hyphen, which spaces out words like
+  "read-only" in running text). Sizes in px: 11 meta, 12 labels, 13 rows and UI (the body), 14 inputs, 15 body text, 20 titles, 24 page;
   tracking −0.01em, −0.02em from 20px. Weights 400 text, 500 rows and labels, 600 headings and
   titles. No uppercase labels except a tiny 11px muted one.
 - **Spacing:** a 4px grid.
@@ -140,8 +142,9 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
     (`.sheet-link`: Undo, Remove, Disconnect) are ghost buttons in `--accent-text`, not
     underlined; real links in prose stay links.
   - **Shortcuts:** `kbd` chips, 11px on `--surface-2` with a 4px radius.
-  - **Inputs:** 32px, 14px text, a `--border-strong` border and the accent on focus. The task box
-    stays a bare line of text in its row.
+  - **Inputs:** 32px (14px text on an 18px line), a `--border-strong` border and the accent on
+    focus; a button in a Settings row with a field is 32px too. The task box stays a bare line of
+    text in its row.
   - **Dialogs and menus:** `--surface` with `--shadow-pop` and no border; dialogs 12px radius over
     a dimmed, slightly blurred page, menus 8px radius and 4px padding. A menu opened by click
     shows its first item with a fill, not a ring.
@@ -157,10 +160,13 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   below the window. The title takes the first focus, without a ring. On a phone every dialog is a
   sheet from the bottom edge, as Linear, Sunsama and Notion Calendar open details: full width,
   rounded on top, and the long ones full height with the footer on the bottom edge.
-- **Settings:** its four groups listed down the left (a segmented control across the top on a
-  phone), marking the one in view. Each part is a title, a line of help in `--text-3`, and its
+- **Settings:** its four groups listed down the left, marking the one in view; each group's name
+  heads it as plain text, never a fold. On a phone the list is a segmented control across the
+  top that shows one group at a time, the first unless opened at another. Each part is a title, a line of help in `--text-3`, and its
   controls; on/off settings are switches (`.sheet-switch`, the same `aria-pressed` buttons) at the
   right. Remove and Disconnect are ghost buttons.
+- **Help:** each list's keys sit in one 192px column, so the descriptions line up down the whole
+  dialog, and the keys are `kbd` chips.
 - **Toast:** as before, `--text-1` behind inverse text with an accent Undo, at the bottom centre.
 - **Plan today's timeline:** blocks are 2px in from the column with a 3px bar in their hue and a
   tinted ground: tasks in the accent, course work green, habits grey, calendar events blue.
@@ -171,7 +177,8 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   - **Rows:** one component for every task list (the week, Someday, projects, the Log, Plan
     today's list): 32px, a `--surface-2` fill on hover with a 6px radius, a 16px round box on the
     left, the title at 13px/500, and the meta (source icon, estimate, due date, lock) in `--text-3`
-    12px on the line under it, a timed task's time at the line's right end. ⋯ shows over the top
+    12px on the line under it, a timed task's time first on it (as an event's time sits under its
+    title). ⋯ shows over the top
     right on hover; on touch the box and ⋯ always show, each with a 44px tap area. Where a row is
     wide (a container query on the row), the meta moves up beside the title.
   - **Sources** tint their icon (course violet, campus amber, Slack green, Jira blue, GitHub
@@ -210,7 +217,8 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   fixed `--text-3` column.
 - **/plan/gym:** the same tokens and buttons, a sticky 48px bar (‹ Plan, the title, and Today /
   Records / Edit as a segmented control), each exercise a raised card, and Lucide icons from the
-  page's own sprite for ✓, ✕, −, + and swap.
+  page's own sprite for ✓, ✕, −, + and swap. Weight and reps are steppers of one width, side by
+  side where they fit; today's mark in the week strip is a plain accent fill.
 - **Motion:** 150 ms on `cubic-bezier(.23,1,.32,1)` for hovers, presses (`scale(.97)` on
   `:active`) and opening menus and dialogs; transform and opacity only. Also the 0.25 s fades, the
   check-off below, the progress ring closing a step (400 ms) and Shutdown's "Day closed" rising in
@@ -219,7 +227,9 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
 - **First paint stays small:** /plan and /plan/gym import `plan-base.css`, not the site's
   `global.css`, so they carry none of the portfolio's rules. Styles only a dialog uses come with its
   script (`?inline`): the menus, dialog frame and toast with `overlays.mjs` once signed in,
-  Settings with `settings.mjs`, Plan today's timeline with `plan-dialog.mjs`.
+  Settings with `settings.mjs`, Plan today's timeline with `plan-dialog.mjs`. The week's own
+  styles (`plan-week.css`, `week-styles.mjs`) load once signed in, and the first draw waits for
+  them, so signed out /plan's first-load script carries none of them.
 
 ### Saving in the background
 
@@ -317,8 +327,8 @@ Under 48 rem, one day shows at a time (above). On top of that:
     the large shrinking ring, chimes, the screen kept on). **Done** completes it with the usual
     check-off and Undo, and the card moves on.
   - Below the card, "Then": the next two (timed rows still to start, then untimed tasks), each
-    with its time. **See the week** shows the week; today's stamps then start with a **Doing view**
-    link back. His pick holds for the rest of the day (kept in this browser), and the top bar's
+    with its time. **See the week**, at the bottom of the screen under the thumb, shows the week;
+    today's summary line then ends with a small **Doing view** button back. His pick holds for the rest of the day (kept in this browser), and the top bar's
     day arrows and day button also go to the week. Each load of the week (opening, coming back,
     changing week) chooses again, so the default never flips while he is using the page. The
     stored copy of the week chooses too, before it draws (the first draw waits up to a second for
