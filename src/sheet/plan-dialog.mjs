@@ -16,6 +16,7 @@ import { progressText } from "./focus-notes.mjs";
 import { progressFor } from "./focus-start.mjs";
 // The timeline's styles (plan-dialog.css) come with it, before the dialog first opens.
 import css from "../styles/plan-dialog.css?inline";
+import { dialogHead } from "./dialog-head.mjs";
 
 document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
@@ -94,7 +95,7 @@ export function draw() {
         habit ? icon("repeat", "Habit") : null, b.proposed ? icon("sparkles", "Proposed by Claude") : null,
         `${t.title}${b.proposed || b.gcal_id || habit ? "" : " (not in Google)"}`),
       b.proposed ? approveButton(`Approve block for ${t.title}`, "sheet-approve") : null,
-      el("button", { type: "button", className: "sheet-block-x", textContent: "×", ariaLabel: `${b.proposed && !habit ? "Turn down" : "Remove"} block for ${t.title}` }),
+      el("button", { type: "button", className: "sheet-block-x", ariaLabel: `${b.proposed && !habit ? "Turn down" : "Remove"} block for ${t.title}` }, icon("x")),
       el("span", { className: "sheet-resize", ariaHidden: "true" }));
     box.dataset.block = b.id;
     // A block takes its task's source: the edge colour (sheet.css) and the icon.
@@ -134,7 +135,7 @@ export function draw() {
   const proposals = proposedOn(state.blocks, day, SHEET.timeZone).length;
   const scroll = dialog.querySelector(".sheet-timeline-wrap")?.scrollTop;
   dialog.replaceChildren(...[
-    el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekdayName(day)} ${date}` }),
+    dialogHead(el("h2", { id: "sheet-plan-title", textContent: `Plan ${weekdayName(day)} ${date}` })),
     el("p", { className: `sheet-load is-${m.level}${late ? " is-late" : ""}` },
       el("strong", { textContent: `${formatMinutes(m.total)} / ${formatMinutes(m.capacity)}` }),
       ` · Done ≈ ${formatClock(m.finish)} · shutdown ${formatClock(shut)}`),
@@ -146,8 +147,9 @@ export function draw() {
       ? `Now tap a time for "${state.tasks.get(picked)?.title ?? ""}".`
       : "Drag tasks onto the timeline · ? for keys" }),
     google,
-    proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"), el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
-      rev ? el("span", { className: "sheet-rev", textContent: `Revision ${rev}` }) : null,
+    proposals ? el("p", { className: "sheet-banner" }, icon("sparkles"),
+      el("span", { className: "sheet-banner-text" }, el("span", { textContent: `Claude proposed ${plural(proposals, "block")}` }),
+        rev ? el("span", { className: "sheet-rev", textContent: `Revision ${rev}` }) : null),
       approveButton("Approve all proposed blocks", "sheet-approve-all", "Approve all")) : null,
     notes.length ? el("ul", { className: "sheet-plan-notes" }, ...notes.map((n) => el("li", { textContent: n }))) : null,
     lookbackEntry(history, draw),
@@ -155,7 +157,7 @@ export function draw() {
     el("div", { className: "sheet-plan-body" },
       el("div", { className: "sheet-plan-tasks" }, list.children.length ? list : el("p", { className: "small", textContent: "Nothing left on this day." })),
       el("div", { className: "sheet-timeline-wrap", tabIndex: 0, ariaLabel: "Timeline" }, timeline)),
-    el("form", { method: "dialog", className: "sheet-dialog-end" },
+    el("form", { method: "dialog", className: "sheet-dialog-end sheet-dialog-foot" },
       el("button", { type: "submit", className: "sheet-btn primary", value: "done", textContent: "Done" })),
   ].filter(Boolean));
   if (scroll != null) dialog.querySelector(".sheet-timeline-wrap").scrollTop = scroll;

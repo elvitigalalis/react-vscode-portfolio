@@ -5,6 +5,7 @@ import { formatMinutes } from "./logic.mjs";
 import * as api from "./api.mjs";
 import { el, offerUndo, render, state } from "./planner.mjs";
 import { detailsChange } from "./task-details.mjs";
+import { dialogHead } from "./dialog-head.mjs";
 
 const PRESETS = [15, 30, 45, 60, 90, 120];
 const button = (className, textContent, onClick) => {
@@ -36,9 +37,9 @@ export function openDetails(root, id) {
   const note = el("p", { className: "sheet-details-note", role: "alert" });
   const close = () => { dialog.close(); root.querySelector(`[data-id="${id}"] .sheet-title`)?.focus(); };
   const form = el("form", {},
-    el("h2", { id: "sheet-details-title", textContent: t.title }),
+    dialogHead(el("h2", { id: "sheet-details-title", textContent: t.title })),
     est.node, time?.node, due.node, tag.node, note,
-    el("div", { className: "sheet-dialog-end" }, button("sheet-btn", "Cancel", close), el("button", { type: "submit", className: "sheet-btn primary", textContent: "Save" })));
+    el("div", { className: "sheet-dialog-end sheet-dialog-foot" }, button("sheet-btn", "Cancel", close), el("button", { type: "submit", className: "sheet-btn primary", textContent: "Save" })));
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const { change, error } = detailsChange(t, { est: est.input.value, time: time?.input.value ?? "", due: due.input.value, tag: tag.input.value });

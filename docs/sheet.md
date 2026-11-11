@@ -143,15 +143,37 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   - **Dialogs and menus:** `--surface` with `--shadow-pop` and no border; dialogs 12px radius over
     a dimmed, slightly blurred page, menus 8px radius and 4px padding. A menu opened by click
     shows its first item with a fill, not a ring.
+- **Menus** (`plan-overlays.css`): the task's ⋯, the top bar's ⋯, an event's ⋯ and a carried-over
+  task's triage. Items are 28px (44px on touch): a 16px Lucide icon in `--text-3`, the label and,
+  where a key does the same, its `kbd` at the right end (D and Z on the task menu; P, S and ? on
+  ⋯). Groups part on a hairline (`hr.sheet-menu-sep`); Delete and Feed failed are red.
+- **Dialogs** (`plan-overlays.css`): three widths, 480 (Details, Oura), 640 (Shutdown, Needs you,
+  Campus, Help, Last week) and 800 (Plan today, Settings). Each has a sticky header, its 20px/600
+  title and an icon Close (`dialog-head.mjs`, which closes the way Escape does, so Shutdown still
+  holds while Finish saves), and a sticky footer, `.sheet-dialog-foot`, its actions at the right
+  with the main one last. The dialog itself scrolls between them, so Shutdown's Finish is never
+  below the window. The title takes the first focus, without a ring. On a phone every dialog is a
+  sheet from the bottom edge, as Linear, Sunsama and Notion Calendar open details: full width,
+  rounded on top, and the long ones full height with the footer on the bottom edge.
+- **Settings:** its four groups listed down the left (a segmented control across the top on a
+  phone), marking the one in view. Each part is a title, a line of help in `--text-3`, and its
+  controls; on/off settings are switches (`.sheet-switch`, the same `aria-pressed` buttons) at the
+  right. Remove and Disconnect are ghost buttons.
+- **Toast:** as before, `--text-1` behind inverse text with an accent Undo, at the bottom centre.
+- **Plan today's timeline:** blocks are 2px in from the column with a 3px bar in their hue and a
+  tinted ground: tasks in the accent, course work green, habits grey, calendar events blue.
+  Claude's proposed blocks have no fill and a dashed outline, and a small Approve chip.
   - **Focus:** `:focus-visible` only, a 2px accent ring 2px out. A heading or box that script
     focuses (`tabindex="-1"`) shows none. `::selection` is an accent wash; scrollbars are thin.
 - **Motion:** 150 ms on `cubic-bezier(.23,1,.32,1)` for hovers, presses (`scale(.97)` on
   `:active`) and opening menus and dialogs; transform and opacity only. Also the 0.25 s fades, the
   check-off below, the progress ring closing a step (400 ms) and Shutdown's "Day closed" rising in
-  (320 ms, 6 px). All of it is off under `prefers-reduced-motion`.
+  (320 ms, 6 px). On a phone a dialog slides up 32px as it opens (240 ms). All of it is off under
+  `prefers-reduced-motion`.
 - **First paint stays small:** /plan and /plan/gym import `plan-base.css`, not the site's
   `global.css`, so they carry none of the portfolio's rules. Styles only a dialog uses come with its
-  script (`?inline`): Settings with `settings.mjs`, Plan today's timeline with `plan-dialog.mjs`.
+  script (`?inline`): the menus, dialog frame and toast with `overlays.mjs` once signed in,
+  Settings with `settings.mjs`, Plan today's timeline with `plan-dialog.mjs`.
 
 ### Saving in the background
 

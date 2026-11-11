@@ -13,7 +13,7 @@ async function draw() {
   $("[data-triage-rules]").replaceChildren(...(rules.length ? rules.map((r) => {
     // A sender rule (made from a Needs you offer) holds a hash; it shows the sender's name.
     const shown = r.match === "sender" ? r.label || "a sender" : r.pattern;
-    const remove = el("button", { type: "button", className: "sheet-link", textContent: "Remove", ariaLabel: `Remove the rule for ${shown}` });
+    const remove = el("button", { type: "button", className: "sheet-btn ghost", textContent: "Remove", ariaLabel: `Remove the rule for ${shown}` });
     remove.dataset.triageRemove = r.id;
     return el("li", {}, `${WORDS[r.action]} · ${r.match === "sender" ? "sender" : r.match === "domain" ? "domain" : "address"} `, el("strong", { textContent: shown }), " ", remove);
   }) : [el("li", { className: "small", textContent: "No rules yet." })]));

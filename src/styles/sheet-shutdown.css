@@ -1,37 +1,45 @@
 /* Shutdown that closes loops (docs/sheet.md, "Shutdown"). Added as text when shutdown-view.mjs
-   loads (Vite's ?inline), so /plan's first load carries none of it. Tokens: plan-base.css. */
-.sheet-shut-wins { list-style: none; padding: 0; margin: 0.25rem 0 0.5rem; font-size: 0.875rem; }
-.sheet-shut-wins li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.sheet-shut-wins li::before { content: "✓ "; color: var(--accent-text); }
-.sheet-shut-wins .sheet-meta { display: block; padding-left: 1.1em; color: var(--muted); font-size: 0.8125rem; }
-.sheet-shut-wins li.is-reading { color: var(--muted); border-bottom: 0; }
-.sheet-shut-wins li.is-reading::before { content: "… "; color: var(--muted); }
-.sheet-shut-quiet { color: var(--muted); font-size: 0.875rem; margin: 0.25rem 0 0.5rem; }
+   loads (Vite's ?inline), so /plan's first load carries none of it. Its frame (640 wide, the
+   header, the footer that stays at the bottom edge, the phone sheet) is plan-overlays.css's.
+   Tokens: plan-base.css. */
+/* Lucide check and circle, as masks, so the lines keep their text. */
+.sheet-shut-wins li::before {
+  content: ""; flex: none; width: 16px; height: 16px; margin-top: 1px; background: var(--accent-text);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 16px no-repeat;
+}
+.sheet-shut-wins { list-style: none; padding: 0; margin: 4px 0 8px; font-size: 13px; }
+.sheet-shut-wins li { display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-faint); overflow-wrap: anywhere; }
+.sheet-shut-wins li > * { grid-column: 2; }
+.sheet-shut-wins .sheet-meta { display: block; color: var(--text-3); font-size: 12px; }
+.sheet-shut-wins li.is-reading { color: var(--text-3); border-bottom: 0; }
+.sheet-shut-wins li.is-reading::before { background: var(--text-4); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M5 12h.01M12 12h.01M19 12h.01'/%3E%3C/svg%3E"); }
+.sheet-shut-quiet { color: var(--text-3); font-size: 13px; margin: 4px 0 8px; }
 
 /* Every unfinished task: its title, then one tap for where it goes. */
-.sheet-shut-open { list-style: none; padding: 0; margin: 0.25rem 0 0.5rem; }
-.sheet-shut-task { padding: 0.4rem 0; border-bottom: 1px solid var(--line); }
-.sheet-shut-task > p { margin: 0 0 0.3rem; font-size: 0.875rem; overflow-wrap: anywhere; }
-.sheet-shut-choices { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sheet-shut-open { list-style: none; padding: 0; margin: 4px 0 8px; }
+.sheet-shut-task { padding: 10px 0; border-bottom: 1px solid var(--border-faint); }
+.sheet-shut-task > p { margin: 0 0 6px; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.sheet-shut-choices { display: flex; flex-wrap: wrap; gap: 4px; }
 .sheet-shut-choice {
-  font: inherit; font-size: 0.8125rem; color: var(--fg); background: var(--bg); cursor: pointer;
-  border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.65rem; min-height: 1.9rem;
+  min-height: 28px; padding: 0 10px; font: 500 13px/1 var(--sans); letter-spacing: -0.01em; color: var(--text-2); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
-.sheet-shut-choice:hover { border-color: var(--muted); }
-.sheet-shut-choice[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-btn); font-weight: 600; }
-.sheet-shut-task.is-asked > p { font-weight: 600; }
-.sheet-shut-ask { margin: 0.4rem 0; font-size: 0.875rem; }
-.sheet-shut-rest { margin-left: 0.5rem; font-size: 0.8125rem; }
+.sheet-shut-choice:hover { background: var(--surface-2); color: var(--text-1); }
+.sheet-shut-choice[aria-pressed="true"] { color: var(--accent-text); background: var(--accent-tint); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.sheet-shut-task.is-asked > p { color: var(--warning-text); }
+.sheet-shut-ask { margin: 6px 0; font-size: 13px; color: var(--warning-text); }
+.sheet-shut-rest { margin-left: 8px; font-size: 13px; }
 /* On a phone the choices share one row, each a 44px-tall target. */
 @media (pointer: coarse) {
   .sheet-shut-choices { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
-  .sheet-shut-choice { min-height: 2.75rem; padding: 0.3rem 0.25rem; }
+  .sheet-shut-choice { min-height: 44px; padding: 0 4px; }
 }
 
 /* Day closed: the next step, then the wind-down line as the week shows it. */
-.sheet-shut-closed p { margin: 0.4rem 0; }
-.sheet-shut-next { font-size: 1rem; }
-.sheet-shut-closed .sheet-winddown { font-size: 0.875rem; margin: 0.75rem 0; }
+.sheet-shut-closed p { margin: 6px 0; }
+.sheet-shut-next { font-size: 15px; font-weight: 500; }
+.sheet-shut-closed .sheet-winddown { font-size: 13px; margin: 12px 0; }
 
 /* Motion (docs/sheet.md, "Motion"): only with no reduced-motion preference, opacity and transform
    only, strong ease-out, under half a second, never in the way of a tap. */

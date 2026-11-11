@@ -8,6 +8,7 @@ import { addDays, weekDays, zonedIso, minutesOn, formatSpan, dayLabel, positionB
 import { campusDay, campusTags, eventToTask, freeFood, isAdded, activeTags, tagsOf } from "./campus.mjs";
 import { el, icon, state, render, renderHooks, keyHooks, actHooks, offerUndo, failed, forgetTask } from "./planner.mjs";
 import { campusSummary } from "./glance.mjs";
+import { dialogHead } from "./dialog-head.mjs";
 
 const tz = SHEET.timeZone;
 const KEY = "sheet.campus";
@@ -101,7 +102,7 @@ function draw() {
   const { weekday, date } = dayLabel(day);
   const routine = el("input", { type: "checkbox", id: "sheet-campus-routine", checked: filters.showRoutine });
   dialog.replaceChildren(...[
-    el("h2", { id: "sheet-campus-title", textContent: `Campus · ${weekday} ${date}` }),
+    dialogHead(el("h2", { id: "sheet-campus-title", textContent: `Campus · ${weekday} ${date}` })),
     el("div", { className: "sheet-campus-filters", role: "group", ariaLabel: "Filter by tag" }, ...tags.map(({ tag, count }) => {
       const chip = el("button", { type: "button", className: "sheet-chip", textContent: `${tag} ${count}` });
       chip.dataset.tag = tag;
@@ -111,7 +112,7 @@ function draw() {
     el("p", { className: "sheet-campus-switch" }, routine, el("label", { htmlFor: "sheet-campus-routine", textContent: " Show practices and meetings" })),
     note ? el("p", { className: "sheet-notice", role: "status" }, note, " ", undoButton()) : null,
     shown.length ? el("ul", { className: "sheet-campus-list" }, ...shown.map(item)) : el("p", { className: "sheet-notice", textContent: "No events match these filters." }),
-    el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn", textContent: "Close" })),
+    el("form", { method: "dialog", className: "sheet-dialog-end sheet-dialog-foot" }, el("button", { type: "submit", className: "sheet-btn", textContent: "Close" })),
   ].filter(Boolean));
   if (keep) dialog.querySelector(keep)?.focus();
 }

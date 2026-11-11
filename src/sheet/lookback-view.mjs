@@ -13,6 +13,7 @@ import { paceByKind } from "./pace.mjs";
 import { lightDismiss } from "./dismiss.mjs";
 import { el, state, render, addTask, moveTask, failed, workloadCap } from "./planner.mjs";
 import { callLine, callLookback, dueLine, dueLookback, keepsMoving, weekLine, weekReview, weekTitle } from "./lookback.mjs";
+import { dialogHead } from "./dialog-head.mjs";
 
 document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
@@ -101,14 +102,14 @@ function draw(h, onchange) {
   const movers = h.moving.filter(notQuiet);
   const again = () => { draw(h, onchange); onchange?.(); };
   dialog.replaceChildren(...[
-    el("h2", { id: "sheet-back-title", textContent: "Last week" }),
+    dialogHead(el("h2", { id: "sheet-back-title", textContent: "Last week" })),
     ...(h.week ? weekSection(h.week) : []),
     h.due || h.held ? el("h3", { textContent: "Due dates" }) : null,
     h.due ? el("p", { className: "small", textContent: dueLine(h.due) }) : null,
     h.held ? el("p", { className: "small", textContent: callLine(h.held) }) : null,
     movers.length ? el("h3", { textContent: "Kept moving" }) : null,
     movers.length ? moverPrompts(movers, h.day, again) : null,
-    el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })),
+    el("form", { method: "dialog", className: "sheet-dialog-end sheet-dialog-foot" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })),
   ].filter(Boolean));
 }
 

@@ -19,6 +19,7 @@ import { burst } from "./celebrate.mjs";
 import * as lb from "./lookback-shutdown.mjs";
 import { holdEscape } from "./dismiss.mjs";
 import { choicesFor, closedLine, decisionChange, firstUp, rollsOnServer, targetOf, undecided, winLines, winsOf } from "./shutdown-close.mjs";
+import { dialogHead } from "./dialog-head.mjs";
 
 document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
@@ -214,9 +215,9 @@ function buildToday() {
     late: el("div", {}),
     open: el("section", {}),
     past: el("div", {}),
-    end: el("div", { className: "sheet-dialog-end" }),
+    end: el("div", { className: "sheet-dialog-end sheet-dialog-foot" }),
   };
-  body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), parts.wins, parts.open, parts.late, box, parts.past, parts.end);
+  body.replaceChildren(dialogHead(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" })), parts.wins, parts.open, parts.late, box, parts.past, parts.end);
   fill(parts.wins, winsNodes());
   fill(parts.open, openNodes());
   fill(parts.late, lateNodes());
@@ -244,7 +245,7 @@ function buildTomorrow() {
   const back = el("button", { type: "button", className: "sheet-btn", textContent: "Back", onclick: () => { step = "today"; buildToday(); dialog.querySelector('[data-key="next"]')?.focus(); } });
   const done = el("button", { type: "button", className: "sheet-btn primary", textContent: "Finish", onclick: finish });
   done.dataset.key = "finish";
-  body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Tomorrow" }), parts.tomorrow, el("div", { className: "sheet-dialog-end" }, back, done));
+  body.replaceChildren(dialogHead(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Tomorrow" })), parts.tomorrow, el("div", { className: "sheet-dialog-end sheet-dialog-foot" }, back, done));
   fill(parts.tomorrow, tomorrowNodes());
 }
 
@@ -256,12 +257,12 @@ function closedScreen() {
   const b = bedtimeFor(tonight(new Date(), tz), { settings: state.settings, sleep: state.sleep, sleepTimes: state.sleepTimes, tz });
   const line = closedLine(decisions);
   return el("div", { className: "sheet-shut-closed" },
-    el("h2", { id: "sheet-shut-title", textContent: "Day closed" }),
+    dialogHead(el("h2", { id: "sheet-shut-title", textContent: "Day closed" })),
     line ? el("p", { textContent: line }) : null,
     el("p", { className: "sheet-shut-next", textContent: next ? `Tomorrow starts with ${next}.` : "Tomorrow is open." }),
     // The week's wind-down line (planner.mjs, windDownMark), as what comes next tonight.
     b ? el("p", { className: "sheet-winddown", textContent: `Next: ${bedtimeMarker(b)}` }) : el("p", { className: "small", textContent: "Nothing else tonight." }),
-    el("form", { method: "dialog", className: "sheet-dialog-end" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })));
+    el("form", { method: "dialog", className: "sheet-dialog-end sheet-dialog-foot" }, el("button", { type: "submit", className: "sheet-btn primary", textContent: "Close" })));
 }
 
 // A read landed: fill what it feeds, in place.
@@ -415,7 +416,7 @@ const offWeek = (day) => state.week && !weekDays(state.week).includes(day);
 
 function showReading() {
   parts = {};
-  body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }), el("p", { className: "small", textContent: "Reading the day…" }));
+  body.replaceChildren(dialogHead(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" })), el("p", { className: "small", textContent: "Reading the day…" }));
 }
 
 // A first load that failed (or the day's own read): say so, with Retry. Resolves true on Retry,
@@ -427,9 +428,9 @@ function askRetry() {
     const gone = () => done(false);
     dialog.addEventListener("close", gone, { once: true });
     parts = {};
-    body.replaceChildren(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" }),
+    body.replaceChildren(dialogHead(el("h2", { id: "sheet-shut-title", tabIndex: -1, textContent: "Shut down" })),
       el("p", { textContent: "Couldn't load the latest. Shutdown needs today's tasks as they are now." }),
-      el("div", { className: "sheet-dialog-end" }, cancel, retry));
+      el("div", { className: "sheet-dialog-end sheet-dialog-foot" }, cancel, retry));
     retry.focus();
     announce("Couldn't load the latest. Retry?");
   });

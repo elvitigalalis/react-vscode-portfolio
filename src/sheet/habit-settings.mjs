@@ -10,7 +10,7 @@ const $ = (sel) => root.querySelector(sel);
 async function draw() {
   const habits = await api.listHabits();
   $("[data-habits]").replaceChildren(...(habits.length ? habits.map((h) => {
-    const remove = el("button", { type: "button", className: "sheet-link", textContent: "Remove", ariaLabel: `Remove ${h.name}` });
+    const remove = el("button", { type: "button", className: "sheet-btn ghost", textContent: "Remove", ariaLabel: `Remove ${h.name}` });
     remove.dataset.act = "habit-remove";
     remove.dataset.id = h.id;
     return el("li", {}, el("span", { textContent: habitLine(h) }), " ", remove);

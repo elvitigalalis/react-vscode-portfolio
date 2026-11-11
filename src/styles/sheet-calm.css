@@ -2,7 +2,7 @@
    time either shows (calm-styles.mjs), so first load carries no rules it doesn't use. */
 /* The over-commit note (plan-today.mjs, overNote): one calm line in muted ink, never red. Its
    list of tasks to move sits under it; each is a whole-row button (44px on touch). */
-.sheet-over { margin: 0.2rem 0 0; font-size: 0.75rem; color: var(--muted); }
+.sheet-over { margin: 2px 0 0; font-size: 12px; color: var(--text-3); }
 .sheet-over .sheet-link { font-size: inherit; }
 .sheet-over-pick { list-style: none; margin: 0.25rem 0 0; padding: 0; }
 .sheet-over-pick button {
@@ -14,6 +14,7 @@
 .sheet-over-pick button > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 @media (hover: none) { .sheet-over-pick button { min-height: 2.75rem; } }
 
-/* A carried-over task's menu leads with where it could go (planner.mjs, openMenu). */
-.sheet-menu-triage { border-bottom: 1px solid var(--line); margin-bottom: 0.3rem; padding-bottom: 0.3rem; }
-.sheet-menu-triage p { margin: 0; padding: 0.3rem 0.6rem 0.2rem; font-size: 0.75rem; color: var(--muted); max-width: 13rem; }
+/* A carried-over task's menu leads with where it could go (planner.mjs, openMenu): a small
+   label, its four items, and a hairline before the rest. */
+.sheet-menu-triage { border-bottom: 1px solid var(--border); margin: 0 -4px 4px; padding: 0 4px 4px; }
+.sheet-menu-triage p { margin: 0; padding: 6px 8px 4px; font-size: 12px; color: var(--text-3); max-width: 216px; white-space: normal; }
