@@ -13,8 +13,6 @@ import { hostToast } from "./toast-host.mjs";
 import { scrollToToday } from "./public.mjs";
 import { wakeProfile, windowStart, planStart } from "./sleep.mjs";
 import { bedtimeFor, bedtimeMarker, ouraWindow, tonight, shutdownFor } from "./bedtime.mjs";
-import { chipsLabel, dayChips, lateNap } from "./oura-day.mjs";
-import { pickTips } from "./tips.mjs";
 import { lightDismiss, menuKeys } from "./dismiss.mjs";
 import { dayRows, taskSpan } from "./event-todos.mjs";
 import { horizonChip, horizonLine } from "./horizon-view.mjs";
@@ -738,10 +736,10 @@ function blankRow() {
 const shortDay = (weekday) => weekday[0] + weekday.slice(1).toLowerCase();
 
 // The week's newer parts, today's summary line (which folds Oura, wind-down and the week's count
-// under it) and the empty week's message, come from week-parts.mjs, which the page's script
+// under it), the empty week's message and a day's Oura chips, come from week-parts.mjs, which the page's script
 // loads: kept out of this chunk, a signed-out first load (which draws no week) doesn't count
 // their code as unused (Lighthouse's unused-javascript). `open` is whether today's line is open.
-export const weekParts = { open: false, summary: null, empty: null };
+export const weekParts = { open: false, summary: null, empty: null, oura: null };
 
 function dayColumn(day, rows, items) {
   const list = tasksOn(day);
@@ -759,7 +757,7 @@ function dayColumn(day, rows, items) {
   ul.dataset.day = day;
   const marks = [info.planned && "Planned", info.shutdown && "Shut down"].filter(Boolean)
     .flatMap((m, i) => [i ? " · " : null, el("span", { className: "sheet-mark" }, icon("check"), ` ${m}`)]);
-  const extra = [day <= state.today ? ouraChips(day, `${weekday} ${date}`) : null, day === state.focus ? weekDoneMark() : null, today ? windDownMark() : null].filter(Boolean);
+  const extra = [day <= state.today ? weekParts.oura?.(day, `${weekday} ${date}`) : null, day === state.focus ? weekDoneMark() : null, today ? windDownMark() : null].filter(Boolean);
   const more = today && extra.length && weekParts.summary ? el("div", { className: "sheet-today-more", id: "sheet-today-more", hidden: !weekParts.open }, ...extra) : null;
   const progress = today ? progressMark(day) : null;
   const section = el("section", { className: `sheet-day${today ? " is-today" : ""}${day === state.focus ? " is-focus" : ""}` },
@@ -832,29 +830,6 @@ function growProgress() {
     fill.animate([{ strokeDashoffset: leftWas }, { strokeDashoffset: left }], { duration: 400, easing: cheer.EASE_OUT });
   }
   leftWas = left;
-}
-
-// Oura (oura-day.mjs): a past day's or today's "☾ 82 · ⚡ 86 · 7h 40m", a button that opens the
-// day's numbers; nothing on future days or without a row.
-// Today's also says a late nap ("late nap 5:10–6:20 pm") and "1 tip" when there is one.
-function ouraChips(day, when) {
-  const chips = dayChips(state.sleepDays.find((r) => r.day === day));
-  if (!chips.length) return null;
-  const today = day === state.today;
-  const nap = today ? lateNap(state.sleep, day, SHEET.timeZone) : null;
-  const tips = today ? pickTips(state.sleepDays, day).length : 0;
-  const extra = [nap, tips ? plural(tips, "tip") : null].filter(Boolean);
-  const kids = chips.flatMap((c, i) => [
-    i ? el("span", { className: "sheet-oura-sep", textContent: "·" }) : null,
-    c.icon ? icon(c.icon) : null,
-    el("span", { className: c.band ? `is-${c.band}` : "", textContent: c.text }),
-  ]);
-  if (extra.length) kids.push(el("span", { className: "sheet-oura-note", textContent: extra.join(" · ") }));
-  const label = `${chipsLabel(chips, when).replace(/\. Open details$/, "")}${extra.length ? `; ${extra.join("; ")}` : ""}. Open details`;
-  const button = el("button", { type: "button", className: "sheet-oura", ariaLabel: label }, ...kids);
-  button.dataset.act = "oura-day";
-  button.dataset.day = day;
-  return button;
 }
 
 // Horizon planning: a later day's planned minutes, faded ("OS project 1h30 · Essay 1h"). Only
