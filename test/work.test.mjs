@@ -30,6 +30,16 @@ test("work-sync: a list that may be cut short closes nothing", () => {
   assert.match(fn, /incomplete_results === false/);
 });
 
+test("work-sync: Jira updates for Needs you, read-only, written as jira rows and closed when resolved", () => {
+  assert.match(fn, /\/rest\/api\/3\/myself/);
+  assert.match(fn, /\(assignee = currentUser\(\) OR reporter = currentUser\(\) OR watcher = currentUser\(\)\) AND updated >= -\$\{UPDATE_DAYS\}d/);
+  assert.match(fn, /fields: \["summary", "status", "assignee", "creator", "created", "comment"\]/);
+  assert.match(fn, /jiraNeeds\(issues, \{ self, site: JIRA_SITE, known, since \}\)/);
+  assert.match(fn, /source: "jira-needs", uid: r\.message_id/);
+  assert.match(fn, /jiraResolved\(open, issues, self\)/);
+  assert.doesNotMatch(fn, /console\.log/);
+});
+
 // --- /plan ----------------------------------------------------------------------------------------
 
 test("githubOrgsFromInput: Settings' orgs, comma or space separated, lower case, once each", async () => {

@@ -181,6 +181,7 @@ function mentions(node, self) {
 const lastOwnComment = (issue, self) => Math.max(-Infinity,
   ...(issue?.fields?.comment?.comments ?? []).filter((c) => c?.author?.accountId === self).map((c) => at(c.created)).filter(Number.isFinite));
 
+/** @param {any[]} issues @param {{ self?: string | null, site?: string, known?: any[], since?: number }} [opts] */
 export function jiraNeeds(issues, { self, site, known = [], since = 0 } = {}) {
   if (!self || !/^[a-z0-9][a-z0-9-]*\.atlassian\.net$/.test(String(site ?? ""))) return [];
   const seen = new Set(known.map((k) => (typeof k === "string" ? k : k?.message_id)));
@@ -221,6 +222,7 @@ export function jiraNeeds(issues, { self, site, known = [], since = 0 } = {}) {
 // The open Jira rows ([{ id, message_id, kind, created_at }]) that no longer need him, by id: the
 // issue is Done, he has commented on it since the row was written, or (for an assignment) it is
 // no longer his. A row whose issue isn't in `issues` (not changed lately) is left alone.
+/** @param {any[]} open @param {any[]} issues @param {string} self @returns {string[]} */
 export function jiraResolved(open, issues, self) {
   const byKey = new Map((issues ?? []).filter((i) => JIRA_KEY.test(String(i?.key ?? ""))).map((i) => [i.key, i]));
   return (open ?? []).filter((r) => {
