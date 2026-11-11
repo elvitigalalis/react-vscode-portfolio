@@ -1,8 +1,8 @@
 /* Reflow rest of today (reflow-view.mjs) and the phone's Doing card (doing-view.mjs), added as text
    when either loads (doing-styles.mjs). Tokens: plan-base.css. */
-.sheet-reflow { margin: 0.2rem 0 0; font-size: 0.75rem; color: var(--muted); }
+.sheet-reflow { margin: 4px 0 0; font-size: 12px; color: var(--text-3); }
 .sheet-reflow .sheet-link { font-size: inherit; }
-@media (pointer: coarse) { .sheet-reflow .sheet-link { min-height: 2.75rem; } }
+@media (pointer: coarse) { .sheet-reflow .sheet-link { min-height: 44px; } }
 
 /* The Doing view (doing-view.mjs): phones only. It takes the week's place, and the sections under
    the week, until "See the week". */
@@ -12,39 +12,64 @@
   .sheet-planner.is-doing > .sheet-doing:not([hidden]) { display: block; }
   .sheet-planner.is-choosing > .sheet-week { visibility: hidden; }
 }
-.sheet-doing { margin: 0.25rem 0 1rem; }
+/* The card: the hero, on a raised surface. A small muted label, then the ring and a 20px title,
+   the time left, the first step, and Start (primary) beside Done. */
+.sheet-doing { margin: 4px 0 16px; }
 .sheet-doing-card {
-  display: flex; flex-direction: column; gap: 0.6rem; padding: 1.25rem 1rem 1rem;
-  background: var(--card); border: 1px solid var(--line); border-radius: 0.75rem;
-  --bg: var(--card);
+  display: flex; flex-direction: column; gap: 8px; padding: 16px;
+  background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+  --bg: var(--surface);
 }
 .sheet-doing-kicker, .sheet-doing-then h3 {
-  margin: 0; color: var(--muted); font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; font-variant-numeric: tabular-nums;
+  margin: 0; color: var(--text-3); font-size: 12px; font-weight: 500; line-height: 16px;
+  letter-spacing: 0; font-variant-numeric: tabular-nums;
 }
-.sheet-doing-head { display: flex; align-items: center; gap: 0.75rem; }
-.sheet-doing-dial { flex: none; width: 3rem; height: 3rem; }
+.sheet-doing-head { display: flex; align-items: center; gap: 12px; }
+.sheet-doing-dial { flex: none; width: 40px; height: 40px; }
 .sheet-doing-ring { display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
-.sheet-doing-ring circle { fill: none; stroke-width: 4; }
-.sheet-doing-track { stroke: var(--line); }
+.sheet-doing-ring circle { fill: none; stroke-width: 3.5; }
+.sheet-doing-track { stroke: var(--surface-2); }
 .sheet-doing-arc { stroke: var(--accent); stroke-dasharray: 1; stroke-linecap: round; }
-.sheet-doing-title { flex: 1; margin: 0; font-family: var(--serif); font-size: 1.5rem; line-height: 1.25; cursor: default; overflow-wrap: anywhere; }
-.sheet-doing-left, .sheet-doing-sub { margin: 0; color: var(--muted); font-size: 0.875rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.sheet-doing-actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
-.sheet-doing-start { flex: 1; justify-content: center; min-height: 3rem; font-size: 1.0625rem; }
-.sheet-doing .sheet-check.sheet-doing-done {
-  position: static; translate: none; opacity: 1; display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
-  flex: none; width: auto; height: auto; min-width: 6.5rem; min-height: 3rem; margin: 0; padding: 0 1rem;
-  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 0.4rem;
+.sheet-doing-title {
+  flex: 1; margin: 0; font-size: 20px; font-weight: 600; line-height: 26px; letter-spacing: -0.02em;
+  color: var(--text-1); cursor: default; overflow-wrap: anywhere; text-wrap: balance;
 }
+.sheet-doing-left, .sheet-doing-sub { margin: 0; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sheet-doing-left { color: var(--text-2); font-weight: 500; }
+.sheet-doing-sub { color: var(--text-3); }
+.sheet-doing-actions { display: flex; gap: 8px; margin-top: 8px; }
+.sheet-doing-start { flex: 1; min-height: 44px; font-size: 15px; }
+.sheet-doing .sheet-check.sheet-doing-done {
+  position: static; translate: none; opacity: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  flex: none; width: auto; height: auto; min-width: 104px; min-height: 44px; margin: 0; padding: 0 16px;
+  font: 500 15px/1 var(--sans); letter-spacing: -0.01em; color: var(--text-1);
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.sheet-doing .sheet-check.sheet-doing-done:hover { background: var(--surface-2); }
+.sheet-doing-done .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
 .sheet-doing-card:not(:has(.sheet-doing-start)) .sheet-doing-done { flex: 1; }
 .sheet-doing-card.is-checking .sheet-doing-done { color: var(--accent-text); }
 .sheet-doing-card.is-checking .sheet-check path { stroke-dasharray: 1 1; }
-.sheet-doing-card:is(.is-checking, .is-done) .sheet-doing-title { color: var(--muted); }
+.sheet-doing-card:is(.is-checking, .is-done) .sheet-doing-title { color: var(--text-3); }
 .sheet-doing-card.is-done .sheet-doing-title { text-decoration: line-through; }
-.sheet-doing-then { margin-top: 1rem; }
-.sheet-doing-then ul { list-style: none; margin: 0.25rem 0 0; padding: 0; }
-.sheet-doing-then li { display: flex; gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--line); font-size: 0.9375rem; overflow-wrap: anywhere; }
-.sheet-doing-when { flex: none; min-width: 6rem; color: var(--muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; line-height: 1.6; }
-.sheet-doing-week { width: 100%; justify-content: center; min-height: 2.75rem; margin-top: 1rem; }
-.sheet-doing-back { min-height: 2.75rem; font-size: 0.8125rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-doing .sheet-check.sheet-doing-done { transition: transform 150ms var(--ease); }
+  .sheet-doing .sheet-check.sheet-doing-done:active { transform: scale(0.97); }
+}
+/* Then: the next two as rows of a grouped list, the time in a fixed column. */
+.sheet-doing-then { margin-top: 20px; }
+.sheet-doing-then h3 { padding: 0 4px 6px; }
+.sheet-doing-then ul {
+  list-style: none; margin: 0; padding: 0 12px;
+  background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+}
+.sheet-doing-then li {
+  display: flex; align-items: baseline; gap: 12px; min-height: 44px; padding: 12px 0;
+  font-size: 15px; line-height: 20px; color: var(--text-1); overflow-wrap: anywhere;
+}
+.sheet-doing-then li + li { border-top: 1px solid var(--border-faint); }
+.sheet-doing-then li > :last-child { min-width: 0; }
+.sheet-doing-when { flex: none; min-width: 88px; color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.sheet-doing-week { width: 100%; min-height: 44px; margin-top: 16px; }
+.sheet-doing-back { min-height: 44px; font-size: 13px; }
