@@ -749,7 +749,7 @@ function dayColumn(day, rows, items) {
   const allDone = today && list.length > 0 && list.every((t) => t.done);
   // An empty today says what to do next (docs/sheet-glance.md, change 7), always shown.
   const blank = today && !items.length;
-  // No filler rows: the week's grid rows (--rows) still line every column's tasks up.
+  // No filler rows: the week's grid (--rows) keeps the header bands level; rows stack per day.
   const ul = el("ul", { className: `sheet-rows${blank ? " is-blank" : ""}${items.length ? "" : " is-none"}` }, ...items.map((r) => (r.kind === "task" ? taskRow(r.task, r.start == null ? null : r) : r.kind === "adding" ? addingRow(r) : eventTodoRow(r))),
     blank ? blankRow() : null,
     addRow({ day }, `Add a task to ${weekday} ${date}`),

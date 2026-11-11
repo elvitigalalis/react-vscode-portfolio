@@ -2,7 +2,9 @@
    one row component for every task list, calendar events as tinted blocks, and quiet empty states.
    Only /plan loads it (week-styles.mjs, as text before the first draw), after sheet.css, whose
    shared day and row rules keep /now's ruled look.
-   The week's grid rows (sheet.css, subgrid) still line every column's tasks up. Tokens: plan-base.css. */
+   The week's grid (sheet.css, subgrid) keeps each day's header band level, so every column's tasks
+   start on one line; below that each day's rows stack at their own height, as in Sunsama, so a
+   two-line row in one day leaves no gap in the others. Tokens: plan-base.css. */
 
 /* Columns: a hairline between days, and one under the header band. The first column's rows
    reach into the gutter so its text lines up with the bar's. */
@@ -10,6 +12,7 @@
 .sheet-week > .sheet-day { min-width: 0; padding: 0 6px; border-left: 1px solid var(--border-faint); }
 @media (min-width: 48.01rem) { .sheet-week > .sheet-day:first-child { margin-left: -12px; border-left: 0; } }
 @media (max-width: 48rem) { .sheet-week > .sheet-day { margin-inline: -6px; padding: 0; border: 0; } }
+.sheet-planner .sheet-day > .sheet-rows { grid-template-rows: none; grid-auto-rows: min-content; align-content: start; }
 
 /* Day header: "Tue" in 13px/600 and the date in --text-3; today's date sits in an accent pill. */
 .sheet-day > .sheet-head {
