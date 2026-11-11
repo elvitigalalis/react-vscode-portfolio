@@ -518,6 +518,7 @@ import "../../styles/plan-shell.css";
 </Base>
 
 <script>
+  import "../../sheet/week-styles.mjs";
   import "../../sheet/week-parts.mjs";
   import { start, drawWaits } from "../../sheet/planner.mjs";
   import { setupPlanToday } from "../../sheet/plan-today.mjs";
@@ -540,9 +541,6 @@ import "../../styles/plan-shell.css";
   // The sections under the week (Someday, the Log, Projects: their header, rows and disclosure)
   // style themselves and count their tasks once signed in, and the first draw, the stored copy's too, waits for them.
   const setupSections = () => drawWaits.push(import("../../sheet/sections.mjs"));
-  // The week's own styles (plan-week.css) load the same way, once signed in: signed out, /plan
-  // draws no week, so its first load carries none of them.
-  const setupWeekStyles = () => drawWaits.push(import("../../sheet/week-styles.mjs"));
   // School load (docs/sheet-glance.md) loads after sign-in, off the first load.
   const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root)).catch(console.error);
   // Reflow rest of today (docs/sheet.md) loads after sign-in, off the first load.
@@ -567,5 +565,5 @@ import "../../styles/plan-shell.css";
   setupTheme();
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
-  start(document.querySelector(".sheet-planner"), [setupWeekStyles, setupOverlays, setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupSections, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);
+  start(document.querySelector(".sheet-planner"), [setupOverlays, setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupSections, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);
 </script>
