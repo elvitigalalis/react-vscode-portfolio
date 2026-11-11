@@ -93,7 +93,7 @@ auto_approve.
   morning plan. trigger "replan" means the server started this run during the day because
   something changed; reasons are fixed names (busy_overlap: a busy time landed on a block;
   time_freed: an hour or more freed up; busy_change; course_due_soon: a course task is due within
-  48 hours; course_change; campus_change; mail_owed; mail_new; github_*, jira_*, slack_new,
+  48 hours; course_change; campus_change; mail_owed; mail_new; github_*, jira_*,
   handshake_change; woke_late: he woke 45+ minutes after the plan's start), and changes counts what changed since the newest revision, by kind. On a
   replan, plan the rest of D the same way, from window.from (which is already now, rounded up),
   and deal first with what the reasons name. Keep the earlier revision's blocks (proposed true,
@@ -181,6 +181,10 @@ on today (a task with day today, or an event starting today). Then go on with st
 replan of today. On any other run, go on with step 3.
 
 STEP 3: INBOX SWEEP (Needs you)
+Needs you is mail and Jira only. Your items come from mail alone: never add a Slack message
+(submit_proposal refuses an item whose account isn't one of accounts), and never add a Jira
+update, since the server writes those by itself. needs_you_open may hold Jira rows (account
+"jira"); leave them as they are.
 First, reply_state.owed from read_planner: each row is a thread where someone is waiting on
 Lisul (basis "thread": they answered a thread he wrote in; "known": someone he has written to;
 "cc": he was copied). Every owed row with basis "thread" or "known", or overdue true, becomes

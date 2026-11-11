@@ -53,7 +53,9 @@ blocks     + habit_id uuid references habits on delete cascade
 busy       + source text not null default 'calendar' check (source in ('calendar','handshake','message'))  -- message: sheet-messages.md
              primary key (source, starts_at, ends_at)    -- was (starts_at, ends_at)
 tasks      + link text check (link is null or link ~ '^https://')   -- GitHub/Jira page; never public
-needs_you  + source text not null default 'mail' check (source in ('mail','slack'))
+needs_you  + source text not null default 'mail' check (source in ('mail','slack','jira'))
+           kind adds 'assigned'                         -- a Jira issue newly assigned to him
+                                                         --   ('slack' only for old rows: Slack no longer feeds it)
            + not_needed boolean not null default false   -- done = true as well
            + sender_hash text                            -- the From address's salted hash, set by
                                                          --   the server (fix: was from_address)
@@ -173,7 +175,8 @@ weather_cache id boolean pk default true check (id), point text not null,
       lists, in start order), `couldnt_fit`, `suggested`, `run_trigger` and `reasons`.
     - Needs you is as in v4: open items for d are replaced, `(account, message_id)` already there
       is skipped.
-      **Decided (SRC2):** only `source = 'mail'` items are replaced; Slack items stay until done.
+      **Decided (SRC2):** only `source = 'mail'` items are replaced; Jira items (and old Slack
+      ones) stay until done.
     - It sets `consumed_day = d, consumed_rev = <new rev>` on every `changes` row with both null
       and `at <= read_at`. **Fix:** `apply_proposal` takes a last argument `read_at timestamptz
       default null`, read_planner's `read_at` passed back by submit_proposal; null (an older
@@ -308,8 +311,9 @@ weather_cache id boolean pk default true check (id), point text not null,
 
     Why 5 hours: Needs you only gets new mail triaged by a run, and midday and late afternoon are
     fresh enough. From a morning plan near 6 am that is two catch-ups before a 5-11 pm shutdown,
-    where 4 hours is three and 6 leaves mail untriaged until after lunch. Slack mentions reach
-    Needs you without a run (slack-sync). `mail_owed` stays at once: a known sender is waiting,
+    where 4 hours is three and 6 leaves mail untriaged until after lunch. Jira updates reach
+    Needs you without a run (work-sync); Slack no longer feeds it, and `slack_new` is no longer
+    written. `mail_owed` stays at once: a known sender is waiting,
     and the run drafts the reply.
 
     With no changes, `hold` is `nothing`; with changes and no rule met, `waiting`.
@@ -612,23 +616,34 @@ weather_cache id boolean pk default true check (id), point text not null,
     skips a source with no token. `githubOrgsFromInput(value)` parses Settings' orgs field
     (comma or space separated, lower case, once each; undefined when one isn't a GitHub login).
     A GitHub or Jira task's source icon on /plan links to `link`.
-- `slackNeeds(matches, { known })` takes `search.messages` matches and returns `needs_you` rows:
-  `{ source: 'slack', account: 'slack', message_id: '<channel id>:<ts>', link: permalink,
-  sender: <username>, subject: '#<channel name>' or 'Direct message', why: 'Mentioned you' or
-  'Sent you a direct message', kind: 'reply' }`. Never `text`. Permalinks must start with
-  `https://` and hold `.slack.com/`, or the match is skipped. Rows in `known` (already there)
-  are skipped.
-  - **Decided (SRC2):** a match is a direct message when `channel.is_im`; `known` is the slack
-    `needs_you` rows already saved, `[{ message_id }]`; a match listed twice (the mentions and
-    DM searches overlap) gives one row.
-  - **Decided (SRC2, at build):** `known` also takes the ids in `feed_seen ('slack', id)`, which
-    slack-sync writes with each row, since `nightly_roll` deletes done rows. An optional `self`
-    (his user id from `auth.test`) leaves out his own messages. Channel names and usernames must
-    be Slack words (`[\w.-]{1,80}`): a channel that isn't is skipped, a username that isn't reads
-    "Someone". `slackLink` (morning.mjs) is the permalink check, shared with /plan: https:// and a
-    host ending in `.slack.com`. slack-sync searches `<@USERID> after:<date>` and
-    `to:me after:<date>`, from the day before its last good sync, and writes one `slack_new`
-    change per new row.
+- **Slack no longer feeds Needs you.** Needs you is mail and Jira only. slack-sync still runs
+  its two searches (`<@USERID> after:<date>` and `to:me after:<date>`, from the day before its
+  last good sync) so `feed_state` shows whether the Slack token works, and writes nothing else:
+  no `needs_you` row, no `feed_seen` id, no `slack_new` change. `slackNeeds` and `slackLink` are
+  gone; `slack_new` stays a known reason only for rows logged before.
+- `jiraNeeds(issues, { self, site, known, since })` takes a JQL search of the issues he is
+  assignee, reporter or watcher of updated in the last 2 days (fields summary, status,
+  assignee, creator, created, comment; `expand: "changelog"`) and his accountId (`GET
+  /rest/api/3/myself`), and returns `needs_you` rows `{ source: 'jira', account: 'jira',
+  message_id, link, sender, subject: "<KEY>: <summary>", why, kind }`. Never comment text. What
+  counts:
+  - an issue newly assigned to him by someone else: a changelog entry whose `assignee` item has
+    `to` = his accountId (`message_id` `<KEY>:assigned:<history id>`), or an issue someone else
+    created already assigned to him (`<KEY>:assigned:new`); kind `assigned`, why "Assigned it to
+    you", link `https://<site>/browse/<KEY>`;
+  - a comment by someone else that mentions him (an ADF `mention` node with his accountId), or
+    any comment by someone else on an issue assigned to him (`<KEY>:comment:<id>`); kind
+    `reply`, why "Mentioned you in a comment" or "Commented on your issue", link with
+    `?focusedCommentId=<id>`.
+  Left out: his own actions, status moves and other field changes (his site's statuses are To
+  Do, In Progress, In PR Review and Done, none waiting on him), events before `since`, Done
+  issues, events he has answered with a later comment, and ids in `known`.
+  - **Decided:** work-sync writes the rows and their ids in `feed_seen ('jira-needs', id)`, so
+    one he marked done (and `nightly_roll` deleted) never returns. `jiraResolved(open, issues,
+    self)` gives the open Jira rows to mark done: the issue is Done, he commented after the row
+    was written, or an assigned issue is no longer his. `jiraLink` (morning.mjs) is the link
+    check, shared with /plan: https:// on `<name>.atlassian.net/browse/<KEY>`, at most with
+    `?focusedCommentId=<digits>`.
 - `handshakeBusy(events)` returns busy rows (`source = 'handshake'`) for parsed Handshake events
   whose summary starts with "Interview" or "Appointment" (case aside); other events are left out.
 - `academicEntries(events, day, timeZone)` returns `[{ title, all_day }]` for parsed academic
@@ -675,8 +690,8 @@ weather_cache id boolean pk default true check (id), point text not null,
 | `calendar-connect` | /plan Settings | as `mail-connect` | `/start` and `/callback` for the free/busy grant |
 | `busy-sync` | `sheet-busy` | `x-sheet-cron` | free/busy → `busy` (source calendar), `busy_as_of`, a busy change |
 | `mail-sync` | `sheet-mail` | `x-sheet-cron` | history → `reply_state`, `message_senders`, `known_senders`, mail changes |
-| `work-sync` | `sheet-work` | `x-sheet-cron` | GitHub and Jira → tasks, changes |
-| `slack-sync` | `sheet-slack` | `x-sheet-cron` | Slack → `needs_you` rows, changes |
+| `work-sync` | `sheet-work` | `x-sheet-cron` | GitHub and Jira → tasks, changes; Jira updates → `needs_you` rows |
+| `slack-sync` | `sheet-slack` | `x-sheet-cron` | Slack → `feed_state` only (no longer Needs you) |
 | `ical-sync` | `sheet-ical` | `x-sheet-cron` | Handshake → `busy` (source handshake, `handshake_sync_save`); academic → `academic_days`; `enrollment_at` → its task |
 | `weather` | `sheet-weather` | `x-sheet-cron` | NWS → `weather_cache` |
 | `telegram` | as before | as before | plus the replan decision and fire, Finished?, replan messages, rpc changes |
@@ -757,8 +772,10 @@ weather_cache id boolean pk default true check (id), point text not null,
   ago" from `busy_as_of`), replans on or off, the workload cap (in hours, 1–16, step 0.5), pace
   per kind ("Course tasks: took 1.4× your estimate (median of 12) · most ran 1.1–1.9×", or "Course: 3 of 5 needed"), habits, triage rules, the
   enrollment time, and a status row for each source in `feed_state`.
-- **Needs you** gains Not needed (with undo) beside Done, Slack rows with their icon, a link
-  only when it starts with `https://` and holds `.slack.com/` for Slack rows, an "Awaiting reply"
+- **Needs you** gains Not needed (with undo) beside Done on mail rows, Jira rows with the
+  kanban icon, an "Open in Jira" link only when `jiraLink` passes, and an "Assigned to you"
+  group (Jira rows offer no Not needed and log no triage feedback: that learning is by mail
+  sender). Slack rows never show (it reads `source=in.(mail,jira)`). It also gains an "Awaiting reply"
   group, and on a row with a suggestion, "Add task". After two `not_needed` feedback rows with the
   same `sender_hash`, it offers "Never show mail from <name>" (the name its Needs you rows carry),
   which adds a `never` rule `{ match: "sender", pattern: <hash>, label: <name> }` on confirm.

@@ -121,7 +121,7 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
     all approves what's still proposed.
 - **The check-in** adds "Tomorrow: 2 due (HW3, Lab 4)." when undone tasks are due tomorrow
   (titles cut to 30 characters, at most 3), and "Needs you: 1." when `needs_you`
-  has rows not done (mail and Slack alike).
+  has rows not done (mail and Jira alike).
 - Telegram messages are sent with link previews off, and plain text with no `parse_mode`.
 
 ### Edge Functions
