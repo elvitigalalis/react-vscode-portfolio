@@ -71,7 +71,13 @@
 .sheet-doing-then li + li { border-top: 1px solid var(--border-faint); }
 .sheet-doing-then li > :last-child { min-width: 0; }
 .sheet-doing-when { flex: none; min-width: 88px; color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
-.sheet-doing-week { width: 100%; min-height: 44px; margin-top: 16px; }
+/* The card and Then sit at the top and See the week at the bottom of the screen, under the thumb,
+   so the view fills the phone instead of ending halfway down it. */
+@media (max-width: 48rem) {
+  .sheet-planner.is-doing > .sheet-doing:not([hidden]) { display: flex; flex-direction: column; min-height: calc(100svh - 112px); }
+}
+.sheet-doing-week { width: 100%; min-height: 44px; margin-top: auto; }
+.sheet-doing > :nth-last-child(2) { margin-bottom: 16px; }
 /* Back to Doing, from the week's today: a small button at the end of today's summary line, not a
    link on a line of its own. */
 .sheet-stamps-row:has(> .sheet-doing-back) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-auto-flow: dense; column-gap: 8px; }
