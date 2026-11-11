@@ -115,3 +115,19 @@ test("jiraLink: only https:// issue links on an atlassian.net site", () => {
     assert.equal(jiraLink(bad), null, String(bad));
   }
 });
+
+test("needsGroups: an assigned Jira row goes under Assigned to you, after the mail groups", async () => {
+  const { needsGroups } = await import("../src/sheet/morning.mjs");
+  const rows = [{ id: 1, kind: "assigned", done: false }, { id: 2, kind: "reply", done: false }];
+  assert.deepEqual(needsGroups(rows).map((g) => [g.kind, g.title]), [["reply", "Reply owed"], ["assigned", "Assigned to you"]]);
+});
+
+test("/plan: a Jira row has the kanban icon, opens only a jiraLink, and offers no Not needed", async () => {
+  const { readFileSync } = await import("node:fs");
+  const needs = readFileSync(new URL("../src/sheet/needs-you.mjs", import.meta.url), "utf8");
+  assert.match(needs, /jira \? sourceIcon\("jira"\) : null/);
+  assert.match(needs, /const link = jira \? jiraLink\(r\.link\) : gmailLink\(r\.link\)/);
+  assert.match(needs, /const skip = jira \? null : el\("button"/);
+  assert.match(needs, /if \(mail\) await api\.logFeedback/);
+  assert.match(readFileSync(new URL("../src/sheet/planner.mjs", import.meta.url), "utf8"), /jira: \["kanban", "From Jira"\]/);
+});

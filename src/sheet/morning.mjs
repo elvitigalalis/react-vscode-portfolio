@@ -31,6 +31,7 @@ export const NEEDS_GROUPS = [
   ["deadline", "Deadlines"],
   ["meeting", "Meetings"],
   ["admin", "School & admin"],
+  ["assigned", "Assigned to you"],
 ];
 
 // The rows not done, grouped by kind as [{ kind, title, rows }]. Within a group the soonest due
