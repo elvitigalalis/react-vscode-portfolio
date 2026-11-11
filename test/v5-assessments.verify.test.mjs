@@ -251,7 +251,7 @@ test("proposalLines: one \"Task to add\" line per suggestion, after \"Couldn't f
     "Couldn't fit: Lab 4.",
     "Task to add: HackerRank assessment (due Nov 7)",
     "Task to add: Karat interview (due Nov 12)",
-    "Mail: 1 needs you.",
+    "Needs you: 1.",
   ]);
 });
 

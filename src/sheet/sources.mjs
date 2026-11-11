@@ -3,7 +3,6 @@
 import { addDays, formatSpan, minutesOn, cutTitle, localNow, titleDue, zonedIso } from "./logic.mjs";
 import { linkish } from "./proposal.mjs";
 import { changeRow } from "./replan.mjs";
-import { slackLink } from "./morning.mjs";
 
 // --- Weather (W1) ----------------------------------------------------------------------------
 // The NWS API (https://www.weather.gov/documentation/services-web-api): /points/{lat},{lon} names
@@ -146,44 +145,111 @@ export function jiraTaskChanges(issues, { tasks, seen, site, today }) {
   return workTaskChanges(rows, { tasks, seen, today }, "jira", "Jira");
 }
 
+// --- Jira updates in Needs you ---------------------------------------------------------------
+// work-sync reads the issues Lisul is assignee, reporter or watcher of that changed since
+// jiraNeedsSince (POST /rest/api/3/search/jql with fields summary, status, assignee, creator, created and
+// comment, and expand=changelog) and hands them here with his accountId (GET /rest/api/3/myself).
+// What needs him, written by code with no AI:
+// - an issue newly assigned to him by someone else: a changelog entry setting assignee to him, or
+//   an issue someone else created already assigned to him (kind 'assigned');
+// - a comment by someone else that mentions him (an ADF mention node with his accountId), or any
+//   comment by someone else on an issue assigned to him (kind 'reply'). Mentions count only on
+//   the issues read, those he is assignee, reporter or watcher of: JQL can't search for them.
+// Nothing else counts: his own actions, status moves and other field changes are left out (his
+// site's statuses, To Do, In Progress, In PR Review and Done, have none that waits on him). An
+// event older than `since` (ms), on a Done issue, already answered by a comment of his, or in
+// `known` (message ids already written) is skipped. A row holds the issue key and summary, the
+// person and the link, never comment text. Its message_id is the comment's or changelog entry's
+// id ('comment:<id>', 'assigned:<id>'), or 'assigned:new:<issue id>', never the key: an issue
+// moved to another project keeps them, so it never gives a second row.
+
+const JIRA_KEY = /^[A-Z][A-Z0-9_]*-\d+$/;
+const JIRA_ID = /^\d{1,20}$/;
+const oneLine = (s, max) => {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+};
+const person = (u) => oneLine(u?.displayName, 80) || "Someone";
+const jiraDone = (issue) => issue?.fields?.status?.statusCategory?.key === "done";
+const at = (s) => Date.parse(String(s ?? ""));
+
+// Whether an Atlassian Document Format body holds a mention of `self`.
+function mentions(node, self) {
+  if (!node || typeof node !== "object") return false;
+  if (node.type === "mention" && node.attrs?.id === self) return true;
+  return Array.isArray(node.content) && node.content.some((n) => mentions(n, self));
+}
+
+// The time of his newest comment on the issue, or -Infinity.
+const lastOwnComment = (issue, self) => Math.max(-Infinity,
+  ...(issue?.fields?.comment?.comments ?? []).filter((c) => c?.author?.accountId === self).map((c) => at(c.created)).filter(Number.isFinite));
+
+/** @param {any[]} issues @param {{ self?: string | null, site?: string, known?: any[], since?: number }} [opts] */
+export function jiraNeeds(issues, { self, site, known = [], since = 0 } = {}) {
+  if (!self || !/^[a-z0-9][a-z0-9-]*\.atlassian\.net$/.test(String(site ?? ""))) return [];
+  const seen = new Set(known.map((k) => (typeof k === "string" ? k : k?.message_id)));
+  const rows = [];
+  const add = (row) => { if (!seen.has(row.message_id)) { seen.add(row.message_id); rows.push(row); } };
+  for (const issue of issues ?? []) {
+    const key = String(issue?.key ?? "");
+    if (!JIRA_KEY.test(key) || jiraDone(issue)) continue;
+    const f = issue.fields ?? {};
+    const subject = oneLine(`${key}: ${oneLine(f.summary, 200)}`, 140);
+    const base = `https://${site}/browse/${key}`;
+    const mine = f.assignee?.accountId === self;
+    const answered = lastOwnComment(issue, self);
+    const fresh = (t) => Number.isFinite(t) && t >= since && t > answered;
+    for (const c of f.comment?.comments ?? []) {
+      if (!JIRA_ID.test(String(c?.id ?? "")) || !c.author?.accountId || c.author.accountId === self || !fresh(at(c.created))) continue;
+      const mention = mentions(c.body, self);
+      if (!mention && !mine) continue;
+      add({ source: "jira", account: "jira", message_id: `comment:${c.id}`, link: `${base}?focusedCommentId=${c.id}`,
+        sender: person(c.author), subject, why: mention ? "Mentioned you in a comment" : "Commented on your issue", kind: "reply" });
+    }
+    if (!mine) continue;
+    const handed = (issue.changelog?.histories ?? []).filter((h) => (h?.items ?? []).some((i) => (i?.fieldId ?? i?.field) === "assignee" && i.to === self));
+    for (const h of handed) {
+      if (!JIRA_ID.test(String(h?.id ?? "")) || !h.author?.accountId || h.author.accountId === self || !fresh(at(h.created))) continue;
+      add({ source: "jira", account: "jira", message_id: `assigned:${h.id}`, link: base,
+        sender: person(h.author), subject, why: "Assigned it to you", kind: "assigned" });
+    }
+    const creator = f.creator ?? f.reporter;
+    if (!handed.length && JIRA_ID.test(String(issue.id ?? "")) && creator?.accountId && creator.accountId !== self && fresh(at(f.created))) {
+      add({ source: "jira", account: "jira", message_id: `assigned:new:${issue.id}`, link: base,
+        sender: person(creator), subject, why: "Assigned it to you", kind: "assigned" });
+    }
+  }
+  return rows;
+}
+
+// The open Jira rows ([{ id, message_id, kind, created_at }]) that no longer need him, by id: the
+// issue is Done, he has commented on it since the row was written, or (for an assignment) it is
+// no longer his. A row's issue is the one holding its comment or changelog entry (or with its
+// issue id); a row whose issue isn't in `issues` (not changed lately, or reassigned away and not
+// watched) is left alone, and stays open until he marks it done.
+/** @param {any[]} open @param {any[]} issues @param {string} self @returns {string[]} */
+export function jiraResolved(open, issues, self) {
+  const byId = new Map();
+  for (const i of issues ?? []) {
+    if (!JIRA_KEY.test(String(i?.key ?? ""))) continue;
+    for (const c of i.fields?.comment?.comments ?? []) byId.set(`comment:${c?.id}`, i);
+    for (const h of i.changelog?.histories ?? []) byId.set(`assigned:${h?.id}`, i);
+    byId.set(`assigned:new:${i.id}`, i);
+  }
+  return (open ?? []).filter((r) => {
+    const issue = byId.get(String(r?.message_id ?? ""));
+    if (!issue) return false;
+    return jiraDone(issue) || lastOwnComment(issue, self) > at(r.created_at)
+      || (r.kind === "assigned" && issue.fields?.assignee?.accountId !== self);
+  }).map((r) => r.id);
+}
+
 // /plan Settings' GitHub orgs: logins split on commas or spaces, lower case, once each. Anything
 // that isn't a GitHub login (letters, digits and inner hyphens, up to 39) is undefined, so nothing
 // is saved.
 export function githubOrgsFromInput(value) {
   const orgs = [...new Set(String(value ?? "").toLowerCase().split(/[\s,]+/).filter(Boolean))];
   return orgs.every((o) => /^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/.test(o)) ? orgs : undefined;
-}
-
-// --- Slack (SRC2) ----------------------------------------------------------------------------
-// slack-sync runs search.messages (https://docs.slack.dev/reference/methods/search.messages) for
-// mentions and DMs and hands the matches here. Only the channel, the person and the permalink
-// come out, never `text`: a mention becomes a Needs you row written by code, with no AI.
-
-// Slack usernames and channel names are short words of letters, digits, dots, hyphens and
-// underscores; anything else is left out, so no stray text rides along.
-const slackWord = (s) => (/^[\w.-]{1,80}$/.test(String(s ?? "")) ? String(s) : null);
-
-export function slackNeeds(matches, { known, self } = {}) {
-  const seen = new Set((known ?? []).map((k) => k.message_id));
-  const rows = [];
-  for (const m of matches ?? []) {
-    const channel = m?.channel ?? {};
-    const id = /^[A-Z0-9]{1,30}$/.test(String(channel.id ?? "")) && /^\d{1,12}\.\d{1,8}$/.test(String(m.ts ?? ""))
-      ? `${channel.id}:${m.ts}` : null;
-    const link = slackLink(m?.permalink);
-    if (!id || !link || seen.has(id) || (self && m.user === self)) continue;
-    seen.add(id);
-    const dm = channel.is_im === true;
-    const name = slackWord(channel.name);
-    if (!dm && !name) continue;
-    rows.push({
-      source: "slack", account: "slack", message_id: id, link, sender: slackWord(m.username) ?? "Someone",
-      subject: dm ? "Direct message" : `#${name}`,
-      why: dm ? "Sent you a direct message" : "Mentioned you",
-      kind: "reply",
-    });
-  }
-  return rows;
 }
 
 // --- Handshake, the academic calendar and enrollment (SRC3) ----------------------------------

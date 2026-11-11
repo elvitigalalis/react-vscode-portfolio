@@ -6,7 +6,7 @@
 // Nothing is booked ahead: each run works the messages out again from a snapshot of the day,
 // and the nudges log is what stops one going out twice.
 import { ORIGIN } from "../site.mjs";
-import { clockSpan, couldntFitLine, linkish, proposalLines } from "./proposal.mjs";
+import { clockSpan, couldntFitLine, linkish, needsShown, proposalLines } from "./proposal.mjs";
 import { weatherLine } from "./sources.mjs";
 import { addDays, localNow, weekdayName, zonedIso, minutesOn, atRisk, isDropped, dueLabel, formatClock, formatMinutes, telegramOn, blockOnComplete, blockMinutes, plural, proposedOn } from "./logic.mjs";
 import { paceKind } from "./pace.mjs";
@@ -182,7 +182,7 @@ function dayOf(snapshot, now) {
   const { day: today, minutes } = localNow(now, tz);
   // A snapshot from before the morning plan has none of its fields: no proposal, no open mail.
   // They do count for the morning plan, while today's proposal is pending.
-  const needsOpen = (snapshot.needsOpen ?? []).filter((n) => !n.done);
+  const needsOpen = needsShown(snapshot.needsOpen);
   const p = snapshot.proposal;
   const plan = p?.day === today && p.status === "pending"
     ? proposalLines(p, proposedOn(snapshot.blocks, today, tz), snapshot.tasks, needsOpen, p.picks ?? [], snapshot.campus ?? [], tz)
@@ -310,7 +310,8 @@ function brief(day) {
   if (missed) lines.push(empty);
   else if (!n) lines.push('Nothing planned yet: say "plan my day" to Claude.');
   // With no plan to carry it, the brief counts the open Needs you rows, and its link opens them.
-  const needs = day.needsOpen.length ? `Needs you: ${day.needsOpen.length}.` : null;
+  const shown = needsShown(day.needsOpen).length;
+  const needs = shown ? `Needs you: ${shown}.` : null;
   const head = todays.length || n || risky.length ? [...lines, needs] : [lines[0], "Nothing on today.", missed && empty, needs];
   return brief(head, [{ text: "Open /plan", url: needs ? planUrl("needs") : PLAN_URL }]);
 }
@@ -676,7 +677,7 @@ function finishedChecks(day) {
 
 // The check-in: at the day's shutdown line (his, else when wind-down starts: shutdownFor),
 // asking for the shutdown. Once the day is shut down, or on a day with no tasks, there's nothing
-// to ask. It also says what's due tomorrow and how many Needs you rows, mail and Slack, are
+// to ask. It also says what's due tomorrow and how many Needs you rows, mail and Jira, are
 // still open (docs/sheet-morning.md).
 function checkin({ tasks, day: row, today, tz, needsOpen, settings, sleep, sleepTimes }) {
   const todays = tasks.filter((t) => t.day === today);
@@ -688,7 +689,8 @@ function checkin({ tasks, day: row, today, tz, needsOpen, settings, sleep, sleep
   const lines = [`Shutdown time. ${done} done, ${todays.length - done} left.`];
   const tomorrow = tasks.filter((t) => !t.done && !isDropped(t) && t.due === addDays(today, 1));
   if (tomorrow.length) lines.push(`Tomorrow: ${tomorrow.length} due (${tomorrow.slice(0, 3).map((t) => t.title.slice(0, 30).trim()).join(", ")}).`);
-  if (needsOpen.length) lines.push(`Needs you: ${needsOpen.length}.`);
+  const shown = needsShown(needsOpen).length;
+  if (shown) lines.push(`Needs you: ${shown}.`);
   return [{ kind: "checkin", block_id: null, day: today, send_at: zonedIso(today, at, tz), text: lines.join("\n"), buttons: [{ text: "Open /plan", url: planUrl("shutdown") }] }];
 }
 

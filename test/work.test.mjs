@@ -30,6 +30,24 @@ test("work-sync: a list that may be cut short closes nothing", () => {
   assert.match(fn, /incomplete_results === false/);
 });
 
+test("work-sync: Jira updates for Needs you, read-only, written as jira rows and closed when resolved", () => {
+  assert.match(fn, /\/rest\/api\/3\/myself/);
+  assert.match(fn, /\(assignee = currentUser\(\) OR reporter = currentUser\(\) OR watcher = currentUser\(\)\) AND updated >= -\$\{minutes\}m/);
+  assert.match(fn, /fields: \["summary", "status", "assignee", "creator", "created", "comment"\]/);
+  assert.match(fn, /jiraNeeds\(issues, \{ self, site: JIRA_SITE, known, since \}\)/);
+  assert.match(fn, /source: "jira-needs", uid: r\.message_id/);
+  assert.match(fn, /jiraResolved\(open, issues, self\)/);
+  assert.doesNotMatch(fn, /console\.log/);
+});
+
+test("work-sync: Jira updates run after the task sync, on their own, recorded as jira-needs", () => {
+  const jiraTasks = fn.slice(fn.indexOf('jira: await source("jira"'), fn.indexOf("const jira_needs"));
+  assert.doesNotMatch(jiraTasks, /jiraUpdates/);
+  assert.match(fn, /const jira_needs = await needsSource\(now, today\);\n  const ok = out\.github\.ok !== false && out\.jira\.ok !== false;/);
+  assert.match(fn, /await feedFailed\("jira-needs", e, fetched_at, \[JIRA_TOKEN, JIRA_EMAIL, JIRA_SITE\]\)/);
+  assert.match(fn, /saveFeedState\("jira-needs", \{ fetched_at, ok: true/);
+});
+
 // --- /plan ----------------------------------------------------------------------------------------
 
 test("githubOrgsFromInput: Settings' orgs, comma or space separated, lower case, once each", async () => {

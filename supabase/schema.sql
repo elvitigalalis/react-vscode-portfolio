@@ -2443,3 +2443,17 @@ select cron.schedule('sheet-focus-log', '13 8 * * *', $job$
   delete from focus_log
   where id in (select id from old) or id in (select unnest(closes) from old)
 $job$);
+
+-- --- Jira in Needs you (docs/sheet-v5.md, SRC2) ----------------------------------------------
+-- Needs you is mail and Jira only: slack-sync no longer writes rows ('slack' stays allowed for
+-- the old ones until they are done and nightly_roll deletes them). work-sync writes a row per
+-- Jira update that needs Lisul (jiraNeeds, src/sheet/sources.mjs), with source and account
+-- 'jira', message_id 'comment:<id>', 'assigned:<changelog id>' or 'assigned:new:<issue id>' (never
+-- the key, which a project move changes), a link on his Atlassian site, the person
+-- and "KEY: summary", never comment text. kind 'reply' is a comment, 'assigned' an issue newly
+-- assigned to him. Its ids go in feed_seen ('jira-needs', message_id), so one he marked done
+-- never comes back. Additive: re-running it changes nothing.
+alter table needs_you drop constraint if exists needs_you_source_check;
+alter table needs_you add constraint needs_you_source_check check (source in ('mail', 'slack', 'jira'));
+alter table needs_you drop constraint if exists needs_you_kind_check;
+alter table needs_you add constraint needs_you_kind_check check (kind in ('reply', 'deadline', 'meeting', 'admin', 'assigned'));

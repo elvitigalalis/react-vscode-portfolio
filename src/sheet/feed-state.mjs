@@ -24,6 +24,15 @@ function lastOk(state) {
 // back with none ("since yesterday", spec 47 story 65).
 export const slackSince = (state, now) => lastOk(state) ?? new Date(now.getTime() - DAY_MS);
 
+// Where work-sync's Jira updates read from: two days back, or the last good read when that is
+// earlier, so an outage longer than two days still catches up. Returns { since, minutes }: the
+// start, and the whole minutes back to it for JQL's `updated >= -<minutes>m`.
+export function jiraNeedsSince(state, now) {
+  const last = lastOk(state);
+  const since = Math.min(now.getTime() - 2 * DAY_MS, last ? last.getTime() : Infinity);
+  return { since, minutes: Math.ceil((now.getTime() - since) / 60_000) };
+}
+
 // Whether mail-sync sweeps this run: on the first good read of the local day (the last good read
 // was on an earlier day), after a failed read, and when nothing has read well yet.
 export function mailSweepDue(state, now, timeZone) {

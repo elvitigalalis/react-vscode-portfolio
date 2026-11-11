@@ -31,6 +31,7 @@ export const NEEDS_GROUPS = [
   ["deadline", "Deadlines"],
   ["meeting", "Meetings"],
   ["admin", "School & admin"],
+  ["assigned", "Assigned to you"],
 ];
 
 // The rows not done, grouped by kind as [{ kind, title, rows }]. Within a group the soonest due
@@ -53,10 +54,11 @@ export const gmailLink = (link) =>
 export const threadLink = (account, thread) => (/^[0-9a-f]{6,32}$/.test(thread)
   ? `https://mail.google.com/mail/?authuser=${encodeURIComponent(account)}#all/${thread}` : null);
 
-// v5 SRC2: a Slack row's Open in Slack link: an https:// permalink on a <workspace>.slack.com
-// address, else null. slack-sync keeps only these, and /plan checks again before drawing one.
-export const slackLink = (link) =>
-  typeof link === "string" && /^https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.slack\.com\//i.test(link) ? link : null;
+// A Jira row's Open in Jira link: an https:// issue link on a <name>.atlassian.net site, at most
+// with the comment it points to, else null. work-sync builds only these, and /plan checks again
+// before drawing one.
+export const jiraLink = (link) => (typeof link === "string"
+  && /^https:\/\/[a-z0-9][a-z0-9-]*\.atlassian\.net\/browse\/[A-Z][A-Z0-9_]*-\d+(?:\?focusedCommentId=\d{1,20})?$/.test(link) ? link : null);
 
 // --- Plan today ----------------------------------------------------------------------------
 

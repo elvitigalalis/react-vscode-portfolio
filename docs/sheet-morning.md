@@ -98,7 +98,7 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
   - `"Didn't fit: <note>"` when there is a note;
   - `"Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)"` for at most 2 picks, leaving out
     any pick whose feed title could become a link (`linkish`);
-  - `"Mail: 3 need you."`
+  - `"Needs you: 3."`
 
 `src/sheet/nudges.mjs`, extended:
 - **The brief:**
@@ -121,7 +121,7 @@ nudges     kind + 'proposal'             -- the plan, sent on its own when it la
     all approves what's still proposed.
 - **The check-in** adds "Tomorrow: 2 due (HW3, Lab 4)." when undone tasks are due tomorrow
   (titles cut to 30 characters, at most 3), and "Needs you: 1." when `needs_you`
-  has rows not done (mail and Slack alike).
+  has rows not done (mail and Jira alike).
 - Telegram messages are sent with link previews off, and plain text with no `parse_mode`.
 
 ### Edge Functions

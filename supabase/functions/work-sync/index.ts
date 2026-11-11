@@ -15,6 +15,14 @@
 //   (https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/,
 //   "Search for issues using JQL enhanced search (POST)"; basic auth with an email and API token,
 //   scope read:jira-work). Recorded as "jira".
+// - Jira updates for Needs you: GET /rest/api/3/myself for his accountId, then the same search
+//   for `(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND
+//   updated >= -<minutes>m` (from jiraNeedsSince: two days back, or the last good read when
+//   earlier), with fields summary, status, assignee, creator, created and comment and
+//   expand=changelog. jiraNeeds (src/sheet/sources.mjs) picks the updates that need him and
+//   jiraResolved the open rows that no longer do; this file writes needs_you rows with source
+//   'jira' (their ids also in feed_seen ('jira-needs', id), so one he marked done never comes
+//   back) and marks the resolved ones done. Comment text stays in this function's memory.
 //
 // A task closes when its item is no longer listed: the review was done, the issue closed or the
 // ticket finished. So a list that may be cut short (a search that timed out, more results than
@@ -28,9 +36,10 @@
 // fine-grained token with read-only Pull requests, Issues and Metadata on his orgs),
 // SHEET_JIRA_TOKEN, SHEET_JIRA_EMAIL and SHEET_JIRA_SITE ("<name>.atlassian.net"), and
 // SHEET_CRON_SECRET. Tokens are never logged or written to feed_state.
-import { githubTaskChanges, jiraTaskChanges } from "../../../src/sheet/sources.mjs";
+import { githubTaskChanges, jiraNeeds, jiraResolved, jiraTaskChanges } from "../../../src/sheet/sources.mjs";
 import { githubExpiry } from "../../../src/sheet/health.mjs";
 import { localNow } from "../../../src/sheet/logic.mjs";
+import { jiraNeedsSince } from "../../../src/sheet/feed-state.mjs";
 import { db, env, feedFailed, saveFeedState, secretMatches } from "../_shared/server.ts";
 
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -40,6 +49,7 @@ const JIRA_EMAIL = env("SHEET_JIRA_EMAIL");
 const JIRA_SITE = env("SHEET_JIRA_SITE").trim().toLowerCase().replace(/^https:\/\//, "").replace(/\/+$/, "");
 const PER_PAGE = 100;
 const JIRA_PAGES = 5;
+const UPDATE_PAGES = 2;
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -61,8 +71,11 @@ Deno.serve(async (req) => {
       return { read: issues.length, whole, changes: jiraTaskChanges(issues, { ...(await planner("jira")), site: JIRA_SITE, today }) };
     }),
   };
+  // Needs you's Jira updates run after the tasks are saved, on their own: a failure here is
+  // recorded under "jira-needs" and never undoes or fails the Jira task sync.
+  const jira_needs = await needsSource(now, today);
   const ok = out.github.ok !== false && out.jira.ok !== false;
-  return Response.json({ ok, ...out }, { status: ok ? 200 : 502 });
+  return Response.json({ ok, ...out, jira_needs }, { status: ok ? 200 : 502 });
 });
 
 // --- Sync -------------------------------------------------------------------------------------
@@ -190,20 +203,17 @@ async function githubItems() {
 
 // --- Jira -------------------------------------------------------------------------------------
 
-async function jiraIssues() {
-  const auth = `Basic ${btoa(`${JIRA_EMAIL}:${JIRA_TOKEN}`)}`;
+const jiraHeaders = () => ({ Authorization: `Basic ${btoa(`${JIRA_EMAIL}:${JIRA_TOKEN}`)}`, Accept: "application/json" });
+
+// Up to `pages` pages of one enhanced JQL search; `whole` is false when pages were left over.
+async function jiraSearch(query: Record<string, unknown>, pages: number) {
   const issues: unknown[] = [];
   let nextPageToken: string | undefined;
-  for (let page = 0; page < JIRA_PAGES; page++) {
+  for (let page = 0; page < pages; page++) {
     const res = await fetch(`https://${JIRA_SITE}/rest/api/3/search/jql`, {
       method: "POST",
-      headers: { Authorization: auth, Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jql: "assignee = currentUser() AND statusCategory != Done ORDER BY key",
-        fields: ["summary", "duedate"],
-        maxResults: PER_PAGE,
-        ...(nextPageToken ? { nextPageToken } : {}),
-      }),
+      headers: { ...jiraHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...query, maxResults: PER_PAGE, ...(nextPageToken ? { nextPageToken } : {}) }),
     });
     if (!res.ok) throw new Error(`jira: HTTP ${res.status}`);
     const body = await res.json();
@@ -213,4 +223,63 @@ async function jiraIssues() {
     nextPageToken = body.nextPageToken;
   }
   return { issues, whole: false };
+}
+
+const jiraIssues = () => jiraSearch({ jql: "assignee = currentUser() AND statusCategory != Done ORDER BY key", fields: ["summary", "duedate"] }, JIRA_PAGES);
+
+// The Jira updates' run, recorded in feed_state as "jira-needs".
+async function needsSource(now: Date, today: string) {
+  const fetched_at = now.toISOString();
+  if (!(JIRA_TOKEN && JIRA_EMAIL && JIRA_SITE) || !/^[a-z0-9][a-z0-9-]*\.atlassian\.net$/.test(JIRA_SITE)) {
+    await saveFeedState("jira-needs", { fetched_at, ok: null, error: "not connected" });
+    return { ok: null, skipped: "not connected" };
+  }
+  try {
+    const { read, inserted, resolved } = await jiraUpdates(now, today);
+    await saveFeedState("jira-needs", { fetched_at, ok: true, error: null, items: read });
+    return { ok: true, items: read, inserted, resolved };
+  } catch (e) {
+    await feedFailed("jira-needs", e, fetched_at, [JIRA_TOKEN, JIRA_EMAIL, JIRA_SITE]);
+    return { ok: false };
+  }
+}
+
+// Needs you's Jira rows: the updates since jiraNeedsSince (two days back, or the last good read
+// when earlier) that need him, written once each, and the open rows that no longer need him marked done. As save: the rows first, then
+// their ids.
+async function jiraUpdates(now: Date, today: string) {
+  const me = await fetch(`https://${JIRA_SITE}/rest/api/3/myself`, { headers: jiraHeaders() });
+  if (!me.ok) throw new Error(`jira: myself HTTP ${me.status}`);
+  const self = String((await me.json())?.accountId ?? "");
+  if (!/^[\w:-]{1,128}$/.test(self)) throw new Error("jira: myself gave no accountId");
+  const [state] = await db("feed_state?select=fetched_at,ok,last_ok_at&source=eq.jira-needs");
+  const { since, minutes } = jiraNeedsSince(state, now);
+  const { issues } = await jiraSearch({
+    jql: `(assignee = currentUser() OR reporter = currentUser() OR watcher = currentUser()) AND updated >= -${minutes}m ORDER BY updated DESC`,
+    fields: ["summary", "status", "assignee", "creator", "created", "comment"],
+    expand: "changelog",
+  }, UPDATE_PAGES);
+  const known = [
+    ...(await db("needs_you?select=message_id&source=eq.jira")),
+    ...(await db("feed_seen?select=uid&source=eq.jira-needs")).map((r: { uid: string }) => r.uid),
+  ];
+  const rows = jiraNeeds(issues, { self, site: JIRA_SITE, known, since });
+  if (rows.length) {
+    await db("needs_you?on_conflict=account,message_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+      body: JSON.stringify(rows.map((r) => ({ ...r, day: today }))),
+    });
+    await db("feed_seen?on_conflict=source,uid", {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+      body: JSON.stringify(rows.map((r) => ({ source: "jira-needs", uid: r.message_id }))),
+    });
+  }
+  const open = await db("needs_you?select=id,message_id,kind,created_at&source=eq.jira&done=is.false");
+  const resolved = jiraResolved(open, issues, self);
+  if (resolved.length) {
+    await db(`needs_you?id=in.(${resolved.join(",")})&done=is.false`, { method: "PATCH", body: JSON.stringify({ done: true }) });
+  }
+  return { read: issues.length, inserted: rows.length, resolved: resolved.length };
 }

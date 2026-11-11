@@ -8,7 +8,7 @@
 import { formatClock, localNow, weekdayName } from "./logic.mjs";
 
 // Feed names as Settings shows them (feed-status.mjs), with the two it doesn't list.
-const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", slack: "Slack", gmail: "Gmail", oura: "Oura", hevy: "Hevy" };
+const NAMES = { brightspace: "Brightspace", campus: "Campus events", weather: "Weather", freebusy: "Calendar busy times", handshake: "Handshake", academic: "Academic calendar", github: "GitHub", jira: "Jira", "jira-needs": "Jira updates", slack: "Slack", gmail: "Gmail", oura: "Oura", hevy: "Hevy" };
 // Each source's cron interval in minutes (supabase/schema.sql's cron.schedule lines): busy every
 // 10, mail every 5, Oura every 10, the rest hourly. A feed is stale after 3 intervals, and never
 // before 30 minutes, so one slow run is not an incident.

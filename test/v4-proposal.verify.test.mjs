@@ -619,7 +619,7 @@ test("proposalLines: the summary, each block, the note, the pick and the mail co
     "3:30 pm · HW3 (30 min)",
     "Didn't fit: Lab 4 didn't fit before shutdown.",
     "Campus pick: Art Club - Oil Pastels (7:00 pm, 22 going)",
-    "Mail: 3 need you.",
+    "Needs you: 3.",
   ]);
 });
 
@@ -645,7 +645,7 @@ test("proposalLines: more than 6 blocks shows the first 6, then \"+2 more\"", as
     "1:00 pm · Gym (30 min)",
     "2:00 pm · Gym (30 min)",
     "+2 more",
-    "Mail: 3 need you.",
+    "Needs you: 3.",
   ]);
 });
 
@@ -667,7 +667,7 @@ test("proposalLines: no note, no picks: no \"Didn't fit\" or \"Campus pick\" lin
     "1:00 pm · Office hours (30 min)",
     "2:30 pm · Gym (60 min)",
     "3:30 pm · HW3 (30 min)",
-    "Mail: 3 need you.",
+    "Needs you: 3.",
   ]);
 });
 
