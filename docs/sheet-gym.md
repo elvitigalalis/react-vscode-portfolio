@@ -28,7 +28,8 @@ JavaScript must stay at or under 40 KB gzipped (`check/budget.mjs`, run by `npm 
   today's suggestion and its reason, and an e1RM sparkline.
 - Below that come the set rows. Warm-up rows (W) come first, prefilled from about 50% to 85% of
   the working weight. They never count toward records or suggestions.
-- Each row has 56 px −/+ steppers and a 56 px ✓. The number fields are 18 px or larger, with
+- Each row has 56 px −/+ steppers and a 56 px ✓ (Lucide icons, from the page's sprite; the look is
+  the planner's, docs/sheet.md "Look"). The number fields are 18 px or larger, with
   `inputmode` decimal for weight and numeric for reps.
 - ✓ saves the set to the phone at once and offers Undo for 5 s. It starts the rest timer (the
   slot's lower rest bound, or 60 s after a warm-up) and opens the RPE chips (6–10 in half steps,
@@ -42,7 +43,7 @@ JavaScript must stay at or under 40 KB gzipped (`check/budget.mjs`, run by `npm 
   left. A set deleted before it synced is never sent.
 - The rest bar keeps counting past zero (+0:20). At zero the screen flashes and a beep sounds.
   The wake lock is held while a session is open and is taken again on `visibilitychange`.
-- ⇄ swaps the exercise. The choices are the original (marked Original), the two substitutes, any
+- The swap button (arrows left and right) swaps the exercise. The choices are the original (marked Original), the two substitutes, any
   exercise, or a new one, for "Today only" or "Rest of phase". Records stay with the exercise he
   actually did.
 - Finish shows a summary (sets, volume, time, PRs) and links back to `/plan`. If today has a Gym

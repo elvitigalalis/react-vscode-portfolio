@@ -8,8 +8,8 @@
   .sheet-chips .sheet-chip.is-alert { display: none; }
   .sheet-planner:has([data-feed-alert]:not([hidden])) [popovertarget="sheet-more"] { position: relative; }
   .sheet-planner:has([data-feed-alert]:not([hidden])) [popovertarget="sheet-more"]::after {
-    content: ""; position: absolute; top: 0.3rem; right: 0.3rem; width: 0.5rem; height: 0.5rem;
-    border-radius: 50%; background: var(--danger);
+    content: ""; position: absolute; top: 25%; right: 25%; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--bg);
   }
   /* In the shutdown window, Shut down takes Plan's place and Plan today moves into ⋯. */
   .sheet-tools:has([data-act="shutdown"]:not([hidden])) [data-act="plan"] { display: none; }

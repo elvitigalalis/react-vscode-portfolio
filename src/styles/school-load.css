@@ -1,44 +1,64 @@
-/* Student load (docs/sheet-glance.md, "School load"): one bar above the week, the load meter's
-   colours (sheet.css, .sheet-meter-fill) and the day chip's (.sheet-load-chip). Tokens: plan-base.css.
-   Loaded with school-load-view.mjs, not on /plan's first paint. */
-.sheet-school { margin: 0 0 0.75rem; font-size: 0.875rem; }
+/* Student load (docs/sheet-glance.md, "School load"): one line above the week, the sections' header
+   (plan-sections.css: 15px/600, a chevron) with the hours as its count and a slim meter, which
+   opens to the items as 32px rows with a one-tap estimate for each that has none. The meter uses
+   the load meter's colours (.sheet-meter-fill). Tokens: plan-base.css. Loaded with
+   school-load-view.mjs, not on /plan's first paint. */
+.sheet-school { margin: 0 0 12px; font-size: 13px; }
 .sheet-school-sum {
-  display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 0.2rem 0.6rem;
-  cursor: pointer; list-style: none; min-height: 1.5rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; width: fit-content; max-width: 100%;
+  min-height: 32px; margin-left: -4px; padding: 4px 8px 4px 4px; border-radius: var(--radius);
 }
-.sheet-school-sum::-webkit-details-marker { display: none; }
-.sheet-school-label { font-weight: 600; }
-.sheet-school-label::before { content: "▸ " / ""; color: var(--muted); }
-.sheet-school[open] .sheet-school-label::before { content: "▾ " / ""; }
-.sheet-school-sum .sheet-load-chip { margin-left: 0; font-size: 0.8125rem; }
-.sheet-school-sum .sheet-meter { grid-column: 3; max-width: 20rem; height: 6px; border-radius: 3px; }
+.sheet-school-sum:hover { background: var(--surface-2); }
+.sheet-school-label { font-size: 15px; font-weight: 600; line-height: 20px; letter-spacing: -0.01em; color: var(--text-1); }
+.sheet-school-sum .sheet-load-chip { margin-left: 0; font-size: 13px; font-weight: 500; color: var(--text-3); }
+.sheet-school-sum .sheet-meter {
+  width: 160px; height: 4px; margin-left: 4px; border-radius: 999px;
+  background: color-mix(in srgb, var(--text-1) 10%, transparent);
+}
+.sheet-school-sum .sheet-meter-fill { border-radius: inherit; }
 /* A crunch week is a heads-up, not an act-now item, so it is amber, never red: red stays for what
-   needs acting on now (overdue, a failed feed). */
-.sheet-school-crunch { justify-self: end; font-size: 0.75rem; font-weight: 600; color: var(--warn); }
-.sheet-crunch { font-size: 0.6em; font-weight: 600; color: var(--warn); white-space: nowrap; }
-.sheet-school .sheet-load-chip.is-over { color: var(--warn); }
-.sheet-school .sheet-meter-fill.is-over { background: var(--warn); }
-.sheet-school-note { margin: 0.5rem 0 0.25rem; color: var(--muted); font-size: 0.8125rem; }
-.sheet-school-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.15rem; max-width: 48rem; }
+   needs acting on now (overdue, a failed feed). Amber text is --warning-text, AA on its tint. */
+.sheet-school-crunch {
+  padding: 0 6px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; line-height: 20px;
+  color: var(--warning-text); background: color-mix(in srgb, var(--warning) 14%, var(--bg));
+}
+.sheet-crunch { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--warning-text); white-space: nowrap; }
+.sheet-school-sum .sheet-load-chip:is(.is-near, .is-over) { color: var(--warning-text); }
+.sheet-school .sheet-meter-fill.is-over { background: var(--warning); }
+.sheet-school-note { margin: 8px 0 4px; color: var(--text-3); font-size: 12px; }
+.sheet-school-list { list-style: none; padding: 0; margin: 0 -8px; display: grid; gap: 2px; max-width: 640px; }
 .sheet-school-item {
-  display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; align-items: center; gap: 0.2rem 0.6rem;
-  padding: 0.25rem 0; border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 4px 12px;
+  min-height: 32px; padding: 6px 8px; border-radius: var(--radius); line-height: 20px;
 }
-.sheet-school-due { color: var(--muted); font-size: 0.8125rem; }
-.sheet-school-title { overflow-wrap: anywhere; }
-.sheet-school-est { font-variant-numeric: tabular-nums; }
-.sheet-school-est.is-guess { color: var(--muted); }
-.sheet-school-picks { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.sheet-school-item:hover { background: var(--surface-2); }
+.sheet-school-due { color: var(--text-3); font-size: 12px; }
+.sheet-school-title { color: var(--text-1); overflow-wrap: anywhere; }
+.sheet-school-est { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.sheet-school-est.is-guess { color: var(--text-3); }
+/* The estimates: small chips, like a segmented row of inputs. */
+.sheet-school-picks { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
 .sheet-school-pick {
-  font: inherit; font-size: 0.8125rem; font-variant-numeric: tabular-nums; color: var(--fg); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 0.4rem; min-width: 2.75rem; min-height: 1.75rem; padding: 0 0.5rem; cursor: pointer;
+  min-width: 40px; min-height: 24px; padding: 0 8px; border-radius: var(--radius);
+  font: 500 12px/1 var(--sans); font-variant-numeric: tabular-nums; color: var(--text-2);
+  background: var(--surface); border: 1px solid var(--border-strong); box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  cursor: pointer; touch-action: manipulation;
 }
-.sheet-school-pick:hover { border-color: var(--muted); }
+.sheet-school-pick:hover { color: var(--text-1); background: var(--surface-2); }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-school-pick { transition: transform 150ms var(--ease); }
+  .sheet-school-pick:active { transform: scale(0.97); }
+}
 @media (max-width: 48rem) {
-  .sheet-school-sum { grid-template-columns: auto 1fr; }
-  .sheet-school-sum .sheet-load-chip { grid-column: 1 / -1; grid-row: 2; }
-  .sheet-school-sum .sheet-meter { grid-column: 1 / -1; max-width: none; }
-  .sheet-school-item { grid-template-columns: 3rem minmax(0, 1fr) auto; }
-  .sheet-school-pick { min-height: 2.25rem; }
+  /* To-dos first: on a phone the day sits right under the bar, and School this week joins the
+     sections after it (plan-phone.css orders them), clear of the sticky bar. */
+  .sheet-planner > .sheet-school { order: 2; margin: 24px 0 0; }
+  .sheet-school-sum { width: auto; }
+  .sheet-school-sum .sheet-meter { flex-basis: 100%; width: auto; margin: 2px 0 0 24px; }
+  .sheet-school-item { grid-template-columns: 40px minmax(0, 1fr) auto; }
+}
+@media (pointer: coarse) {
+  .sheet-school-sum { min-height: 44px; }
+  .sheet-school-pick { min-width: 44px; min-height: 44px; font-size: 13px; }
 }
 @media (min-width: 48.0625rem) { .sheet-school-crunch { display: none; } }

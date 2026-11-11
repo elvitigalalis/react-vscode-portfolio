@@ -4,10 +4,11 @@
 // Loaded after sign-in (plan/index.astro), so /plan's first load carries none of it; its styles
 // come with it as text (Vite's ?inline, as lookback-view.mjs does).
 import css from "../styles/school-load.css?inline";
+import "./sections.mjs";
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { formatMinutes, localNow, weekDays, weekdayName } from "./logic.mjs";
-import { el, state, render, renderHooks, eventsOn, dayStart, shutdownAt, workloadCap, offerUndo, failed } from "./planner.mjs";
+import { el, icon, state, render, renderHooks, eventsOn, dayStart, shutdownAt, workloadCap, offerUndo, failed } from "./planner.mjs";
 import { courseCodes, freeOn, weekLoad, QUICK_EST } from "./school-load.mjs";
 
 // Free minutes on each day of the week on screen, from the day's start (now, on today) to its
@@ -83,7 +84,9 @@ export function setupSchoolLoad(root) {
   const chip = el("span", { className: "sheet-load-chip" });
   // The title carries "Crunch week" for screen readers; phones hide the title, so it shows here.
   const crunch = el("span", { className: "sheet-school-crunch", ariaHidden: "true", textContent: "Crunch week", hidden: true });
-  const summary = el("summary", { className: "sheet-school-sum" },
+  const chev = icon("chevron-right");
+  chev.classList.add("sheet-chev");
+  const summary = el("summary", { className: "sheet-school-sum" }, chev,
     el("span", { className: "sheet-school-label", textContent: "School this week" }), chip, crunch,
     el("span", { className: "sheet-meter", ariaHidden: "true" }, fill));
   const note = el("p", { className: "sheet-school-note" });

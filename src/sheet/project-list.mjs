@@ -4,7 +4,7 @@
 // anywhere else; steps stay out of the Someday lists. The rows are drawn on each render from
 // state; the projects and their steps are read again when the planner loads.
 import * as api from "./api.mjs";
-import { el, state, render, renderHooks, reloadHooks, taskRow } from "./planner.mjs";
+import { el, icon, state, render, renderHooks, reloadHooks, taskRow } from "./planner.mjs";
 import { projectSummary } from "./project-view.mjs";
 
 let root;
@@ -28,9 +28,17 @@ async function refresh(tasks) {
   else if (changed || added.length) draw();
 }
 
+// The disclosure's mark: a chevron that turns down when open (plan-sections.css).
+function chevron() {
+  const svg = icon("chevron-right");
+  svg.classList.add("sheet-chev");
+  return svg;
+}
+
 function row(p, s) {
   const details = el("details", { className: "sheet-project", open: opened.has(p.id) },
     el("summary", {},
+      chevron(),
       el("span", { className: "sheet-project-title", textContent: p.title }),
       s.chip ? el("span", { className: `sheet-meta sheet-hz is-${s.chip.level}`, textContent: s.chip.text }) : null,
       el("span", { className: "sheet-hz-line", textContent: s.line })),
@@ -44,6 +52,7 @@ function draw() {
   const items = projects.map((p) => [p, projectSummary(p, steps.filter((t) => t.project_id === p.id), state.states)])
     .filter(([, s]) => s.steps.length && !s.done);
   root.querySelector("[data-projects]").hidden = !items.length;
+  root.querySelector("[data-project-n]").textContent = items.length ? String(items.length) : "";
   root.querySelector("[data-project-list]").replaceChildren(...items.map(([p, s]) => row(p, s)));
 }
 

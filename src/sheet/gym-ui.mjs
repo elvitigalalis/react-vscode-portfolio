@@ -40,6 +40,19 @@ const el = (tag, props = {}, ...kids) => {
   return node;
 };
 const btn = (text, props = {}) => el("button", { type: "button", textContent: text, ...props });
+// A Lucide icon from the page's sprite (plan/gym/index.astro), in the text's colour.
+const SVG = "http://www.w3.org/2000/svg";
+function icon(name) {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", "sheet-icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `#i-${name}`);
+  svg.append(use);
+  return svg;
+}
+// A button that shows only an icon; its name is the aria-label in props.
+const iconBtn = (name, props) => el("button", { type: "button", ...props }, icon(name));
 const byId = (list, id) => list.find((x) => x.id === id);
 const exName = (id) => byId(D.exercises, id)?.name ?? "Exercise";
 const dayKeys = () => Object.fromEntries(D.days.map((d) => [d.id, d.day_key]));
@@ -236,8 +249,8 @@ function stepper(id, label, unit, value, step, onSet, numeric) {
   });
   input.addEventListener("change", () => onSet(readNum(input.value, numeric), false));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { input.blur(); render(); } });
-  const minus = btn("−", { id: `${id}-m`, className: "gym-step", ariaLabel: `${label}: ${step} less` });
-  const plus = btn("+", { id: `${id}-p`, className: "gym-step", ariaLabel: `${label}: ${step} more` });
+  const minus = iconBtn("minus", { id: `${id}-m`, className: "gym-step", ariaLabel: `${label}: ${step} less` });
+  const plus = iconBtn("plus", { id: `${id}-p`, className: "gym-step", ariaLabel: `${label}: ${step} more` });
   const now = () => readNum(input.value, numeric) ?? value ?? 0;
   minus.addEventListener("click", () => onSet(Math.max(0, now() - step), true));
   plus.addEventListener("click", () => onSet(now() + step, true));
@@ -255,7 +268,7 @@ function card(rx, dayKey) {
   const work = sug.weight_lb ?? (last ? Math.max(...last.sets.map((s) => Number(s.weight_lb))) : baseline?.weight_lb ?? null);
   const name = ex.name ?? "Exercise";
 
-  const swap = btn("⇄", { className: "gym-icon-btn", ariaLabel: `Swap ${name}`, title: "Swap" });
+  const swap = iconBtn("arrow-left-right", { className: "sheet-btn sheet-icon-btn gym-icon-btn", ariaLabel: `Swap ${name}`, title: "Swap" });
   swap.addEventListener("click", () => openSwap(rx, exId));
   const head = el("h2", { className: "gym-name" }, el("span", { textContent: name }), exId !== rx.exercise_id ? el("span", { className: "gym-tag", textContent: "swapped" }) : null, swap);
   const lastLine = last
@@ -281,7 +294,7 @@ function card(rx, dayKey) {
       if (redraw) render();
     };
     const prev = spec.warmup ? null : last?.sets[spec.index - 1];
-    const check = btn("✓", { id: `${id}-ok`, className: `gym-check${done ? " is-done" : ""}`, ariaLabel: `${done ? "Saved" : "Save"} ${what} of ${name}` });
+    const check = iconBtn("check", { id: `${id}-ok`, className: `gym-check${done ? " is-done" : ""}`, ariaLabel: `${done ? "Saved" : "Save"} ${what} of ${name}` });
     check.setAttribute("aria-pressed", String(Boolean(done)));
     // ✓ saves what the fields hold right now, typed or not, in the one tap.
     check.addEventListener("click", () => {
@@ -292,7 +305,7 @@ function card(rx, dayKey) {
       logSet({ rx, exId, name, spec, done, values });
     });
     // ✕ drops a planned row, or deletes a logged set; either way with Undo for 5 s.
-    const x = btn("✕", { id: `${id}-x`, className: "gym-x", ariaLabel: `${done ? "Delete" : "Remove"} ${what} of ${name}`, title: done ? "Delete set" : "Remove set" });
+    const x = iconBtn("x", { id: `${id}-x`, className: "gym-x", ariaLabel: `${done ? "Delete" : "Remove"} ${what} of ${name}`, title: done ? "Delete set" : "Remove set" });
     x.addEventListener("click", () => removeSet(key, done, what));
     const row = el("div", { className: `gym-set${spec.warmup ? " is-warmup" : ""}${done ? " is-done" : ""}` },
       el("span", { className: "gym-set-n", textContent: spec.label, title: spec.warmup ? "Warm-up: never counted" : "" }),
@@ -305,7 +318,7 @@ function card(rx, dayKey) {
     if (done && S.rpeFor === done.id) rows.push(rpeChips(done, rx));
     if (ex.bar_lb && !spec.warmup && spec.index === 1 && v.weight_lb) rows.push(el("p", { className: "gym-plates", textContent: plateText(v.weight_lb, Number(ex.bar_lb)) }));
   }
-  const more = btn("+ Set", { className: "sheet-link gym-more", ariaLabel: `Add a set of ${name}` });
+  const more = el("button", { type: "button", className: "sheet-btn ghost gym-more", ariaLabel: `Add a set of ${name}` }, icon("plus"), "Set");
   more.addEventListener("click", () => { S.extra[rx.id] = (S.extra[rx.id] ?? 0) + 1; render(); });
 
   return el("article", { className: "gym-card", ariaLabel: name },
@@ -315,7 +328,7 @@ function card(rx, dayKey) {
     el("p", { className: "gym-suggest" }, sug.weight_lb != null ? el("strong", { textContent: `Today: ${lb(sug.weight_lb)} × ${sug.reps}` }) : null, el("span", { textContent: sug.reason })),
     sparkline(exId),
     el("div", { className: "gym-sets", role: "group", ariaLabel: `Sets of ${name}` },
-      el("div", { className: "gym-set gym-set-head", ariaHidden: "true" }, ...["Set", "Last", "✓", "lb · Reps"].map((t) => el("span", { textContent: t }))), ...rows),
+      el("div", { className: "gym-set gym-set-head", ariaHidden: "true" }, ...["Set", "Last", icon("check"), "lb · Reps"].map((t) => el("span", {}, t))), ...rows),
     more);
 }
 
@@ -413,13 +426,14 @@ function drawToday(main) {
   });
   const rows = strip(D.days, D.sessions, S.dayId);
   const states = { done: "done", today: "today", next: "next" };
-  main.append(
+  // No Ring line is no node (append would write "null").
+  main.append(...[
     el("p", { className: "gym-day", textContent: dayLabel(day) }),
     ringToday(),
     el("div", { className: "gym-strip", role: "img", ariaLabel: `Program progress: ${rows.flat().filter((d) => d.state === "done").length} of ${rows.flat().length} done this pass` },
       ...rows.map((week) => el("div", { className: "gym-strip-week" }, ...week.map((d) => el("span", { className: `gym-dot${d.state ? ` is-${states[d.state]}` : ""}`, title: dayLabel(d) }))))),
     el("p", { className: "gym-pick" }, el("label", { htmlFor: "gym-day", textContent: loggedAny ? "Today's day (sets logged)" : "Another day" }), pick),
-    ...rxsOf(day.id).map((rx) => card(rx, day.day_key)));
+    ...rxsOf(day.id).map((rx) => card(rx, day.day_key))].filter(Boolean));
   if (S.session) {
     const finish = btn("Finish workout", { className: "sheet-btn primary gym-finish" });
     finish.addEventListener("click", finishSession);
