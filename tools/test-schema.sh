@@ -1331,6 +1331,21 @@ begin
   delete from proposals where day = d;
   raise notice '✓ v5: a revision replaces open mail rows and keeps Slack ones';
 end $$;
+
+-- Jira in Needs you: source 'jira' and kind 'assigned' are allowed, and a revision keeps the row.
+do $$
+declare d date := sheet_today() + 41;
+begin
+  insert into needs_you (day, account, message_id, link, sender, subject, why, kind, source)
+    values (d, 'jira', 'KAN-7:assigned:10001', 'https://example.atlassian.net/browse/KAN-7',
+            'Andrew Shi', 'KAN-7: Fix the login', 'Assigned it to you', 'assigned', 'jira');
+  perform apply_proposal(d => d, replaces => null, blocks => '[]');
+  if not exists (select 1 from needs_you where message_id = 'KAN-7:assigned:10001')
+    then raise exception 'a revision deleted an open Jira row'; end if;
+  delete from needs_you where message_id = 'KAN-7:assigned:10001';
+  delete from proposals where day = d;
+  raise notice '✓ Jira in Needs you: source jira, kind assigned, kept by a revision';
+end $$;
 SQL
 psql_as postgres >/dev/null <<'SQL'
 -- --- Messages to Claude (docs/sheet-messages.md) ------------------------------------------------
