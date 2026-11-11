@@ -193,3 +193,19 @@
 .sheet-campus-food { display: inline-block; padding: 0 6px; border-radius: 999px; background: var(--ev-green-bg); color: var(--ev-green-text); font-weight: 500; }
 .sheet-campus-item > .sheet-campus-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .sheet-campus-tag { font-size: 11px; color: var(--text-2); background: var(--surface-2); border-radius: var(--radius-sm); padding: 1px 6px; }
+
+/* --- The toast ----------------------------------------------------------------------------
+   As before: dark ink on light pages, light on dark, one line and an accent Undo, at the bottom
+   centre (inside an open dialog while one is up: toast-host.mjs). */
+.sheet-toast {
+  bottom: calc(20px + env(safe-area-inset-bottom)); z-index: 5; display: flex; align-items: center; gap: 4px;
+  width: max-content; max-width: min(480px, calc(100vw - 32px)); min-height: 36px; padding: 4px 8px 4px 14px;
+  background: var(--text-1); color: var(--surface); font: 500 13px/1.3 var(--sans);
+}
+.sheet-toast[hidden] { display: none; }
+.sheet-toast [data-toast-text] { min-width: 0; overflow-wrap: anywhere; }
+.sheet-toast .sheet-link { flex: none; margin: 0 0 0 4px; font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-toast:not([hidden]) { animation: plan-toast 200ms var(--ease); }
+}
+@keyframes plan-toast { from { opacity: 0; transform: translate(-50%, 8px); } }
