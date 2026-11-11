@@ -4,6 +4,7 @@ import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import { siteConfig } from "../../config";
 import "../../styles/sheet.css";
+import "../../styles/global.css";
 import { SHEET } from "../../site.mjs";
 
 const writeups = (await getCollection("writeups")).map((w) => w.id);
