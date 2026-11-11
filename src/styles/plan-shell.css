@@ -41,7 +41,7 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 .plan-bar .sheet-chips .sheet-chip:hover { background: var(--surface-2); }
-.plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); }
+.plan-bar .sheet-chips .sheet-chip.is-alert { color: var(--danger); border-color: var(--border-strong); }
 .plan-bar .sheet-chip .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
 .plan-bar .sheet-nudges[aria-pressed="false"] .sheet-icon { color: var(--text-3); }
 
