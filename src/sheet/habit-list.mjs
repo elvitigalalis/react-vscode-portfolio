@@ -77,6 +77,7 @@ function draw(fresh = null) {
   // A redraw (a reload, the planner's render) replaces the rows: focus stays on the same ✓.
   const focused = document.activeElement?.closest?.(".sheet-habit-check")?.dataset.id;
   root.querySelector("[data-habit-rates]").hidden = !habits.length;
+  root.querySelector("[data-habit-n]").textContent = habits.length ? String(habits.length) : "";
   root.querySelector("[data-habit-list]").replaceChildren(...habits.map((h) => row(h, day, fresh)));
   if (focused) root.querySelector(`.sheet-habit-check[data-id="${CSS.escape(focused)}"]`)?.focus();
 }

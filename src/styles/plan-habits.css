@@ -1,24 +1,53 @@
 /* Habits as rates (docs/sheet-habits.md, src/sheet/habit-list.mjs): a ✓ for today, the last seven
-   days as dots and "5 of last 7 sessions". A day not done is an empty ring in the line colour, never red. */
-.sheet-habit-list { list-style: none; display: grid; gap: 0.25rem; max-width: 40rem; padding: 0; }
-.sheet-habit { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; min-height: 2rem; }
-.sheet-habit-check {
-  display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; padding: 0;
-  border: 1px solid var(--line-strong); border-radius: 50%; background: none; color: var(--muted); cursor: pointer;
+   days as dots and "5 of last 7 sessions", one 36px row each with the sections' hover fill
+   (plan-sections.css). A day not done is an empty ring in the border colour, never red. */
+.sheet-habit-list { list-style: none; display: grid; gap: 2px; max-width: 640px; padding: 0; }
+.sheet-habit {
+  display: grid; grid-template-columns: 24px minmax(0, 160px) auto minmax(0, 1fr); align-items: center; gap: 2px 12px;
+  min-height: 36px; padding: 2px 8px 2px 4px; border-radius: var(--radius); font-size: 13px; line-height: 20px;
 }
-.sheet-habit-check .sheet-icon { width: 1rem; height: 1rem; opacity: 0.35; }
-.sheet-habit-check:hover { color: var(--accent-text); border-color: var(--accent); }
-.sheet-habit.is-done .sheet-habit-check { background: var(--accent); border-color: var(--accent); color: var(--on-btn); }
-.sheet-habit.is-done .sheet-habit-check .sheet-icon { opacity: 1; }
-.sheet-habit-name { font-weight: 600; min-width: 7.5rem; }
-.sheet-habit-dots { display: inline-flex; gap: 0.3rem; align-items: center; }
-.sheet-habit-dots > span { width: 0.6rem; height: 0.6rem; border-radius: 50%; border: 1.5px solid var(--line-strong); }
-.sheet-habit-dots > .is-done { background: var(--accent); border-color: var(--accent); }
-.sheet-habit-dots > .is-due { border-color: var(--accent); }
-.sheet-habit-dots > .is-off { border-color: transparent; background: radial-gradient(circle, var(--line) 0 30%, transparent 35%); }
-.sheet-habit-rate { color: var(--muted); font-variant-numeric: tabular-nums; }
-.sheet-habit-back { color: var(--accent-text); }
+.sheet-habit:hover { background: var(--surface-2); }
+/* The ✓: a 24px target round a 18px ring; done, the ring fills with the accent. */
+.sheet-habit-check {
+  position: relative; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  border: 0; border-radius: 50%; background: none; color: transparent; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.sheet-habit-check::before {
+  content: ""; position: absolute; inset: 3px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-1) 28%, transparent);
+}
+.sheet-habit-check .sheet-icon { position: relative; width: 12px; height: 12px; stroke-width: 2.5; }
+.sheet-habit-check:hover { color: var(--text-3); }
+.sheet-habit-check:hover::before { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sheet-habit.is-done .sheet-habit-check { color: var(--on-accent); }
+.sheet-habit.is-done .sheet-habit-check::before { background: var(--accent); box-shadow: none; }
+.sheet-habit-name { min-width: 0; font-weight: 500; color: var(--text-1); overflow-wrap: anywhere; }
+/* The week as dots: done fills, a miss is a ring, today still open an accent ring, a day off a speck. */
+.sheet-habit-dots { display: inline-flex; gap: 6px; align-items: center; }
+.sheet-habit-dots > span { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-1) 22%, transparent); }
+.sheet-habit-dots > .is-done { background: var(--accent); box-shadow: none; }
+.sheet-habit-dots > .is-due { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.sheet-habit-dots > .is-off { box-shadow: none; background: radial-gradient(circle, var(--text-4) 0 1.5px, transparent 2px); }
+.sheet-habit-rate { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sheet-habit-back { grid-column: 4; justify-self: start; font-size: 12px; font-weight: 500; color: var(--accent-text); }
+/* With room, "Back on it today?" sits after the rate on its line. */
+@media (min-width: 48.01rem) {
+  .sheet-habit:has(.sheet-habit-back) { grid-template-columns: 24px minmax(0, 160px) auto auto minmax(0, 1fr); }
+  .sheet-habit-back { grid-column: 5; }
+}
+/* Phones: name and dots on the first line, the rate under the name. */
+@media (max-width: 48rem) {
+  .sheet-habit { grid-template-columns: 24px minmax(0, 1fr) auto; min-height: 44px; padding-block: 4px; }
+  .sheet-habit-check { grid-row: span 2; }
+  .sheet-habit-rate, .sheet-habit-back { grid-column: 2 / -1; }
+  .sheet-habit:has(.sheet-habit-back) .sheet-habit-rate { grid-column: 2; }
+  .sheet-habit:has(.sheet-habit-back) .sheet-habit-back { grid-column: 3; grid-row: 2; justify-self: end; }
+}
+@media (pointer: coarse) {
+  .sheet-habit-check::after { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; translate: -50% -50%; }
+}
 @media (prefers-reduced-motion: no-preference) {
-  .sheet-habit.is-fresh .sheet-habit-check { animation: sheet-habit-pop 0.3s cubic-bezier(0.23, 1, 0.32, 1); }
+  .sheet-habit.is-fresh .sheet-habit-check::before { animation: sheet-habit-pop 0.3s var(--ease); }
 }
 @keyframes sheet-habit-pop { from { transform: scale(0.85); } to { transform: scale(1); } }
