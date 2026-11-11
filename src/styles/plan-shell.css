@@ -48,6 +48,8 @@
 /* Signed out, Privacy and the way home (plan-base.css) sit under the sign-in line. */
 .sheet-planner:has([data-tools]:not([hidden])) > .plan-foot { display: none; }
 .sheet-planner > .sheet-status { font-size: 14px; color: var(--text-2); }
+/* Signed out: Sign in sits on its own line under the sentence, not trailing it. */
+.sheet-status > .sheet-btn { display: flex; width: fit-content; margin-top: 12px; }
 
 @media (max-width: 48rem) {
   .sheet-page.sheet-planner { padding-inline: 16px; }
