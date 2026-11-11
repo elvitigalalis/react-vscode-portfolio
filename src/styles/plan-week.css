@@ -118,7 +118,7 @@ button.sheet-today-sum:hover { background: var(--surface-2); }
 /* Calendar events: a tinted block with a 3px bar, the title over its time in the hue's ink. Its
    check and ⋯ show on hover. Done, it loses the tint. */
 .sheet-rows > .sheet-evtodo {
-  display: grid; align-self: start; min-height: 0; margin: 1px 0; padding: 4px 8px 4px 11px; border-radius: var(--radius-sm);
+  display: grid; align-self: start; min-height: 0; margin: 2px 0; padding: 4px 8px 4px 11px; border-radius: var(--radius-sm);
   line-height: 16px; background: var(--ev-blue-bg); box-shadow: inset 3px 0 var(--ev-blue-bar);
 }
 .sheet-evtodo .sheet-title { font-size: 12px; font-weight: 500; }
