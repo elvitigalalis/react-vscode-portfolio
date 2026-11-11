@@ -228,8 +228,8 @@ Notion Calendar, Sunsama): "Linear-neutral". /plan/gym takes the same theme; /no
   `global.css`, so they carry none of the portfolio's rules. Styles only a dialog uses come with its
   script (`?inline`): the menus, dialog frame and toast with `overlays.mjs` once signed in,
   Settings with `settings.mjs`, Plan today's timeline with `plan-dialog.mjs`. The week's own
-  styles (`plan-week.css`, `week-styles.mjs`) load once signed in, and the first draw waits for
-  them, so signed out /plan's first-load script carries none of them.
+  styles (`plan-week.css`, `week-styles.mjs`) come with the page's script, before the first draw,
+  so the stored copy of the week never draws unstyled.
 
 ### Saving in the background
 
