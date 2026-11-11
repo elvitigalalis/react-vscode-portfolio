@@ -53,6 +53,8 @@
 /* A row of controls (a field, its note, Save) sits left to right under the help. */
 .sheet-settings-part .sheet-dialog-end { flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 8px; margin: 8px 0 0; }
 .sheet-settings-part .sheet-dialog-end > label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+/* A button in a row with a field takes the field's 32px height. */
+.sheet-settings-part .sheet-dialog-end:has(input, select) > .sheet-btn { min-height: 32px; }
 .sheet-settings-part .sheet-dialog-end > .small { order: 9; flex-basis: 100%; margin: 0; }
 
 /* On/off settings: the title and help on the left, a switch on the right. */
