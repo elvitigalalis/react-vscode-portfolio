@@ -136,7 +136,7 @@ function draw() {
   }
   // Back to Doing from the week's today, on a phone only: a wider screen has no Doing view.
   if (!doing && pick.card && matchMedia(NARROW).matches) {
-    const back = el("button", { type: "button", className: "sheet-link sheet-doing-back", textContent: "Doing view" });
+    const back = el("button", { type: "button", className: "sheet-btn sheet-doing-back", textContent: "Doing view" });
     back.dataset.act = "doing-view";
     root.querySelector(`.sheet-day[data-day="${state.today}"].is-focus .sheet-stamps-row`)?.prepend(back);
   }

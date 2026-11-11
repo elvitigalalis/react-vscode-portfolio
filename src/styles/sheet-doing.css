@@ -72,4 +72,11 @@
 .sheet-doing-then li > :last-child { min-width: 0; }
 .sheet-doing-when { flex: none; min-width: 88px; color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; }
 .sheet-doing-week { width: 100%; min-height: 44px; margin-top: 16px; }
-.sheet-doing-back { min-height: 44px; font-size: 13px; }
+/* Back to Doing, from the week's today: a small button at the end of today's summary line, not a
+   link on a line of its own. */
+.sheet-stamps-row:has(> .sheet-doing-back) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-auto-flow: dense; column-gap: 8px; }
+.sheet-stamps-row:has(> .sheet-doing-back) > * { grid-column: 1 / -1; }
+.sheet-stamps-row > .sheet-today-sum { grid-column: 1; }
+.sheet-stamps-row > .sheet-doing-back { grid-column: 2; order: -1; align-self: center; position: relative; min-height: 28px; padding: 0 10px; font-size: 13px; }
+/* 44px to tap, the look unchanged. */
+.sheet-doing-back::after { content: ""; position: absolute; inset: -8px -4px; }
