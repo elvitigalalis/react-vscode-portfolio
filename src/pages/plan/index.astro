@@ -219,16 +219,19 @@ import "../../styles/plan-shell.css";
       <p class="sheet-dialog-end sheet-dialog-foot"><button type="button" class="sheet-btn" data-act="close-oura-day">Close</button></p>
     </dialog>
     <dialog class="sheet-dialog sheet-settings" data-settings aria-labelledby="sheet-settings-title">
-      <h2 id="sheet-settings-title">Settings</h2>
-      <!-- Four groups you can jump to (research/plan-improvements.md 12). planner.mjs opens Settings
-           at one (the Feed failed chip at Status, Calendars at Accounts); on phones the others
-           start closed. -->
+      <header class="sheet-dialog-head"><h2 tabindex="-1" autofocus id="sheet-settings-title">Settings</h2><form method="dialog"><button type="submit" class="sheet-btn sheet-icon-btn" aria-label="Close"><svg class="sheet-icon" aria-hidden="true"><use href="#i-x"></use></svg></button></form></header>
+      <!-- Four groups you can jump to (research/plan-improvements.md 12), listed down the left
+           (across the top on a phone). planner.mjs opens Settings at one (the Feed failed chip at
+           Status, Calendars at Accounts); on phones the others start closed. -->
+      <div class="sheet-settings-main">
       <nav class="sheet-settings-index" aria-label="Settings sections">
-        <button type="button" class="sheet-chip" data-act="settings-go" data-section="accounts">Accounts</button>
-        <button type="button" class="sheet-chip" data-act="settings-go" data-section="day">Day</button>
-        <button type="button" class="sheet-chip" data-act="settings-go" data-section="claude">Claude</button>
-        <button type="button" class="sheet-chip" data-act="settings-go" data-section="status">Status</button>
+        <button type="button" class="sheet-settings-tab" data-act="settings-go" data-section="accounts"><svg class="sheet-icon" aria-hidden="true"><use href="#i-user"></use></svg>Accounts</button>
+        <button type="button" class="sheet-settings-tab" data-act="settings-go" data-section="day"><svg class="sheet-icon" aria-hidden="true"><use href="#i-sun"></use></svg>Day</button>
+        <button type="button" class="sheet-settings-tab" data-act="settings-go" data-section="claude"><svg class="sheet-icon" aria-hidden="true"><use href="#i-sparkles"></use></svg>Claude</button>
+        <button type="button" class="sheet-settings-tab" data-act="settings-go" data-section="status"><svg class="sheet-icon" aria-hidden="true"><use href="#i-activity"></use></svg>Status</button>
       </nav>
+
+      <div class="sheet-settings-body">
 
       <details class="sheet-settings-group" id="sheet-settings-accounts" data-section="accounts" open>
         <summary class="sheet-settings-group-title">Accounts</summary>
@@ -238,7 +241,7 @@ import "../../styles/plan-shell.css";
           <p class="small">Claude reads these, read-only, when you plan your day. Their sign-ins stay on the server.</p>
           <ul class="sheet-mail" data-mail-accounts></ul>
           <template data-mail-row>
-            <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-link" data-act="mail-remove">Remove</button></li>
+            <li><span data-mail-name></span> <span class="small sheet-mail-error" data-mail-error></span> <button type="button" class="sheet-btn ghost" data-act="mail-remove">Remove</button></li>
           </template>
           <button type="button" class="sheet-btn" data-act="mail-connect">Connect an account</button>
         </section>
@@ -250,7 +253,7 @@ import "../../styles/plan-shell.css";
           <p><span role="status" data-busy-saved></span></p>
           <p class="small"><span data-cal-account></span> <span class="sheet-mail-error" data-cal-error></span></p>
           <button type="button" class="sheet-btn" data-act="cal-connect">Connect</button>
-          <button type="button" class="sheet-link" data-act="cal-disconnect" hidden>Disconnect</button>
+          <button type="button" class="sheet-btn ghost" data-act="cal-disconnect" hidden>Disconnect</button>
           <!-- Extra calendars (was its own dialog): planner.mjs fills and saves them. -->
           <h4 id="sheet-cal-ids-title">Other calendars</h4>
           <p class="small">Your main Google calendar always shows. Paste another one's Calendar ID, one per line. Only you see them; never on /now.</p>
@@ -267,7 +270,7 @@ import "../../styles/plan-shell.css";
           <details class="sheet-settings-more"><summary>More</summary><p class="small">The plan starts 30 minutes after you wake; your readiness, a short night or Rest Mode can lighten the day, and a ring workout ticks your Gym habit. Kept for 60 days, never shared and never sent to Claude: sleep start and end times; each day's sleep, readiness and activity scores and their contributors, hours slept, efficiency, deep and REM time, lowest and average heart rate, HRV, temperature deviation, steps and stress; Oura's bedtime window; workouts' day, times and type; Rest Mode's days; and a low-battery flag.</p></details>
           <p class="small"><span role="status" data-oura-status></span> <span class="sheet-mail-error" data-oura-error></span></p>
           <button type="button" class="sheet-btn" data-act="oura-connect">Connect</button>
-          <button type="button" class="sheet-link" data-act="oura-disconnect" hidden>Disconnect</button>
+          <button type="button" class="sheet-btn ghost" data-act="oura-disconnect" hidden>Disconnect</button>
         </section>
 
       <!-- Hevy (docs/sheet-hevy.md): src/sheet/hevy-settings.mjs fills it. The key field is write-only. -->
@@ -282,10 +285,15 @@ import "../../styles/plan-shell.css";
             <button type="submit" class="sheet-btn primary">Save</button>
           </form>
           <p class="small" role="status" data-hevy-note></p>
-          <button type="button" class="sheet-link" data-act="hevy-disconnect" hidden>Disconnect</button>
-          <h4 id="sheet-gym-nudge-title">Gym start nudge</h4>
-          <p class="small">Telegram says when the Gym block starts and which routine is next. One a day, no buttons.</p>
-          <p class="sheet-dialog-end"><span class="small" role="status" data-gym-nudge-note></span> <button type="button" class="sheet-btn" data-act="gym-nudge" aria-pressed="false">Gym start nudge</button></p>
+          <button type="button" class="sheet-btn ghost" data-act="hevy-disconnect" hidden>Disconnect</button>
+          <div class="sheet-field">
+            <div class="sheet-field-text">
+              <h4 id="sheet-gym-nudge-title">Gym start nudge</h4>
+              <p class="small">Telegram says when the Gym block starts and which routine is next. One a day, no buttons.</p>
+            </div>
+            <button type="button" class="sheet-switch" data-act="gym-nudge" aria-pressed="false"><span class="visually-hidden">Gym start nudge</span></button>
+          </div>
+          <p class="small" role="status" data-gym-nudge-note></p>
         </section>
       </details>
 
@@ -300,18 +308,24 @@ import "../../styles/plan-shell.css";
 
         <!-- Completion sound (docs/sheet.md, "Completion"): src/sheet/planner.mjs keeps it in this browser. -->
         <section class="sheet-settings-part" aria-labelledby="sheet-sound-title">
-          <h3 id="sheet-sound-title">Completion sound</h3>
-          <p class="small">A soft tick when you check something off, on this device only. It follows the silent switch.</p>
-          <p class="sheet-dialog-end"><button type="button" class="sheet-btn" data-act="sound" aria-pressed="false">Sound</button></p>
+          <div class="sheet-field">
+            <div class="sheet-field-text">
+              <h3 id="sheet-sound-title">Completion sound</h3>
+              <p class="small">A soft tick when you check something off, on this device only. It follows the silent switch.</p>
+            </div>
+            <button type="button" class="sheet-switch" data-act="sound" aria-pressed="false"><span class="visually-hidden">Sound</span></button>
+          </div>
         </section>
 
         <section class="sheet-settings-part" aria-labelledby="sheet-sleep-title">
           <!-- Wind-down (docs/sheet-v5.md, "Wind-down"): src/sheet/bedtime-settings.mjs fills it. -->
           <h3 id="sheet-sleep-title">Sleep</h3>
           <p class="small">No block or habit goes in the hour before bed, and Telegram says when to wind down and when it's bedtime. With no bedtime set, Oura's suggested one is used when it has one.</p>
-          <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn" data-act="bedtime-ease" aria-pressed="true">Ease in</button> <button type="button" class="sheet-btn" data-act="wind-down" aria-pressed="true">Wind-down</button> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
+          <p class="sheet-dialog-end"><label for="sheet-bedtime">Bedtime</label> <input id="sheet-bedtime" type="time" step="900"> <button type="button" class="sheet-btn primary" data-act="save-bedtime">Save</button></p>
+          <div class="sheet-field is-sub"><span class="sheet-field-text" aria-hidden="true">Ease in</span> <button type="button" class="sheet-switch" data-act="bedtime-ease" aria-pressed="true"><span class="visually-hidden">Ease in</span></button></div>
+          <div class="sheet-field is-sub"><span class="sheet-field-text" aria-hidden="true">Wind-down</span> <button type="button" class="sheet-switch" data-act="wind-down" aria-pressed="true"><span class="visually-hidden">Wind-down</span></button></div>
           <p class="small" role="status" data-bedtime-note></p>
-          <p><button type="button" class="sheet-link" data-act="oura-week">Sleep this week</button></p>
+          <p><button type="button" class="sheet-btn ghost" data-act="oura-week"><svg class="sheet-icon" aria-hidden="true"><use href="#i-moon"></use></svg>Sleep this week</button></p>
           <!-- Wake alarm (docs/sheet-alarms.md): src/sheet/bedtime-settings.mjs fills the link. -->
           <p class="small"><a data-alarm href="#">Set iPhone alarm</a> <span data-alarm-note></span></p>
         </section>
@@ -355,17 +369,27 @@ import "../../styles/plan-shell.css";
 
       <!-- Replans (docs/sheet-v5.md, "/plan"): src/sheet/replan-settings.mjs fills and saves it. -->
         <section class="sheet-settings-part" aria-labelledby="sheet-replans-title">
-          <h3 id="sheet-replans-title">Replans</h3>
-          <p class="small">Claude replans the rest of the day when something changes, at most once an hour.</p>
+          <div class="sheet-field">
+            <div class="sheet-field-text">
+              <h3 id="sheet-replans-title">Replans</h3>
+              <p class="small">Claude replans the rest of the day when something changes, at most once an hour.</p>
+            </div>
+            <button type="button" class="sheet-switch" data-act="replans" aria-pressed="false"><span class="visually-hidden">Replans</span></button>
+          </div>
+          <p class="small" role="status" data-replans-note></p>
           <details class="sheet-settings-more"><summary>More</summary><p class="small">When something changes during the day (a busy time lands on a block, a course task comes due), Claude plans the rest of the day again, at most once an hour. A replan may move a block it placed until the block starts; one you moved stays put.</p></details>
-          <p class="sheet-dialog-end"><span class="small" role="status" data-replans-note></span> <button type="button" class="sheet-btn" data-act="replans" aria-pressed="false">Replans</button></p>
         </section>
 
         <section class="sheet-settings-part" aria-labelledby="sheet-auto-approve-title">
-          <h3 id="sheet-auto-approve-title">Auto-approve</h3>
-          <p class="small">A plan's blocks count without Approve all.</p>
+          <div class="sheet-field">
+            <div class="sheet-field-text">
+              <h3 id="sheet-auto-approve-title">Auto-approve</h3>
+              <p class="small">A plan's blocks count without Approve all.</p>
+            </div>
+            <button type="button" class="sheet-switch" data-act="auto-approve" aria-pressed="false"><span class="visually-hidden">Auto-approve</span></button>
+          </div>
+          <p class="small" role="status" data-auto-approve-note></p>
           <details class="sheet-settings-more"><summary>More</summary><p class="small">A plan's blocks count as soon as Claude makes them: they get calendar events and nudges without Approve all. Move or remove any of them here.</p></details>
-          <p class="sheet-dialog-end"><span class="small" role="status" data-auto-approve-note></span> <button type="button" class="sheet-btn" data-act="auto-approve" aria-pressed="false">Auto-approve</button></p>
         </section>
 
       <!-- Triage rules (docs/sheet-v5.md, "/plan"): src/sheet/triage-settings.mjs fills and saves them. -->
@@ -403,8 +427,10 @@ import "../../styles/plan-shell.css";
           <ul class="sheet-mail" data-pace></ul>
         </section>
       </details>
+      </div>
+      </div>
 
-      <form method="dialog" class="sheet-dialog-end"><button type="submit" class="sheet-btn">Close</button></form>
+      <form method="dialog" class="sheet-dialog-end sheet-dialog-foot"><button type="submit" class="sheet-btn">Close</button></form>
     </dialog>
 
     <!-- A task's estimate, time, due date and tag, no typed syntax: src/sheet/task-details-dialog.mjs. -->
@@ -470,6 +496,22 @@ import "../../styles/plan-shell.css";
       <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></symbol>
       <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
       <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
+      <!-- Menus and dialogs (plan-overlays.css): Lucide x, info, sunrise, chevrons-right, archive,
+           trash-2, settings, circle-help, shield, log-out, external-link, eye-off, user and activity. -->
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
+      <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M12 2v8" /><path d="m4.93 10.93 1.41 1.41" /><path d="M2 18h2" /><path d="M20 18h2" /><path d="m19.07 10.93-1.41 1.41" /><path d="M22 22H2" /><path d="m8 6 4-4 4 4" /><path d="M16 18a4 4 0 0 0-8 0" /></symbol>
+      <symbol id="i-chevrons-right" viewBox="0 0 24 24"><path d="m6 17 5-5-5-5" /><path d="m13 17 5-5-5-5" /></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><path d="M10 11v6" /><path d="M14 11v6" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></symbol>
+      <symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></symbol>
+      <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></symbol>
+      <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></symbol>
     </svg>
 
   </section>
@@ -496,22 +538,6 @@ import "../../styles/plan-shell.css";
   const setupHabits = (root) => import("../../sheet/habit-list.mjs").then((m) => m.setupHabits(root));
   // School load (docs/sheet-glance.md) loads after sign-in, off the first load.
   const setupSchoolLoad = (root) => import("../../sheet/school-load-view.mjs").then((m) => m.setupSchoolLoad(root)).catch(console.error);
-      <!-- Menus and dialogs (plan-overlays.css): Lucide x, info, sunrise, chevrons-right, archive,
-           trash-2, settings, circle-help, shield, log-out, external-link, eye-off, user and activity. -->
-      <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
-      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></symbol>
-      <symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M12 2v8" /><path d="m4.93 10.93 1.41 1.41" /><path d="M2 18h2" /><path d="M20 18h2" /><path d="m19.07 10.93-1.41 1.41" /><path d="M22 22H2" /><path d="m8 6 4-4 4 4" /><path d="M16 18a4 4 0 0 0-8 0" /></symbol>
-      <symbol id="i-chevrons-right" viewBox="0 0 24 24"><path d="m6 17 5-5-5-5" /><path d="m13 17 5-5-5-5" /></symbol>
-      <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></symbol>
-      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><path d="M10 11v6" /><path d="M14 11v6" /></symbol>
-      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></symbol>
-      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></symbol>
-      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></symbol>
-      <symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></symbol>
-      <symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6" /><path d="M10 14 21 3" /><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></symbol>
-      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" /><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" /><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" /><path d="m2 2 20 20" /></symbol>
-      <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></symbol>
-      <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></symbol>
   // Reflow rest of today (docs/sheet.md) loads after sign-in, off the first load.
   const setupReflow = (root) => import("../../sheet/reflow-view.mjs").then((m) => m.setupReflow(root)).catch(console.error);
   // The Doing view (docs/sheet.md, "On the phone") loads on a phone, after sign-in, or when the
@@ -525,6 +551,8 @@ import "../../styles/plan-shell.css";
     if (narrow.matches) drawWaits.push(load());
     else narrow.addEventListener("change", () => load().catch(console.error), { once: true });
   };
+  // The menus', dialogs' and toast's styles (overlays.mjs) load once signed in, off the first load.
+  const setupOverlays = () => import("../../sheet/overlays.mjs").catch(console.error);
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
@@ -534,5 +562,3 @@ import "../../styles/plan-shell.css";
   setupFocus(document.querySelector(".sheet-planner"));
   start(document.querySelector(".sheet-planner"), [setupOverlays, setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);
 </script>
-  // The menus', dialogs' and toast's styles (overlays.mjs) load once signed in, off the first load.
-  const setupOverlays = () => import("../../sheet/overlays.mjs").catch(console.error);

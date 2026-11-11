@@ -1,32 +1,136 @@
 /* Settings (docs/sheet.md): added as text when settings.mjs loads, which openSettings awaits
    before the dialog opens, so /plan's first paint carries none of it (Lighthouse's
-   unused-css-rules gate). The dialog itself is static markup in plan/index.astro. */
-/* Settings' groups and their index (research/plan-improvements.md 12). The index stays at the top
-   of the dialog while it scrolls; each group is a <details>, closed on phones but the one asked
-   for (planner.mjs, openSettings). */
-.sheet-settings-index {
-  position: sticky; top: -1.25rem; z-index: 1; display: flex; flex-wrap: wrap; gap: 0.4rem;
-  margin: 0 -1.25rem 0.5rem; padding: 0.5rem 1.25rem; background: var(--bg); border-bottom: 1px solid var(--line);
+   unused-css-rules gate). The dialog itself is static markup in plan/index.astro; its frame
+   (header, footer, widths, the phone sheet) is plan-overlays.css's. */
+/* Its four groups down the left, as Linear's and Notion's settings do (research/plan-improvements.md
+   12): the list stays put while the groups scroll, and marks the one in view
+   (settings-sections.mjs). On a phone the list runs across the top as a segmented control. */
+.sheet-settings-main { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 0 24px; align-items: start; }
+.sheet-settings-index { position: sticky; top: 60px; z-index: 1; display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.sheet-settings-tab {
+  display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius);
+  font: 500 13px/1.2 var(--sans); letter-spacing: -0.01em; color: var(--text-2); text-align: left;
+  background: none; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
-.sheet-settings-group { border-bottom: 1px solid var(--line); padding: 0.25rem 0 0.75rem; scroll-margin-top: 3.5rem; }
-.sheet-settings-group-title { font-size: 1.0625rem; font-weight: 600; padding: 0.5rem 0; cursor: pointer; }
-.sheet-settings-part h4 { font-size: 0.9375rem; margin: 0.75rem 0 0.25rem; }
-.sheet-settings-more > summary { font-size: 0.8125rem; color: var(--muted); cursor: pointer; width: fit-content; }
-.sheet-settings-more > p { margin-top: 0.25rem; }
-@media (pointer: coarse) {
-  .sheet-settings-index .sheet-chip { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
-  /* Line height, not flex, so the summaries keep their disclosure triangle. */
-  .sheet-settings-group-title { line-height: 2.75rem; padding: 0; }
-  .sheet-settings-more > summary { line-height: 1.5rem; }
+.sheet-settings-tab .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; color: var(--text-3); }
+.sheet-settings-tab:hover { background: var(--surface-2); color: var(--text-1); }
+.sheet-settings-tab[aria-current="true"] { background: var(--surface-2); color: var(--text-1); }
+.sheet-settings-tab[aria-current="true"] .sheet-icon { color: var(--accent-text); }
+.sheet-settings-body { min-width: 0; }
+
+/* A group: its name as the section title (a chevron, not the browser's triangle), then its parts. */
+.sheet-settings-group { scroll-margin-top: -4px; }
+.sheet-settings-group + .sheet-settings-group { border-top: 1px solid var(--border); margin-top: 8px; }
+.sheet-settings-group-title {
+  display: flex; align-items: center; gap: 6px; padding: 12px 0 4px; list-style: none; cursor: pointer;
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-1); width: fit-content;
+}
+.sheet-settings-group-title::-webkit-details-marker, .sheet-settings-more > summary::-webkit-details-marker { display: none; }
+/* Lucide chevron-right, drawn by a mask so the summary keeps its own text. */
+.sheet-settings-group-title::before, .sheet-settings-more > summary::before {
+  content: ""; flex: none; width: 16px; height: 16px; background: var(--text-3);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 18 6-6-6-6'/%3E%3C/svg%3E") center / 16px no-repeat;
+}
+:is(.sheet-settings-group, .sheet-settings-more)[open] > summary::before { rotate: 90deg; }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-settings-group-title::before, .sheet-settings-more > summary::before { transition: rotate 150ms var(--ease); }
 }
 
-/* Settings: mail accounts (src/sheet/mail-settings.mjs) */
-.sheet-settings-part h3 { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
-.sheet-mail { list-style: none; padding: 0; margin: 0.5rem 0; }
-.sheet-mail li { padding: 0.25rem 0; }
+/* A part: its title, a line of help in the third ink, then its controls. */
+.sheet-settings-part { padding: 12px 0 16px; }
+.sheet-settings-part + .sheet-settings-part { border-top: 1px solid var(--border-faint); }
+.sheet-settings-part :is(h3, h4) { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 2px; }
+.sheet-settings-part h4 { margin-top: 16px; }
+.sheet-settings-part .small { margin: 2px 0 8px; }
+.sheet-settings-part .small:empty { display: none; }
+.sheet-settings-part > p:not(.small, .sheet-dialog-end) { margin: 8px 0; }
+.sheet-settings-part > .sheet-btn + .sheet-btn { margin-left: 4px; }
+/* A lone ghost button (Sleep this week) lines its text up with the words above it. */
+.sheet-settings-part > p > .sheet-btn.ghost:only-child { margin-left: -10px; }
+
+/* A row of controls (a field, its note, Save) sits left to right under the help. */
+.sheet-settings-part .sheet-dialog-end { flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 8px; margin: 8px 0 0; }
+.sheet-settings-part .sheet-dialog-end > label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.sheet-settings-part .sheet-dialog-end > .small { order: 9; flex-basis: 100%; margin: 0; }
+
+/* On/off settings: the title and help on the left, a switch on the right. */
+.sheet-field { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.sheet-field-text { min-width: 0; }
+.sheet-field-text > :is(h3, h4) { margin-top: 0; }
+.sheet-field .sheet-switch { margin-top: 1px; }
+.sheet-field.is-sub { align-items: center; min-height: 32px; margin-top: 4px; font-size: 13px; color: var(--text-1); }
+.sheet-field.is-sub .sheet-switch { margin-top: 0; }
+
+/* The switch: a 32×18 track, the knob at the right and the accent when on. It is the same
+   aria-pressed button as before (bedtime-settings.mjs, replan-settings.mjs, hevy-settings.mjs,
+   planner.mjs), named by its hidden words. */
+.sheet-switch {
+  position: relative; flex: none; width: 32px; height: 18px; padding: 0; border: 0; border-radius: 999px; cursor: pointer;
+  background: color-mix(in srgb, var(--text-3) 70%, var(--surface)); touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.sheet-switch::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: #ffffff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+}
+.sheet-switch[aria-pressed="true"] { background: var(--accent); }
+.sheet-switch[aria-pressed="true"]::before { translate: 14px 0; }
+.sheet-switch:hover { filter: brightness(0.96); }
+/* 44px to tap on a touch screen, the look unchanged. */
+.sheet-switch::after { content: ""; position: absolute; inset: -4px; }
+@media (pointer: coarse) { .sheet-switch::after { inset: -13px -6px; } }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-switch, .sheet-switch::before { transition: background-color 150ms var(--ease), translate 150ms var(--ease); }
+}
+
+/* "More" and "Where to find an ID": a quiet disclosure. */
+.sheet-settings-more > summary {
+  display: flex; align-items: center; gap: 2px; width: fit-content; min-height: 24px; list-style: none; cursor: pointer;
+  font-size: 12px; font-weight: 500; color: var(--text-3);
+}
+.sheet-settings-more > summary:hover { color: var(--text-1); }
+.sheet-settings-more > summary::before { width: 14px; height: 14px; mask-size: 14px; }
+.sheet-settings-more > p { margin: 4px 0 8px 16px; }
+
+/* Text areas (calendar IDs, the interest profile) are ordinary fields, full width. */
+.sheet-settings .sheet-reflect { margin: 8px 0 0; }
+#sheet-cal-ids { font-family: var(--sans); font-size: 14px; }
+
+/* Lists: mail accounts, habits, triage rules, feeds, pace. One hairline row each, its action at the end. */
+.sheet-mail { list-style: none; padding: 0; margin: 8px 0; }
+.sheet-mail li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-height: 36px; padding: 4px 0; border-bottom: 1px solid var(--border-faint); overflow-wrap: anywhere; }
+.sheet-mail li:last-child { border-bottom: 0; }
+.sheet-mail li > .sheet-btn { margin-left: auto; }
+.sheet-mail li > .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; color: var(--success); }
+.sheet-mail li.sheet-mail-error > .sheet-icon { color: var(--danger); }
+.sheet-mail .small { margin: 0; }
+.sheet-mail-error { color: var(--danger); }
+
 /* v5 D2: the workload cap, a short hours field; v5 H1: the habit form. */
-.sheet-cap { width: 5rem; }
-.sheet-habit-form { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; font-size: 0.9375rem; }
-.sheet-habit-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
-.sheet-habit-form legend { float: left; margin-right: 0.5rem; }
+.sheet-cap { width: 80px; }
+.sheet-habit-form { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 8px; font-size: 13px; color: var(--text-2); }
+.sheet-habit-form > label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.sheet-habit-form fieldset { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; border: 0; padding: 0; margin: 0; }
+.sheet-habit-form fieldset label { display: inline-flex; align-items: center; gap: 4px; }
+.sheet-habit-form legend { float: left; margin-right: 4px; font-weight: 500; }
 .sheet-habit-form .sheet-dialog-end { flex-basis: 100%; margin: 0; }
+
+@media (pointer: coarse) {
+  .sheet-settings-tab { min-height: 44px; }
+  .sheet-settings-more > summary { min-height: 44px; }
+}
+
+/* Phones: the list runs across the top, under the header, as a segmented control; each group
+   stays a disclosure, the others closed (glance.mjs, settingsOpen). */
+@media (max-width: 40rem) {
+  .sheet-settings-main { display: block; }
+  .sheet-settings-index {
+    top: 60px; flex-direction: row; gap: 2px; margin: 0 0 4px; padding: 2px;
+    background: var(--surface-2); border-radius: var(--radius-md);
+  }
+  .sheet-settings-tab { flex: 1 1 0; justify-content: center; min-width: 0; padding: 0 4px; font-size: 13px; }
+  .sheet-settings-tab .sheet-icon { display: none; }
+  .sheet-settings-tab:hover { background: none; }
+  .sheet-settings-tab[aria-current="true"] { background: var(--surface); box-shadow: var(--shadow-card); }
+  .sheet-settings-group { scroll-margin-top: 48px; }
+  .sheet-settings-group-title { width: 100%; min-height: 44px; padding: 0; }
+}
