@@ -1,4 +1,6 @@
-/* Settings on /plan only (the gym page shares sheet.css, so these stay out of it). */
+/* Settings (docs/sheet.md): added as text when settings.mjs loads, which openSettings awaits
+   before the dialog opens, so /plan's first paint carries none of it (Lighthouse's
+   unused-css-rules gate). The dialog itself is static markup in plan/index.astro. */
 /* Settings' groups and their index (research/plan-improvements.md 12). The index stays at the top
    of the dialog while it scrolls; each group is a <details>, closed on phones but the one asked
    for (planner.mjs, openSettings). */
@@ -17,3 +19,14 @@
   .sheet-settings-group-title { line-height: 2.75rem; padding: 0; }
   .sheet-settings-more > summary { line-height: 1.5rem; }
 }
+
+/* Settings: mail accounts (src/sheet/mail-settings.mjs) */
+.sheet-settings-part h3 { font-size: 1rem; margin: 0.5rem 0 0.25rem; }
+.sheet-mail { list-style: none; padding: 0; margin: 0.5rem 0; }
+.sheet-mail li { padding: 0.25rem 0; }
+/* v5 D2: the workload cap, a short hours field; v5 H1: the habit form. */
+.sheet-cap { width: 5rem; }
+.sheet-habit-form { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; font-size: 0.9375rem; }
+.sheet-habit-form fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; }
+.sheet-habit-form legend { float: left; margin-right: 0.5rem; }
+.sheet-habit-form .sheet-dialog-end { flex-basis: 100%; margin: 0; }

@@ -1,30 +1,38 @@
 ---
 // Every page: head, top bar, main, footer. Only system fonts and one inline stylesheet.
+// Each page imports its base stylesheet: the site's pages global.css, and the planner's app pages
+// (app="plan": /plan and /plan/gym) plan-base.css, so /plan doesn't ship the portfolio's rules
+// (hero, plant, cards, write-ups) it never uses.
+// app="plan" makes the page an app: no site top bar or footer (the page draws its own bar),
+// data-app="plan" on <html> for the planner's tokens, no Fraunces preload, and the browser bar in
+// the planner's own background colours.
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 import Seo, { type Props as SeoProps } from "../components/Seo.astro";
 import Analytics from "../components/Analytics.astro";
 import { siteConfig } from "../config";
-import "../styles/global.css";
 
-type Props = SeoProps;
+type Props = SeoProps & { app?: "plan" };
+const { app, ...seo } = Astro.props;
+// The browser bar's colour, light and dark: each theme's page background.
+const [light, dark] = app ? ["#ffffff", "#0f1011"] : ["#f9f3ea", "#1b1915"];
 ---
 
-<html lang="en">
+<html lang="en" data-app={app}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- The visitor's light/dark pick, applied before first paint so the page never flashes the other theme. -->
     {/* And again when Back/Forward restores the page from the bfcache with the theme it had then. */}
     <script is:inline data-theme-init>(() => { const r = document.documentElement, pick = () => { try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") r.dataset.theme = t; else delete r.dataset.theme; } catch {} }; pick(); addEventListener("pageshow", (e) => e.persisted && pick()); })();</script>
-    <Seo {...Astro.props} />
+    <Seo {...seo} />
     <!-- The two fonts (global.css), fetched in parallel with the stylesheet. -->
-    <link rel="preload" href="/fonts/fraunces-display.woff2" as="font" type="font/woff2" crossorigin />
+    {!app && <link rel="preload" href="/fonts/fraunces-display.woff2" as="font" type="font/woff2" crossorigin />}
     <link rel="preload" href="/fonts/inter-text.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f3ea" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1b1915" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content={light} />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content={dark} />
     <meta name="color-scheme" content="light dark" />
     {siteConfig.analytics.searchConsole && <meta name="google-site-verification" content={siteConfig.analytics.searchConsole} />}
     <slot name="head" />
@@ -32,11 +40,11 @@ type Props = SeoProps;
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-    <Header />
+    {!app && <Header />}
     <main id="main">
       <slot />
     </main>
-    <Footer />
+    {!app && <Footer />}
     <slot name="end" />
   </body>
 </html>

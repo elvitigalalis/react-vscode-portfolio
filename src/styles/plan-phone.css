@@ -36,14 +36,6 @@
   .sheet-btn-approve::after { content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 2.75rem); height: 2.75rem; translate: -50% -50%; }
   /* In the week and the banner, Approve itself is 24 px tall (WCAG 2.5.8). */
   :is(.sheet-proposal, .sheet-banner) > .sheet-btn-approve { min-height: 1.5rem; padding-inline: 0.5rem; }
-  /* Plan today: the 6 px resize bar and the shutdown line keep their look; the block lets the
-     hit areas reach past its edge (its title still clips itself). */
-  .sheet-block { overflow: visible; }
-  .sheet-resize::after { content: ""; position: absolute; left: 0; right: 0; top: -0.5rem; height: 2.75rem; }
-  .sheet-shutline::after { content: ""; position: absolute; left: 0; right: 0; top: -1.375rem; height: 2.75rem; }
-  /* Above the resize bar's hit area, which covers all of a block under 30 minutes. */
-  .sheet-block-x { position: relative; z-index: 1; min-width: 2.75rem; }
-  .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
 }
 
 /* The Now/Next line above today (research U18). In the week's narrow column each part keeps one
@@ -51,7 +43,7 @@
 .sheet-nownext { display: flex; flex-wrap: wrap; align-items: center; gap: 0 0.35rem; margin: 0.2rem 0 0; font-size: 0.8125rem; line-height: 1.5rem; color: var(--muted); }
 .sheet-nownext b { font-weight: 600; color: var(--fg); }
 .sheet-nownext-part { min-width: 0; }
-.sheet-nownext-done { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 0.3rem; cursor: pointer; }
+.sheet-nownext-done { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; padding: 0; color: var(--accent-text); background: none; border: 1px solid var(--line); border-radius: 0.3rem; cursor: pointer; }
 @media (min-width: 48.01rem) {
   .sheet-nownext-part { flex: 1 1 calc(100% - 2rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
@@ -65,10 +57,7 @@
 .sheet-details-field { display: grid; gap: 0.3rem; margin: 0 0 0.9rem; font-size: 0.9375rem; }
 .sheet-details-field > label { font-weight: 600; }
 .sheet-details-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
-.sheet-details-row input {
-  flex: 1 1 8rem; min-width: 0; min-height: 2.75rem; font: inherit; font-size: 1rem; color: var(--fg); background: var(--bg);
-  border: 1px solid var(--line); border-radius: 0.4rem; padding: 0.3rem 0.5rem;
-}
+.sheet-details-row input { flex: 1 1 8rem; min-width: 0; min-height: 2.75rem; }
 .sheet-details-row .sheet-link { min-height: 2.75rem; min-width: 2.75rem; }
 .sheet-details-presets { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .sheet-taskinfo .sheet-btn { min-height: 2.75rem; min-width: 2.75rem; justify-content: center; }
@@ -101,7 +90,7 @@
   }
   .is-swipe-left::before { left: auto; right: 0; justify-content: flex-end; text-indent: 0; padding-inline-end: 0; }
   .is-swipe-left::before { direction: rtl; text-indent: 0.75rem; }
-  .is-armed::before { background: var(--accent); color: var(--bg); }
+  .is-armed::before { background: var(--accent); color: var(--on-btn); }
   .is-leaving { opacity: 0.5; }
   .is-day-swiping { translate: var(--swipe) 0; }
   .sheet-week:has(.is-day-swiping) { overflow-x: clip; }
@@ -115,7 +104,7 @@
    /now don't carry it. The row being checked shows its ✓ in the accent, its words go muted while
    a strike runs through them, and specks or confetti fly over the page. The script adds none of
    it under reduced motion. */
-.sheet-row.is-checking .sheet-check { opacity: 1; color: var(--accent); }
+.sheet-row.is-checking .sheet-check { opacity: 1; color: var(--accent-text); }
 .sheet-row.is-checking .sheet-check path { stroke-dasharray: 1 1; }
 .sheet-row.is-checking :is(.sheet-title, .sheet-when, .sheet-details) { color: var(--muted); }
 .sheet-strike { background: linear-gradient(currentColor 0 0) no-repeat 0 58% / 0% 1px; }

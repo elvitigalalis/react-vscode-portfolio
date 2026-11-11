@@ -1,0 +1,97 @@
+/* The planner's base components (docs/sheet.md, "Look"): buttons, kbd chips, inputs, and the
+   dialog and menu surface. /plan and /plan/gym import it after sheet.css, so these win over the
+   shared rules there, which /now and /oauth/consent keep in the site's look. Tokens: plan-base.css. */
+
+/* Buttons: one system, five variants, 28px tall (32px with .lg, 44px on a touch screen).
+   Secondary is .sheet-btn alone; .primary fills with the accent; .ghost has no border; .danger
+   is red; .sheet-icon-btn is a square ghost for one icon. They press in a little on :active. */
+.sheet-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 28px; padding: 0 10px; border-radius: var(--radius);
+  font: 500 13px/1.2 var(--sans); letter-spacing: -0.01em; text-decoration: none;
+  color: var(--text-1); background: var(--surface); border: 1px solid var(--border-strong);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04); cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.sheet-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.sheet-btn.primary { color: var(--on-accent); background: var(--accent); border-color: transparent; font-weight: 500; }
+.sheet-btn.primary:hover { background: var(--accent-hover); }
+.sheet-btn.ghost, .sheet-btn.sheet-icon-btn { background: transparent; border-color: transparent; box-shadow: none; }
+.sheet-btn.ghost:hover, .sheet-btn.sheet-icon-btn:hover { background: var(--surface-2); }
+.sheet-btn.danger { color: var(--danger); }
+.sheet-btn.danger:hover { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
+.sheet-btn.sheet-icon-btn { width: 28px; min-width: 28px; padding: 0; color: var(--text-2); }
+.sheet-btn.lg { min-height: 32px; padding: 0 12px; }
+.sheet-btn.sheet-icon-btn.lg { width: 32px; min-width: 32px; }
+.sheet-btn .sheet-icon { width: 16px; height: 16px; stroke-width: 1.5; }
+.sheet-btn:disabled { opacity: 0.5; cursor: default; }
+/* A toggle (aria-pressed) reads as on with the accent's tint. */
+.sheet-btn[aria-pressed="true"]:not(.primary) { color: var(--accent-text); background: var(--accent-tint); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+@media (pointer: coarse) { .sheet-btn { min-height: 44px; } .sheet-btn.sheet-icon-btn { width: 44px; min-width: 44px; } }
+
+/* A button that reads as a link (Undo, Remove, Disconnect…): a ghost button in the accent's ink,
+   with no underline. Real links in prose stay links. */
+.sheet-link {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 6px;
+  font: 500 13px/1.2 var(--sans); color: var(--accent-text); text-decoration: none;
+  background: none; border: 0; border-radius: var(--radius); cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.sheet-link:hover { background: var(--surface-2); }
+.sheet-toast .sheet-link { margin: 0 -6px 0 6px; color: var(--accent-inverse); }
+.sheet-toast .sheet-link:hover { background: color-mix(in srgb, var(--bg) 14%, transparent); }
+
+@media (prefers-reduced-motion: no-preference) {
+  :is(.sheet-btn, .sheet-link, .sheet-chip) { transition: transform 150ms var(--ease); }
+  :is(.sheet-btn, .sheet-link, .sheet-chip):active:not(:disabled) { transform: scale(0.97); }
+}
+
+/* Shortcut chips: 11px on --surface-2, 4px radius; on the accent they turn translucent white. */
+kbd {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 4px;
+  font: 500 11px/1 var(--sans); letter-spacing: 0; color: var(--text-3);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.sheet-btn kbd { margin: 0 -4px 0 2px; font: 500 11px/1 var(--sans); opacity: 1; }
+.sheet-btn.primary kbd { color: inherit; background: rgb(255 255 255 / 0.18); border-color: transparent; }
+
+/* Inputs: text, number, date and time fields, text areas and selects. The task box (.sheet-add)
+   stays a bare line of text in its row. */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), textarea:not(.sheet-add), select) {
+  min-height: 32px; padding: 6px 10px; border-radius: var(--radius);
+  font: 400 14px/1.4 var(--sans); letter-spacing: -0.01em; color: var(--text-1);
+  background: var(--surface); border: 1px solid var(--border-strong);
+}
+:where(input, textarea, select):hover:not(:focus, .sheet-add) { border-color: color-mix(in srgb, var(--text-1) 24%, transparent); }
+:where(input, textarea, select):focus-visible { outline-offset: 0; border-color: var(--accent); }
+::placeholder { color: var(--text-4); opacity: 1; }
+:where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--accent); }
+/* Under 16px iOS Safari zooms the page into a field that takes focus. */
+@media (pointer: coarse) { :where(input, textarea, select) { font-size: 16px; } }
+
+/* Dialogs and menus share one raised surface: --surface, --shadow-pop and no border. Dialogs have
+   a 12px radius and a dimmed, slightly blurred page behind; menus an 8px radius and 4px padding. */
+.sheet-dialog {
+  color: var(--text-1); background: var(--surface); border: 0; border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop); padding: 20px; overscroll-behavior: contain;
+}
+/* Inside a raised surface, --bg is the surface, so what sits on "the page colour" (proposed
+   blocks, labels, the sticky Settings index) matches the box it sits in, in dark mode too. */
+.sheet-dialog, .sheet-menu { --bg: var(--surface); }
+.sheet-dialog::backdrop { background: rgb(0 0 0 / 0.4); backdrop-filter: blur(2px); }
+.sheet-menu {
+  color: var(--text-1); background: var(--surface); border: 0; border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop); padding: 4px;
+}
+.sheet-menu :is(button, a) { border-radius: var(--radius-sm); }
+.sheet-menu :is(button, a):hover { background: var(--surface-2); }
+/* A menu opened by click focuses its first item: the item's fill shows it, not a ring. */
+.sheet-menu :is(button, a):focus-visible { outline: none; background: var(--surface-2); }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet-menu:popover-open { animation: plan-pop 150ms var(--ease); }
+  .sheet-dialog[open] { animation: plan-pop 150ms var(--ease); }
+}
+@keyframes plan-pop { from { opacity: 0; transform: scale(0.98); } }
+
+/* The toast: --text-1 behind inverse text, raised. */
+.sheet-toast { border-radius: var(--radius-md); padding: 8px 12px; font-size: 13px; box-shadow: var(--shadow-pop); }

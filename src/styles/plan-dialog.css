@@ -1,0 +1,104 @@
+/* Plan today's dialog (plan-dialog.mjs, docs/sheet.md): the timeline, its blocks, hours, now and
+   shutdown lines, the proposal banner and the header bar. Added as text when plan-dialog.mjs
+   loads, the first time Plan today opens, so /plan's first paint carries none of it (Lighthouse's
+   unused-css-rules gate). The dialog itself is static markup in plan/index.astro. */
+.sheet-plan { width: min(56rem, calc(100vw - 2rem)); max-width: none; }
+.sheet-event, .sheet-block, .sheet-preview {
+  position: absolute; left: 0.25rem; right: 0.5rem; border-radius: 0.3rem; padding: 0.1rem 0.4rem;
+  font-size: 0.75rem; line-height: 1.25; overflow: hidden; overflow-wrap: anywhere;
+}
+.sheet-block { background: color-mix(in srgb, var(--accent) 22%, var(--bg)); border-left: 3px solid var(--accent); display: flex; gap: 0.3rem; }
+.sheet-block.is-done { opacity: 0.4; }
+.sheet-block-title { flex: 1; min-width: 0; overflow: hidden; }
+.sheet-block { cursor: grab; }
+/* Proposed blocks are Claude's until approved: a dashed outline, no fill. */
+.sheet-block.is-proposed { background: var(--bg); border: 1px dashed var(--accent); }
+.sheet-plan .sheet-task { cursor: grab; }
+.sheet-plan .sheet-task.is-picked { background: var(--chip); border-bottom-color: var(--accent); }
+.sheet-plan .sheet-title { cursor: pointer; }
+.sheet-block[data-source="course"] { background: color-mix(in srgb, var(--stem) 18%, var(--bg)); border-left: 3px solid var(--stem); }
+.sheet-block.is-proposed[data-source="course"] { background: var(--bg); }
+.sheet-block > .sheet-icon { margin-top: 0.15em; color: var(--muted); }
+.sheet-block-title .sheet-icon { margin-right: 0.2rem; color: var(--accent-text); }
+.sheet-banner {
+  display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0.5rem; padding: 0.35rem 0.6rem; font-size: 0.875rem;
+  border: 1px dashed var(--accent); border-radius: 0.4rem;
+}
+.sheet-banner > .sheet-icon { color: var(--accent-text); }
+.sheet-plan-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 1.25rem; margin-top: 0.75rem; }
+
+@media (max-width: 40rem) { .sheet-plan-body { grid-template-columns: 1fr; }
+}
+
+.sheet-timeline-wrap { max-height: 60vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 0.4rem; }
+
+.sheet-timeline { position: relative; margin-left: 3.25rem; }
+
+.sheet-hour { position: absolute; left: -3.25rem; right: 0; border-top: 1px solid var(--line); font-size: 0.6875rem; color: var(--muted); padding-left: 0.3rem; }
+
+.sheet-event { background: var(--chip); color: var(--muted); }
+
+/* × keeps 12px from Approve beside it, so each small target has its 24px circle (WCAG 2.5.8). */
+.sheet-block-x { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 0.2rem; margin-left: 2px; align-self: flex-start; }
+
+.sheet-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; touch-action: none; }
+
+.sheet-preview { border: 1px dashed var(--accent); color: var(--accent-text); pointer-events: none; }
+
+.sheet-shutline { position: absolute; left: -3.25rem; right: 0; border-top: 2px dashed var(--accent); cursor: ns-resize; touch-action: none; height: 0.75rem; }
+
+.sheet-shutline span { position: absolute; right: 0.4rem; top: -1.1rem; font-size: 0.6875rem; color: var(--accent-text); }
+
+@media (max-width: 40rem) { .sheet-timeline-wrap { max-height: 45vh; }
+}
+/* Plan today's header: the same bar at full width, with a "Done ≈" marker at the fill's end. */
+.sheet-planbar { position: relative; margin: 0.35rem 0 1.4rem; }
+
+.sheet-planbar .sheet-meter { height: 6px; border-radius: 3px; }
+
+.sheet-meter-mark { position: absolute; top: -3px; left: var(--at); width: 2px; height: 12px; margin-left: -1px; background: var(--fg); }
+
+.sheet-meter-mark span {
+  position: absolute; top: 14px; left: 0; transform: translateX(calc(-1 * var(--at))); white-space: nowrap;
+  font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+/* Under 30 minutes a block is one line: the title ends in an ellipsis, in full on hover. */
+.sheet-block.is-short { align-items: center; padding-block: 0; }
+
+.sheet-block.is-short .sheet-block-title { white-space: nowrap; text-overflow: ellipsis; }
+
+.sheet-block.is-short .sheet-block-x { align-self: center; }
+
+.sheet-block.is-short .sheet-btn-approve { align-self: center; }
+
+/* The now line: 2px, a dot at the timeline's edge and its time in the hour gutter. It comes
+   before the blocks, which cover it, so it never runs through their text. */
+.sheet-nowline { position: absolute; left: 0; right: 0; border-top: 2px solid var(--accent); margin-top: -1px; pointer-events: none; }
+
+.sheet-nowline::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+.sheet-nowline span {
+  position: absolute; left: -3.25rem; width: 3rem; top: -0.45rem; padding: 0.1rem 0 0.3rem 0.2rem; background: var(--bg); white-space: nowrap;
+  font-size: 0.6875rem; line-height: 1; color: var(--accent-text); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+.sheet-banner > .sheet-rev { color: var(--muted); font-size: 0.8125rem; }
+
+.sheet-banner > .sheet-btn-approve { margin-left: auto; align-self: center; font-size: 0.8125rem; padding: 0.15rem 0.5rem; }
+.sheet-plan-notes { list-style: none; padding: 0; margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted); }
+/* v5 H1: habit blocks, in the muted colour, and Settings' habit form. */
+.sheet-block.is-habit { background: color-mix(in srgb, var(--muted) 16%, var(--bg)); border-left: 3px solid var(--muted); }
+
+.sheet-block.is-habit.is-proposed { background: var(--bg); border: 1px dashed var(--muted); }
+
+/* Touch: the hit areas (plan-phone.css has the rest). */
+@media (pointer: coarse) {
+  /* Plan today: the 6 px resize bar and the shutdown line keep their look; the block lets the
+     hit areas reach past its edge (its title still clips itself). */
+  .sheet-block { overflow: visible; }
+  .sheet-resize::after { content: ""; position: absolute; left: 0; right: 0; top: -0.5rem; height: 2.75rem; }
+  .sheet-shutline::after { content: ""; position: absolute; left: 0; right: 0; top: -1.375rem; height: 2.75rem; }
+  /* Above the resize bar's hit area, which covers all of a block under 30 minutes. */
+  .sheet-block-x { position: relative; z-index: 1; min-width: 2.75rem; }
+  .sheet-block-x::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2.75rem; translate: 0 -50%; }
+}

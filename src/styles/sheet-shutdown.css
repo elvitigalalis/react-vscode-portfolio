@@ -1,8 +1,8 @@
 /* Shutdown that closes loops (docs/sheet.md, "Shutdown"). Added as text when shutdown-view.mjs
-   loads (Vite's ?inline), so /plan's first load carries none of it. Same tokens as global.css. */
+   loads (Vite's ?inline), so /plan's first load carries none of it. Tokens: plan-base.css. */
 .sheet-shut-wins { list-style: none; padding: 0; margin: 0.25rem 0 0.5rem; font-size: 0.875rem; }
 .sheet-shut-wins li { padding: 0.25rem 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-.sheet-shut-wins li::before { content: "✓ "; color: var(--accent); }
+.sheet-shut-wins li::before { content: "✓ "; color: var(--accent-text); }
 .sheet-shut-wins .sheet-meta { display: block; padding-left: 1.1em; color: var(--muted); font-size: 0.8125rem; }
 .sheet-shut-wins li.is-reading { color: var(--muted); border-bottom: 0; }
 .sheet-shut-wins li.is-reading::before { content: "… "; color: var(--muted); }

@@ -4,13 +4,15 @@ import Base from "../../layouts/Base.astro";
 import { siteConfig } from "../../config";
 import { SHEET } from "../../site.mjs";
 import "../../styles/sheet.css";
+import "../../styles/plan-base.css";
 import "../../styles/sheet-plan.css";
 import "../../styles/plan-phone.css";
 import "../../styles/sheet-focus.css";
-import "../../styles/plan-settings.css";
+import "../../styles/plan-ui.css";
+import "../../styles/plan-shell.css";
 ---
 
-<Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex>
+<Base title={`Plan · ${siteConfig.title}`} description="Lisul Elvitigala's weekly planner. Only he can sign in; the public view is at /now." path="/plan/" noindex app="plan">
   {SHEET.supabaseUrl && <link slot="head" rel="preconnect" href={SHEET.supabaseUrl} crossorigin />}
   <!-- Add to Home Screen: /plan/ opens full screen, as its own app (Web App Manifest,
        https://www.w3.org/TR/appmanifest/; scope and display as in /plan/gym/'s). -->
@@ -22,7 +24,10 @@ import "../../styles/plan-settings.css";
          the arrows step a day), Plan today, Shut down in its window, chips, Nudges and a ⋯ menu.
          src/sheet/topbar.mjs keeps its labels and the menu; feed-status.mjs the Feed failed chip;
          needs-you.mjs the Needs you chip (docs/sheet-morning.md, "/plan"). -->
-    <div class="sheet-bar-top">
+    <!-- The app's own 48px bar (plan-shell.css): the wordmark, ‹ Today › and the week's title on the
+         left; the actions and the light/dark/system switch (theme.mjs) on the right. -->
+    <header class="sheet-bar-top plan-bar">
+      <span class="plan-mark" aria-hidden="true"><svg class="sheet-icon"><use href="#i-calendar"></use></svg>Plan</span>
       <h1 data-week-title>Plan</h1>
       <div class="sheet-tools" data-tools hidden>
         <span class="sheet-nav">
@@ -38,9 +43,11 @@ import "../../styles/plan-settings.css";
           <button type="button" class="sheet-chip is-alert" data-act="settings" data-section="status" data-feed-alert hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-circle-alert"></use></svg><span class="sheet-chip-text">Feed failed</span></button>
         </span>
         <button type="button" class="sheet-btn sheet-nudges" data-act="telegram" aria-pressed="false" title="Telegram nudges. While they're off, blocks get Google's default alert"><svg class="sheet-icon" aria-hidden="true"><use href="#i-bell-off"></use></svg><span class="sheet-chip-text">Nudges</span></button>
-        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: gym, calendars, settings, help, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
+        <button type="button" class="sheet-btn sheet-icon-btn" popovertarget="sheet-more" aria-label="More: gym, calendars, settings, help, theme, privacy, sign out"><svg class="sheet-icon" aria-hidden="true"><use href="#i-more-horizontal"></use></svg></button>
       </div>
-    </div>
+      <!-- Hidden until theme.mjs runs: without JS the switch could do nothing. -->
+      <button type="button" class="sheet-btn sheet-icon-btn plan-theme" data-theme-switch aria-label="Theme" hidden><svg class="sheet-icon" aria-hidden="true"><use href="#i-monitor"></use></svg></button>
+    </header>
     <!-- On phones the bar holds ‹ day ›, Plan, Needs you, Nudges and ⋯ (sheet.css), so Gym lives
          here, a failed feed shows as a dot on ⋯ and the Feed failed item below, and in the shutdown
          window Plan today moves here to make room for Shut down. -->
@@ -51,6 +58,8 @@ import "../../styles/plan-settings.css";
       <button type="button" data-act="calendars">Calendars</button>
       <button type="button" data-act="settings">Settings <kbd>S</kbd></button>
       <button type="button" data-act="help">Help <kbd>?</kbd></button>
+      <button type="button" data-theme-switch hidden>Theme</button>
+      <a href="/privacy/">Privacy</a>
       <button type="button" data-act="sign-out">Sign out</button>
     </div>
     <!-- Messages to Claude (docs/sheet-messages.md): src/sheet/message-box.mjs sends them and
@@ -88,6 +97,8 @@ import "../../styles/plan-settings.css";
       <summary>Log (<span data-log-count>0</span>)</summary>
       <ul class="sheet-rows" data-log-list></ul>
     </details>
+    <!-- Until the planner opens (signed out), the bar has no ⋯ menu, so Privacy shows here. -->
+    <p class="plan-foot"><a href="/privacy/">Privacy</a> · <a href="/">lisul-elvi.com</a></p>
 
     <div class="sheet-menu" data-menu popover>
       <!-- A task carried over twice or more leads with where it could go instead (docs/sheet.md, Rollover). -->
@@ -450,6 +461,8 @@ import "../../styles/plan-settings.css";
       <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" /><path d="m2.5 21.5 1.4-1.4" /><path d="m20.1 3.9 1.4-1.4" /><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" /><path d="m9.6 14.4 4.8-4.8" /></symbol>
       <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4" /><path d="M16 2v4" /><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M3 10h18" /></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></symbol>
       <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
       <symbol id="i-repeat" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></symbol>
     </svg>
@@ -471,6 +484,7 @@ import "../../styles/plan-settings.css";
   import { setupProjects } from "../../sheet/project-list.mjs";
   import { setupNowNext } from "../../sheet/now-next-line.mjs";
   import { setupReadinessNote } from "../../sheet/readiness-note.mjs";
+  import { setupTheme } from "../../sheet/theme.mjs";
   // Swipes load only on a touch screen, so the Mac's first load doesn't carry them.
   const setupSwipe = (root) => { if (matchMedia("(pointer: coarse)").matches) import("../../sheet/swipe-ui.mjs").then((m) => m.setupSwipe(root)); };
   // Habits (docs/sheet-habits.md) load after first paint; the row draws once they arrive.
@@ -493,6 +507,8 @@ import "../../styles/plan-settings.css";
   // Settings' sections load the first time Settings opens (planner.mjs, openSettings), or at once
   // when Google sends him back from connecting mail or the calendar.
   const settings = () => import("../../sheet/settings.mjs").then((m) => [m.setupMailSettings, m.setupCalendarSettings, m.setupPaceSettings, m.setupEnrollmentSettings, m.setupReplanSettings, m.setupTriageSettings, m.setupHabitSettings, m.setupOuraSettings, m.setupHevySettings, m.setupBedtimeSettings, m.setupSettingsSections]);
+  // The light/dark/system switch works signed out too, so it starts before the planner.
+  setupTheme();
   // Focus mode (docs/sheet-focus.md): its hooks go on before the planner starts.
   setupFocus(document.querySelector(".sheet-planner"));
   start(document.querySelector(".sheet-planner"), [setupPlanToday, setupShutdown, setupFeedStatus, setupCampus, setupTopBar, setupBusy, setupNeedsYou, setupMessages, setupProjects, setupHabits, setupNowNext, setupSwipe, setupSchoolLoad, setupReadinessNote, setupReflow, setupDoing], settings);

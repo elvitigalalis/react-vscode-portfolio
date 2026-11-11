@@ -1,5 +1,6 @@
 // Plan today's dialog (docs/sheet.md): the timeline, its blocks and the pointer and key work on
-// them. Loaded on demand the first time Plan today opens (plan-today.mjs, loadDialog).
+// them. Loaded on demand the first time Plan today opens (plan-today.mjs, loadDialog), with its
+// styles.
 import { SHEET } from "../site.mjs";
 import * as api from "./api.mjs";
 import { addDays, dayLabel, localNow, zonedIso, minutesOn, load, finishAt, dialogDay, snap, formatMinutes, formatClock, formatSpan, proposedOn, DEFAULT_EST, blockMinutes, weekdayName, plural } from "./logic.mjs";
@@ -13,6 +14,10 @@ import { history as readHistory, lookbackEntry, moverPrompts } from "./lookback-
 import { estimateLearning, learningLine } from "./estimate-learning.mjs";
 import { progressText } from "./focus-notes.mjs";
 import { progressFor } from "./focus-start.mjs";
+// The timeline's styles (plan-dialog.css) come with it, before the dialog first opens.
+import css from "../styles/plan-dialog.css?inline";
+
+document.head.append(Object.assign(document.createElement("style"), { textContent: css }));
 
 let dialog;
 let day;          // the day being planned

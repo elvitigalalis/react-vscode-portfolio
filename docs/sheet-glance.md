@@ -89,7 +89,7 @@ the base spec is [sheet.md](sheet.md).
      for ok, `--warn` for near and `--danger` for over, on a `--line` track. The "3h30" text
      stays.
    - **Day strip:** under the bar, a 6px strip from `stripSegments`. Busy times are grey, blocks
-     are sage, and proposed blocks are dashed. Today's strip has a now tick in `--accent`.
+     are the accent, and proposed blocks are dashed. Today's strip has a now tick in `--accent`.
    - **Plan today:** the header gets the same bar at full width, with a marker at "Done ≈".
    - *Why:* Sunsama and Ellie compare planned time with capacity, and Structured draws the day.
      The text stays, so the bar adds to the page and passes 1.4.1 and 1.4.11.
@@ -164,10 +164,11 @@ both loaded after sign-in, so /plan's first load doesn't carry them.
 
 ## Out of scope
 
-- New colours beyond the site's palette. A colour switch like Todoist's is out: the one
-  dimension is source.
-- Animation beyond the existing 0.25 s fades, the check-off in [sheet.md](sheet.md)
-  ("Completion") and today's progress ring ("Progress"), and none under `prefers-reduced-motion`.
+- New colours beyond the planner's palette ([sheet.md](sheet.md), "Look"). A colour switch like
+  Todoist's is out: the one dimension is source.
+- Animation beyond what [sheet.md](sheet.md) "Look" lists (150 ms hovers, presses and popovers,
+  the 0.25 s fades, the check-off and today's progress ring), and none under
+  `prefers-reduced-motion`.
 - Streaks, totals or rewards on /now.
 
 ## Quality bar
