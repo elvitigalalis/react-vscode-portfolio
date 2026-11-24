@@ -1,8 +1,9 @@
 // Chat with the bot (docs/sheet-chat.md): src/sheet/chat.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
-  addedResult, applyEvent, conversation, draftId, MAX_TURNS, pieces, plain, plannerView, readReset,
+  addedResult, applyEvent, conversation, draftId, FAILED, finalText, MAX_TURNS, pieces, plain, plannerView, readReset,
   replyText, sentResult, sseEvents, systemBlocks, toolCalls, TOOLS, TURN_WINDOW_MS,
 } from "../src/sheet/chat.mjs";
 
@@ -117,4 +118,26 @@ test("addedResult and sentResult: what the model is told", () => {
   assert.equal(sentResult(null).is_error, true);
   assert.match(sentResult({ fired: true }).content, /few minutes/);
   assert.equal(sentResult({ fired: false, why: "not connected" }).is_error, true);
+});
+
+test("finalText: the words, or what went through when it failed or said nothing", () => {
+  assert.equal(finalText({ said: "Hi", done: [], failed: false }), "Hi");
+  assert.equal(finalText({ said: "", done: [], failed: true }), FAILED);
+  assert.equal(finalText({ said: "", done: ["Added: X (Inbox)"], failed: true }), "Added: X (Inbox)\n\nStopped early, so that's all I got to.");
+  assert.equal(finalText({ said: "", done: ["Added: X (Inbox)"], failed: false }), "Added: X (Inbox)");
+  assert.match(finalText({ said: "", done: [], failed: false }), /No answer/);
+});
+
+// --- The telegram function (source checks, as elsewhere) ---------------------------------------
+
+const fn = readFileSync(new URL("../supabase/functions/telegram/index.ts", import.meta.url), "utf8");
+
+test("telegram: a text goes to the chat when the API key is set, else to capture as before", () => {
+  assert.match(fn, /if \(t\) return CHAT_KEY \? chat\(t, now\) : capture\(t, now\);/);
+});
+
+test("telegram: the chat reads the planner through the shared snapshot, never Hevy or Oura tables itself", () => {
+  const chat = fn.slice(fn.indexOf("// --- Chat with the bot"));
+  assert.match(chat, /plannerSnapshot\(/);
+  assert.doesNotMatch(chat, /hevy_|sleep_|oura_/);
 });
