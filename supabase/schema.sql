@@ -2457,3 +2457,25 @@ alter table needs_you drop constraint if exists needs_you_source_check;
 alter table needs_you add constraint needs_you_source_check check (source in ('mail', 'slack', 'jira'));
 alter table needs_you drop constraint if exists needs_you_kind_check;
 alter table needs_you add constraint needs_you_kind_check check (kind in ('reply', 'deadline', 'meeting', 'admin', 'assigned'));
+
+-- --- Chat with the bot (docs/sheet-chat.md) ----------------------------------------------------
+-- The back-and-forth when Lisul texts the Telegram bot: his text and the bot's answer, one row
+-- each. The telegram function writes them with the service key and reads the recent ones back as
+-- the conversation. A user row keeps his Telegram message's id, unique, so a webhook Telegram
+-- sends again is answered once. role 'reset' is /new: the conversation starts over after it.
+-- Owner-only, in no public view; kept 30 days. Additive: re-running it changes nothing.
+create table if not exists chat_turns (
+  id uuid primary key default gen_random_uuid(),
+  at timestamptz not null default now(),
+  role text not null check (role in ('user', 'assistant', 'reset')),
+  text text not null check (char_length(text) <= 8000),
+  tg_message_id bigint unique
+);
+create index if not exists chat_turns_at on chat_turns (at desc);
+alter table chat_turns enable row level security;
+drop policy if exists owner_all on chat_turns;
+create policy owner_all on chat_turns for all using (is_owner()) with check (is_owner());
+revoke all on chat_turns from anon;
+select cron.schedule('sheet-chat-turns', '23 8 * * *', $job$
+  delete from chat_turns where at < now() - interval '30 days'
+$job$);
