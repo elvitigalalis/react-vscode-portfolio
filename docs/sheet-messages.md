@@ -100,6 +100,10 @@ with `trigger: message`, and that run does the reading. Terms are as in
 
 ## From Telegram
 
+With `ANTHROPIC_API_KEY` set, a text to the bot is a chat instead, answered at once
+([sheet-chat.md](sheet-chat.md)); Claude hands a request on to this pipeline with
+`send_to_planner` when it needs the morning task. Without the key:
+
 A plain text Lisul sends the bot is a message too, exactly as if he had typed it into the box:
 it lands in the same table, shows in /plan's Recent list, and Claude answers it the same way.
 

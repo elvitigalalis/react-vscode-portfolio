@@ -38,13 +38,13 @@ import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@^2
 import { pipeline } from "npm:@supabase/middleware@1";
 import { withOAuthProtectedResource, withSupabase } from "npm:@supabase/server@^1.9.2";
 import { z } from "npm:zod@^4.3.6";
-import { checkProposal, NEEDS_KINDS, messageRunOf, planDayOf, planSnapshot } from "../../../src/sheet/proposal.mjs";
-import { habitsQuery, horizonSnapshotQueries, paceQueries, replanQueries, snapshotQueries, todayReplanQueries } from "../../../src/sheet/proposal-io.mjs";
+import { checkProposal, NEEDS_KINDS } from "../../../src/sheet/proposal.mjs";
 import { reflowHorizon } from "../../../src/sheet/horizon-io.mjs";
 import { senderHash } from "../../../src/sheet/mail.mjs";
-import { checkAnswers, checkStep, MAX_ANSWERS, MAX_READ, proposalTrigger, STEP_KINDS, stepTargets, withMessages } from "../../../src/sheet/messages.mjs";
+import { checkAnswers, checkStep, MAX_ANSWERS, MAX_READ, proposalTrigger, STEP_KINDS, stepTargets } from "../../../src/sheet/messages.mjs";
+import { plannerSnapshot } from "../../../src/sheet/planner-snapshot.mjs";
 import { checkEventTodos } from "../../../src/sheet/event-todos.mjs";
-import { addDays, localNow } from "../../../src/sheet/logic.mjs";
+import { localNow } from "../../../src/sheet/logic.mjs";
 
 // The sender hashes' salt (mail-sync's), for hashing triage rule patterns at submit.
 const SALT = Deno.env.get("SHEET_SENDER_SALT") ?? "";
@@ -369,66 +369,9 @@ async function pendingMessages(db: Db) {
 }
 
 // --- The snapshot -----------------------------------------------------------------------------
-
-// The raw rows planSnapshot takes, read as the owner: settings first for the time zone, then the
-// day's rows, then the blocks of the tasks read.
-async function snapshot(db: Db, now: Date) {
-  const [settings] = await read(db, { table: "settings", select: "*" });
-  if (!settings) throw new Error("settings: no row");
-  // v5 R1: a replan run plans the rest of today, even from 3 pm (planDayOf), and so does a
-  // message run, which may go on as a replan of today while replans are on (step 2b).
-  const t = todayReplanQueries(now, settings.time_zone);
-  const [[replan = null], [todayRev = null], [message = null]] = await Promise.all([
-    read(db, t.replan), read(db, t.proposal), settings.replans_on ? read(db, t.message) : Promise.resolve([]),
-  ]);
-  const planDay = planDayOf(now, settings.time_zone, replan, todayRev, message);
-  const messageRun = Boolean(settings.replans_on) && messageRunOf(now, message, todayRev);
-  // Horizon planning: plan_day's minutes and every state; none until its schema has run.
-  const h = horizonSnapshotQueries(planDay);
-  const [alloc, states] = await Promise.all([optional(db, h.alloc), optional(db, h.states)]);
-  const horizonIds = alloc.filter((a: { minutes: number; over_min: number }) => a.minutes - a.over_min > 0).map((a: { task_id: string }) => a.task_id);
-  const q = snapshotQueries(now, settings.time_zone, planDay, horizonIds);
-  const { tasks, busy, days, campus, proposal, needsOpen, accounts } = q.queries;
-  const rows = await Promise.all([tasks, busy, days, campus, proposal, needsOpen, accounts].map((x) => read(db, x)));
-  const blocks = await read(db, q.blocks(rows[0].map((t: { id: string }) => t.id)));
-  // v5 W1: the cached forecast; planSnapshot keeps plan_day's hours.
-  const [weather = null] = await read(db, { table: "weather_cache", select: "periods" });
-  // v5 SRC3: plan_day's academic calendar entries (the day planSnapshot plans).
-  const [academicDay = null] = await read(db, { table: "academic_days", select: "entries", filters: [["day", "eq", planDay]] });
-  // v5 P1: what pace and planned versus done are worked out from.
-  const p = paceQueries(now, settings.time_zone, planDay);
-  const [actuals, past] = await Promise.all([read(db, p.actuals), read(db, p.past)]);
-  // v5 H1: the habits; planSnapshot keeps plan_day's.
-  const habits = await read(db, habitsQuery());
-  // v5 R1: the replan that started this run, if any, and the changes since the newest revision.
-  const changes = await read(db, replanQueries(now, settings.time_zone, rows[4][0] ?? null, planDay).changes);
-  // v5 L1: the triage rules.
-  const triage = await read(db, { table: "triage_rules", select: "match,pattern,action", order: "created_at" });
-  // v5 M1: Reply owed and Awaiting reply, which the mail sync keeps.
-  const replyState = await read(db, { table: "reply_state", select: "account,thread_id,state,since,who,message_id,basis,draft", order: "since" });
-  // Oura: the sleep periods (nightly_roll keeps 60 days), the day's readiness and sleep, and
-  // Oura's bedtime windows. A missing table (the Oura schema not run yet) reads as none. Only what
-  // code derives from them goes out: window.from, window.to, the cap and break rule, and bedtime
-  // and wind_down_from as plain times (docs/adr/0005-oura-data-never-reaches-claude.md).
-  const [sleep, sleepDays, sleepTimes, restPeriods] = await Promise.all([
-    optional(db, { table: "sleep_nights", select: "oura_id,day,type,bedtime_start,bedtime_end", order: "bedtime_end" }),
-    // plan_day's and the two days before it, for the rolling sleep debt (sleep.mjs, sleepDebt).
-    optional(db, { table: "sleep_days", select: "day,readiness,sleep_s", filters: [["day", "gte", addDays(planDay, -2)], ["day", "lte", planDay]] }),
-    optional(db, { table: "sleep_times", select: "day,start_offset,end_offset", order: "day" }),
-    optional(db, { table: "rest_periods", select: "start_day,end_day", order: "start_day" }),
-  ]);
-  const snap = planSnapshot({
-    sleep, sleepDays, sleepTimes, restPeriods,
-    plan_day: planDay, actuals, past, habits, replan, changes, triage, replyState,
-    settings, tasks: rows[0], blocks, busy: rows[1], days: rows[2], campus: rows[3],
-    proposal: rows[4][0] ?? null, needsOpen: rows[5], accounts: rows[6], weather,
-    academic: academicDay?.entries ?? [], horizon: { alloc, states },
-  }, now);
-  // Messages to Claude: the pending ones, today and replans_on.
-  // Whether this may be a message run going on as a replan of today (submit_proposal reads it).
-  snap.message_run = messageRun;
-  return withMessages(snap, await pendingMessages(db), settings, now);
-}
+// The raw rows planSnapshot takes, read as the owner (src/sheet/planner-snapshot.mjs, which the
+// telegram function's chat shares).
+const snapshot = (db: Db, now: Date) => plannerSnapshot((q) => read(db, q), () => pendingMessages(db), now);
 
 // v5 L1: the sender hashes of each submitted Needs you item, "<account> <message_id>" →
 // { address, domains }, from message_senders (written by mail-sync, M1), which keeps no address
@@ -466,16 +409,6 @@ const horizonIo = (db: Db) => ({
     return data;
   },
 });
-
-// A read of a table that may not exist yet: none until its schema section has run.
-async function optional(db: Db, q: Query) {
-  try {
-    return await read(db, q);
-  } catch (e) {
-    if (/schema cache|does not exist/.test((e as Error).message)) return [];
-    throw e;
-  }
-}
 
 // One query through supabase-js: .filter(column, operator, value) and .or() take PostgREST's own
 // syntax (https://supabase.com/docs/reference/javascript/filter,

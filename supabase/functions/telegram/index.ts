@@ -28,6 +28,9 @@ import { ackReaction, ackText, ANSWERED, mediaReply, readKey, readMedia, readTex
 import { startedPatch } from "../../../src/sheet/messages.mjs";
 import { db, env, secretMatches } from "../_shared/server.ts";
 import { saveAndFire } from "../_shared/capture.ts";
+import { plannerSnapshot } from "../../../src/sheet/planner-snapshot.mjs";
+import { addedResult, applyEvent, CHAT_BUDGET_MS, conversation, DRAFT_EVERY_MS, draftId, finalText, MAX_ROUNDS, MODEL, pieces, plain, readReset, replyText, request, sentResult, sseEvents, systemBlocks, toolCalls, turnText } from "../../../src/sheet/chat.mjs";
+import { captureRows } from "../../../src/sheet/voice.mjs";
 
 const BOT_TOKEN = env("TELEGRAM_BOT_TOKEN");
 const CRON_SECRET = env("SHEET_CRON_SECRET");
@@ -36,6 +39,11 @@ const WEBHOOK_SECRET = env("TELEGRAM_WEBHOOK_SECRET");
 // Without both, no replan fires.
 const ROUTINE_ID = env("SHEET_ROUTINE_ID");
 const ROUTINE_TOKEN = env("SHEET_ROUTINE_TOKEN");
+// Chat with the bot (docs/sheet-chat.md, docs/adr/0008-the-bot-chats-through-the-anthropic-api.md):
+// with the key, a text to the bot gets Claude's answer at once; without it, capture as before.
+// SHEET_CHAT_MODEL picks another model (chat.mjs's MODEL by default).
+const CHAT_KEY = env("ANTHROPIC_API_KEY");
+const CHAT_MODEL = env("SHEET_CHAT_MODEL") || MODEL;
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -527,8 +535,10 @@ async function webhook(update: unknown, now: Date) {
   // The thumb keyboard's keys first, so a label is never captured as a message (capture.mjs).
   const k = readKey(update, settings);
   if (k) return keyAnswer(k, now);
+  const r = CHAT_KEY ? readReset(update, settings) : null;
+  if (r) return resetChat(r);
   const t = readText(update, settings);
-  if (t) return capture(t, now);
+  if (t) return CHAT_KEY ? chat(t, now) : capture(t, now);
   const u = readUndo(update, settings);
   if (u) return undo(u, settings);
   const media = readMedia(update, settings);
@@ -600,6 +610,161 @@ async function capture(t: { text: string; chat_id: number; message_id: number },
     ...PLAIN,
     reply_parameters: { message_id: t.message_id, allow_sending_without_reply: true },
   }).catch((e) => console.error("telegram capture:", e.message));
+}
+
+// --- Chat with the bot (docs/sheet-chat.md) ---------------------------------------------------
+// His text is saved as a turn first: its Telegram id is unique (schema.sql, chat_turns), so an
+// update Telegram sends again is answered once. The answer runs after the webhook has said ok
+// (EdgeRuntime.waitUntil, supabase.com/docs/guides/functions/background-tasks), so Telegram never
+// waits on Claude and never resends for it. While Claude writes, the answer streams into a draft
+// (sendMessageDraft: an empty text shows "Thinking…", and sendMessage then keeps the whole answer:
+// core.telegram.org/bots/api#sendmessagedraft). A failed draft only loses the preview.
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void };
+
+type ChatText = { text: string; chat_id: number; message_id: number };
+
+async function chat(t: ChatText, now: Date) {
+  try {
+    await db("chat_turns", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ role: "user", text: turnText(t.text), tg_message_id: t.message_id }) });
+  } catch (e) {
+    if (e instanceof Error && /^chat_turns: 409/.test(e.message)) return;
+    throw e;
+  }
+  EdgeRuntime.waitUntil(answer(t, now).catch((e) => console.error("chat:", e instanceof Error ? e.message : e)));
+}
+
+async function resetChat(r: { chat_id: number; message_id: number }) {
+  await db("chat_turns", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ role: "reset", text: "" }) });
+  await telegram("sendMessage", { chat_id: r.chat_id, text: "New chat.", ...PLAIN, reply_parameters: { message_id: r.message_id, allow_sending_without_reply: true } })
+    .catch((e) => console.error("telegram reset:", e.message));
+}
+
+async function answer(t: ChatText, now: Date) {
+  const draft_id = draftId(t.message_id);
+  const draft = (text: string) => telegram("sendMessageDraft", { chat_id: t.chat_id, draft_id, text: text.slice(0, 4096) }).catch(() => {});
+  await draft("");
+  // What was said and done so far, so an error after a tool ran still tells him what went through.
+  const state: ChatState = { said: "", done: [], failed: false };
+  try {
+    const since = new Date(now.getTime() - 86_400_000).toISOString();
+    const [snapshot, rows] = await Promise.all([
+      plannerSnapshot((q: Parameters<typeof queryPath>[0]) => db(queryPath(q)), async () => [], now),
+      db(`chat_turns?select=at,role,text&at=gte.${encodeURIComponent(since)}&order=at.desc&limit=60`),
+    ]);
+    await converse(t, systemBlocks(snapshot, now), conversation(rows, now), draft, snapshot.time_zone, state, Date.now() + CHAT_BUDGET_MS);
+  } catch (e) {
+    console.error("chat answer:", e instanceof Error ? e.message : e);
+    state.failed = true;
+  }
+  const out = plain(finalText(state));
+  for (const [i, piece] of pieces(out).entries()) {
+    await telegram("sendMessage", {
+      chat_id: t.chat_id,
+      text: piece,
+      ...PLAIN,
+      ...(i === 0 ? { reply_parameters: { message_id: t.message_id, allow_sending_without_reply: true } } : {}),
+    });
+  }
+  // A turn that said or did something is remembered; a plain failure isn't.
+  if (state.said || state.done.length) await db("chat_turns", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ role: "assistant", text: turnText(out) }) });
+}
+
+type ChatState = { said: string; done: string[]; failed: boolean };
+
+// Rounds of the Messages API until Claude stops asking for tools (MAX_ROUNDS at most, within the
+// deadline): each
+// round streams, the draft follows the text, and add_tasks and send_to_planner run here.
+// web_search runs on Anthropic's side; a long one pauses the turn (pause_turn), which goes on by
+// sending the reply back as it is (docs.claude.com, "Web search tool").
+async function converse(t: ChatText, system: unknown[], history: { role: string; content: unknown }[], draft: (s: string) => Promise<unknown>, tz: string, state: ChatState, deadline: number) {
+  const messages: { role: string; content: unknown }[] = history.length ? history : [{ role: "user", content: t.text }];
+  let sent = false;
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    // The function's wall clock is limited (150 s on the free plan), so rounds stop at the deadline.
+    const left = deadline - Date.now();
+    if (left < 5_000) throw new Error("chat: out of time");
+    // A draft lasts about 30 seconds, so each round shows it again.
+    if (round) await draft(state.said);
+    const said = state.said;
+    const reply = await stream(request(CHAT_MODEL, system, messages), (s) => draft(`${said}${said && s ? "\n\n" : ""}${s}`), left);
+    const words = replyText(reply);
+    if (words) state.said = `${said}${said ? "\n\n" : ""}${words}`;
+    // The API refuses a text block with no visible text, which a reply that went straight to a tool can hold.
+    const content = reply.content.filter((b: { type: string; text?: string }) => b && !(b.type === "text" && !b.text?.trim()));
+    if (!content.length) return;
+    messages.push({ role: "assistant", content });
+    if (reply.stop_reason === "pause_turn") continue;
+    const calls = toolCalls(reply);
+    if (reply.stop_reason !== "tool_use" || !calls.length) return;
+    const results = [];
+    for (const c of calls) {
+      let r: { content: string; is_error?: boolean };
+      try {
+        if (c.name === "add_tasks") r = addedResult(await addTasks(c.input, tz));
+        else if (c.name === "send_to_planner" && !sent) {
+          sent = true;
+          r = sentResult(await toPlanner(String(c.input?.request ?? "").trim() || t.text, t.message_id));
+        } else r = { is_error: true, content: c.name === "send_to_planner" ? "Already sent for this message." : "No such tool." };
+      } catch (e) {
+        console.error(`chat ${c.name}:`, e instanceof Error ? e.message : e);
+        r = { is_error: true, content: "That failed on the server. Tell him it didn't go through." };
+      }
+      if (!r.is_error) state.done.push(r.content);
+      results.push({ type: "tool_result", tool_use_id: c.id, ...r });
+    }
+    messages.push({ role: "user", content: results });
+  }
+}
+
+// One streamed Messages API call: the reply, with onText given the text so far, no more often
+// than DRAFT_EVERY_MS.
+async function stream(body: unknown, onText: (s: string) => Promise<unknown>, timeout: number) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    signal: AbortSignal.timeout(timeout),
+    headers: { "x-api-key": CHAT_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok || !res.body) throw new Error(`anthropic: ${res.status}`);
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let reply = null;
+  let shown = 0;
+  let last = "";
+  for await (const chunk of res.body) {
+    const { events, rest } = sseEvents(buffer + decoder.decode(chunk, { stream: true }));
+    buffer = rest;
+    for (const e of events) reply = applyEvent(reply, e);
+    const text = replyText(reply);
+    if (text && text !== last && Date.now() - shown >= DRAFT_EVERY_MS) {
+      shown = Date.now();
+      last = text;
+      await onText(plain(text));
+    }
+  }
+  return reply ?? { content: [], stop_reason: null };
+}
+
+// add_tasks: checked as voice capture checks them (captureRows), then saved private at the end of
+// their lists. null when any is invalid, and then nothing is saved.
+async function addTasks(input: unknown, tz: string) {
+  const rows = captureRows(input, localNow(new Date(), tz).day);
+  if (!rows) return null;
+  const position = Date.now() / 1000;
+  await db("tasks", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(rows.map((r: Record<string, unknown>, i: number) => ({ ...r, public: false, position: position + i }))) });
+  return rows;
+}
+
+// send_to_planner: the request goes through the same save and fire as a captured text, keyed to
+// his message, so the receipt with its Undo buttons replies to it (receipts). null when this
+// message was sent already (messages_tg_message_id).
+async function toPlanner(text: string, message_id: number) {
+  try {
+    return await saveAndFire(text.slice(0, 8000), new Date(), { tg_message_id: message_id });
+  } catch (e) {
+    if (e instanceof Error && /^messages: 409 23505/.test(e.message)) return null;
+    throw e;
+  }
 }
 
 // --- Re-firing a failed message (research/plan-reliability.md R9) -------------------------------
