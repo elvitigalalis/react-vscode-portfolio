@@ -130,9 +130,29 @@ test("planner-mcp: event to-do titles are written only through set_event_titles,
 });
 
 test("planner-mcp: read_planner adds the pending messages through withMessages", () => {
-  assert.match(code, /return withMessages\(snap, await pendingMessages\(db\), settings, now\);/);
+  assert.match(code, /plannerSnapshot\(\(q\) => read\(db, q\), \(\) => pendingMessages\(db\), now\)/);
+  assert.match(readFileSync(new URL("../src/sheet/planner-snapshot.mjs", import.meta.url), "utf8"), /return withMessages\(snap, await pending\(\), settings, now\);/);
   assert.match(code, /from\("messages"\)\.select\("id,at,text,fired_at"\)\.eq\("status", "pending"\)/);
 });
+
+const at1000 = new Date("2026-11-24T15:00:00Z");
+test("plannerSnapshot (planner-snapshot.mjs): reads through the given read, missing optional tables read as none", async () => {
+  const { plannerSnapshot } = await import("../src/sheet/planner-snapshot.mjs");
+  const tables = [];
+  const read = async (q) => {
+    tables.push(q.table);
+    if (q.table === "settings") return [{ time_zone: "America/New_York", replans_on: false }];
+    if (/^(sleep_|rest_periods|horizon_)/.test(q.table)) throw new Error(`${q.table}: 404 PGRST205`);
+    return [];
+  };
+  const snap = await plannerSnapshot(read, async () => [], at1000);
+  assert.equal(snap.time_zone, "America/New_York");
+  assert.deepEqual(snap.messages, []);
+  assert.ok(tables.includes("tasks"));
+  assert.ok(!tables.some((t) => t.startsWith("hevy_")));
+  await assert.rejects(plannerSnapshot(async (q) => { if (q.table === "tasks") throw new Error("tasks: 500"); return q.table === "settings" ? [{ time_zone: "UTC" }] : []; }, async () => [], at1000), /tasks: 500/);
+});
+
 
 test("replanQueries: plan_day's newest replan and the changes since the newest revision", async () => {
   const { replanQueries } = await import("../src/sheet/proposal-io.mjs");
